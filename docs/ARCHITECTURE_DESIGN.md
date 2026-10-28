@@ -9,7 +9,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 |                            Central Tooling Repository                             |
 |                                                                                   |
 |   +-------------------+    +------------------------+    +--------------------+   |
-|   |  main.go, cmd/    |    |       workflows/       |    |       config/      |   |
+|   |  main.go, cmd/,   |    |       workflows/       |    |       config/      |   |
 |   |  (Go CLI Binary,  |    |  (Reusable GHA Workf)  |    | (project configs)  |   |
 |   |   internal/...)   |    |                        |    |                    |   |
 |   +-------------------+    +------------------------+    +--------------------+   |
@@ -45,7 +45,7 @@ The system uses a **Hybrid Workflow Model** combining central reusable workflows
 * **CLI Sync (`gero workflows sync`):** Reads the target repo's config, pulls down canonical templates from the central repository, renders `.github/workflows/` YAML files, shows a dry-run diff, and opens a PR or commits changes. A `verify` command checks rendered files for drift.
 
 ### C. CLI Layer
-The CLI is built on **cobra** with a small custom loader for CLI config (no viper). Commands are thin and call into `internal/` packages. *CLI config* (how an invocation behaves) is kept separate from *application config* (the YAML in section 3):
+The CLI is built on **cobra** with a small custom loader for CLI config (no viper). `cmd/` is a thin shell that registers commands; each command lives in its own `internal/cli/<cmd>/` package and calls into domain packages under `internal/`. *CLI config* (how an invocation behaves) is kept separate from *application config* (the YAML in section 3):
 
 ```
  flags  >  GERO_* env  >  user file (~/.config/gero/config.yaml)  >  defaults

@@ -3,7 +3,7 @@
 **Status:** agreed. The YAML library is still to be chosen.
 
 * **Standard library first.** Fewer dependencies means a smaller supply-chain surface and less to audit.
-* A new dependency needs an entry here (or the IMPLEMENTATION section it belongs to) saying what the standard library would cost us. Enforced by a `depguard` allow-list in `.golangci.yml`, so an unlisted import fails lint.
+* A new dependency needs an entry here (or the IMPLEMENTATION section it belongs to) saying what the standard library would cost us. Enforced by a `depguard` allow-list in `.golangci.yml`, so an unlisted import fails lint. A second, narrower rule restricts `cmd/` to the standard library, cobra, `cmd/...`, `internal/cli/...` and `internal/errs`, and a `nocobra` rule keeps cobra out of everything except `cmd/` and `internal/cli/` ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6).
 * Approved now:
 
 | Module | For |
@@ -11,12 +11,14 @@
 | `github.com/spf13/cobra` | Command tree, flags, help, completions ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)) |
 | `github.com/cli/go-gh` | GitHub auth, host resolution, HTTP client (IMPLEMENTATION §3) |
 | `github.com/google/go-github` | Typed REST (IMPLEMENTATION §3) |
+| `github.com/go-git/go-git` | Local git operations: refs, tags, clone, commit (IMPLEMENTATION §3). Preferred over shelling out to `git`: no binary needed on the machine, no subprocess inheriting environment and config, same behavior locally and in CI. Costs a larger transitive tree than `os/exec`, accepted for portability and security. |
 | One YAML library | Application config and the user file. **(unverified)** Pick one that supports multi-document decoding and rejecting unknown fields, and record it here. |
 | `github.com/stretchr/testify` | **Tests only.** `require` and `assert` for the strong test-first workflow ([TESTING](TESTING.md)); the standard library makes table tests and diffs of structs noisy. |
 | `go.uber.org/mock` | **Tests only.** `mockgen`-generated mocks for interfaces at package seams (the GitHub access layer, `internal/ui`), so tests drive behavior without network access. |
 
 * Test-only modules are imported from `_test.go` files and from generated mock packages, never from production code. The `depguard` `main` rule excludes `$test`, so they stay out of the production allow-list. Use them where they help, not by default: plain `testing` is fine for a simple case.
 * **Integration-test dependencies live in the `test/integration` sub-module**, never in the root `go.mod` ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 5). The same rule applies: each one gets an entry here saying what the standard library would cost us. None approved yet.
+* `os/exec` calling `git` is allowed only as a recorded fallback where go-git falls short (IMPLEMENTATION §3).
 * Not adopted: `viper`, color or logging libraries, any TUI library ([CLI_FRAMEWORK](CLI_FRAMEWORK.md), [CLI_OUTPUT](CLI_OUTPUT.md)).
 
 ## Open questions

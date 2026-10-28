@@ -17,7 +17,7 @@ How `gero` is built as a CLI: framework, command tree, global flags, context gat
 
 **Viper adoption trigger.** Revisit only if CLI config grows past roughly ten keys, needs nested or per-command sections, needs more than one file format, or needs watching or remote sources. The swap stays local because everything downstream reads one resolved `Settings` struct from `internal/clicfg`.
 
-**Structure.** The root command lives in `cmd/`. Each command group is one file in `cmd/` while it is small, and moves to its own subdirectory (`cmd/<group>/`) when it grows or needs shared setup, such as the CI-only commands. A command's `RunE` parses flags, builds dependencies from `Settings`, and calls into `internal/`. Commands hold no business logic, so everything is testable without cobra. See [PROJECT_LAYOUT](PROJECT_LAYOUT.md).
+**Structure.** The root command and global flags live in `cmd/`, which imports only cobra, the standard library, `cmd/...`, `internal/cli/...` and `internal/errs` (lint-enforced, see [PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6). Each command is its own package, `internal/cli/<cmd>/`, exporting a constructor that `cmd/` registers. A command's `RunE` parses flags, builds dependencies from `Settings`, and calls into domain packages in `internal/`. Commands hold no business logic, so everything is testable without cobra.
 
 ## 2. Command tree and global flags
 
@@ -28,6 +28,8 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero config validate` | either | Runs without credentials |
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
 | `gero lines resolve` | either | Read-only |
+| `gero repo check-semver <version>` | either | Read-only; port of the shared `check-semver` script. Emits env-style output |
+| `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
 | `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |
@@ -39,7 +41,7 @@ Global (persistent) flags:
 |---|---|
 | `--config-dir` | [CLI_CONFIG](CLI_CONFIG.md) section 4 |
 | `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing. Read-only commands accept and ignore it. Default is off, with `verify` as the explicit check mode **(leaning)**. |
-| `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md) section 1); shorthand for `--output json` |
+| `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md) section 1); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md) section 2); repeatable |
 | `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md) section 1) |
 | `--version` | Prints the version and exits |
@@ -48,7 +50,7 @@ Per-command flags, such as the per-release override of `requiresPrerelease` (IMP
 
 ## 3. Execution-context gating
 
-A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `cmd/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
+A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `internal/cli/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
 
 ## 4. Exit codes
 

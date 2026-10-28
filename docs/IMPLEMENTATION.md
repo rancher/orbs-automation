@@ -30,7 +30,8 @@ Use two Go libraries together, and shell out to `gh` only where it adds somethin
   * It bumps major versions often. Pin it and keep usage behind our own interfaces.
   * Enterprise hosts need the base URL set explicitly. Open question: do we ever target non-github.com hosts?
 * **`gh` via subprocess:** only for interactive or human-facing steps (e.g. `gh auth login`, browser handoffs) and pure passthrough. Not used for logic that must be tested or that runs in CI.
-* **`git` via `os/exec`:** local operations such as cloning and committing rendered workflows. PR creation goes through the API.
+* **`go-git/go-git`:** the preferred git tooling for local operations (reading refs and tags, cloning, committing rendered workflows). It needs no `git` binary on the machine and avoids running a subprocess with inherited environment and config, which is safer and more portable. Keep usage behind our own interfaces. PR creation goes through the API.
+  * **`git` via `os/exec` is a fallback only**, for an operation go-git cannot do or does differently from git in a way that matters. Each use records the reason next to the code. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
 * **GraphQL** via the `go-gh` client, only if REST proves insufficient (e.g. batched state queries).
 
 ### Interfaces
