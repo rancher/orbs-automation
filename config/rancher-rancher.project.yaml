@@ -1,0 +1,56 @@
+# MOCK config for review. Shape is not final.
+# Not owned (the default), so all config is central. This is where Rancher's own
+# line-to-branch mapping lives (the RancherLines document has no branches).
+apiVersion: gero/v1alpha1
+kind: Project
+name: rancher-rancher
+spec:
+  repo:
+    name: rancher/rancher
+  release:
+    branches: perLine
+    lines:
+      - line: v2.16             # no branch: default branch while "development"
+      - line: v2.15
+        branch: release/v2.15
+      - line: v2.14
+        branch: release/v2.14
+      - line: v2.13
+        branch: release/v2.13
+  pullRequests:
+    title: "[{branch}] Update {source} to {version}"
+    branchPrefix: "bot/{source}-"
+    labels:
+      - status/auto-created
+  sources:
+    - from: rancher-charts
+      accept:
+        when: all
+      update:
+        strategy: buildYamlBump
+        params:
+          file: build.yaml
+          key: webhookVersion   # key varies per chart
+        postEdit:
+          - go generate ./...
+
+    - from: rancher-shell
+      # accept default: when stable (illustrative; today's behavior needs checking)
+      update:
+        strategy: buildYamlBump
+        params:
+          file: build.yaml
+          key: defaultShellVersion
+        postEdit:
+          - go generate ./...
+
+    - from: scc-operator
+      # accept defaults: when stable, lines all. A universal source, so every active
+      # line gets a PR, with per-target status.
+      update:
+        strategy: buildYamlBump
+        params:
+          file: build.yaml
+          key: defaultSccOperatorImage
+        postEdit:
+          - go generate ./...

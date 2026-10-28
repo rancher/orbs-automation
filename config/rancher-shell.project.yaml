@@ -1,0 +1,24 @@
+# MOCK config for review. Shape is not final.
+# Mapping mirrors the README table (release/v2.15 = v0.8.x = Rancher 2.15; ...).
+apiVersion: gero/v1alpha1
+kind: Project
+name: rancher-shell
+spec:
+  repo:
+    name: rancher/shell
+    owned: true
+  release:
+    branches: perLine
+    lines:
+      - line: v2.16             # illustrative series; no branch while "development"
+        version: "0.9.x"
+      - line: v2.15
+        version: "0.8.x"
+        branch: release/v2.15   # shell branches are named after the Rancher line
+      - line: v2.14
+        version: "0.7.x"
+        branch: release/v2.14
+      - line: v2.13
+        version: "0.6.x"
+        branch: release/v2.13
+  # No sources: nothing upstream is bumped into this repo by gero.

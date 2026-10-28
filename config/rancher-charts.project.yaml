@@ -1,0 +1,38 @@
+# MOCK config for review. Shape is not final.
+# Not owned (the default), so we cannot put config in this repo: all of it lives centrally.
+apiVersion: gero/v1alpha1
+kind: Project
+name: rancher-charts
+spec:
+  repo:
+    name: rancher/charts
+  release:
+    branches: perLine
+    lines:
+      - line: v2.16
+        branch: dev-v2.16
+      - line: v2.15
+        branch: dev-v2.15
+      - line: v2.14
+        branch: dev-v2.14
+      - line: v2.13
+        branch: dev-v2.13
+  # Conventions every producer follows when opening PRs here (labels default to none).
+  pullRequests:
+    title: "[{branch}] {package} {chartVersion} {action}"   # action: bump (prerelease) | UnRC (stable)
+    branchPrefix: "bot/{source}-"                           # deterministic, no epoch suffix
+  sources:
+    - from: backup-restore-operator
+      accept:
+        when: all               # RC bumps and stable "UnRC" bumps both
+      update:
+        strategy: chartsPackageBump   # one shared implementation: package.yaml, release.yaml, make steps
+        params:
+          package: rancher-backup
+    - from: ob-team-charts      # illustrative; mechanism not reviewed
+      accept:
+        when: all               # a universal source lands in every line's branch
+      update:
+        strategy: chartsPackageBump
+        params:
+          package: "<tbd>"

@@ -1,0 +1,15 @@
+# MOCK config for review. A made-up external dependency, to show the two directions.
+# Externals are not projects we model: no sources, no workflows.
+#   trackOnly / react: pull-like, we depend on them and watch their releases.
+#   notify:            push-like, they depend on us and we tell them when we release.
+# One action per pair of projects: notify cannot be combined with trackOnly/react
+# for the same pair, since that implies a circular dependency.
+apiVersion: gero/v1alpha1
+kind: External
+name: example-sdk
+spec:
+  repo:
+    name: third-party/example-sdk
+  relationships:
+    - project: backup-restore-operator
+      action: trackOnly

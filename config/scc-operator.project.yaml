@@ -1,0 +1,13 @@
+# MOCK config for review. Shape is not final.
+# One release line (main + v* tags) serving every Rancher line, no release branches.
+# Defaults apply: branches single, tagPattern "v*", lines universal. requiresPrerelease
+# is opted in because stable must come from a commit that already has an RC.
+apiVersion: gero/v1alpha1
+kind: Project
+name: scc-operator
+spec:
+  repo:
+    name: rancher/scc-operator
+    owned: true
+  release:
+    requiresPrerelease: true

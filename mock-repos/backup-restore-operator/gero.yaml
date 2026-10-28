@@ -1,0 +1,39 @@
+# MOCK of a file that would live in the backup-restore-operator repo itself
+# (on its automation-core branch, else its default branch), read by gero when it
+# renders workflow templates into this repo's branches.
+#
+# Multi-document YAML, like the central config. Branch names are keys here, so the
+# file is self-contained: the renderer maps a branch to its Rancher line using the
+# central Project's release.lines, and uses these settings for that branch.
+#
+# For now only `kind: WorkflowsConfig` is allowed in a repo's gero.yaml; any other kind
+# is an error. Moving other config (e.g. a Project) into repos is a later decision.
+---
+apiVersion: gero/v1alpha1
+kind: WorkflowsConfig
+name: backup-restore-operator
+spec:
+  gero:
+    version: v0.3.0             # pins the gero release whose templates are rendered
+  workflows:
+    - ci
+    - release
+    - headBuilds
+    - fossa
+  branches:
+    main:
+      toolchain:
+        go: "1.25"
+        k3sVersions:
+          - v1.35.7
+          - v1.36.3
+    release/v11.x:
+      toolchain:
+        go: "1.25"
+        k3sVersions:
+          - v1.35.5
+    release/v10.x:
+      toolchain:
+        go: "1.24"
+        k3sVersions:
+          - v1.33.9

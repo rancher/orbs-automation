@@ -1,0 +1,11 @@
+# MOCK config for review. Illustrative: how this repo feeds rancher/charts has NOT been reviewed.
+# Its charts are "universal": they only become Rancher-minor specific when they land
+# in a rancher/charts branch. All defaults apply: branches single, tagPattern "v*",
+# lines universal, requiresPrerelease off.
+apiVersion: gero/v1alpha1
+kind: Project
+name: ob-team-charts
+spec:
+  repo:
+    name: rancher/ob-team-charts
+    owned: true

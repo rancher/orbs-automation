@@ -1,0 +1,25 @@
+# MOCK config for review. Shape is not final.
+# Mapping mirrors this repo's VERSION.md (main = v9.x = Rancher 2.16; release/v8.x = 2.15; ...).
+# Start of the chain:
+#   kuberlr-kubectl -> backup-restore-operator -> rancher-charts -> rancher-rancher
+apiVersion: gero/v1alpha1
+kind: Project
+name: kuberlr-kubectl
+spec:
+  repo:
+    name: rancher/kuberlr-kubectl
+    owned: true
+  release:
+    branches: perLine
+    lines:
+      - line: v2.16             # no branch: default branch while v2.16 is "development"
+        version: "9.x"
+      - line: v2.15
+        version: "8.x"
+        branch: release/v8.x
+      - line: v2.14
+        version: "7.x"
+        branch: release/v7.x
+      - line: v2.13
+        version: "6.x"
+        branch: release/v6.x
