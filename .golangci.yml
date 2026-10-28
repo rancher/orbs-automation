@@ -30,6 +30,7 @@ linters:
             - github.com/spf13/cobra
             - github.com/cli/go-gh
             - github.com/google/go-github
+            - github.com/go-git/go-git
             # YAML library: add once chosen (docs/specs/DEPENDENCY_POLICY.md open questions).
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus

@@ -1,6 +1,6 @@
 # branch-tags
 
-**Status:** draft. Nothing is built yet: stubs exist for `gero repo branch-tags` and an empty `internal/gittags` package.
+**Status:** draft. The faithful port (sections 1 to 4, default behavior) is built: `internal/gittags`, `internal/gitrepo`, `internal/cli/branchtags` and the `gero repo branch-tags` command. The opt-in improvements in section 6, the optional parity test and the open questions in section 5 are not done.
 
 Port of the `.github/scripts/branch-tags.sh` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same inputs, same output keys, case and order, same results. Every approved improvement is listed in section 6 and is opt-in. Git access uses go-git behind an interface ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md), IMPLEMENTATION §3).
 
@@ -56,14 +56,15 @@ gero repo branch-tags
 2. **Branch rules.** Only `refs/heads/main` and `refs/heads/release/<version>` are supported, with the tags in the table in section 1. `<version>` is not validated, so `release/` gives `branch_tag=-head`.
 3. **Previous tag.** The newest tag by `creatordate` whose name starts with the prefix, matched as a regex as the script does, so the `.` in `v2.x-head-` is a wildcard. No match is not an error: `prev_static_tag=` is empty.
 4. **Previous means previous in sequence.** The newest matching tag counts even when it already points at the current commit. This is decided, not a quirk to fix: the question is what came before in the tag sequence, not what came before on a different commit.
-5. **Local short commit.** Matches `git rev-parse --short HEAD`, which is 7 or more characters depending on repository size. How go-git reproduces this is an open question.
+5. **Local short commit.** Matches `git rev-parse --short HEAD`, which is 7 or more characters depending on repository size. go-git has no equivalent, so this one call goes through the `os/exec` fallback ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)); see section 3.
 6. **Output.** Exactly three lowercase `key=value` lines on stdout, in the script's order: `branch_tag`, `branch_static_tag`, `prev_static_tag`. The key case differs from [CHECK_SEMVER](CHECK_SEMVER.md) (upper case) because each matches the script it replaces and workflows read those names.
-7. **Errors.** An unsupported ref and a missing `.git` exit 1. A detached HEAD with no CI environment exits non-zero, as the script does (the script's 128 comes from git, which go-git will not reproduce exactly). Error message text is not part of the contract.
-8. **Context:** either (read-only, no credentials).
+7. **Errors.** An unsupported ref and a missing `.git` exit 1. A detached HEAD with no CI environment exits non-zero, as the script does (the script's 128 comes from git, which go-git will not reproduce exactly; `gero` exits 1). The message goes to **stdout**, as in the script, and only once. Error message text is not part of the contract.
+8. **Tags in CI.** With `GITHUB_REF` and `GITHUB_SHA` set the script only runs `git tag`, so no `.git` directory is required in the current directory: the repository is found from the current directory upward, and no repository at all gives an empty `prev_static_tag=`, not an error.
+9. **Context:** either (read-only, no credentials).
 
 ## 3. Library
 
-`internal/gittags` resolves the result from a ref, a commit and a tag source. The interface is defined in the package that consumes it ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3):
+`internal/gittags` resolves the result from a ref, an abbreviated commit and a tag source. The interface is defined in the package that consumes it ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3):
 
 ```go
 type Result struct {
@@ -79,13 +80,19 @@ type Tags interface {
 
 var ErrUnsupportedRef = errors.New("unsupported branch pattern")
 
-func Resolve(ref, sha string, tags Tags) (Result, error)
+// Short abbreviates a CI commit to its first 7 characters.
+func Short(sha string) string
+
+// Resolve uses commit exactly as given.
+func Resolve(ref, commit string, tags Tags) (Result, error)
 ```
 
-* `Resolve` is pure apart from the `Tags` call. It takes `sha` in full and uses the first 7 characters. The opt-ins are options on the call, so the default is the faithful behavior.
-* A second small piece reads the current ref and commit from a repository, and implements `Tags`, using go-git. It is the only code that imports go-git, so `Resolve` is tested with a hand-written fake.
-* **Creator date.** git's `creatordate` is the tagger date for an annotated tag and the commit date for a lightweight tag. The go-git side has to reproduce that, plus git's tie-breaking for equal dates **(unverified)**. This is checked against real `git` in the parity test, since `branch-tags` depends on it.
-* Shallow clones and detached HEAD with go-git also need confirming **(unverified)**, as noted in IMPLEMENTATION §3.
+* `Resolve` is pure apart from the `Tags` call. It uses `commit` **as given**, and the caller abbreviates: `Short` (7 characters) for the CI `GITHUB_SHA`, git's own `--short` for a local repository, which can be longer. If `Resolve` cut to 7 itself, the default local output would silently become the "Fixed 7-character short commit" improvement. The opt-ins are options on the call, so the default is the faithful behavior.
+* `internal/gitrepo` reads the current ref and commit from a repository and implements `Tags`, using go-git: `Open` (strict: requires `.git` as a directory in the given directory), `Discover` (from the directory upward, used for listing tags in CI), `Head` and `NewestFirst`. It is the only code that imports go-git, so `Resolve` is tested with a hand-written fake.
+* `internal/cli/branchtags` chooses the inputs (CI variables, else the repository), defines the `Repository` interface it consumes, and renders the three lines. It is tested with a fake `Repository`.
+* **Short commit uses `git`.** `Head` runs `git rev-parse --short HEAD`, a recorded `os/exec` fallback: git's length grows with the object count (7 minimum, 8 or more from roughly 16k objects) and lengthens on ambiguity, and go-git has no equivalent. Reproducing the rule by hand would be guesswork, and the faithful default has to match git.
+* **Creator date.** git's `creatordate` is the tagger date for an annotated tag and the commit date for a lightweight tag. `NewestFirst` reproduces that, and breaks equal dates by ref name ascending, as git does. The adapter tests compare the order with `git tag --sort=-creatordate` whenever a `git` binary is present, and it matched on every case tried (verified for lightweight, annotated, mixed and equal-date tags).
+* Shallow clones (with and without tags) and detached HEAD work with go-git, and are covered by the adapter tests. Shallow clones are built with real `git`, so that test skips when it is missing.
 
 ## 4. Test plan
 
@@ -106,6 +113,8 @@ Test first, per [TESTING](TESTING.md) and [`ai/red-green-commits.md`](../ai/red-
 | `refs/heads/release/` | `abcdef1234567` | none | default: `-head`, `-head-abcdef1`, ``; with the opt-in, `ErrUnsupportedRef` |
 | `refs/heads/main` | `abc` (short) | none | static tag uses what is there, no panic |
 
+The `Sha` column is the commit as `Resolve` receives it (already abbreviated). `Short` is tested separately: `abcdef1234567` gives `abcdef1`, and anything shorter is returned whole. A longer local commit such as `abcdef12` is used as given.
+
 A `Tags` error is returned, not swallowed.
 
 **go-git adapter, against temporary repositories built in the test** (`testdata/` for any golden output):
@@ -114,10 +123,12 @@ A `Tags` error is returned, not swallowed.
 * Current ref and short commit on a branch, and on detached HEAD (error). Discovery from a subdirectory and in a worktree is asserted only with its improvement flag, since the faithful default requires a `.git` directory in the current directory.
 * A shallow clone with and without tags.
 
-**`cmd`, in-process (captured stdout, stderr, exit code):**
+**`internal/cli/branchtags`, with a fake `Repository`:** CI inputs (no `.git` required, no repository means no tags), local inputs (also when only one of `GITHUB_REF` and `GITHUB_SHA` is set, or both are empty), a longer local commit used as given, every error path (not a repository, detached HEAD, unsupported ref, tag listing failure), and `Render` keeping the empty `prev_static_tag=` line.
 
-* `GITHUB_REF` and `GITHUB_SHA` set: exact default output, key order included. Only one of them set: falls back to the repository.
-* Unsupported ref and not a repository: exit 1. Detached HEAD with no CI environment: non-zero exit.
+**`cmd`, wiring only, through the root command:**
+
+* CI variables set: the three lines on stdout.
+* Unsupported ref: the message on stdout only, nothing on stderr, and an error (exit 1). Not a repository: an error.
 * Each improvement flag changes only its own case, and leaves the default output untouched.
 
 **Parity (optional, `test/integration/`):** build the same temporary repositories, run the original script and the built `gero`, and compare stdout. This is also the check for the unverified go-git ordering. All default-mode rows must match the script. The improvement rows from section 6 are asserted separately. The original script lives there as a fixture.
@@ -126,7 +137,7 @@ A `Tags` error is returned, not swallowed.
 
 * **Branch families as config.** Supported ref patterns default to `main` and `release/*`, and an optional config could override them, possibly in the repo-level `gero.yaml`. [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md) currently allows only `WorkflowsConfig` in a target repo's `gero.yaml`, so this needs a decision there first. Unconfigured behavior stays the script's.
 * **Flags.** Whether `--ref`, `--sha` and `--repo <path>` are worth adding to run the command without the CI environment. Undecided; the environment rule stays the default.
-* **Default local short commit.** To be faithful, the default should match `git rev-parse --short`. go-git has no equivalent that lengthens on ambiguity, so either reproduce git's rule (minimum 7, longer when the prefix is ambiguous) or ask git through the `os/exec` fallback allowed in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md). Settled with the first adapter tests.
+* **Default local short commit.** Decided: ask git through the `os/exec` fallback (section 3). Revisit only if a go-git abbreviation that matches git appears, since the subprocess inherits the environment and git config.
 * **Opt-in flag names and grouping.** One flag per improvement in section 6, or a single flag that turns on the related ones.
 * **Error reporting.** The stderr row in section 6 touches a global rule ([CLI_OUTPUT](CLI_OUTPUT.md): diagnostics to stderr). Whether it still needs a per-command opt-in.
 

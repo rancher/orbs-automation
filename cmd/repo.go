@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/rancher/orbs-automation/internal/cli/branchtags"
 	"github.com/rancher/orbs-automation/internal/cli/checksemver"
-	"github.com/rancher/orbs-automation/internal/errs"
 	"github.com/spf13/cobra"
 )
 
@@ -35,8 +35,21 @@ stripped. Any text is accepted, SemVer or not.`,
 		&cobra.Command{
 			Use:   "branch-tags",
 			Short: "Resolve branch and previous tags from the repository state",
-			RunE: func(*cobra.Command, []string) error {
-				return errs.NotImplemented("gero repo branch-tags")
+			Long: `Print the branch tag, the static tag for this commit and the previous
+static tag, for refs/heads/main and refs/heads/release/<version>.
+
+The ref and commit come from GITHUB_REF and GITHUB_SHA when both are set,
+else from the git repository in the current directory.`,
+			// Faithful to the script: errors are printed to stdout, once.
+			SilenceErrors: true,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				res, err := branchtags.Resolve(os.Getenv, ".")
+				if err != nil {
+					_, _ = fmt.Fprintln(cmd.OutOrStdout(), err)
+					return err
+				}
+				_, err = fmt.Fprint(cmd.OutOrStdout(), branchtags.Render(res))
+				return err
 			},
 		},
 	)
