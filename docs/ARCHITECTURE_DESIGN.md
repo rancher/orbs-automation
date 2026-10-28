@@ -10,7 +10,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 |                                                                                   |
 |   +-------------------+    +------------------------+    +--------------------+   |
 |   |    cmd/gero/      |    |       workflows/       |    |       config/      |   |
-|   |  (Go CLI Binary)  |    |  (Reusable GHA Workf)  |    |  (topology.yaml)   |   |
+|   |  (Go CLI Binary)  |    |  (Reusable GHA Workf)  |    | (project configs)  |   |
 |   +-------------------+    +------------------------+    +--------------------+   |
 +------------------------------------------+----------------------------------------+
                                            |
@@ -45,48 +45,17 @@ The system uses a **Hybrid Workflow Model** combining central reusable workflows
 
 ---
 
-## 3. Topology & Dependency Graph (`topology.yaml`)
+## 3. Topology & Config
 
-The central automation repo is the source of truth for the project list, project connections, release propagation rules, and the shared map from release lines to each repo's branches. Config the tool only needs while it is already working in a target repo lives in that repo instead (see Section 2.B and `IMPLEMENTATION.md`).
+The central automation repo is the source of truth for the project list, how projects relate (what each takes updates from), the Rancher release lines, and the configs of projects we do not own. Config is a set of YAML documents with `apiVersion`, `kind`, `name` and `spec`, inspired by Kubernetes resources but not compatible with them.
 
-The example below is **illustrative only**. The final file shape (one file or several, how release lines and branches are modeled, how per-consumer rules are expressed) is still open; see the open questions in `IMPLEMENTATION.md`. Each edge is declared once, under `downstream`, and the upstream direction is derived.
+Kinds so far (names are not final):
+* `Project`: a repo we model. Its `spec` has `repo`, `release` (branch policy, tag pattern, line-to-branch mapping) and `sources` (what it takes updates from, with `accept` and `update`). Edges are declared once, on the consuming side, and the reverse view is derived. A project can be a consumer on one edge and a producer on another.
+* `RancherLines`: the set of Rancher lines with their phase and Kubernetes range. It has no branches; each project maps its own branches to line IDs.
+* `External`: a third-party project we track (`trackOnly`, `react`) or notify.
+* `WorkflowsConfig`: how workflows are rendered into a repo's branches. This lives in the target repo's `gero.yaml`, not centrally, and is the only kind allowed there for now.
 
-```yaml
-version: "1.0"
-ecosystem:
-  name: "core-platform"
-
-projects:
-  - name: "auth-service"
-    repo: "my-org/auth-service"
-    default_branch: "main"
-    requires_prerelease: true
-    downstream:
-      - "api-gateway"
-      - "user-dashboard"
-
-  - name: "api-gateway"
-    repo: "my-org/api-gateway"
-    default_branch: "main"
-    requires_prerelease: false
-    downstream:
-      - "rancher-charts"
-
-  - name: "user-dashboard"
-    repo: "my-org/user-dashboard"
-    default_branch: "main"
-    requires_prerelease: false
-
-  - name: "rancher-charts"
-    repo: "my-org/rancher-charts"
-    default_branch: "main"
-    requires_prerelease: false
-
-external_dependencies:
-  - name: "upstream-cloud-sdk"
-    repo: "third-party/cloud-sdk"
-    action: "notify" # Options: react, notify, track-only
-```
+Illustrative mock files are in [`../config/`](../config/README.md) and [`../mock-repos/`](../mock-repos/). Details, defaults and open questions are in `IMPLEMENTATION.md`.
 
 ---
 
@@ -142,5 +111,5 @@ What a QA run proves it tested (Rancher version, chart version or image) must be
 
 An optional `gero dashboard` or `gero triage` subcommand runs a lightweight embedded HTTP server (`net/http` with embedded static assets) on the developer's machine:
 * Displays real-time status of multi-repo release trains by querying the central tracking issues.
-* visualizes project dependency trees defined in `topology.yaml`.
+* visualizes the project graph defined by the `sources` in the central config.
 * Inspired by Google's `triage-party`, allowing local custom views into multi-repo issue and release states.

@@ -6,6 +6,8 @@ Each note was gathered from a read-only review of a local clone (and a few read-
 
 ## Index
 
+The groupings below describe how each project behaves in the relationships we reviewed. They are not a fixed role for the project: producer and consumer are properties of an edge, and one project can be both (e.g. `rancher-charts` consumes BRO and feeds Rancher).
+
 **Producers (release something that flows downstream)**
 * [backup-restore-operator](backup-restore-operator.md): `automation-core` branch, hybrid reusable + rendered workflows
 * [rancher-shell](rancher-shell.md): `automation-core` branch, reusable workflows with thin stubs
