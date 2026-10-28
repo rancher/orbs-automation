@@ -1,0 +1,10 @@
+# SCC Operator project config
+apiVersion: gero/v1alpha1
+kind: Project
+name: scc-operator
+spec:
+  repo:
+    name: rancher/scc-operator
+    owned: true
+  release:
+    requiresPrerelease: true

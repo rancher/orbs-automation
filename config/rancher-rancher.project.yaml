@@ -1,0 +1,34 @@
+# `r/r` repo Project config
+apiVersion: gero/v1alpha1
+kind: Project
+name: rancher-rancher
+spec:
+  repo:
+    name: rancher/rancher
+  release:
+    branches: perLine
+    lines:
+      - line: v2.16             # no branch: default branch while "development"
+      - line: v2.15
+        branch: release/v2.15
+      - line: v2.14
+        branch: release/v2.14
+      - line: v2.13
+        branch: release/v2.13
+      - line: v2.12
+        branch: release/v2.12
+  pullRequests:
+    title: "[{branch}] Update {source} to {version}"
+    branchPrefix: "bot/{source}-"
+    labels:
+      - status/auto-created
+      - team/orbs
+  sources:
+    - from: scc-operator
+      update:
+        strategy: buildYamlBump
+        params:
+          file: build.yaml
+          key: defaultSccOperatorImage
+        postEdit:
+          - go generate ./...

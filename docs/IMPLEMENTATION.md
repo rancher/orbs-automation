@@ -77,7 +77,7 @@ Informed by [frameworks-automation](references/frameworks-automation.md) (an ins
 
 ## 7. Config Shape and Placement
 
-Informed by [backup-restore-operator](projects/backup-restore-operator.md) and [rancher-shell](projects/rancher-shell.md). The backup-restore-operator style (hybrid: reusable workflows, composite actions and rendered templates) is the closer model for what the central repo offers. Mock configs live in [`../config/`](../config/README.md) and [`../mock-repos/`](../mock-repos/); they are illustrative and not final.
+Informed by [backup-restore-operator](projects/backup-restore-operator.md) and [rancher-shell](projects/rancher-shell.md). The backup-restore-operator style (hybrid: reusable workflows, composite actions and rendered templates) is the closer model for what the central repo offers. Real configs live in [`../config/`](../config/README.md) and mock configs in [`../config-mock/`](../config-mock/) and [`../mock-repos/`](../mock-repos/); they are illustrative and not final.
 
 ### Shape
 
@@ -103,13 +103,13 @@ Informed by [backup-restore-operator](projects/backup-restore-operator.md) and [
 
 ## 8. Repo Shapes and Downstream Bumps
 
-Evidence: [scc-operator](projects/scc-operator.md), [rancher-charts](projects/rancher-charts.md), [rancher-rancher](projects/rancher-rancher.md), [kuberlr-kubectl and the other mock projects](../config/README.md) and the cross-project table in [projects/README](projects/README.md).
+Evidence: [scc-operator](projects/scc-operator.md), [rancher-charts](projects/rancher-charts.md), [rancher-rancher](projects/rancher-rancher.md), [kuberlr-kubectl and the other mock projects](../config-mock/) and the cross-project table in [projects/README](projects/README.md).
 
 * **Pull-style config.** Each project lists its **sources** (the projects it takes updates from) with `accept` (which releases and lines it takes) and `update` (strategy, params, post-edit commands). Producers do not describe their consumers. Push style exists only for `notify` toward external projects we do not model. Roles (producer/consumer) are per edge, and the reverse view ("who consumes X") is derived.
 * **Every project is tied to a Rancher line for our team's repos**, except "universal" projects (e.g. `ob-team-charts`, `scc-operator`) that only become line-specific when they land in a branch of a line-specific repo such as `rancher/charts`. These leave `release.lines` out, because `universal` is the default.
 * **Release branches are optional.** A repo declares its release-branch policy (`single` or `perLine`), and the tool must not assume `release/vX.Y`.
 * **A repo's version line is separate from its consumers' branches.** Producers do not carry downstream branch names.
-* **One shared line map.** The mapping from a line to each repo's branch was encoded in many places with different logic. The `RancherLines` document holds line facts only (phase, Kubernetes range), with no branches. Each project maps its own series and branches to line IDs under `release.lines`, including `rancher/rancher` itself.
+* **One shared line map.** The mapping from a line to each repo's branch was encoded in many places with different logic. The `RancherLines` document holds line facts only (phase, Kubernetes range), with no branches. Phase follows the product dates: `development`, `ga`, `eom`, `eol`. Each project maps its own series and branches to line IDs under `release.lines`, including `rancher/rancher` itself.
   * The development line comes from a repo's default branch. A branch cut moves `main` to the next line. A `release.lines` entry with no `branch` resolves to the default branch only while the line's `phase` is `development`; any other missing branch is an error, never a silent skip.
   * A source with `accept.lines: all` maps, per Rancher line, the source's release for that line to the consumer's branch for that line.
 * **A downstream bump has four parts:**

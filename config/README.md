@@ -1,6 +1,6 @@
-# Config (MOCK, for review)
+# Config
 
-Illustrative configs. Shapes and values are not final.
+The configs `gero` runs on. Shapes are `gero/v1alpha1` and may still change before v1.0.0. Illustrative configs for projects we do not model yet live in [`../config-mock/`](../config-mock/).
 
 Every file is YAML with `apiVersion`, `kind`, `name` and `spec`, inspired by Kubernetes resources but not compatible with them (no `metadata` or `status`). Files may hold several documents.
 
@@ -12,6 +12,17 @@ Every file is YAML with `apiVersion`, `kind`, `name` and `spec`, inspired by Kub
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches (lives in the repo) | repo |
 
 File names in this repo: `<name>.project.yaml`, `<name>.external.yaml`, `rancher.lines.yaml`. In a target repo: `gero.yaml`.
+
+## Line phases
+
+`RancherLines` gives each line a `phase`, following the product dates (GA, EOM, EOL):
+
+| Phase | Meaning |
+|---|---|
+| `development` | Before GA. Served from a repo's default branch. |
+| `ga` | Generally available, fully supported. |
+| `eom` | End of maintenance reached: still supported, but only for fixes. |
+| `eol` | End of life. Remove the line from config. |
 
 ## Defaults (applied when a field is omitted)
 
