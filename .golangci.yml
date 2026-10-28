@@ -19,7 +19,7 @@ linters:
       rules:
         main:
           # Strict: only the allow-list below may be imported. Adding a
-          # dependency means updating docs/CLI_FOUNDATIONS.md section 2 too.
+          # dependency means updating docs/specs/DEPENDENCY_POLICY.md too.
           list-mode: strict
           files:
             - $all
@@ -30,7 +30,7 @@ linters:
             - github.com/spf13/cobra
             - github.com/cli/go-gh
             - github.com/google/go-github
-            # YAML library: add once chosen (CLI_FOUNDATIONS section 13).
+            # YAML library: add once chosen (docs/specs/DEPENDENCY_POLICY.md open questions).
         test:
           list-mode: lax
           files:

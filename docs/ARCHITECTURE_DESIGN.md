@@ -53,7 +53,7 @@ The CLI is built on **cobra** with a small custom loader for CLI config (no vipe
                         internal/clicfg  ->  Settings  ->  command
 ```
 
-Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Prompts and rich rendering sit behind `internal/ui`, which leaves room for a TUI later. Dependencies are stdlib-first and allow-listed. All decisions are in [CLI_FOUNDATIONS](CLI_FOUNDATIONS.md).
+Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Prompts and rich rendering sit behind `internal/ui`, which leaves room for a TUI later. Dependencies are stdlib-first and allow-listed. All decisions are in the [specs](specs/README.md).
 
 ---
 
