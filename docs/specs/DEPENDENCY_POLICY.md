@@ -18,7 +18,7 @@
 
 * Test-only modules are imported from `_test.go` files and from generated mock packages, never from production code. The `depguard` `main` rule excludes `$test`, so they stay out of the production allow-list. Use them where they help, not by default: plain `testing` is fine for a simple case.
 * **Integration-test dependencies live in the `test/integration` sub-module**, never in the root `go.mod` ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 5). The same rule applies: each one gets an entry here saying what the standard library would cost us. None approved yet.
-* `os/exec` calling `git` is allowed only as a recorded fallback where go-git falls short (IMPLEMENTATION §3). In use: `internal/gitrepo` runs `git rev-parse --short HEAD`, because git's abbreviation length depends on the repository's object count and go-git has no equivalent ([BRANCH_TAGS](BRANCH_TAGS.md) section 3).
+* `os/exec` calling `git` is an escape hatch, allowed only for an operation go-git cannot do (IMPLEMENTATION §3). It is not a runtime fallback and has no obligation to mirror go-git. It is lint-enforced: `os/exec` is importable only from `internal/git/gitcli`, and go-git only from `internal/git/repo`. In use: `gitcli.ShortCommit` runs `git rev-parse --short HEAD`, because git's abbreviation length depends on the repository's object count and go-git has no equivalent ([BRANCH_TAGS](BRANCH_TAGS.md) section 3).
 * Not adopted: `viper`, color or logging libraries, any TUI library ([CLI_FRAMEWORK](CLI_FRAMEWORK.md), [CLI_OUTPUT](CLI_OUTPUT.md)).
 
 ## Open questions

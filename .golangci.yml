@@ -58,6 +58,27 @@ linters:
           deny:
             - pkg: github.com/spf13/cobra
               desc: cobra is only allowed in cmd/ (docs/specs/PROJECT_LAYOUT.md)
+        # go-git stays in internal/git/repo, the one place that reads a local
+        # repository (docs/specs/PROJECT_LAYOUT.md section 6).
+        nogogit:
+          list-mode: lax
+          files:
+            - "!**/internal/git/repo/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/go-git/go-git
+              desc: go-git is only allowed in internal/git/repo (docs/specs/PROJECT_LAYOUT.md)
+        # os/exec is the escape hatch to the git binary and lives only in
+        # internal/git/gitcli, where each use records why go-git cannot do it
+        # (docs/specs/DEPENDENCY_POLICY.md).
+        noexec:
+          list-mode: lax
+          files:
+            - "!**/internal/git/gitcli/**"
+            - "!$test"
+          deny:
+            - pkg: os/exec
+              desc: os/exec is only allowed in internal/git/gitcli, as an escape hatch for what go-git cannot do (docs/specs/DEPENDENCY_POLICY.md)
         # main.go only calls cmd.Execute().
         entrypoint:
           list-mode: strict

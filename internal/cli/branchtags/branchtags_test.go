@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/gitrepo"
-	"github.com/rancher/orbs-automation/internal/gittags"
+	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/git/repo"
 )
 
 type fakeRepo struct {
@@ -39,7 +39,7 @@ func TestResolveFromCI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := gittags.Result{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}
+	want := git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}
 	if got != want {
 		t.Errorf("Resolve = %+v, want %+v", got, want)
 	}
@@ -51,11 +51,11 @@ func TestResolveFromCI(t *testing.T) {
 func TestResolveFromCIWithoutRepository(t *testing.T) {
 	vars := map[string]string{"GITHUB_REF": "refs/heads/release/v2.x", "GITHUB_SHA": "abcdef1234567"}
 	var n int
-	got, err := resolve(env(vars), ".", nil, serve(nil, gitrepo.ErrNotRepository, &n))
+	got, err := resolve(env(vars), ".", nil, serve(nil, repo.ErrNotRepository, &n))
 	if err != nil {
 		t.Fatalf("a missing repository is not an error in CI mode: %v", err)
 	}
-	want := gittags.Result{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef1"}
+	want := git.BranchTags{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef1"}
 	if got != want {
 		t.Errorf("Resolve = %+v, want %+v", got, want)
 	}
@@ -85,7 +85,7 @@ func TestResolveFromRepository(t *testing.T) {
 				t.Fatal(err)
 			}
 			// The local abbreviation is used as given, even past 7 characters.
-			want := gittags.Result{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef12", PrevStaticTag: "v2.x-head-1111111"}
+			want := git.BranchTags{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef12", PrevStaticTag: "v2.x-head-1111111"}
 			if got != want {
 				t.Errorf("Resolve = %+v, want %+v", got, want)
 			}
@@ -101,17 +101,17 @@ func TestResolveErrors(t *testing.T) {
 		open opener
 		want error
 	}{
-		{"not a repository", nil, func(string) (Repository, error) { return nil, gitrepo.ErrNotRepository }, gitrepo.ErrNotRepository},
-		{"detached HEAD", nil, func(string) (Repository, error) { return fakeRepo{headErr: gitrepo.ErrDetachedHead}, nil }, gitrepo.ErrDetachedHead},
-		{"unsupported local branch", nil, func(string) (Repository, error) { return fakeRepo{ref: "refs/heads/feature/x", short: "abcdef1"}, nil }, gittags.ErrUnsupportedRef},
-		{"unsupported CI ref", map[string]string{"GITHUB_REF": "refs/pull/12/merge", "GITHUB_SHA": "abcdef1"}, nil, gittags.ErrUnsupportedRef},
+		{"not a repository", nil, func(string) (Repository, error) { return nil, repo.ErrNotRepository }, repo.ErrNotRepository},
+		{"detached HEAD", nil, func(string) (Repository, error) { return fakeRepo{headErr: repo.ErrDetachedHead}, nil }, repo.ErrDetachedHead},
+		{"unsupported local branch", nil, func(string) (Repository, error) { return fakeRepo{ref: "refs/heads/feature/x", short: "abcdef1"}, nil }, git.ErrUnsupportedRef},
+		{"unsupported CI ref", map[string]string{"GITHUB_REF": "refs/pull/12/merge", "GITHUB_SHA": "abcdef1"}, nil, git.ErrUnsupportedRef},
 		{"tag listing fails", nil, func(string) (Repository, error) {
 			return fakeRepo{ref: "refs/heads/main", short: "abcdef1", tagsErr: boom}, nil
 		}, boom},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			discover := func(string) (Repository, error) { return nil, gitrepo.ErrNotRepository }
+			discover := func(string) (Repository, error) { return nil, repo.ErrNotRepository }
 			if _, err := resolve(env(tt.vars), ".", tt.open, discover); !errors.Is(err, tt.want) {
 				t.Errorf("err = %v, want %v", err, tt.want)
 			}
@@ -122,12 +122,12 @@ func TestResolveErrors(t *testing.T) {
 func TestRender(t *testing.T) {
 	tests := []struct {
 		name string
-		res  gittags.Result
+		res  git.BranchTags
 		want string
 	}{
-		{"all set", gittags.Result{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"},
+		{"all set", git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"},
 			"branch_tag=head\nbranch_static_tag=main-abcdef1\nprev_static_tag=main-1111111\n"},
-		{"empty previous tag keeps its line", gittags.Result{BranchTag: "head", BranchStaticTag: "main-abcdef1"},
+		{"empty previous tag keeps its line", git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1"},
 			"branch_tag=head\nbranch_static_tag=main-abcdef1\nprev_static_tag=\n"},
 	}
 	for _, tt := range tests {

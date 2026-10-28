@@ -20,6 +20,9 @@ internal/cli/<cmd>/  one subpackage per command: its logic as plain functions, n
 internal/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
 internal/config/     application config: types, loader, validation, defaults
 internal/ui/         output and prompt seam, plain-text implementation first   (CLI_OUTPUT)
+internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
+internal/git/repo/   local repository access with go-git; the only importer of go-git
+internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; the only importer of os/exec
 internal/...         domain packages as they arrive: lines, bump, reconcile, github
 test/integration/    separate Go module (own go.mod) for integration tests     (TESTING)
 ```
@@ -48,7 +51,7 @@ main.go -> cmd -> internal/cli/<cmd>  ->  domain packages  ->  internal/config, 
 
 * `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...` and `internal/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any other `internal/` package, but not another command package. Shared command code goes in a third, smaller package.
-* Domain packages (`semver`, `gittags`, `config`, ...) never import `internal/cli/...` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
+* Domain packages (`semver`, `git`, `config`, ...) never import `internal/cli/...` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
 * `internal/clicfg` and `internal/config` do not import each other. `Settings` is passed down by the command, never read from a global.
 * Domain packages take their dependencies as arguments (a `*slog.Logger`, a GitHub client interface, a `Settings` value). No package-level logger, client or config singleton.
 * Interfaces are defined where they are consumed, so a domain package can be tested without the real GitHub client.
@@ -79,7 +82,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 
 * The `internal/` rule is compiler-enforced.
 * Imports of third-party modules are checked by the depguard allow-list ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
-* **The `cmd/` boundary is lint-enforced.** A second depguard rule scoped to `cmd/` (`files: ["**/cmd/**"]`, strict) allows only `$gostd`, `github.com/spf13/cobra`, `github.com/rancher/orbs-automation/cmd`, `.../internal/cli` and `.../internal/errs` (depguard matches by prefix, so subpackages are covered). A matching rule for `main.go` allows only `$gostd` and `github.com/rancher/orbs-automation/cmd`. A third rule, `nocobra`, denies `github.com/spf13/cobra` in every file outside `cmd/`, `main.go` and tests, so `internal/cli/` and the domain packages cannot import it. The rest of dependency direction (section 3) is by review for now. A depguard rule per package can be added once there are enough packages to be worth it.
+* **The `cmd/` boundary is lint-enforced.** A second depguard rule scoped to `cmd/` (`files: ["**/cmd/**"]`, strict) allows only `$gostd`, `github.com/spf13/cobra`, `github.com/rancher/orbs-automation/cmd`, `.../internal/cli` and `.../internal/errs` (depguard matches by prefix, so subpackages are covered). A matching rule for `main.go` allows only `$gostd` and `github.com/rancher/orbs-automation/cmd`. A third rule, `nocobra`, denies `github.com/spf13/cobra` in every file outside `cmd/`, `main.go` and tests, so `internal/cli/` and the domain packages cannot import it. Two more `deny` rules keep git access in one place: `nogogit` allows go-git only in `internal/git/repo`, and `noexec` allows `os/exec` only in `internal/git/gitcli`. The rest of dependency direction (section 3) is by review for now. A depguard rule per package can be added once there are enough packages to be worth it.
 
 ## Open questions
 

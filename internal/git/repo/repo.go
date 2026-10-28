@@ -1,19 +1,19 @@
-// Package gitrepo reads the facts the branch-tags command needs from a local
-// repository: the current ref, the abbreviated commit and the tags by date. It
-// is the only package that imports go-git.
-package gitrepo
+// Package repo reads the facts commands need from a local repository: the
+// current ref, the abbreviated commit and the tags by date. It uses go-git, and
+// reaches for internal/git/gitcli only for what go-git cannot do. It is the
+// only package that imports go-git.
+package repo
 
 import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/rancher/orbs-automation/internal/git/gitcli"
 )
 
 var (
@@ -59,7 +59,8 @@ func Discover(dir string) (*Repo, error) {
 }
 
 // Head returns the full ref HEAD points to, for example refs/heads/main, and
-// the abbreviated commit it resolves to. A detached HEAD is ErrDetachedHead.
+// the abbreviated commit it resolves to (git's own abbreviation, see gitcli).
+// A detached HEAD is ErrDetachedHead.
 func (r *Repo) Head() (ref, short string, err error) {
 	head, err := r.repo.Reference(plumbing.HEAD, false)
 	if err != nil {
@@ -68,24 +69,11 @@ func (r *Repo) Head() (ref, short string, err error) {
 	if head.Type() != plumbing.SymbolicReference {
 		return "", "", ErrDetachedHead
 	}
-	short, err = r.shortCommit()
+	short, err = gitcli.ShortCommit(r.dir)
 	if err != nil {
 		return "", "", err
 	}
 	return head.Target().String(), short, nil
-}
-
-// shortCommit asks git for the abbreviated HEAD commit, the same call the
-// script makes. This is a recorded os/exec fallback (DEPENDENCY_POLICY):
-// git's --short length grows with the object count of the repository (7
-// characters minimum, 8 or more from roughly 16k objects) and lengthens on
-// ambiguity, and go-git has no equivalent.
-func (r *Repo) shortCommit() (string, error) {
-	out, err := exec.Command("git", "-C", r.dir, "rev-parse", "--short", "HEAD").Output()
-	if err != nil {
-		return "", fmt.Errorf("git rev-parse --short HEAD: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 type datedTag struct {
