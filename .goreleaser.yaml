@@ -1,0 +1,51 @@
+# Make sure to check the documentation at https://goreleaser.com
+version: 2 # the goreleaser config version
+before:
+  hooks:
+    - go mod tidy
+builds:
+    - id: gero
+      main: ./main.go
+      goos:
+        - darwin
+        - linux
+      goarch:
+        - amd64
+        - arm64
+      binary: gero
+      ldflags:
+        - -extldflags
+        - -static
+        - -s -w
+        - -X github.com/rancher/orbs-automation/cmd/version.Version={{.Version}}
+        - -X github.com/rancher/orbs-automation/cmd/version.Commit={{.Commit}}
+        - -X github.com/rancher/orbs-automation/cmd/version.Date={{.Date}}
+      flags:
+        - -trimpath
+      env:
+        - CGO_ENABLED=0
+
+archives:
+    - id: gero
+      builds:
+        - gero
+      name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
+
+release:
+  prerelease: auto
+  draft: true
+  extra_files:
+    - glob : ./build/artifacts/*.tgz
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

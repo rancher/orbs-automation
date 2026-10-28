@@ -5,6 +5,7 @@ import (
 
 	"github.com/rancher/orbs-automation/cmd/ci"
 	"github.com/rancher/orbs-automation/cmd/groups"
+	"github.com/rancher/orbs-automation/cmd/version"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,8 @@ without manual intervention, with gh-style commands: gero <category> <action>.`,
 }
 
 func init() {
+	// Setting Version makes cobra add the --version flag.
+	rootCmd.Version = version.String()
 	rootCmd.AddGroup(&groups.CIGroup)
 	ci.RegisterSubcommands(rootCmd)
 }
