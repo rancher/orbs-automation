@@ -2,13 +2,12 @@
 
 Working notes on implementation choices: decisions, leanings and open questions. Evidence about specific repos lives in [`projects/`](projects/README.md) and [`references/`](references/frameworks-automation.md); this doc links to it instead of repeating it.
 
-Status markers: unmarked items are decided. **(leaning)** is a proposal not yet agreed. **(unverified)** was decided from memory and needs confirmation (e.g. a small spike) before we rely on it.
+Status markers: unmarked items are decisions or working agreements. **(leaning)** is a proposal not yet agreed. **(unverified)** was decided from memory and needs confirmation (e.g. a small spike) before we rely on it.
 
 ## 1. CLI Packaging
 
 * The binary is named **`gero`** (Dr. Gero). It does not need to match the repo name.
-* **Standalone-first.** The CLI must be usable by humans without being a `gh` extension, and CI downloads a pinned release binary.
-* **Decided: standalone only, using the GitHub APIs directly** (`go-gh` and `go-github`, section 3). `gh` is not a hard dependency: it is only needed for the keyring token fallback and interactive or passthrough steps.
+* **Standalone only, using the GitHub APIs directly** (`go-gh` and `go-github`, section 3). `gh` is not a hard dependency: it is only needed for the keyring token fallback and interactive or passthrough steps.
 * There is no published `gh` extension, so the central repo keeps its name and does not need a `gh-` prefix. A developer who wants `gh gero` can install the binary as an extension locally (e.g. `gh extension install .` from a checkout); that is a personal convenience and is not supported or documented as an install path.
 * Name collisions for the `gero` binary on `PATH` are assumed not to be a problem (not a common binary name, and none expected on the team).
 
@@ -42,7 +41,7 @@ Use two Go libraries together, and shell out to `gh` only where it adds somethin
 
 ## 4. Release Rules
 
-* `requires_prerelease` means a stable tag must come from a commit that already has an RC. It is a safety check that some repos do not need at all.
+* `release.requiresPrerelease` means a stable tag must come from a commit that already has an RC. It is a safety check that some repos do not need at all, so it is off unless a project opts in. The config accepts it from the start; enforcement ships later (see [PHASES](PHASES.md)).
 * Even when the rule is on, it can be **overridden per release** (e.g. a single-commit CVE dependency bump that needs a new patch, not an RC retest).
   * Mechanism: an explicit CLI flag or issue label, with the reason recorded in the tracking issue. **(leaning)**
 * **Tag classification** (semver, prerelease, build metadata) is one shared library function. Existing repos reimplement it in shell (see [projects/](projects/README.md)).
@@ -105,7 +104,7 @@ Informed by [backup-restore-operator](projects/backup-restore-operator.md) and [
 Evidence: [scc-operator](projects/scc-operator.md), [rancher-charts](projects/rancher-charts.md), [rancher-rancher](projects/rancher-rancher.md), [kuberlr-kubectl and the other mock projects](../config/README.md) and the cross-project table in [projects/README](projects/README.md).
 
 * **Pull-style config.** Each project lists its **sources** (the projects it takes updates from) with `accept` (which releases and lines it takes) and `update` (strategy, params, post-edit commands). Producers do not describe their consumers. Push style exists only for `notify` toward external projects we do not model. Roles (producer/consumer) are per edge, and the reverse view ("who consumes X") is derived.
-* **Every project is tied to a Rancher line for our team's repos**, except "universal" projects (e.g. `ob-team-charts`, `scc-operator`) that only become line-specific when they land in a branch of a line-specific repo such as `rancher/charts`. These use `release.lines: universal`.
+* **Every project is tied to a Rancher line for our team's repos**, except "universal" projects (e.g. `ob-team-charts`, `scc-operator`) that only become line-specific when they land in a branch of a line-specific repo such as `rancher/charts`. These leave `release.lines` out, because `universal` is the default.
 * **Release branches are optional.** A repo declares its release-branch policy (`single` or `perLine`), and the tool must not assume `release/vX.Y`.
 * **A repo's version line is separate from its consumers' branches.** Producers do not carry downstream branch names.
 * **One shared line map.** The mapping from a line to each repo's branch was encoded in many places with different logic. The `RancherLines` document holds line facts only (phase, Kubernetes range), with no branches. Each project maps its own series and branches to line IDs under `release.lines`, including `rancher/rancher` itself.
@@ -127,15 +126,15 @@ Evidence: [scc-operator](projects/scc-operator.md), [rancher-charts](projects/ra
 When implementation starts, build a validator (runnable without credentials) that checks:
 
 * dangling project references, and that each `release.lines` entry names a known Rancher line
-* each edge declared once, under the consuming project's `sources`
+* each project-to-project edge declared once, under the consuming project's `sources`
 * **Roles belong to relationships, not projects.** A project can be a producer on one edge and a consumer on another (e.g. a chart repo that consumes an operator and feeds Rancher). Project config has no `role` field; producer and consumer are derived from the edges.
 * **One action per pair of projects, per edge:** `notify` (outbound) is mutually exclusive with `trackOnly` / `react` (inbound) between the same two projects, since both would imply a circular dependency. This applies to a pair, not to a project as a whole.
-* edge kinds (bump, notify, track/react, and later QA test) are named on the edge, because a project like the QA repo is related to others by something other than a bump
+* edge kinds are explicit: a `sources` entry is a bump edge, `External` `relationships[].action` names `trackOnly`, `react` or `notify`, and a QA test edge is added later, because a project like the QA repo is related to others by something other than a bump
 * a `gero.yaml` in a repo contains only allowed kinds
 
 **No hard limit on graph shape beyond the pair rule.** Real workflows are complex, and artificial limits (such as banning every cycle through three or more projects) could block legitimate setups. Cycles across several projects are warnings at most. Graph traversal must be cycle-safe regardless (track visited projects).
 
-## 10. QA Handshake (V2, undecided)
+## 10. QA Handshake (v3, undecided)
 
 Evidence: [observability-e2e](projects/observability-e2e.md). Nothing here is decided.
 
@@ -148,7 +147,6 @@ Evidence: [observability-e2e](projects/observability-e2e.md). Nothing here is de
 Conventions the tool wants repos to follow, so automation does not fight them.
 
 * **Helm chart unit tests and dynamic values.** Tests for a value that automation bumps (for example a default image tag) should set the input explicitly and assert the same value, not depend on the chart's default. That way the value can change without breaking tests, and the tests still validate the template mechanics. For example, `backup-restore-operator`'s `kubectl-image_test.yaml` asserts the default `kuberlr-kubectl` tag, so a default bump would break it. The tool does not edit test files as part of a bump.
-
 * **`VERSION.md` is the standard place for branch and version mapping, and it is generated from config.** Repos document their line mapping today in different places and formats (a `VERSION.md`, a README table). The standard is a `VERSION.md` in each owned repo, generated by `gero` from the project's `release.lines` and the `RancherLines` facts (e.g. the Kubernetes range), and kept in sync on the default branch with a PR, like rendered workflows. It carries a generated header, and `verify` detects drift. This also moves toward automating today's manual "branch for X" workflow. Release branches keep whatever copy they had when cut.
 
 ## 12. Documentation Policy
@@ -158,12 +156,12 @@ Conventions the tool wants repos to follow, so automation does not fight them.
 
 ## 13. Open Questions
 
-* Scope of V1: which repos, and what release cadence?
+* Scope and order of the milestones: see [PHASES](PHASES.md).
 * Reconciler triggering: cron only, or `repository_dispatch` where needed.
 * Whether any config other than `WorkflowsConfig` ever moves into target repos.
 * Final kind names and field names (everything in `config/` is a mock).
 * Which existing workflows to standardize first, and whether the central repo publishes them as reusable workflows or composite actions.
-* Which parts of the charts and Rancher bump logic ship in V1, and whether the CLI replaces the existing "push to X" scripts or wraps them at first.
+* Whether the CLI replaces the existing "push to X" scripts or wraps them at first (decided in v0.x, see [PHASES](PHASES.md)).
 * How new Rancher lines are cut and registered in the line map (manual edit, or a command that updates it).
 * How downstream repos pin and call reusable workflows; resolve when we review a repo that consumes the existing core branches.
 * The `VERSION.md` format: one standard layout across repos, which fields it shows (branch, tag, Rancher line, Kubernetes range, EOL section), and whether other tools that read `VERSION.md` today (e.g. frameworks-automation reads per-repo `VERSION.md` at runtime) need the old formats to keep working.

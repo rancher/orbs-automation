@@ -19,7 +19,7 @@ This repository serves as the central command center for engineering tooling, de
 * **Human-Auditable State:** Releases are tracked via structured GitHub Issues in the automation repo. Machine state is stored in the issue, and a readable view (read-only markdown task lists and labels, including a stale marker) is rendered from it for engineers, QA and managers.
 * **Observational Cron:** A scheduled GHA workflow running a Go reconciler checks the actual state of GitHub (tags, PR merges, check runs) and updates the master tracking issues accordingly, avoiding brittle micro-management while maintaining full auditability.
 
-### 4. Cross-Boundary QA Integration (V2)
+### 4. Cross-Boundary QA Integration (v3)
 * **Ecosystem Bridging:** Once core engineering release trains are stable, the central control plane connects with the dedicated QA automation repository, recording automated test results as evidence alongside manual sign-off for stable promotions. The exact handshake is undecided.
 
 ### 5. Moonshot: Local Web Dashboards

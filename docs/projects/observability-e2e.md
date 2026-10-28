@@ -1,6 +1,6 @@
 # observability-e2e
 
-QA repo, owned by `@rancher/orbs_qa`. Informs the V2 QA handshake, which is undecided.
+QA repo, owned by `@rancher/orbs_qa`. Informs the v3 QA handshake, which is undecided.
 
 ## What it is
 * End-to-end tests for Rancher observability, backup/restore and related install/upgrade flows.
@@ -27,7 +27,7 @@ QA repo, owned by `@rancher/orbs_qa`. Informs the V2 QA handshake, which is unde
 ## Pain points
 * Heavy duplication of Qase pre/post jobs. Fragile `awk '/available:/'` parsing of the Qase report URL. Long runs (60–120 minute timeouts) needing real AWS resources, so triggering per RC is costly. A `rancher_version` typo fails late.
 
-## Implications for the V2 handshake (nothing decided)
+## Implications for the v3 handshake (nothing decided)
 * QA needs, at minimum, `milestone`, `rancher_version` or track, `chart`, `shell_image_version`, plus a new additive RC reference and a correlation ID. Some of that needs QA-side work to be consumed.
 * Realistic sign-off signals: a GitHub workflow conclusion (needs correlation), a QA-written label or status on a tracking issue or commit (needs a cross-repo token and QA changes), or Qase API polling (couples us to a third-party SaaS).
 * Leaning, to agree with the QA owners: dispatch a thin QA workflow with correlation ID, milestone and Rancher version; observe the run conclusion; record it on the tracking issue as evidence; keep the stable-tag gate a human decision.

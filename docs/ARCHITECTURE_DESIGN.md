@@ -32,7 +32,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 
 ### A. Distribution & Execution Model
 * **Binary:** `gero`, a standalone CLI. It does not require being a `gh` extension.
-* **Developer Machines:** Distributed as precompiled binaries attached to GitHub Releases in the central repository. Installed locally or compiled via `go install`. Self-update logic is explicitly out of scope for V1.
+* **Developer Machines:** Distributed as precompiled binaries attached to GitHub Releases in the central repository. Installed locally or compiled via `go install`. Self-update logic is explicitly out of scope for v1.0.0.
 * **GitHub Access:** Uses the Go API libraries `go-gh` (auth, host resolution, transport) and `go-github` (typed REST) directly. Authentication reuses `GH_TOKEN` / `GITHUB_TOKEN` or the local `gh` session where available. `gh` itself is only shelled out to for interactive or passthrough steps. See `IMPLEMENTATION.md`.
 * **Execution Contexts:** Commands are either CI-only (the reconciler and anything needing GHA-provided tokens, failing fast elsewhere) or work in either context.
 * **CI Runners:** Workflows in CI fetch a pinned, tagged release version of the `gero` binary during initial setup steps. Running `go run` dynamically in CI is prohibited to avoid module download latency and compilation overhead.
@@ -96,9 +96,9 @@ Instead of a monolithic control plane that directly manages every build executio
 
 ---
 
-## 5. QA Automation Handshake (V2 Boundary)
+## 5. QA Automation Handshake (v3 Boundary)
 
-To interface cleanly with QA without coupling engineering builds directly to QA test runner logic. The design is **undecided** and V2 scope; the current leaning is:
+To interface cleanly with QA without coupling engineering builds directly to QA test runner logic. The design is **undecided** and is v3.0.0 scope (see `PHASES.md`); the current leaning is:
 1. **Target Repo Event:** When an Engineering RC tag passes all build gates, the central tool dispatches a thin workflow in the **dedicated QA Automation Repository** with a correlation ID, milestone and Rancher version.
 2. **QA Pipeline Execution:** The QA repo executes its automated test suites.
 3. **Observed Result:** The reconciler observes the QA run's conclusion by correlation ID and records it on the tracking issue as evidence. The final stable promotion remains a human decision.

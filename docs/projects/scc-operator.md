@@ -33,8 +33,8 @@ Producer. Does **not** use `automation-core`. A single branch (`main`) serves ev
 * Semver check duplicated in two places; `release/v0.1.x` and the `release/**` triggers are dead or speculative; `release.yml` triggers on any tag with no format check.
 
 ## Implications for the tool
-* Release branches must be optional; a repo declares its release-branch policy (e.g. `single` or `per-minor`).
-* A repo's version line is separate from its consumers' branches. One line, N consumers, with optional per-consumer rules (stable-only, RC-only, min/max).
+* Release branches must be optional; a repo declares its release-branch policy (`single` or `perLine`).
+* A repo's version line is separate from its consumers' branches. One line, N consumers, where each consumer declares its own `accept` rules (stable-only, RC-only, which lines).
 * Fan-out reports per-target state and tolerates partial failure.
 * The reconciler observes human-pushed tags.
 * Borrowable details: image-exists validation, skip when the value already matches (exit code 2), bot branch naming, `--dry-run` and local-run parity, manual dispatch for RC pushes.
