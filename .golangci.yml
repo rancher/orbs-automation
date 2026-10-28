@@ -46,18 +46,17 @@ linters:
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
             - github.com/rancher/orbs-automation/internal/errs
-        # cobra stays in the CLI layer (cmd/ and internal/cli/). Domain
-        # packages must not import it, so the CLI framework can be swapped.
+        # cobra stays in cmd/. internal/cli/ and domain packages must not
+        # import it, so the CLI framework can be swapped by touching cmd/ only.
         nocobra:
           list-mode: lax
           files:
             - "!**/cmd/**"
-            - "!**/internal/cli/**"
             - "!**/main.go"
             - "!$test"
           deny:
             - pkg: github.com/spf13/cobra
-              desc: cobra is only allowed in cmd/ and internal/cli/ (docs/specs/PROJECT_LAYOUT.md)
+              desc: cobra is only allowed in cmd/ (docs/specs/PROJECT_LAYOUT.md)
         # main.go only calls cmd.Execute().
         entrypoint:
           list-mode: strict
