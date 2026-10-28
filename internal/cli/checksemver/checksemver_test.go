@@ -1,10 +1,10 @@
 package checksemver
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/stretchr/testify/assert"
 )
 
 func env(vars map[string]string) func(string) string {
@@ -31,21 +31,19 @@ func TestResolveTag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ResolveTag(tt.args, env(tt.env))
-			if !errors.Is(err, tt.err) {
-				t.Fatalf("err = %v, want %v", err, tt.err)
-			}
-			if got != tt.want {
-				t.Errorf("tag = %q, want %q", got, tt.want)
-			}
+
+			assert.ErrorIs(t, err, tt.err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestClassify(t *testing.T) {
 	got := Classify("v1.2.3-rc.1+b")
-	if !got.HasPrerelease || !got.HasBuildMeta || got.Version != "1.2.3-rc.1+b" {
-		t.Errorf("Classify = %+v", got)
-	}
+
+	assert.Equal(t, "1.2.3-rc.1+b", got.Version)
+	assert.True(t, got.HasPrerelease)
+	assert.True(t, got.HasBuildMeta)
 }
 
 func TestRender(t *testing.T) {
@@ -67,9 +65,7 @@ func TestRender(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := Render(tt.info); got != tt.want {
-				t.Errorf("Render = %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, Render(tt.info))
 		})
 	}
 }

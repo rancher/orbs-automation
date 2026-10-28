@@ -34,8 +34,6 @@ archives:
 release:
   prerelease: auto
   draft: true
-  extra_files:
-    - glob : ./build/artifacts/*.tgz
 
 checksum:
   name_template: 'checksums.txt'

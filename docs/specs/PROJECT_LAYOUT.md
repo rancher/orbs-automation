@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** agreed. Nothing is built yet.
+**Status:** agreed. The `cmd/`, `internal/cli/`, `internal/git/` and `internal/semver` parts are built and lint-enforced. `internal/clicfg`, `internal/config`, `internal/ui` and `test/integration/` are not.
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -16,6 +16,7 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 ```
 main.go              entry point: calls cmd.Execute(), nothing else
 cmd/                 all cobra code: root command, command tree, flags, help text, groups, gating; imports only internal/cli and internal/errs
+cmd/version/         build info (Version, Commit, Date) set by GoReleaser through -ldflags -X; read only by cmd/, passed down as a value
 internal/cli/<cmd>/  one subpackage per command: its logic as plain functions, no cobra
 internal/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
 internal/config/     application config: types, loader, validation, defaults

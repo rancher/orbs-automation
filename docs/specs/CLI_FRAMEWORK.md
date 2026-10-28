@@ -1,6 +1,6 @@
 # CLI Framework
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Nothing is built yet.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built so far: the cobra root, `--version`, `repo check-semver` and `repo branch-tags`. The rest of the command tree is stubs, and global flags, gating and exit codes are not built.
 
 How `gero` is built as a CLI: framework, command tree, global flags, context gating and exit codes. Product design is in [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md). Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md).
 
@@ -28,7 +28,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero config validate` | either | Runs without credentials |
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
 | `gero lines resolve` | either | Read-only |
-| `gero repo check-semver <version>` | either | Read-only; port of the shared `check-semver` script. Emits env-style output |
+| `gero repo check-semver [tag]` | either | Read-only; port of the shared `check-semver` script. Emits env-style output |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
@@ -44,7 +44,7 @@ Global (persistent) flags:
 | `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md) section 1); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md) section 2); repeatable |
 | `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md) section 1) |
-| `--version` | Prints the version and exits |
+| `--version` | Prints the version and exits. No `-v` shorthand, which is `--verbose`. The value comes from `cmd/version`, set by GoReleaser through `-ldflags -X` (`.goreleaser.yaml`); a plain `go build` prints `dev` |
 
 Per-command flags, such as the per-release override of `requiresPrerelease` (IMPLEMENTATION §4), are defined with their command and follow `--kebab-case`.
 

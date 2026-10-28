@@ -3,6 +3,9 @@ package git
 import (
 	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type fakeTags struct {
@@ -53,12 +56,9 @@ func TestResolveBranchTags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ResolveBranchTags(tt.ref, tt.commit, fakeTags{names: tt.tags})
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if got != tt.want {
-				t.Errorf("ResolveBranchTags = %+v, want %+v", got, tt.want)
-			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -75,12 +75,9 @@ func TestResolveBranchTagsUnsupportedRef(t *testing.T) {
 	} {
 		t.Run(ref, func(t *testing.T) {
 			got, err := ResolveBranchTags(ref, "abcdef1", fakeTags{names: []string{"main-1111111"}})
-			if !errors.Is(err, ErrUnsupportedRef) {
-				t.Fatalf("err = %v, want ErrUnsupportedRef", err)
-			}
-			if got != (BranchTags{}) {
-				t.Errorf("BranchTags = %+v, want zero", got)
-			}
+
+			require.ErrorIs(t, err, ErrUnsupportedRef)
+			assert.Zero(t, got)
 		})
 	}
 }
@@ -88,9 +85,8 @@ func TestResolveBranchTagsUnsupportedRef(t *testing.T) {
 func TestResolveBranchTagsTagsError(t *testing.T) {
 	boom := errors.New("boom")
 	_, err := ResolveBranchTags("refs/heads/main", "abcdef1", fakeTags{err: boom})
-	if !errors.Is(err, boom) {
-		t.Fatalf("err = %v, want it to wrap the Tags error", err)
-	}
+
+	assert.ErrorIs(t, err, boom, "the Tags error must be returned, not swallowed")
 }
 
 func TestShort(t *testing.T) {
@@ -100,8 +96,6 @@ func TestShort(t *testing.T) {
 		"abc":           "abc",
 		"":              "",
 	} {
-		if got := Short(in); got != want {
-			t.Errorf("Short(%q) = %q, want %q", in, got, want)
-		}
+		assert.Equal(t, want, Short(in), "Short(%q)", in)
 	}
 }

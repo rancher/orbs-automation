@@ -1,6 +1,10 @@
 package semver
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestClassify(t *testing.T) {
 	tests := []struct {
@@ -30,15 +34,10 @@ func TestClassify(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			got := Classify(tt.input)
-			if got.Input != tt.input {
-				t.Errorf("Input = %q, want %q", got.Input, tt.input)
-			}
-			if got.HasPrerelease != tt.pre {
-				t.Errorf("HasPrerelease = %v, want %v", got.HasPrerelease, tt.pre)
-			}
-			if got.HasBuildMeta != tt.build {
-				t.Errorf("HasBuildMeta = %v, want %v", got.HasBuildMeta, tt.build)
-			}
+
+			assert.Equal(t, tt.input, got.Input)
+			assert.Equal(t, tt.pre, got.HasPrerelease, "HasPrerelease")
+			assert.Equal(t, tt.build, got.HasBuildMeta, "HasBuildMeta")
 		})
 	}
 }
@@ -51,8 +50,6 @@ func TestClassifyStripsOneLeadingV(t *testing.T) {
 		"1.2.3":   "1.2.3",
 		"":        "",
 	} {
-		if got := Classify(input).Version; got != want {
-			t.Errorf("Classify(%q).Version = %q, want %q", input, got, want)
-		}
+		assert.Equal(t, want, Classify(input).Version, "Classify(%q).Version", input)
 	}
 }

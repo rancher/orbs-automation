@@ -1,3 +1,4 @@
+// Package groups defines the cobra help groups shared by commands.
 package groups
 
 import "github.com/spf13/cobra"

@@ -1,11 +1,9 @@
 package repo
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +11,8 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var epoch = time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -31,48 +31,36 @@ func newRepo(t *testing.T) *testRepo {
 	t.Helper()
 	dir := t.TempDir()
 	r, err := git.PlainInit(dir, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return &testRepo{t: t, dir: dir, repo: r}
 }
 
-// commit makes an empty-tree-change commit dated epoch+offset and returns it.
+// commit makes a commit dated epoch+offset and returns it.
 func (r *testRepo) commit(msg string, offset time.Duration) plumbing.Hash {
 	r.t.Helper()
 	wt, err := r.repo.Worktree()
-	if err != nil {
-		r.t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(r.dir, "f.txt"), []byte(msg), 0o600); err != nil {
-		r.t.Fatal(err)
-	}
-	if _, err := wt.Add("f.txt"); err != nil {
-		r.t.Fatal(err)
-	}
+	require.NoError(r.t, err)
+	require.NoError(r.t, os.WriteFile(filepath.Join(r.dir, "f.txt"), []byte(msg), 0o600))
+	_, err = wt.Add("f.txt")
+	require.NoError(r.t, err)
 	h, err := wt.Commit(msg, &git.CommitOptions{Author: sig(offset), Committer: sig(offset)})
-	if err != nil {
-		r.t.Fatal(err)
-	}
+	require.NoError(r.t, err)
 	return h
 }
 
 func (r *testRepo) lightweight(name string, at plumbing.Hash) {
 	r.t.Helper()
-	if _, err := r.repo.CreateTag(name, at, nil); err != nil {
-		r.t.Fatal(err)
-	}
+	_, err := r.repo.CreateTag(name, at, nil)
+	require.NoError(r.t, err)
 }
 
 func (r *testRepo) annotated(name string, at plumbing.Hash, offset time.Duration) {
 	r.t.Helper()
 	_, err := r.repo.CreateTag(name, at, &git.CreateTagOptions{Tagger: sig(offset), Message: name})
-	if err != nil {
-		r.t.Fatal(err)
-	}
+	require.NoError(r.t, err)
 }
 
-func gitBinary(t *testing.T) {
+func requireGit(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git binary not available")
@@ -83,60 +71,44 @@ func gitBinary(t *testing.T) {
 func gitTags(t *testing.T, dir string) []string {
 	t.Helper()
 	out, err := exec.Command("git", "-C", dir, "tag", "--sort=-creatordate").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return strings.Fields(string(out))
 }
 
 func TestOpenRequiresGitDirectory(t *testing.T) {
 	r := newRepo(t)
-	if _, err := Open(r.dir); err != nil {
-		t.Fatalf("Open(repo root) = %v", err)
-	}
+	_, err := Open(r.dir)
+	require.NoError(t, err, "the repository root")
 
 	sub := filepath.Join(r.dir, "sub")
-	if err := os.Mkdir(sub, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Open(sub); !errors.Is(err, ErrNotRepository) {
-		t.Errorf("Open(subdirectory) = %v, want ErrNotRepository", err)
-	}
-	if _, err := Open(t.TempDir()); !errors.Is(err, ErrNotRepository) {
-		t.Errorf("Open(empty dir) = %v, want ErrNotRepository", err)
-	}
+	require.NoError(t, os.Mkdir(sub, 0o750))
+	_, err = Open(sub)
+	assert.ErrorIs(t, err, ErrNotRepository, "a subdirectory")
+
+	_, err = Open(t.TempDir())
+	assert.ErrorIs(t, err, ErrNotRepository, "an empty directory")
 
 	// A worktree or submodule has a .git file, not a directory.
 	file := t.TempDir()
-	if err := os.WriteFile(filepath.Join(file, ".git"), []byte("gitdir: /elsewhere\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Open(file); !errors.Is(err, ErrNotRepository) {
-		t.Errorf("Open(.git file) = %v, want ErrNotRepository", err)
-	}
+	require.NoError(t, os.WriteFile(filepath.Join(file, ".git"), []byte("gitdir: /elsewhere\n"), 0o600))
+	_, err = Open(file)
+	assert.ErrorIs(t, err, ErrNotRepository, "a .git file")
 }
 
 func TestDiscoverFindsRepositoryUpward(t *testing.T) {
 	r := newRepo(t)
-	c := r.commit("only", 0)
-	r.lightweight("main-1111111", c)
+	r.lightweight("main-1111111", r.commit("only", 0))
 	sub := filepath.Join(r.dir, "a", "b")
-	if err := os.MkdirAll(sub, 0o750); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, os.MkdirAll(sub, 0o750))
 
 	repo, err := Discover(sub)
-	if err != nil {
-		t.Fatalf("Discover(subdirectory) = %v", err)
-	}
+	require.NoError(t, err)
 	got, err := repo.NewestFirst()
-	if err != nil || !slices.Equal(got, []string{"main-1111111"}) {
-		t.Errorf("NewestFirst = %v, %v", got, err)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, []string{"main-1111111"}, got)
 
-	if _, err := Discover(t.TempDir()); !errors.Is(err, ErrNotRepository) {
-		t.Errorf("Discover(not a repository) = %v, want ErrNotRepository", err)
-	}
+	_, err = Discover(t.TempDir())
+	assert.ErrorIs(t, err, ErrNotRepository)
 }
 
 func TestNewestFirst(t *testing.T) {
@@ -145,7 +117,7 @@ func TestNewestFirst(t *testing.T) {
 		build func(r *testRepo)
 		want  []string
 	}{
-		{"no tags", func(r *testRepo) { r.commit("a", 0) }, nil},
+		{"no tags", func(r *testRepo) { r.commit("a", 0) }, []string{}},
 		{
 			"lightweight tags order by commit date",
 			func(r *testRepo) {
@@ -197,130 +169,104 @@ func TestNewestFirst(t *testing.T) {
 			r := newRepo(t)
 			tt.build(r)
 			repo, err := Open(r.dir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			require.NoError(t, err)
+
 			got, err := repo.NewestFirst()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("NewestFirst = %v, want %v", got, tt.want)
-			}
-			// Real git must agree.
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, nonNil(got))
 			if _, err := exec.LookPath("git"); err == nil {
-				if oracle := gitTags(t, r.dir); !slices.Equal(got, oracle) {
-					t.Errorf("differs from git tag --sort=-creatordate: got %v, git %v", got, oracle)
-				}
+				assert.Equal(t, nonNil(gitTags(t, r.dir)), nonNil(got), "must match git tag --sort=-creatordate")
 			}
 		})
 	}
 }
 
+func nonNil(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
+}
+
 func TestHead(t *testing.T) {
-	gitBinary(t)
+	requireGit(t)
 	r := newRepo(t)
 	h := r.commit("first", 0)
 	repo, err := Open(r.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	ref, short, err := repo.Head()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ref != "refs/heads/master" && ref != "refs/heads/main" {
-		t.Errorf("ref = %q, want the default branch", ref)
-	}
-	if len(short) < 7 || !strings.HasPrefix(h.String(), short) {
-		t.Errorf("short = %q, want a prefix (7+ chars) of %s", short, h)
-	}
+	require.NoError(t, err)
+	assert.Contains(t, []string{"refs/heads/master", "refs/heads/main"}, ref, "the default branch")
+	assert.GreaterOrEqual(t, len(short), 7)
+	assert.True(t, strings.HasPrefix(h.String(), short), "%q is not a prefix of %s", short, h)
 
 	// A named branch.
-	if err := r.repo.Storer.SetReference(
-		plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.NewBranchReferenceName("release/v2.x"))); err != nil {
-		t.Fatal(err)
-	}
-	if err := r.repo.Storer.SetReference(
-		plumbing.NewHashReference(plumbing.NewBranchReferenceName("release/v2.x"), h)); err != nil {
-		t.Fatal(err)
-	}
-	if ref, _, err = repo.Head(); err != nil || ref != "refs/heads/release/v2.x" {
-		t.Errorf("Head = %q, %v, want refs/heads/release/v2.x", ref, err)
-	}
+	branch := plumbing.NewBranchReferenceName("release/v2.x")
+	require.NoError(t, r.repo.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, branch)))
+	require.NoError(t, r.repo.Storer.SetReference(plumbing.NewHashReference(branch, h)))
+	ref, _, err = repo.Head()
+	require.NoError(t, err)
+	assert.Equal(t, "refs/heads/release/v2.x", ref)
 }
 
 func TestHeadDetached(t *testing.T) {
 	r := newRepo(t)
 	h := r.commit("first", 0)
-	if err := r.repo.Storer.SetReference(plumbing.NewHashReference(plumbing.HEAD, h)); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, r.repo.Storer.SetReference(plumbing.NewHashReference(plumbing.HEAD, h)))
 	repo, err := Open(r.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := repo.Head(); !errors.Is(err, ErrDetachedHead) {
-		t.Errorf("Head on detached HEAD = %v, want ErrDetachedHead", err)
-	}
+	require.NoError(t, err)
+
+	_, _, err = repo.Head()
+
+	assert.ErrorIs(t, err, ErrDetachedHead)
 }
 
 func TestHeadNoCommits(t *testing.T) {
-	gitBinary(t)
+	requireGit(t)
 	r := newRepo(t)
 	repo, err := Open(r.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := repo.Head(); err == nil {
-		t.Error("Head in a repository with no commits: want an error")
-	}
+	require.NoError(t, err)
+
+	_, _, err = repo.Head()
+
+	assert.Error(t, err, "a repository with no commits has no HEAD commit")
 }
 
 func TestShallowClone(t *testing.T) {
-	gitBinary(t)
+	requireGit(t)
 	src := newRepo(t)
 	src.commit("old", 0)
-	head := src.commit("head", time.Hour)
-	src.lightweight("main-1111111", head)
+	src.lightweight("main-1111111", src.commit("head", time.Hour))
 
 	clone := func(t *testing.T, extra ...string) *Repo {
 		t.Helper()
 		dst := filepath.Join(t.TempDir(), "clone")
 		args := append([]string{"clone", "--quiet", "--depth", "1"}, extra...)
 		args = append(args, "file://"+src.dir, dst)
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
+		out, err := exec.Command("git", args...).CombinedOutput()
+		require.NoError(t, err, "git %v\n%s", args, out)
 		repo, err := Open(dst)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 		return repo
 	}
 
 	t.Run("with tags", func(t *testing.T) {
 		repo := clone(t)
+
 		got, err := repo.NewestFirst()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !slices.Equal(got, []string{"main-1111111"}) {
-			t.Errorf("NewestFirst = %v, want [main-1111111]", got)
-		}
-		if _, _, err := repo.Head(); err != nil {
-			t.Errorf("Head: %v", err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, []string{"main-1111111"}, got)
+
+		_, _, err = repo.Head()
+		assert.NoError(t, err)
 	})
 
 	t.Run("without tags", func(t *testing.T) {
 		got, err := clone(t, "--no-tags").NewestFirst()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(got) != 0 {
-			t.Errorf("NewestFirst = %v, want none", got)
-		}
+
+		require.NoError(t, err)
+		assert.Empty(t, got)
 	})
 }

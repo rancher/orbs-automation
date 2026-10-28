@@ -36,10 +36,7 @@ type Tags interface {
 // Short returns the first 7 characters of sha, or all of it when shorter. It
 // is how a CI commit is abbreviated.
 func Short(sha string) string {
-	if len(sha) > shortLength {
-		return sha[:shortLength]
-	}
-	return sha
+	return sha[:min(len(sha), shortLength)]
 }
 
 // ResolveBranchTags derives the branch tag, the static tag and the previous static tag

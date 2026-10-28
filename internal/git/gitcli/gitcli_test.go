@@ -4,7 +4,17 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func requireGit(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git binary not available")
+	}
+}
 
 func run(t *testing.T, dir string, args ...string) string {
 	t.Helper()
@@ -13,40 +23,31 @@ func run(t *testing.T, dir string, args ...string) string {
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
+	require.NoError(t, err, "git %v\n%s", args, out)
 	return strings.TrimSpace(string(out))
 }
 
 func TestShortCommit(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git binary not available")
-	}
+	requireGit(t)
 	dir := t.TempDir()
 	run(t, dir, "init", "--quiet")
 	run(t, dir, "commit", "--quiet", "--allow-empty", "-m", "first")
 	full := run(t, dir, "rev-parse", "HEAD")
 
 	got, err := ShortCommit(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) < 7 || !strings.HasPrefix(full, got) {
-		t.Errorf("ShortCommit = %q, want a prefix (7+ chars) of %s", got, full)
-	}
-	if want := run(t, dir, "rev-parse", "--short", "HEAD"); got != want {
-		t.Errorf("ShortCommit = %q, git says %q", got, want)
-	}
+
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(got), 7)
+	assert.True(t, strings.HasPrefix(full, got), "%q is not a prefix of %s", got, full)
+	assert.Equal(t, run(t, dir, "rev-parse", "--short", "HEAD"), got, "must match git itself")
 }
 
 func TestShortCommitNoCommits(t *testing.T) {
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git binary not available")
-	}
+	requireGit(t)
 	dir := t.TempDir()
 	run(t, dir, "init", "--quiet")
-	if _, err := ShortCommit(dir); err == nil {
-		t.Error("want an error with no commits")
-	}
+
+	_, err := ShortCommit(dir)
+
+	assert.Error(t, err)
 }

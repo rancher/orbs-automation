@@ -10,6 +10,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/git/repo"
 )
 
+//go:generate go tool mockgen -source=branchtags.go -destination=mock_repository_test.go -package=branchtags
+
 // Repository is what the command needs from a local repository. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Repository interface {

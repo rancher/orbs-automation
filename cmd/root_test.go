@@ -1,0 +1,38 @@
+package cmd
+
+import (
+	"bytes"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// execRoot runs the root command in process with args and returns what it
+// wrote to stdout and stderr. It resets the shared root command afterwards.
+func execRoot(t *testing.T, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&errOut)
+	rootCmd.SetArgs(args)
+	t.Cleanup(func() { rootCmd.SetOut(nil); rootCmd.SetErr(nil); rootCmd.SetArgs(nil) })
+
+	err = rootCmd.Execute()
+	return out.String(), errOut.String(), err
+}
+
+func TestRootVersionFlag(t *testing.T) {
+	stdout, _, err := execRoot(t, "--version")
+
+	require.NoError(t, err)
+	assert.Equal(t, "gero version dev (commit none, built unknown)\n", stdout)
+}
+
+// -v is reserved for --verbose, so --version must not claim it.
+func TestRootVersionFlagHasNoShorthand(t *testing.T) {
+	f := rootCmd.Flags().Lookup("version")
+	require.NotNil(t, f)
+	assert.Empty(t, f.Shorthand)
+	assert.Nil(t, rootCmd.Flags().ShorthandLookup("v"), "-v must stay free for --verbose")
+}

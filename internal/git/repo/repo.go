@@ -5,11 +5,12 @@
 package repo
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -103,11 +104,8 @@ func (r *Repo) NewestFirst() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(tags, func(i, j int) bool {
-		if tags[i].when != tags[j].when {
-			return tags[i].when > tags[j].when
-		}
-		return tags[i].ref < tags[j].ref
+	slices.SortFunc(tags, func(a, b datedTag) int {
+		return cmp.Or(cmp.Compare(b.when, a.when), cmp.Compare(a.ref, b.ref))
 	})
 	names := make([]string, len(tags))
 	for i, t := range tags {
