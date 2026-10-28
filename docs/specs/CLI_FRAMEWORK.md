@@ -17,7 +17,7 @@ How `gero` is built as a CLI: framework, command tree, global flags, context gat
 
 **Viper adoption trigger.** Revisit only if CLI config grows past roughly ten keys, needs nested or per-command sections, needs more than one file format, or needs watching or remote sources. The swap stays local because everything downstream reads one resolved `Settings` struct from `internal/clicfg`.
 
-**Structure.** The root command and global flags live in `cmd/`, which imports only cobra, the standard library, `cmd/...`, `internal/cli/...` and `internal/errs` (lint-enforced, see [PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6). Each command is its own package, `internal/cli/<cmd>/`, exporting a constructor that `cmd/` registers. A command's `RunE` parses flags, builds dependencies from `Settings`, and calls into domain packages in `internal/`. Commands hold no business logic, so everything is testable without cobra.
+**Structure.** The root command and global flags live in `cmd/`, which imports only cobra, the standard library, `cmd/...`, `internal/cli/...` and `internal/errs` (lint-enforced, see [PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6). All cobra code stays in `cmd/`: the command tree, help text, flags, annotations and gating. A command's `RunE` there is glue only: it turns args, flags and the environment into plain values, calls the command's package `internal/cli/<cmd>/` (plain functions, no cobra), writes the output and returns the error. That package builds dependencies from `Settings` and calls into domain packages in `internal/`, so the logic is testable without cobra, and `cmd/` needs only wiring tests.
 
 ## 2. Command tree and global flags
 
@@ -50,7 +50,7 @@ Per-command flags, such as the per-release override of `requiresPrerelease` (IMP
 
 ## 3. Execution-context gating
 
-A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `internal/cli/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
+A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `cmd/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
 
 ## 4. Exit codes
 

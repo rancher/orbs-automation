@@ -1,6 +1,6 @@
 # check-semver
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Nothing is built yet: stubs exist for `gero repo check-semver` and an empty `internal/semver` package.
+**Status:** agreed. Items marked **(leaning)** are proposals. The faithful port (sections 1 to 4, default behavior) is built: `internal/semver`, `internal/cli/checksemver` and the `gero repo check-semver` command. The opt-in improvements in section 6 and the parity test are not built yet.
 
 Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by [IMPLEMENTATION §4](../IMPLEMENTATION.md).
 
@@ -38,6 +38,7 @@ gero repo check-semver [tag]
 
 * **Context:** either (read-only, no credentials).
 * The command reads the environment and passes the string down. The library never reads it.
+* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 2). `cmd/repo.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
 
 ## 3. Library
 
@@ -94,13 +95,16 @@ Test first, per [TESTING](TESTING.md) and [`ai/red-green-commits.md`](../ai/red-
 
 Also assert `Major`, `Minor`, `Patch`, `Prerelease` and `BuildMeta` on the grammar-mode SemVer rows.
 
-**`cmd`, in-process (captured stdout, stderr, exit code):**
+**`internal/cli/checksemver`, plain table tests (a fake `getenv`, no cobra, no `t.Setenv`):**
 
-* Argument given: exactly the two default lines, key order included, and nothing else.
-* No argument, `GITHUB_REF_NAME` set: uses it. Both set: argument wins. Empty argument with the variable set: uses the variable.
-* Neither set: empty stdout, message on stderr, exit 1.
-* Non-SemVer tag: the two lines, exit 0.
+* `ResolveTag`: no argument with `GITHUB_REF_NAME` set uses it. Both set: argument wins. Empty argument with the variable set: uses the variable. Extra arguments are ignored. Neither set: `ErrNoTag`.
+* `Render`: given an `Info`, exactly the two default lines, key order included, and nothing else. The extra `Info` fields never reach the default output. A non-SemVer tag gets the two lines too.
 * Each improvement flag changes only its own behavior, and leaves the default output untouched.
+
+**`cmd`, wiring only, through the root command (captured stdout, error):**
+
+* Argument given: the two lines on stdout, and extra arguments are accepted.
+* Neither argument nor `GITHUB_REF_NAME`: empty stdout and an error, which `Execute` turns into exit 1.
 
 **Parity (`test/integration/`):** run the original script and the built `gero` over every row above in default mode and compare stdout and exit code. All rows must match, including the ones that are quirks. The original script lives there as a fixture, not in the root module.
 

@@ -17,7 +17,7 @@ Code mirrors the split: `internal/config` for application config, `internal/clic
 
 Highest wins:
 
-1. **Flags**, detected with `cmd.Flags().Changed()` so a flag's default never masks a lower source.
+1. **Flags**, detected by whether the flag was explicitly set (cobra's `Flags().Changed()`, read in `cmd/`) so a flag's default never masks a lower source. `internal/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3), so `cmd/` passes it a framework-neutral flag source: the values, and which were set.
 2. **Environment**, `GERO_*`.
 3. **User file.**
 4. **Built-in defaults.**
@@ -71,4 +71,5 @@ If none resolves, the command fails with a message listing these four places. Th
 
 ## Open questions
 
+* The shape of the framework-neutral flag source that `cmd/` hands to `internal/clicfg`, and how commands receive resolved flag values. Designed with the loader, together with [PROJECT_LAYOUT](PROJECT_LAYOUT.md)'s question on how flags reach `internal/cli/`.
 * Final names for the user-file keys.
