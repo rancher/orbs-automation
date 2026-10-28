@@ -42,7 +42,7 @@ Two flows, in order:
 | v0.2 | **Read-only insight:** tag classification library, line resolution (`gero lines resolve`), read-only state queries with pagination and a prerelease policy, graph views | v0.1 |
 | v0.3 | **Bump engine and `buildYamlBump`:** target, branch resolution from the line map, named strategy, post-edit commands, per-consumer `pullRequests` conventions, deterministic branches, reuse of open PRs, preconditions, fan-out with per-target status. Run in dry-run beside the existing script | v0.2 |
 | v0.4 | **Tracking issue format:** versioned state block, read-only rendered view, labels including stale; fixture-driven tests | v0.2 |
-| v0.5 | **Reconciler:** `gero reconcile` (CI-only) on cron, per-operation locks, backoff; observe human-pushed tags first | v0.3, v0.4 |
+| v0.5 | **Reconciler:** `gero ci:reconcile` on cron, per-operation locks, backoff; observe human-pushed tags first | v0.3, v0.4 |
 | v0.6 | **Flow A runs for real** through `gero`, beside and then replacing today's script | v0.5 |
 | | **POC review with the team:** show Flow A, review the config shapes and the direction, and fold feedback in before going further | v0.6 |
 | v0.7 | **More strategies:** `yamlKeyBump` and `chartsPackageBump`, each run in dry-run beside today's scripts | POC review |

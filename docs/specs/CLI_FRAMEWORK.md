@@ -17,11 +17,11 @@ How `gero` is built as a CLI: framework, command tree, global flags, context gat
 
 **Viper adoption trigger.** Revisit only if CLI config grows past roughly ten keys, needs nested or per-command sections, needs more than one file format, or needs watching or remote sources. The swap stays local because everything downstream reads one resolved `Settings` struct from `internal/clicfg`.
 
-**Structure.** One file per command group under `cmd/gero/`. A command's `RunE` parses flags, builds dependencies from `Settings`, and calls into `internal/`. Commands hold no business logic, so everything is testable without cobra. See [PROJECT_LAYOUT](PROJECT_LAYOUT.md).
+**Structure.** The root command lives in `cmd/`. Each command group is one file in `cmd/` while it is small, and moves to its own subdirectory (`cmd/<group>/`) when it grows or needs shared setup, such as the CI-only commands. A command's `RunE` parses flags, builds dependencies from `Settings`, and calls into `internal/`. Commands hold no business logic, so everything is testable without cobra. See [PROJECT_LAYOUT](PROJECT_LAYOUT.md).
 
 ## 2. Command tree and global flags
 
-Noun-verb, like `gh`. **Context** is CI-only or either (IMPLEMENTATION §2).
+Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only or either (IMPLEMENTATION §2).
 
 | Command | Context | Notes |
 |---|---|---|
@@ -30,7 +30,7 @@ Noun-verb, like `gh`. **Context** is CI-only or either (IMPLEMENTATION §2).
 | `gero lines resolve` | either | Read-only |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
-| `gero reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**: kept top-level as it is the product's verb |
+| `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |
 | `gero dashboard` | either | Moonshot; the name may become `triage` |
 
 Global (persistent) flags:
@@ -48,7 +48,7 @@ Per-command flags, such as the per-release override of `requiresPrerelease` (IMP
 
 ## 3. Execution-context gating
 
-A command declares its context with a cobra annotation, for example `gero/context: ci-only`. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
+A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `cmd/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
 
 ## 4. Exit codes
 

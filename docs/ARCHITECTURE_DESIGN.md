@@ -9,7 +9,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 |                            Central Tooling Repository                             |
 |                                                                                   |
 |   +-------------------+    +------------------------+    +--------------------+   |
-|   |    cmd/gero/      |    |       workflows/       |    |       config/      |   |
+|   |  main.go, cmd/    |    |       workflows/       |    |       config/      |   |
 |   |  (Go CLI Binary,  |    |  (Reusable GHA Workf)  |    | (project configs)  |   |
 |   |   internal/...)   |    |                        |    |                    |   |
 |   +-------------------+    +------------------------+    +--------------------+   |
@@ -90,7 +90,7 @@ Instead of a monolithic control plane that directly manages every build executio
                 v
 +--------------------------------+
 |    Go Reconciler Runs Cron     |
-|    (`gero reconcile`)          |
+|    (`gero ci:reconcile`)       |
 +---------------+----------------+
                 |
                 v
@@ -103,7 +103,7 @@ Instead of a monolithic control plane that directly manages every build executio
 ```
 
 1. **Decentralized Execution:** Native target repository GHA workflows complete their own builds. Tags can be pushed by a human in the target repo, or created by a workflow run from the tracker; the reconciler observes either path. Downstream bump PRs are opened by shared `gero` logic, not per-repo scripts.
-2. **Reconciler Observation:** A cron workflow in the central repo runs `gero reconcile` (CI-only). It inspects the actual state of GitHub via API calls (checking for tags, open/closed PRs, and workflow check runs). `repository_dispatch` from target repos can be added as a faster path where needed.
+2. **Reconciler Observation:** A cron workflow in the central repo runs `gero ci:reconcile`. It inspects the actual state of GitHub via API calls (checking for tags, open/closed PRs, and workflow check runs). `repository_dispatch` from target repos can be added as a faster path where needed.
 3. **Audit State in Issues:** Master release issues in the central repo are the persistent, human-auditable state. Machine state lives in a versioned hidden block in the issue body, and the visible markdown (read-only task lists, per-target status and a stale marker) is rendered from it. Humans do not edit these issues; interaction happens through commands, labels or workflow dispatch. The reconciler adds stage and stale labels and posts progress comments. Audience: engineers, QA and managers (and the future GUI).
 
 ---
