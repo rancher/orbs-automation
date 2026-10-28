@@ -4,6 +4,8 @@ Working notes on implementation choices: decisions, leanings and open questions.
 
 Status markers: unmarked items are decisions or working agreements. **(leaning)** is a proposal not yet agreed. **(unverified)** was decided from memory and needs confirmation (e.g. a small spike) before we rely on it.
 
+How the CLI itself is built (framework, CLI config and its precedence, output, logging, exit codes, dependency policy) is in [CLI_FOUNDATIONS](CLI_FOUNDATIONS.md). This doc covers what the tool does.
+
 ## 1. CLI Packaging
 
 * The binary is named **`gero`** (Dr. Gero). It does not need to match the repo name.
@@ -13,7 +15,7 @@ Status markers: unmarked items are decisions or working agreements. **(leaning)*
 
 ## 2. Execution Contexts
 
-* **CI-only commands** (e.g. the reconciler) require a GHA environment and the GHA-provided token, and fail fast with a clear error otherwise (e.g. check `GITHUB_ACTIONS=true` and that a token is present).
+* **CI-only commands** (e.g. the reconciler) require a GHA environment and the GHA-provided token, and fail fast with a clear error otherwise (check `GITHUB_ACTIONS=true` and that a token is present). A command declares its context once, as an annotation enforced centrally ([CLI_FOUNDATIONS §6](CLI_FOUNDATIONS.md)).
 * **Either-context commands** work on a developer workstation or in CI, with auth resolved from the environment.
 * Reconcile only ever runs in CI.
 
@@ -43,7 +45,7 @@ Use two Go libraries together, and shell out to `gh` only where it adds somethin
 
 * `release.requiresPrerelease` means a stable tag must come from a commit that already has an RC. It is a safety check that some repos do not need at all, so it is off unless a project opts in. The config accepts it from the start; enforcement ships later (see [PHASES](PHASES.md)).
 * Even when the rule is on, it can be **overridden per release** (e.g. a single-commit CVE dependency bump that needs a new patch, not an RC retest).
-  * Mechanism: an explicit CLI flag or issue label, with the reason recorded in the tracking issue. **(leaning)**
+  * Mechanism: an explicit CLI flag or issue label, with the reason recorded in the tracking issue. **(leaning)** A flag follows the conventions in [CLI_FOUNDATIONS §6](CLI_FOUNDATIONS.md).
 * **Tag classification** (semver, prerelease, build metadata) is one shared library function. Existing repos reimplement it in shell (see [projects/](projects/README.md)).
 * **Tag creation works both ways.** A human can tag and push in the target repo and the tracker is notified (e.g. via `repository_dispatch`), or a workflow run from the tracker creates the requested tag in the target repo. The reconciler observes either path. The dispatch path is added as needed.
 * Today humans create tags with git and verify QA sign-off before creating a stable tag. The tool fits that process first.
@@ -157,6 +159,7 @@ Conventions the tool wants repos to follow, so automation does not fight them.
 ## 13. Open Questions
 
 * Scope and order of the milestones: see [PHASES](PHASES.md).
+* CLI-layer questions (YAML library, dry-run default, exit codes): see [CLI_FOUNDATIONS §13](CLI_FOUNDATIONS.md).
 * Reconciler triggering: cron only, or `repository_dispatch` where needed.
 * Whether any config other than `WorkflowsConfig` ever moves into target repos.
 * Final kind names and field names (everything in `config/` is a mock).

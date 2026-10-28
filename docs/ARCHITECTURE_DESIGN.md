@@ -10,7 +10,8 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 |                                                                                   |
 |   +-------------------+    +------------------------+    +--------------------+   |
 |   |    cmd/gero/      |    |       workflows/       |    |       config/      |   |
-|   |  (Go CLI Binary)  |    |  (Reusable GHA Workf)  |    | (project configs)  |   |
+|   |  (Go CLI Binary,  |    |  (Reusable GHA Workf)  |    | (project configs)  |   |
+|   |   internal/...)   |    |                        |    |                    |   |
 |   +-------------------+    +------------------------+    +--------------------+   |
 +------------------------------------------+----------------------------------------+
                                            |
@@ -42,6 +43,17 @@ The system uses a **Hybrid Workflow Model** combining central reusable workflows
 * **Remote Reusable Workflows:** Standard, stateless CI tasks (linting, static analysis, generic container builds) live in the central repo and are invoked via `uses: rancher/orbs-automation/.github/workflows/<workflow>.yml@vX.Y.Z`, pinned to a CLI release tag or SHA, never a floating branch.
 * **Rendered Stub Workflows:** For workflows that must be defined in the target repo itself (e.g., release, binary signing, and container image signing, which run on GitHub runners using keyless signing and need the workflow on the tagged branch), a per-repo config defines the subscriptions. The tool reads it from the repo's `automation-core` branch if one exists, otherwise from the default branch. Rendered stubs carry a generated header (template and CLI version, content hash) so drift can be detected.
 * **CLI Sync (`gero workflows sync`):** Reads the target repo's config, pulls down canonical templates from the central repository, renders `.github/workflows/` YAML files, shows a dry-run diff, and opens a PR or commits changes. A `verify` command checks rendered files for drift.
+
+### C. CLI Layer
+The CLI is built on **cobra** with a small custom loader for CLI config (no viper). Commands are thin and call into `internal/` packages. *CLI config* (how an invocation behaves) is kept separate from *application config* (the YAML in section 3):
+
+```
+ flags  >  GERO_* env  >  user file (~/.config/gero/config.yaml)  >  defaults
+                              |
+                        internal/clicfg  ->  Settings  ->  command
+```
+
+Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Prompts and rich rendering sit behind `internal/ui`, which leaves room for a TUI later. Dependencies are stdlib-first and allow-listed. All decisions are in [CLI_FOUNDATIONS](CLI_FOUNDATIONS.md).
 
 ---
 

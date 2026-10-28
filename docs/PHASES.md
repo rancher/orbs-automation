@@ -38,7 +38,7 @@ Two flows, in order:
 
 | Label | Work | Depends on |
 |---|---|---|
-| v0.1 | **Foundations:** Go module, CLI skeleton, CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), the GitHub access layer (including a spike confirming the **(unverified)** items in IMPLEMENTATION §3), CI-only versus either-context gating. Real configs for **all** repos, written and corrected up front even before each is needed | none |
+| v0.1 | **Foundations:** Go module, CLI skeleton per [CLI_FOUNDATIONS](CLI_FOUNDATIONS.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show --resolved`, the GitHub access layer (including a spike confirming the **(unverified)** items in IMPLEMENTATION §3 and the YAML library choice), CI-only versus either-context gating. Real configs for **all** repos, written and corrected up front even before each is needed | none |
 | v0.2 | **Read-only insight:** tag classification library, line resolution (`gero lines resolve`), read-only state queries with pagination and a prerelease policy, graph views | v0.1 |
 | v0.3 | **Bump engine and `buildYamlBump`:** target, branch resolution from the line map, named strategy, post-edit commands, per-consumer `pullRequests` conventions, deterministic branches, reuse of open PRs, preconditions, fan-out with per-target status. Run in dry-run beside the existing script | v0.2 |
 | v0.4 | **Tracking issue format:** versioned state block, read-only rendered view, labels including stale; fixture-driven tests | v0.2 |
@@ -51,7 +51,7 @@ Two flows, in order:
 
 ### Decides in v0.x
 
-Final kind and field names; whether chains are built up front or hop by hop; how the reconciler is triggered; whether the CLI replaces or wraps the "push to X" scripts at first; how producers align on consumer PR conventions.
+The YAML library; the `--dry-run` default for commands that write; final kind and field names; whether chains are built up front or hop by hop; how the reconciler is triggered; whether the CLI replaces or wraps the "push to X" scripts at first; how producers align on consumer PR conventions.
 
 ---
 
@@ -112,6 +112,8 @@ Planning labels, not promises, roughly in dependency order. Only stable tags are
 
 * **Docs:** each milestone updates IMPLEMENTATION and removes docs the code now covers ([policy](IMPLEMENTATION.md)). Facts about specific repos go in `projects/`.
 * **Testing:** fixture-driven tests for resolution and the reconciler; dry-run and `verify` modes for anything that writes.
+* **Dependencies:** stdlib first; a new module needs an entry in [CLI_FOUNDATIONS](CLI_FOUNDATIONS.md) and the depguard allow-list.
+* **TUI:** not scheduled. The `internal/ui` seam lands in v0.1 so a TUI can be added after v1.0.0 without touching commands.
 * **Migration:** old scripts and `automation-core` tooling are retired per capability, not all at once.
 * **Other teams:** another team that wants `gero` can use our releases with their own configs, or fork it. We do not plan special support.
 
