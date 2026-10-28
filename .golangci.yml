@@ -31,10 +31,48 @@ linters:
             - github.com/cli/go-gh
             - github.com/google/go-github
             # YAML library: add once chosen (docs/specs/DEPENDENCY_POLICY.md open questions).
+        # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
+        # thin shell and may only reach internal/ through internal/cli, plus
+        # internal/errs for exit-code errors and its own subpackages.
+        # See docs/specs/PROJECT_LAYOUT.md sections 2, 3 and 6.
+        cmd:
+          list-mode: strict
+          files:
+            - "**/cmd/**"
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/spf13/cobra
+            - github.com/rancher/orbs-automation/cmd
+            - github.com/rancher/orbs-automation/internal/cli
+            - github.com/rancher/orbs-automation/internal/errs
+        # cobra stays in the CLI layer (cmd/ and internal/cli/). Domain
+        # packages must not import it, so the CLI framework can be swapped.
+        nocobra:
+          list-mode: lax
+          files:
+            - "!**/cmd/**"
+            - "!**/internal/cli/**"
+            - "!**/main.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/spf13/cobra
+              desc: cobra is only allowed in cmd/ and internal/cli/ (docs/specs/PROJECT_LAYOUT.md)
+        # main.go only calls cmd.Execute().
+        entrypoint:
+          list-mode: strict
+          files:
+            - "**/main.go"
+          allow:
+            - $gostd
+            - github.com/rancher/orbs-automation/cmd
         test:
           list-mode: lax
           files:
             - $test
+          # depguard requires a non-empty list; lax mode allows everything else.
+          allow:
+            - $gostd
 
   exclusions:
     generated: lax
