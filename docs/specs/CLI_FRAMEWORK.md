@@ -28,6 +28,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero config validate` | either | Runs without credentials |
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
 | `gero config resolve repos [slug]` | either | Read-only; local path of each central-config repo and how it was found ([CLI_CONFIG](CLI_CONFIG.md) section 3b); `--json` supported |
+| `gero version` | either | Read-only; prints the build version, commit and date, the same text as `--version`. `--json` supported |
 | `gero lines resolve` | either | Read-only |
 | `gero semver check [tag]` | either | Read-only; port of the shared `check-semver` script. Takes a string (argument or `GITHUB_REF_NAME`) and never opens a repository. Emits env-style output |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
@@ -45,9 +46,9 @@ Global (persistent) flags:
 | `--config-dir` | [CLI_CONFIG](CLI_CONFIG.md) section 4 |
 | `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing. Read-only commands accept and ignore it. Default is off, with `verify` as the explicit check mode **(leaning)**. |
 | `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md) section 1); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
-| `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md) section 2); repeatable |
+| `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md) section 2): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
 | `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md) section 1) |
-| `--version` | Prints the version and exits. No `-v` shorthand, which is `--verbose`. The value comes from `cmd/version`, set by GoReleaser through `-ldflags -X` (`.goreleaser.yaml`); a plain `go build` prints `dev` |
+| `--version` | Prints the version and exits, with no shorthand. Root only, not persistent. The value comes from `cmd/version`, set by GoReleaser through `-ldflags -X` (`.goreleaser.yaml`); a plain `go build` prints `dev`. `gero version` is the primary form and prints the same text |
 
 Per-command flags, such as the per-release override of `requiresPrerelease` (IMPLEMENTATION §4), are defined with their command and follow `--kebab-case`.
 
