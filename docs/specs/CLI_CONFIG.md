@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built: `internal/clicfg` (flags, env, user file, defaults, source tracking) and the global flags in `cmd/`. `gero config show` (resolved values and their sources, as text, json or env) and central config directory resolution (section 4, `internal/cli/configdir`, shown as source `cwd` for the `./config` fallback). Not built: CWD inference (`internal/workspace`), the `inferred` source, and any other command that reads `Settings`.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built: `internal/clicfg` (flags, env, user file, defaults, source tracking) and the global flags in `cmd/`. `gero config show` (resolved values and their sources, as text, json or env) and central config directory resolution (section 4, `internal/cli/configdir`, shown as source `cwd` for the `./config` fallback). Not built: CWD inference and repo path resolution (`internal/workspace`, `gero config resolve repos`, section 3b), the `inferred` source, and any other command that reads `Settings`.
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
 
@@ -119,6 +119,19 @@ Rules:
 * A user-file value always beats inference.
 * `gero config show` reports each value's source (`flag`, `env`, `file`, `inferred (reason)`, `default`). Verbose mode logs inferred values before any write (push, PR).
 * `internal/clicfg` stays pure (flags, env, file, defaults; unset stays zero) and does not import git. A separate resolver package (working name `internal/workspace`) takes `Settings` and a small repo-access interface and does the inference.
+* `gero config show` may report one slug's resolved path with an `inferred (reason)` source, but it never enumerates repos. For an unset-from-file `repos.search` it shows a hint pointing at `gero config resolve repos`.
+
+## 3b. Resolving repo paths
+
+`gero config resolve repos [slug]` answers "where does each repo live on this machine, and how did `gero` decide?". `config show` reports raw values and their sources. This command runs the same `internal/workspace` resolver the other commands use, so its output is what they would act on. It is read-only and supports `--json`.
+
+Resolution order for one slug is the one in section 3a: the CWD repo if its slug matches, then `repos.paths`, then the `repos.search` scan, then the flat sibling.
+
+**The scan.** Each `repos.search` directory is scanned to depth 2 for clones. A directory is a clone if it contains `.git`. Its remote URLs are read from the repository config through `internal/git/repo` (go-git, no `git` subprocess) and parsed to `owner/name` slugs. Names of directories are never used for matching, so no layout is assumed. A clone whose upstream remote matches the slug is a strong match. A clone that only has a fork of the slug (same name, different owner) is a weak match and counts only when no strong match exists. Several matches of the same strength are ambiguous, never picked silently.
+
+**Cost.** Most commands resolve one slug, usually from the CWD repo or `repos.paths`, and never scan. The scan runs only when those miss, and it is built once per command and matched against every slug asked for. Resolving all slugs is this command's case.
+
+**Output.** One row per central-config slug (`spec.repo.name`) with the path and how it was found: `cwd`, `repos.paths`, `repos.search scan`, or `sibling`. Unresolved and ambiguous slugs are rows, not errors: an ambiguous row lists the candidate paths and names `repos.paths.<slug>` as the key to set. The command exits non-zero if any row is unresolved or ambiguous. An optional `<slug>` argument limits the output to that repo. `--verbose` also logs the scanned directories, the remotes read from each clone, and why each candidate matched or not.
 
 ## 4. Locating the central application config
 
