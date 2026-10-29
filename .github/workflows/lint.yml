@@ -1,0 +1,30 @@
+name: golangci-lint
+on:
+  pull_request:
+    paths-ignore:
+    - 'docs/**'
+    - '*.md'
+    - '.gitignore'
+    - '.github/CODEOWNERS'
+    - 'LICENSE'
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  # pull-requests: read
+
+env:
+  CI: true
+
+jobs:
+  golangci:
+    name: lint
+    runs-on : ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.27
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: golangci-lint
+        run: golangci-lint run ./...

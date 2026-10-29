@@ -29,7 +29,7 @@ archives:
     - id: gero
       builds:
         - gero
-      name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
+      name_template: '{{ .Binary }}_{{ .Os }}_{{ .Arch }}'
 
 release:
   prerelease: auto
