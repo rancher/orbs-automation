@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/cli/cigate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -209,9 +210,9 @@ func TestCIOnlyCommandsNeedCIContextAndToken(t *testing.T) {
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
-			old := gateAuth
-			gateAuth = stubAuth{token: tt.token}
-			t.Cleanup(func() { gateAuth = old })
+			old := cigate.Auth
+			cigate.Auth = stubAuth{token: tt.token}
+			t.Cleanup(func() { cigate.Auth = old })
 
 			_, _, err := execRoot(t, "ci:reconcile")
 

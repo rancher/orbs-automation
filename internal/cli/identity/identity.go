@@ -6,20 +6,24 @@ package identity
 import (
 	"context"
 
-	gogithub "github.com/google/go-github/v93/github"
 	"github.com/rancher/orbs-automation/internal/actor"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/github"
 )
 
+// userLookup returns the numeric id of a GitHub user, using credentials c.
+type userLookup func(ctx context.Context, c github.Credentials, login string) (int64, error)
+
 // Resolve returns the commit identity for the context in s: the engineer's git
 // identity on a workstation, the bot's in CI.
 func Resolve(ctx context.Context, s clicfg.Settings) (actor.Identity, error) {
-	return resolve(ctx, s, github.GoGh{}, gitcli.Config)
+	return resolve(ctx, s, github.GoGh{}, gitcli.Config, func(ctx context.Context, c github.Credentials, login string) (int64, error) {
+		return github.UserID(ctx, c, login)
+	})
 }
 
-func resolve(ctx context.Context, s clicfg.Settings, a github.Auth, git actor.ConfigFunc, opts ...gogithub.ClientOptionsFunc) (actor.Identity, error) {
+func resolve(ctx context.Context, s clicfg.Settings, a github.Auth, git actor.ConfigFunc, lookup userLookup) (actor.Identity, error) {
 	return actor.Resolve(ctx, actor.Inputs{
 		CI:      s.CI,
 		BotUser: s.BotUser,
@@ -31,7 +35,7 @@ func resolve(ctx context.Context, s clicfg.Settings, a github.Auth, git actor.Co
 			if err != nil {
 				return 0, err
 			}
-			return github.UserID(ctx, creds, login, opts...)
+			return lookup(ctx, creds, login)
 		},
 	})
 }

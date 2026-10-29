@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/cmd/ci"
 	"github.com/rancher/orbs-automation/cmd/groups"
 	"github.com/rancher/orbs-automation/cmd/version"
+	"github.com/rancher/orbs-automation/internal/cli/buildinfo"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,7 @@ func init() {
 	// to --verbose (docs/specs/CLI_FRAMEWORK.md). `gero version` is the
 	// primary form (versioncmd.go).
 	rootCmd.Version = version.String()
+	buildinfo.Apply(version.Version)
 	rootCmd.Flags().Bool("version", false, "version for gero")
 	addGlobalFlags(rootCmd)
 	home, _ := os.UserHomeDir()
