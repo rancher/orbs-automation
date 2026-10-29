@@ -1,23 +1,23 @@
 # CLI Config
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built: `internal/clicfg` (flags, env, user file, defaults, source tracking) and the global flags in `cmd/`, including the `log` setting (`-v`, `GERO_LOG`). `gero config show` (resolved values and their sources, the `log` row included, as text, json or env) and central config directory resolution (section 4, `workspace.Open(...).ConfigDir()` in `internal/workspace`, shown as source `cwd` for the `./config` fallback). The current repository is built too (`Workspace.Current` and `CurrentAtRoot`, used by `gero repo branch-tags`), and so is `Workspace.Config`, which loads the central config from that directory, applies defaults and validates it (`gero config validate`). Repo path resolution is built (section 3b: `Workspace.RepoPaths` and `RepoPath`, `gero config resolve repos`, and the hint under `repos.search` in `config show`). Not built: the rest of CWD inference (upstream, fork and githubUser from remotes, the release line), the `inferred` source in `config show`, `config resolve --verbose`, and any other command that reads `Settings`.
+**Status:** implemented for the flags, environment, user file and defaults (`internal/clicfg`) and for locating the central config. The file-only keys other than `repos.*` have no reader yet.
 
-How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
+How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md). Inferring values from the working directory, and resolving repo paths, are in [WORKSPACE](WORKSPACE.md).
 
-## 1. Terms
+## Terms
 
 Two kinds of config exist, and the docs keep them apart.
 
-* **Application config** describes the world `gero` operates on: projects, Rancher lines, external projects, and per-repo workflow settings. It is the multi-document YAML in `config/` and a target repo's `gero.yaml` (IMPLEMENTATION §7). Versioned by `apiVersion`.
-* **CLI config** describes how one invocation behaves: where to find the application config, which remote counts as upstream, output format, verbosity, host. It comes from flags, environment variables and an optional user file (section 2). It never holds application facts, and it never holds secrets.
+* **Application config** describes the world `gero` operates on: projects, Rancher lines, external projects, and per-repo workflow settings. It is the multi-document YAML in `config/` and a target repo's `gero.yaml` ([APP_CONFIG](APP_CONFIG.md)). Versioned by `apiVersion`.
+* **CLI config** describes how one invocation behaves: where to find the application config, which remote counts as upstream, output format, verbosity, host. It comes from flags, environment variables and an optional user file. It never holds application facts, and it never holds secrets.
 
 Code mirrors the split: `internal/config` for application config, `internal/clicfg` for CLI config ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
 
-## 2. Sources and precedence
+## Sources and precedence
 
 Highest wins:
 
-1. **Flags**, detected by whether the flag was explicitly set (cobra's `Flags().Changed()`, read in `cmd/`) so a flag's default never masks a lower source. `internal/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3), so `cmd/` passes it a framework-neutral flag source: the values, and which were set.
+1. **Flags**, detected by whether the flag was explicitly set (cobra's `Flags().Changed()`, read in `cmd/`) so a flag's default never masks a lower source.
 2. **Environment**, `GERO_*`.
 3. **User file.**
 4. **Built-in defaults.**
@@ -31,34 +31,52 @@ Highest wins:
                                   command RunE
 ```
 
-`GH_TOKEN` / `GITHUB_TOKEN` keep their meaning and are consumed by the GitHub access layer (IMPLEMENTATION §3), not by this loader.
+`GH_TOKEN` and `GITHUB_TOKEN` keep their meaning and are consumed by the GitHub access layer ([GITHUB_ACCESS](GITHUB_ACCESS.md)), not by this loader. Values that are left unset can be inferred from the repository at the working directory, which sits between the user file and the defaults ([WORKSPACE](WORKSPACE.md)).
 
-## 3. User file and keys
+### Flag source
 
-### User file
+`internal/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)), so `cmd/` hands it a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
 
-* Path: `$XDG_CONFIG_HOME/gero/config.yaml`, else `~/.config/gero/config.yaml`. `GERO_CONFIG` overrides the path. We do not use `os.UserConfigDir` because it points at `~/Library/Application Support` on macOS. `~/.gero` was considered and rejected to match `gh`'s layout.
+```go
+type FlagLookup func(key string) (value string, set bool) // set == Flags().Changed
+type Inputs struct {
+    Flags    FlagLookup
+    Getenv   func(string) string
+    UserFile io.Reader // nil when absent
+    CI       bool
+}
+func Load(Inputs) (Settings, error)
+```
+
+Keys are table-driven (file key, derived env var, flag name, default, validator). The file is decoded strictly (`KnownFields(true)`), which is why `go.yaml.in/yaml/v3` is a direct dependency ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). Global flags go through `clicfg`. Per-command flags stay in `cmd/` and reach `internal/cli/<cmd>` as an options struct.
+
+## User file and keys
+
+### The file
+
+* Path: `$XDG_CONFIG_HOME/gero/config.yaml`, else `~/.config/gero/config.yaml`. `GERO_CONFIG` overrides the path. We do not use `os.UserConfigDir` because it points at `~/Library/Application Support` on macOS, and `~/.gero` was rejected to match `gh`'s layout.
 * Optional. A missing file is fine; a malformed file, or one with an unknown key, is a loud error naming the file and key.
 * No secrets. Tokens stay with `gh` or the environment.
 * **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file.
 * The main use is per-developer behavior that must not leak into the shared tool. The motivating case: locally `origin` is a developer's fork, while in CI `origin` is the real source, so `upstream` tells `gero` which remote to treat as the real source.
+* It never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no `root` or layout key: it would encode a workstation convention not everyone follows.
 
 ### Keys and environment
 
-Candidate set, names not final **(leaning)**:
+Names are not final **(leaning)**.
 
 | File key | Env var | Flag | Meaning |
 |---|---|---|---|
-| `configDir` | `GERO_CONFIG_DIR` | `--config-dir` | Where the central application config is (section 4) |
+| `configDir` | `GERO_CONFIG_DIR` | `--config-dir` | Where the central application config is |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
-| `host` | `GERO_HOST` | `--host` | GitHub host, if we ever target non-github.com (IMPLEMENTATION §3) |
-| n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md) section 2). A setting named `log`; no user-file key |
+| `host` | `GERO_HOST` | `--host` | GitHub host, if we ever target non-github.com |
+| n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md)). A setting named `log`; no user-file key |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
 
 Env and flag names derive from the file key by one rule, so the table is a check, not a source of truth. The loader is table-tested for precedence and for unknown keys ([TESTING](TESTING.md)).
 
-File-only keys (no flag or env var), all **(leaning)**:
+File-only keys, all **(leaning)**:
 
 | File key | Meaning |
 |---|---|
@@ -68,8 +86,6 @@ File-only keys (no flag or env var), all **(leaning)**:
 | `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
 | `repos.search` | Directories scanned to depth 2 for clones, matched to slugs by remote URL. No directory layout is assumed |
 | `repos.overrides.<slug>.upstream` | Per-repo upstream remote name |
-
-Example:
 
 ```yaml
 # All keys optional. Unknown keys are an error. No secrets.
@@ -90,81 +106,22 @@ repos:
       upstream: rancher
 ```
 
-The user file never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no `root` or layout key: it would encode a workstation convention not everyone follows.
-
-## 3a. Inferred defaults
-
-Most keys can be left unset because they are inferred from the repo at the working directory (found with `repo.Discover`), its remotes and its branch. Full precedence per value:
-
-```
-flag > env > user file > inferred from CWD repo > built-in default > error
-```
-
-| Value | Inferred default |
-|---|---|
-| Current repo slug | `owner/name` parsed from remote URLs, matched against central-config `spec.repo.name` |
-| Local path for a slug | The CWD repo if its slug matches; else `repos.paths`; else the `repos.search` scan; else the flat sibling `<parent of CWD repo>/<name>` |
-| `configDir` | Nearest ancestor of the CWD containing `config/*.project.yaml` |
-| `upstream` | Remote whose URL matches the slug; else the only remote; in CI, `origin` |
-| `fork` | Remote with the same repo name under a different owner |
-| `githubUser` | Owner of the fork remote's URL (no network call) |
-| Release line | `main` is the development line; `release/vX.Y` is that line |
-| `output` | `text`; color follows `NO_COLOR` and TTY detection |
-| `branchPrefix` | None |
-
-Rules:
-
-* Inference never picks silently among several candidates. Ambiguity is an error naming the key to set.
-* It is lazy and per command: a command that needs no remote does not fail because the CWD is not a repo.
-* A user-file value always beats inference.
-* `gero config show` reports each value's source (`flag`, `env`, `file`, `inferred (reason)`, `default`). Verbose mode logs inferred values before any write (push, PR).
-* `internal/clicfg` stays pure (flags, env, file, defaults; unset stays zero) and does not import git. A separate resolver package, `internal/workspace`, takes `Settings` and does the inference.
-* **One door.** `workspace` is the only way a command gets "settings plus the world": the central config directory (section 4), the loaded application config, the current repo, and the local path, upstream and fork for a slug. Each rule exists once there, so the same CLI inputs cannot resolve differently in different commands. `cmd/` knows nothing about it. Each `internal/cli/<cmd>` calls `workspace.Open(settings, cwd)`, which takes plain values and builds its own real dependencies (file system, later a go-git opener). A `getenv` joins the parameters when a rule first needs it, such as the CI check for `upstream`. The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake. Resolution is lazy: `Open` does no I/O, and a method does only the work its caller needs.
-* A command package may not locate the central config, discover a repo, or scan for clones itself. Lint enforces this ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6).
-* The central config directory (section 4) is the first such rule, `Workspace.ConfigDir`, and `gero config show` already reads it that way. `gero config resolve repos` and every command that loads central config go through the same `Workspace`.
-* `gero config show` may report one slug's resolved path with an `inferred (reason)` source, but it never enumerates repos. When `repos.search` is set, the text output ends with a line pointing at `gero config resolve repos`. Json and env never carry it.
-
-## 3b. Resolving repo paths
-
-`gero config resolve repos [slug]` answers "where does each repo live on this machine, and how did `gero` decide?". `config show` reports raw values and their sources. This command runs the same `internal/workspace` resolver (`Workspace.RepoPath`) the other commands use, so its output is what they would act on. The slugs come from `Workspace.Config()`, so an invalid config is rejected before anything is scanned. It is read-only and supports `--json`.
-
-Resolution order for one slug is the one in section 3a: the CWD repo if one of its remotes is the slug (a fork alone does not count), then `repos.paths`, then the `repos.search` scan, then the flat sibling. A `repos.paths` entry is returned as written, without checking that it exists. The sibling is `<parent of the CWD repo's root>/<name>` and counts only when that directory exists and the working directory is in a repo. Paths derived from the CWD repo's root come back with symlinks resolved, as go-git reports them (`/tmp` is `/private/tmp` on macOS).
-
-**The scan.** Each `repos.search` directory is scanned to depth 2 for clones. A directory is a clone if it contains a `.git` directory (worktrees and submodules, where `.git` is a file, are not found), and the scan does not look inside a clone. Its remote URLs are read from the repository config through `internal/git/repo` (go-git, no `git` subprocess) and parsed to `owner/name` slugs (`git.SlugFromURL`: https, ssh and scp-like URLs, host not checked, local paths ignored). Names of directories are never used for matching, so no layout is assumed, and slugs compare case-insensitively. A clone with a remote that is the slug itself, whatever the remote is called, is a strong match. A clone that only has a fork of the slug (same name, different owner) is a weak match and counts only when no strong match exists. Several matches of the same strength are ambiguous, never picked silently.
-
-**Cost.** Most commands resolve one slug, usually from the CWD repo or `repos.paths`, and never scan. The scan runs only when those miss, and it is built once per command and matched against every slug asked for. Resolving all slugs is this command's case.
-
-**Output.** One row per Project in the central config (its `spec.repo.name` slug). External projects get no rows for now: they are not cloned for any command today, and they can be added once one needs a local path. Each row has the path and how it was found: `cwd`, `repos.paths`, `repos.search scan`, or `sibling`. Unresolved and ambiguous slugs are rows, not errors. Text output keeps them short, `(not found)` or `(ambiguous: <candidate paths>)`, with a source of `-`, and ends with one hint line for each kind of problem present: clone the repo under a `repos.search` directory or set `repos.paths.<slug>` (not found), or set `repos.paths.<slug>` to choose one (ambiguous). Json is an array of `{slug, path, source, candidates, error}` objects and carries no hints. Other output formats (`env`) are an error. The command exits non-zero if any row is unresolved or ambiguous, after printing the table. An optional `<slug>` argument limits the output to that Project (spelled as the config spells it) and is an error for a slug that is not a Project. **(leaning, not built)** `--verbose` also logs the scanned directories, the remotes read from each clone, and why each candidate matched or not.
-
-## 4. Locating the central application config
+## Locating the central application config
 
 Commands that read the central `config/` find it in this order:
 
 1. `--config-dir`
 2. `GERO_CONFIG_DIR`
 3. `configDir` in the user file
-4. `./config`, when the working directory is a checkout of the central repo
+4. `./config`, when the working directory is a checkout of the central repo (reported as source `cwd`)
 
-If none resolves, the command fails with a message listing these four places. There is no runtime fetch of config from another branch (IMPLEMENTATION §7, "Avoid"). In CI the central repo is checked out and `GERO_CONFIG_DIR` or `--config-dir` is set explicitly in the workflow.
+If none resolves, the command fails with a message listing these four places. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CONFIG_DIR` or `--config-dir` is set explicitly in the workflow.
+
+## Not built yet
+
+* The `inferred` source in `gero config show` ([WORKSPACE](WORKSPACE.md)).
+* A reader for `fork`, `githubUser` and `branchPrefix`.
 
 ## Open questions
 
-* How commands receive resolved flag values. Decided: global flags go through `internal/clicfg`; per-command flags stay in `cmd/` and reach `internal/cli/<cmd>` as an options struct.
 * Final names for the user-file keys.
-
-## Flag source
-
-`cmd/` hands `internal/clicfg` a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
-
-```go
-type FlagLookup func(key string) (value string, set bool) // set == Flags().Changed
-type Inputs struct {
-    Flags    FlagLookup
-    Getenv   func(string) string
-    UserFile io.Reader // nil when absent
-    CI       bool
-}
-func Load(Inputs) (Settings, error)
-```
-
-Keys are table-driven (file key, derived env var, flag name, default, validator). The file is decoded strictly (`KnownFields(true)`), which makes `go.yaml.in/yaml/v3` a direct dependency ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
