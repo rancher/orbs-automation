@@ -115,7 +115,7 @@ func TestRenderText(t *testing.T) {
 	assert.Regexp(t, `(?m)^upstream\s+rancher\s+flag$`, out)
 	assert.Regexp(t, `(?m)^fork\s+origin\s+file$`, out)
 	assert.Regexp(t, `(?m)^output\s+text\s+default$`, out)
-	assert.Regexp(t, `(?m)^configDir\s+\(unset\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^configDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
 }
 
 func TestRenderJSON(t *testing.T) {
@@ -181,4 +181,41 @@ func TestRenderResolvedConfigDir(t *testing.T) {
 	env, err := Render(s, resolved, clicfg.OutputEnv)
 	require.NoError(t, err)
 	assert.Contains(t, env, "GERO_CONFIG_DIR=/work/config\n")
+}
+
+func TestRenderTextHintsForUnsetKeys(t *testing.T) {
+	out, err := Render(load(t, "", nil, nil), configdir.Result{}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^upstream\s+\(inferred from remotes\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^fork\s+\(inferred from remotes\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^githubUser\s+\(inferred from the fork remote\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^branchPrefix\s+\(none\)\s+default$`, out)
+	assert.NotContains(t, out, "(unset)")
+}
+
+func TestRenderTextHintsOnlyWhereNothingIsSet(t *testing.T) {
+	s := load(t, "upstream: rancher\n", nil, map[string]string{"config-dir": "/flag"})
+
+	out, err := Render(s, configdir.Result{}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^upstream\s+rancher\s+file$`, out)
+	assert.Regexp(t, `(?m)^configDir\s+/flag\s+flag$`, out)
+}
+
+func TestRenderHintsStayOutOfMachineFormats(t *testing.T) {
+	s := load(t, "", nil, nil)
+
+	js, err := Render(s, configdir.Result{}, clicfg.OutputJSON)
+	require.NoError(t, err)
+	var got map[string]struct{ Value, Source string }
+	require.NoError(t, json.Unmarshal([]byte(js), &got), js)
+	assert.Empty(t, got["upstream"].Value)
+	assert.Equal(t, "default", got["upstream"].Source)
+
+	env, err := Render(s, configdir.Result{}, clicfg.OutputEnv)
+	require.NoError(t, err)
+	assert.Contains(t, env, "GERO_UPSTREAM=\n")
+	assert.NotContains(t, env, "inferred")
 }
