@@ -218,11 +218,12 @@ spec:
 	return dir
 }
 
-// userFileWith points GERO_CONFIG at a new user file holding content.
-func userFileWith(t *testing.T, content string) {
+// withRancherPath points GERO_CONFIG at a new user file that maps
+// rancher/rancher to /src/rancher in repos.paths.
+func withRancherPath(t *testing.T) {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(p, []byte(content), 0o600))
+	require.NoError(t, os.WriteFile(p, []byte("repos:\n  paths:\n    rancher/rancher: /src/rancher\n"), 0o600))
 	t.Setenv("GERO_CONFIG", p)
 }
 
@@ -233,7 +234,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		isolateGero(t)
 		t.Chdir(t.TempDir())
 		central := centralWith(t, "rancher/rancher")
-		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+		withRancherPath(t)
 
 		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--config-dir", central)
 
@@ -245,7 +246,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		isolateGero(t)
 		t.Chdir(t.TempDir())
 		central := centralWith(t, "rancher/rancher", "rancher/charts")
-		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+		withRancherPath(t)
 
 		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--config-dir", central)
 
@@ -260,7 +261,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		isolateGero(t)
 		t.Chdir(t.TempDir())
 		central := centralWith(t, "rancher/rancher")
-		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+		withRancherPath(t)
 
 		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--json", "--config-dir", central)
 
@@ -274,7 +275,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		isolateGero(t)
 		t.Chdir(t.TempDir())
 		central := centralWith(t, "rancher/rancher", "rancher/charts")
-		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+		withRancherPath(t)
 
 		stdout, _, err := execRoot(t, "config", "resolve", "repos", "rancher/rancher", "--config-dir", central)
 
