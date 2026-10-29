@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -197,4 +198,106 @@ func TestConfigValidateWithoutConfigDirectory(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--config-dir")
+}
+
+// centralWith writes one Project per slug into a new config directory and
+// returns it.
+func centralWith(t *testing.T, slugs ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, slug := range slugs {
+		_, name, _ := strings.Cut(slug, "/")
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name+".project.yaml"), []byte(`apiVersion: gero/v1alpha1
+kind: Project
+name: `+name+`
+spec:
+  repo:
+    name: `+slug+`
+`), 0o600))
+	}
+	return dir
+}
+
+// userFileWith points GERO_CONFIG at a new user file holding content.
+func userFileWith(t *testing.T, content string) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(p, []byte(content), 0o600))
+	t.Setenv("GERO_CONFIG", p)
+}
+
+// Wiring only: the logic is tested in internal/cli/configresolve and
+// internal/workspace.
+func TestConfigResolveReposWiring(t *testing.T) {
+	t.Run("a repos.paths entry resolves", func(t *testing.T) {
+		isolateGero(t)
+		t.Chdir(t.TempDir())
+		central := centralWith(t, "rancher/rancher")
+		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--config-dir", central)
+
+		require.NoError(t, err)
+		assert.Regexp(t, `(?m)^rancher/rancher\s+/src/rancher\s+repos\.paths$`, stdout)
+	})
+
+	t.Run("an unresolved repo prints the table and fails", func(t *testing.T) {
+		isolateGero(t)
+		t.Chdir(t.TempDir())
+		central := centralWith(t, "rancher/rancher", "rancher/charts")
+		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--config-dir", central)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no unique local clone")
+		assert.Contains(t, stdout, "/src/rancher")
+		assert.Contains(t, stdout, "rancher/charts")
+		assert.Contains(t, stdout, "not found")
+	})
+
+	t.Run("json", func(t *testing.T) {
+		isolateGero(t)
+		t.Chdir(t.TempDir())
+		central := centralWith(t, "rancher/rancher")
+		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--json", "--config-dir", central)
+
+		require.NoError(t, err)
+		var got []struct{ Slug, Path, Source string }
+		require.NoError(t, json.Unmarshal([]byte(stdout), &got), stdout)
+		assert.Equal(t, []struct{ Slug, Path, Source string }{{"rancher/rancher", "/src/rancher", "repos.paths"}}, got)
+	})
+
+	t.Run("one slug", func(t *testing.T) {
+		isolateGero(t)
+		t.Chdir(t.TempDir())
+		central := centralWith(t, "rancher/rancher", "rancher/charts")
+		userFileWith(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n")
+
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "rancher/rancher", "--config-dir", central)
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "/src/rancher")
+		assert.NotContains(t, stdout, "charts")
+	})
+
+	t.Run("at most one slug", func(t *testing.T) {
+		isolateGero(t)
+
+		_, _, err := execRoot(t, "config", "resolve", "repos", "a/b", "c/d")
+
+		assert.Error(t, err)
+	})
+
+	t.Run("without a config directory", func(t *testing.T) {
+		isolateGero(t)
+		t.Chdir(t.TempDir())
+
+		_, _, err := execRoot(t, "config", "resolve", "repos")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--config-dir")
+	})
 }
