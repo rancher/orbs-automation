@@ -44,8 +44,10 @@ The actor is who the commits and the PRs are attributed to. It is two things tha
 | **Commit author and committer** | The engineer's git config (`user.name`, `user.email`) | The bot identity from settings |
 
 * **The PR author is decided by token selection and nothing else.** `gero` never sets an author on the API call. Using the engineer's token is what puts their name on the PR, and no code is needed for it.
+* **A write to another repository checks the token it will use.** The default `GITHUB_TOKEN` is scoped to the repository the workflow runs in, so a cross-repo write with it is a configuration mistake, and `gero` refuses it before any write with a message naming `GH_TOKEN`, instead of letting GitHub return a 403. The check applies to every CI-only command that writes elsewhere. It treats the token as the default one when `GH_TOKEN` is unset or equal to `GITHUB_TOKEN`. Asking GitHub which repositories the token reaches (`GET /installation/repositories`) and requiring the target to be among them is a stronger test **(unverified)**, since both the default and an App installation token are `ghs_` tokens and the prefix cannot tell them apart.
 * **`gero` never mints a token.** A workflow that needs to write to another repository creates a cross-repo token itself (for example a GitHub App installation token scoped to the target repository) and passes it as `GH_TOKEN`, which wins over `GITHUB_TOKEN` ([GITHUB_ACCESS](GITHUB_ACCESS.md)). The default `GITHUB_TOKEN` is scoped to the repository the workflow runs in and cannot push to `rancher/rancher`.
-* **The bot identity is an input, not something derived from the token.** An installation token does not reveal the bot's login. A setting names it (`GERO_BOT_USER`, for example `rancher-scc-bot[bot]`) **(leaning)**. `gero` builds the commit identity from it the way the bash does today: `name` is the login and `email` is `<numeric id>+<login>@users.noreply.github.com`, where the id comes from `GET /users/<login>`, which is public.
+* **The bot identity is an input, not something derived from the token.** An installation token does not reveal the bot's login. The workflow supplies it as an environment variable, `GERO_BOT_USER` (for example `rancher-scc-bot[bot]`), alongside the token, both loaded from Vault by workflow steps. `gero` builds the commit identity from it the way the bash does today: `name` is the login and `email` is `<numeric id>+<login>@users.noreply.github.com`, where the id comes from `GET /users/<login>`, which is public.
+* **`gero` is the plain-English name.** Docs, comments, issues and PR text call the actor `gero`, and credit "ORBS Team Automation" as the team behind it. The same identity goes on the wire as the API `User-Agent`, `gero/<version> (ORBS Team Automation)` **(leaning)**, so GitHub's logs and rate-limit mail name the tool. It is a label only: authorship still comes from the token and `GERO_BOT_USER`.
 * **Commit identity resolution.** On a workstation `gero` reads the engineer's git configuration, repository then global then system, and fails with a message naming `user.name` and `user.email` when either is missing. It never invents one. In CI `GERO_BOT_USER` is required for any command that commits, and the command fails fast without it.
 * **A mismatch is not hidden.** If the workstation token and the git identity disagree (a token for one account, commits for another) the preflight line shows both.
 
@@ -59,7 +61,7 @@ The actor is who the commits and the PRs are attributed to. It is two things tha
 
 * The signature is made by `git` with the engineer's own `gpg.*` and `user.signingkey` configuration, so `gero` holds no key and never reads one. With signing on, the commit is created through `gitcli`, not go-git.
 * If signing is requested and fails (no key, agent locked), the command fails. It never falls back to an unsigned commit, because the engineer asked for the opposite.
-* In CI the setting is ignored, as every user-file key is ([CLI_CONFIG](CLI_CONFIG.md)). Whether bot commits should be verified is an open question.
+* In CI the setting is ignored, as every user-file key is ([CLI_CONFIG](CLI_CONFIG.md)). Bot commits are assumed not to need verification (decided). If that changes, the open question is whether the App commits through the API, which signs them, instead of through `git`.
 
 `signCommits` fits the user file because it states how one engineer's commits are made, not what the tool decides.
 
@@ -71,7 +73,7 @@ Every command that writes to git or GitHub follows these rules in both contexts.
 2. **`--dry-run` parity.** A dry run computes and prints everything, including the branch names and PR titles, and changes nothing remote. It takes the same path as a real run up to the first write.
 3. **Never touch the engineer's checkout.** Edits happen in a throwaway clone or worktree under the temp directory, in both contexts. A `gero` run leaves the clones it found exactly as they were, including after a dry run or a failure.
 4. **Per-target results.** A fan-out reports each target and tolerates partial failure ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)), so exit code and output do not depend on the context.
-5. **Local safety.** A real run on a workstation that would open PRs prints the preflight line and, on a TTY, asks for confirmation unless `--yes` is passed. CI never asks. Whether `--dry-run` should be the default for these commands is the open question in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
+5. **Confirmation only for a suspicious CI context.** A command that works on a workstation does not ask for confirmation there: the engineer ran it. The exception is a CI context that looks like a workstation, such as `GERO_CONTEXT=ci` set where `GITHUB_ACTIONS` is not, or a TTY is attached. That is the case where a write meant for the bot could land under someone's own token, so the command prints the preflight line and asks, unless `--yes` is passed. Real CI never asks. Whether `--dry-run` should be the default for these commands is the open question in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
 
 ## Testing
 
@@ -79,14 +81,20 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 ## Not built yet
 
-* The bot identity setting, commit identity resolution and the `auth status` fallback for installation tokens.
+* The bot identity (`GERO_BOT_USER`), the `User-Agent`, the cross-repo token check, commit identity resolution and the `auth status` fallback for installation tokens.
 * The `gitcli` push, the `signCommits` key and signing through `git`.
-* The write-command contract: preflight line, throwaway clone, `--yes`.
+* The write-command contract: preflight line, throwaway clone, `--yes` for a suspicious CI context.
 * Any write command at all. These are the rules the first one is built against.
+
+## Decided
+
+* Bot commits are not verified for now.
+* The bot's login comes from the workflow as `GERO_BOT_USER`, with the token, from Vault. `gero` is the name in prose and the `User-Agent`.
+* No confirmation on a workstation, except for a CI context that shows workstation signs.
+* A cross-repo write checks the token and refuses the default `GITHUB_TOKEN`.
 
 ## Open questions
 
-* Whether bot commits should be verified, and if so whether the App commits through the API, which signs them, instead of through `git`.
 * Whether the bot identity belongs in the central config (per target) instead of the environment, since different targets may use different Apps.
-* Whether the confirmation on a workstation is wanted, or `--dry-run` as the default is enough.
-* Whether `gero` should detect a workflow's default `GITHUB_TOKEN` and refuse a cross-repo write with a message, instead of letting GitHub return a 403.
+* Whether `--dry-run` should be the default for write commands ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
+* Which signs make a forced CI context "suspicious" (no `GITHUB_ACTIONS`, a TTY, a user file present), and whether one is enough.
