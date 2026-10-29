@@ -14,7 +14,7 @@ const (
 	// ContextAnnotation is the cobra annotation key that declares where a
 	// command may run.
 	ContextAnnotation = "gero/context"
-	// ContextCIOnly marks a command that requires GITHUB_ACTIONS and a token.
+	// ContextCIOnly marks a command that requires the CI context and a token.
 	ContextCIOnly = "ci-only"
 )
 

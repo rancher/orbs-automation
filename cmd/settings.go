@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/cmd/ci"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/github"
 	"github.com/spf13/cobra"
 )
 
@@ -132,15 +133,22 @@ func settingsFrom(cmd *cobra.Command) clicfg.Settings {
 	return s
 }
 
+// gateAuth is where CI-only gating looks for a token. Tests replace it.
+var gateAuth github.Auth = github.GoGh{}
+
 // requireContext enforces the gero/context annotation of cmd against s. A
-// CI-only command needs the CI context and GITHUB_ACTIONS=true itself, because
-// GERO_CONTEXT=ci and CI=true are not proof of a GitHub runner.
+// CI-only command needs the CI context and a token. The context is any of
+// GITHUB_ACTIONS=true, CI=true or GERO_CONTEXT=ci, so a developer can run a CI
+// job locally to debug it, with their own token.
 func requireContext(cmd *cobra.Command, s clicfg.Settings) error {
 	if cmd.Annotations[ci.ContextAnnotation] != ci.ContextCIOnly {
 		return nil
 	}
-	if !s.CI || !s.GitHubActions {
-		return fmt.Errorf("%s runs only in GitHub Actions: it needs GITHUB_ACTIONS=true and the CI context (GERO_CONTEXT=ci or unset)", cmd.CommandPath())
+	if !s.CI {
+		return fmt.Errorf("%s needs the CI context: run it in GitHub Actions, or set GERO_CONTEXT=ci to run it locally", cmd.CommandPath())
+	}
+	if _, err := github.Resolve(gateAuth, ""); err != nil {
+		return fmt.Errorf("%s: %w", cmd.CommandPath(), err)
 	}
 	return nil
 }

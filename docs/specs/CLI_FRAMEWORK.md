@@ -56,7 +56,7 @@ Per-command flags, such as the per-release override of `requiresPrerelease` ([re
 
 ## 3. Execution-context gating
 
-A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `cmd/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require `GITHUB_ACTIONS=true` and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
+A command declares its context with a cobra annotation, for example `gero/context: ci-only`. Each CI-only command also joins the cobra help group `ci` ("CI-Only Commands:", defined in `cmd/groups`), so `gero --help` lists them apart from the human-run noun-verb commands. One shared `PersistentPreRunE` enforces it: CI-only commands require the CI context (`GITHUB_ACTIONS=true`, `CI=true` or `GERO_CONTEXT=ci`, so one can be run locally to debug) and a token, and otherwise fail fast with a clear error. The annotation also drives a marker in `--help`, so gating is declared once per command and never reimplemented inside `RunE`.
 
 Commands that run in both contexts behave the same in each, except for who acts and where inputs come from. That, and the rules for commands that write, are in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 

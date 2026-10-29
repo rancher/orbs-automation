@@ -179,37 +179,54 @@ func resetFlags() {
 	}
 }
 
-func TestCIOnlyCommandsNeedGitHubActions(t *testing.T) {
+// stubAuth is a github.Auth with a fixed token, swapped in for the real one
+// that CI-only gating consults.
+type stubAuth struct{ token string }
+
+func (a stubAuth) TokenForHost(string) (string, string) { return a.token, "GH_TOKEN" }
+func (stubAuth) DefaultHost() (string, string)          { return "github.com", "default" }
+func (stubAuth) IsEnterprise(string) bool               { return false }
+
+func TestCIOnlyCommandsNeedCIContextAndToken(t *testing.T) {
 	tests := []struct {
 		name    string
 		env     map[string]string
-		wantErr bool
+		token   string
+		wantErr string // empty: the gate passes
 	}{
-		{"workstation", map[string]string{"GITHUB_ACTIONS": "", "CI": "", "GERO_CONTEXT": ""}, true},
-		{"CI=true is not a GitHub runner", map[string]string{"GITHUB_ACTIONS": "", "CI": "true", "GERO_CONTEXT": ""}, true},
-		{"GERO_CONTEXT=ci alone", map[string]string{"GITHUB_ACTIONS": "", "CI": "", "GERO_CONTEXT": "ci"}, true},
-		{"GERO_CONTEXT=workstation on a runner", map[string]string{"GITHUB_ACTIONS": "true", "CI": "", "GERO_CONTEXT": "workstation"}, true},
-		{"GitHub runner", map[string]string{"GITHUB_ACTIONS": "true", "CI": "", "GERO_CONTEXT": ""}, false},
+		{"workstation", nil, "t0ken", "CI context"},
+		{"CI=true", map[string]string{"CI": "true"}, "t0ken", ""},
+		{"GITHUB_ACTIONS=true", map[string]string{"GITHUB_ACTIONS": "true"}, "t0ken", ""},
+		{"GERO_CONTEXT=ci alone, to debug locally", map[string]string{"GERO_CONTEXT": "ci"}, "t0ken", ""},
+		{"GERO_CONTEXT=workstation on a runner", map[string]string{"GITHUB_ACTIONS": "true", "GERO_CONTEXT": "workstation"}, "t0ken", "CI context"},
+		{"CI without a token", map[string]string{"GITHUB_ACTIONS": "true"}, "", "no GitHub token"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			for _, k := range []string{"GITHUB_ACTIONS", "CI", "GERO_CONTEXT"} {
+				t.Setenv(k, "")
+			}
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
+			old := gateAuth
+			gateAuth = stubAuth{token: tt.token}
+			t.Cleanup(func() { gateAuth = old })
 
 			_, _, err := execRoot(t, "ci:reconcile")
 
 			require.Error(t, err) // the command itself is not implemented yet
-			if tt.wantErr {
-				assert.Contains(t, err.Error(), "GITHUB_ACTIONS")
+			if tt.wantErr != "" {
+				assert.Contains(t, err.Error(), tt.wantErr)
 			} else {
-				assert.NotContains(t, err.Error(), "GITHUB_ACTIONS")
+				assert.NotContains(t, err.Error(), "CI context")
+				assert.NotContains(t, err.Error(), "no GitHub token")
 			}
 		})
 	}
 }
 
-func TestOtherCommandsRunOutsideGitHubActions(t *testing.T) {
+func TestOtherCommandsRunOutsideCI(t *testing.T) {
 	t.Setenv("GITHUB_ACTIONS", "")
 
 	_, _, err := execRoot(t, "version")

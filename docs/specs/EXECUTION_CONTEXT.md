@@ -14,7 +14,7 @@ One function in `internal/clicfg` decides, once, and the result is `Settings.CI`
 
 * CI is `GITHUB_ACTIONS=true`, or `CI=true`.
 * `GERO_CONTEXT=ci|workstation` forces the answer and wins over both. It lets a developer reproduce a CI failure locally, lets a test pin the context, and lets a developer who exports `CI=true` for another tool keep their user file. Any other value is a usage error naming the variable.
-* CI-only gating additionally needs `GITHUB_ACTIONS=true` itself (`Settings.GitHubActions`, enforced by the root `PersistentPreRunE`), because `CI=true` is not proof of a GitHub runner ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
+* CI-only gating needs the CI context above (any of `GITHUB_ACTIONS=true`, `CI=true`, `GERO_CONTEXT=ci`) **and** a resolvable token ([GITHUB_ACCESS](GITHUB_ACCESS.md)), enforced by the root `PersistentPreRunE` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). It deliberately does not require `GITHUB_ACTIONS` itself, so a developer can run a CI job locally with `GERO_CONTEXT=ci` and their own token to debug it.
 
 ## What differs by context
 
