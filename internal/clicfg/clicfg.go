@@ -174,6 +174,7 @@ func Load(in Inputs) (Settings, error) {
 	if s.CI, err = InCI(getenv); err != nil {
 		return Settings{}, err
 	}
+	s.GitHubActions = getenv("GITHUB_ACTIONS") == "true"
 	label := userFileLabel(in.UserFileName)
 	// Record the file only when one was read: a name with no reader is where we
 	// looked, not a file that was loaded. GERO_CONFIG is the one way to name it.

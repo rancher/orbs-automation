@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 
+	"github.com/rancher/orbs-automation/cmd/ci"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/spf13/cobra"
@@ -134,5 +136,11 @@ func settingsFrom(cmd *cobra.Command) clicfg.Settings {
 // CI-only command needs the CI context and GITHUB_ACTIONS=true itself, because
 // GERO_CONTEXT=ci and CI=true are not proof of a GitHub runner.
 func requireContext(cmd *cobra.Command, s clicfg.Settings) error {
+	if cmd.Annotations[ci.ContextAnnotation] != ci.ContextCIOnly {
+		return nil
+	}
+	if !s.CI || !s.GitHubActions {
+		return fmt.Errorf("%s runs only in GitHub Actions: it needs GITHUB_ACTIONS=true and the CI context (GERO_CONTEXT=ci or unset)", cmd.CommandPath())
+	}
 	return nil
 }
