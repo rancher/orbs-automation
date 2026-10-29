@@ -25,6 +25,12 @@ type Entry struct {
 // the ones the env format can express.
 var scalarKeys = []string{"configDir", "output", "upstream"}
 
+// hints say what an unset key falls back to. Text output shows one in place of
+// "(unset)"; json and env never do, so scripts never read a hint as data. They
+// describe the rules in docs/specs/CLI_CONFIG.md sections 3a and 4, and each
+// goes away as internal/workspace infers a real value for its key.
+var hints = map[string]string{}
+
 // Entries flattens s into one Entry per setting, in display order: the scalar
 // keys, then the repos sections with their map keys sorted. dir is the resolved
 // central config directory and overrides the configDir entry; the zero Result
@@ -90,6 +96,9 @@ func renderText(es []Entry) string {
 		v := e.Value
 		if v == "" {
 			v = "(unset)"
+			if h, ok := hints[e.Key]; ok && e.Source == clicfg.SourceDefault.String() {
+				v = "(" + h + ")"
+			}
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\n", e.Key, v, e.Source)
 	}
