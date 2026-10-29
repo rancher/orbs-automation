@@ -46,6 +46,14 @@ const (
 	OutputEnv  = "env" // KEY=value lines for $GITHUB_OUTPUT and $GITHUB_ENV
 )
 
+// Log levels, lowest verbosity last.
+const (
+	LogDebug = "debug"
+	LogInfo  = "info"
+	LogWarn  = "warn"
+	LogError = "error"
+)
+
 // FlagLookup reports the value of the flag named name and whether it was set
 // explicitly. cmd/ builds it over cobra, where set is Flags().Changed, so a
 // flag's default never masks a lower layer.
@@ -78,6 +86,7 @@ type Repos struct {
 type Settings struct {
 	ConfigDir    string // central application config directory
 	Output       string // OutputText or OutputJSON
+	LogLevel     string // LogDebug, LogInfo, LogWarn or LogError
 	Upstream     string // remote treated as the real source
 	Fork         string // remote holding the developer's fork
 	GitHubUser   string
