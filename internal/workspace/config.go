@@ -1,6 +1,11 @@
 package workspace
 
-import "github.com/rancher/orbs-automation/internal/config"
+import (
+	"fmt"
+	"os"
+
+	"github.com/rancher/orbs-automation/internal/config"
+)
 
 // Config returns the central application config: every document in the config
 // directory (see ConfigDir), with defaults applied and validated, so a command
@@ -8,5 +13,17 @@ import "github.com/rancher/orbs-automation/internal/config"
 // directory, and the loader's or validator's error, naming the file or
 // document, when the config is unusable.
 func (w *Workspace) Config() (config.Config, error) {
-	return config.Config{}, nil
+	dir, err := w.ConfigDir()
+	if err != nil {
+		return config.Config{}, err
+	}
+	loaded, err := config.Load(os.DirFS(dir.Dir))
+	if err != nil {
+		return config.Config{}, fmt.Errorf("config directory %s: %w", dir.Dir, err)
+	}
+	resolved := loaded.WithDefaults()
+	if err := resolved.Validate(); err != nil {
+		return config.Config{}, fmt.Errorf("config directory %s: %w", dir.Dir, err)
+	}
+	return resolved, nil
 }
