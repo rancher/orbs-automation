@@ -58,6 +58,68 @@ Candidate set, names not final **(leaning)**:
 
 Env and flag names derive from the file key by one rule, so the table is a check, not a source of truth. The loader is table-tested for precedence and for unknown keys ([TESTING](TESTING.md)).
 
+File-only keys (no flag or env var), all **(leaning)**:
+
+| File key | Meaning |
+|---|---|
+| `fork` | Remote that holds the developer's fork; where `gero` pushes branches |
+| `githubUser` | Used to build fork refs for PRs |
+| `branchPrefix` | Prefix for branches `gero` creates (for example `dan/`) |
+| `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
+| `repos.search` | Directories scanned to depth 2 for clones, matched to slugs by remote URL. No directory layout is assumed |
+| `repos.overrides.<slug>.upstream` | Per-repo upstream remote name |
+
+Example:
+
+```yaml
+# All keys optional. Unknown keys are an error. No secrets.
+# "~" and $ENV are expanded in paths; relative paths are an error.
+configDir: ~/GitProjects/SUSE/orbs-automation/config
+output: text
+upstream: upstream
+fork: origin
+githubUser: danpock
+branchPrefix: dan/
+repos:
+  search:
+    - ~/GitProjects/SUSE
+  paths:
+    rancher/rancher: ~/GitProjects/SUSE/rancher-src
+  overrides:
+    rancher/scc-operator:
+      upstream: rancher
+```
+
+The user file never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no `root` or layout key: it would encode a workstation convention not everyone follows.
+
+## 3a. Inferred defaults
+
+Most keys can be left unset because they are inferred from the repo at the working directory (found with `repo.Discover`), its remotes and its branch. Full precedence per value:
+
+```
+flag > env > user file > inferred from CWD repo > built-in default > error
+```
+
+| Value | Inferred default |
+|---|---|
+| Current repo slug | `owner/name` parsed from remote URLs, matched against central-config `spec.repo.name` |
+| Local path for a slug | The CWD repo if its slug matches; else `repos.paths`; else the `repos.search` scan; else the flat sibling `<parent of CWD repo>/<name>` |
+| `configDir` | Nearest ancestor of the CWD containing `config/*.project.yaml` |
+| `upstream` | Remote whose URL matches the slug; else the only remote; in CI, `origin` |
+| `fork` | Remote with the same repo name under a different owner |
+| `githubUser` | Owner of the fork remote's URL (no network call) |
+| Release line | `main` is the development line; `release/vX.Y` is that line |
+| `output` | `text`; color follows `NO_COLOR` and TTY detection |
+| `branchPrefix` | None |
+
+Rules:
+
+* Inference never picks silently among several candidates. Ambiguity is an error naming the key to set.
+* It is lazy and per command: a command that needs no remote does not fail because the CWD is not a repo.
+* A user-file value always beats inference.
+* `gero config show` reports each value's source (`flag`, `env`, `file`, `inferred (reason)`, `default`). Verbose mode logs inferred values before any write (push, PR).
+* `internal/clicfg` stays pure (flags, env, file, defaults; unset stays zero) and does not import git. A separate resolver package (working name `internal/workspace`) takes `Settings` and a small repo-access interface and does the inference.
+
 ## 4. Locating the central application config
 
 Commands that read the central `config/` find it in this order:
@@ -71,5 +133,22 @@ If none resolves, the command fails with a message listing these four places. Th
 
 ## Open questions
 
-* The shape of the framework-neutral flag source that `cmd/` hands to `internal/clicfg`, and how commands receive resolved flag values. Designed with the loader, together with [PROJECT_LAYOUT](PROJECT_LAYOUT.md)'s question on how flags reach `internal/cli/`.
+* How commands receive resolved flag values. Decided: global flags go through `internal/clicfg`; per-command flags stay in `cmd/` and reach `internal/cli/<cmd>` as an options struct.
 * Final names for the user-file keys.
+
+## Flag source
+
+`cmd/` hands `internal/clicfg` a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
+
+```go
+type FlagLookup func(key string) (value string, set bool) // set == Flags().Changed
+type Inputs struct {
+    Flags    FlagLookup
+    Getenv   func(string) string
+    UserFile io.Reader // nil when absent
+    CI       bool
+}
+func Load(Inputs) (Settings, error)
+```
+
+Keys are table-driven (file key, derived env var, flag name, default, validator). The file is decoded strictly (`KnownFields(true)`), which makes `go.yaml.in/yaml/v3` a direct dependency ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
