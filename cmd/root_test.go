@@ -18,7 +18,12 @@ func execRoot(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&errOut)
 	rootCmd.SetArgs(args)
-	t.Cleanup(func() { rootCmd.SetOut(nil); rootCmd.SetErr(nil); rootCmd.SetArgs(nil) })
+	t.Cleanup(func() {
+		rootCmd.SetOut(nil)
+		rootCmd.SetErr(nil)
+		rootCmd.SetArgs(nil)
+		resetFlags()
+	})
 
 	err = rootCmd.Execute()
 	return out.String(), errOut.String(), err
@@ -37,4 +42,15 @@ func TestRootVersionFlagHasNoShorthand(t *testing.T) {
 	require.NotNil(t, f)
 	assert.Empty(t, f.Shorthand)
 	assert.Nil(t, rootCmd.Flags().ShorthandLookup("v"), "-v must stay free for --verbose")
+}
+
+// resetFlags returns the global flags to their defaults and unmarks them as
+// set, since the shared root command would otherwise carry them from one test
+// into the next.
+func resetFlags() {
+	for _, name := range []string{"config-dir", "upstream", "output", "json"} {
+		f := rootCmd.PersistentFlags().Lookup(name)
+		_ = f.Value.Set(f.DefValue)
+		f.Changed = false
+	}
 }
