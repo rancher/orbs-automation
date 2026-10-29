@@ -57,18 +57,29 @@ func decodeFile(r io.Reader, name string) (fileConfig, error) {
 	return fc, nil
 }
 
-// Values of GERO_CONTEXT, which forces the execution context.
+// EnvContext is the variable that forces the execution context, and ContextCI
+// and ContextWorkstation are its values.
 const (
+	EnvContext         = "GERO_CONTEXT"
 	ContextCI          = "ci"
 	ContextWorkstation = "workstation"
 )
 
 // InCI reports whether the process runs in CI, where the user file is ignored
 // unless GERO_CONFIG is set. It is the one place that reads CI, GITHUB_ACTIONS
-// and GERO_CONTEXT (docs/specs/EXECUTION_CONTEXT.md). An unknown GERO_CONTEXT
-// is an error.
+// and GERO_CONTEXT (docs/specs/EXECUTION_CONTEXT.md). GERO_CONTEXT wins when
+// set, and an unknown value is an error.
 func InCI(getenv func(string) string) (bool, error) {
-	return getenv("CI") == "true" || getenv("GITHUB_ACTIONS") == "true", nil
+	switch v := getenv(EnvContext); v {
+	case ContextCI:
+		return true, nil
+	case ContextWorkstation:
+		return false, nil
+	case "":
+		return getenv("CI") == "true" || getenv("GITHUB_ACTIONS") == "true", nil
+	default:
+		return false, fmt.Errorf("%s must be %q or %q, got %q", EnvContext, ContextCI, ContextWorkstation, v)
+	}
 }
 
 // UserFilePath returns where the user file lives: GERO_CONFIG, else
