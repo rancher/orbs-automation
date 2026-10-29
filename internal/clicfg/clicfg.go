@@ -92,6 +92,7 @@ type Settings struct {
 	GitHubUser   string
 	BranchPrefix string
 	Repos        Repos
+	UserFile     string // path of the user file that was loaded; empty when none applied
 
 	sources map[string]Source
 }
