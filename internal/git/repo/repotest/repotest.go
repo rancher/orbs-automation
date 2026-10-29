@@ -11,6 +11,7 @@ import (
 	"time"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -41,5 +42,19 @@ func check(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// NewRepoAt initializes an empty repository in dir, creating dir if needed,
+// with the given remotes (name to URL) and no commits. It stands in for a
+// developer's clone when a test only needs a repository with remotes.
+func NewRepoAt(t *testing.T, dir string, remotes map[string]string) {
+	t.Helper()
+	check(t, os.MkdirAll(dir, 0o750))
+	r, err := gogit.PlainInit(dir, false)
+	check(t, err)
+	for name, url := range remotes {
+		_, err := r.CreateRemote(&config.RemoteConfig{Name: name, URLs: []string{url}})
+		check(t, err)
 	}
 }
