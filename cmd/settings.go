@@ -19,6 +19,7 @@ func addGlobalFlags(cmd *cobra.Command) {
 	f.String("upstream", "", "remote that points at the real source repository (env GERO_UPSTREAM)")
 	f.String("output", "", "output format: text, json or env (env GERO_OUTPUT; default text)")
 	f.Bool("json", false, "machine output, shorthand for --output json")
+	f.CountP("verbose", "v", "log more to stderr: -v for info, -vv for debug (env GERO_LOG=debug|info|warn|error)")
 }
 
 // flagLookup adapts the parsed flags of cmd to the framework-neutral lookup that
