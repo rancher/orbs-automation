@@ -5,10 +5,10 @@ package config
 // must be written out.
 const (
 	DefaultBranch     = "main"
-	DefaultBranches   = "single"
+	DefaultBranches   = BranchesSingle
 	DefaultTagPattern = "v*"
-	DefaultAcceptWhen = "stable"
-	DefaultAcceptLine = "all"
+	DefaultAcceptWhen = AcceptStable
+	DefaultAcceptLine = AcceptLinesAll
 )
 
 // WithDefaults returns a copy of c with every omitted field that has a default
