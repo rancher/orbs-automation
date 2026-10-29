@@ -84,16 +84,17 @@ type Repos struct {
 // Settings is the resolved CLI config. Treat it as read-only and pass it down by
 // value.
 type Settings struct {
-	ConfigDir    string // central application config directory
-	Output       string // OutputText or OutputJSON
-	LogLevel     string // LogDebug, LogInfo, LogWarn or LogError
-	Upstream     string // remote treated as the real source
-	Fork         string // remote holding the developer's fork
-	GitHubUser   string
-	BranchPrefix string
-	Repos        Repos
-	UserFile     string // path of the user file that was loaded; empty when none applied
-	CI           bool   // the process runs in CI rather than on a workstation
+	ConfigDir     string // central application config directory
+	Output        string // OutputText or OutputJSON
+	LogLevel      string // LogDebug, LogInfo, LogWarn or LogError
+	Upstream      string // remote treated as the real source
+	Fork          string // remote holding the developer's fork
+	GitHubUser    string
+	BranchPrefix  string
+	Repos         Repos
+	UserFile      string // path of the user file that was loaded; empty when none applied
+	CI            bool   // the process runs in CI rather than on a workstation
+	GitHubActions bool   // GITHUB_ACTIONS=true: a GitHub runner, which CI-only commands require
 
 	sources map[string]Source
 }

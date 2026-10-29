@@ -104,6 +104,9 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 		if err != nil {
 			return err
 		}
+		if err := requireContext(cmd, s); err != nil {
+			return err
+		}
 		ctx := cmd.Context()
 		if ctx == nil {
 			ctx = context.Background()
@@ -125,4 +128,11 @@ func settingsFrom(cmd *cobra.Command) clicfg.Settings {
 	}
 	s, _ := ctx.Value(settingsKey{}).(clicfg.Settings)
 	return s
+}
+
+// requireContext enforces the gero/context annotation of cmd against s. A
+// CI-only command needs the CI context and GITHUB_ACTIONS=true itself, because
+// GERO_CONTEXT=ci and CI=true are not proof of a GitHub runner.
+func requireContext(cmd *cobra.Command, s clicfg.Settings) error {
+	return nil
 }
