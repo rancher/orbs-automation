@@ -27,7 +27,8 @@ func resetDoctorFlags(t *testing.T) {
 }
 
 // stubGh puts a fake gh first on PATH, so the gh check does not depend on the
-// machine the tests run on. It reports a version and has no login.
+// machine the tests run on. It reports a version and has no login. It installs
+// stubGit too, because a full run checks both.
 func stubGh(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
@@ -35,6 +36,18 @@ func stubGh(t *testing.T) {
 	script := "#!/bin/sh\n[ \"$1\" = auth ] && exit 1\necho 'gh version 9.9.9 (2030-01-01)'\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755))
 	t.Setenv("GH_PATH", "")
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	stubGit(t)
+}
+
+// stubGit puts a fake git first on PATH, with a version and an identity, so the
+// git check does not depend on the machine the tests run on.
+func stubGit(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo 'git version 9.9.9';;\n" +
+		"config) case \"$3\" in user.name) echo 'Test User';; user.email) echo 'test@example.com';; esac;;\nesac\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755))
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
@@ -119,6 +132,7 @@ func TestDoctorWiring(t *testing.T) {
 		withToken(t)
 		t.Setenv("GH_PATH", "")
 		t.Setenv("PATH", t.TempDir())
+		stubGit(t)
 
 		stdout, _, err := execRoot(t, "doctor")
 
@@ -132,6 +146,7 @@ func TestDoctorWiring(t *testing.T) {
 		withToken(t)
 		t.Setenv("GH_PATH", "")
 		t.Setenv("PATH", t.TempDir())
+		stubGit(t)
 
 		stdout, _, err := execRoot(t, "doctor", "--strict")
 
@@ -204,6 +219,17 @@ func TestDoctorWiring(t *testing.T) {
 		assert.Contains(t, stdout, "✗ auth-token: no token found for github.com\n")
 		assert.Contains(t, stdout, "○ auth-api: skipped, needs auth-token\n")
 		assert.NotContains(t, stdout, "gh:", "only the named check and what it needs")
+	})
+
+	t.Run("a missing git fails the run and says why", func(t *testing.T) {
+		resetDoctorFlags(t)
+		noGitHubAuth(t) // no git on PATH, no gh, no token
+
+		stdout, _, err := execRoot(t, "doctor", "git")
+
+		require.ErrorIs(t, err, doctor.ErrChecksFailed)
+		assert.Contains(t, stdout, "✗ git: git not found on PATH\n")
+		assert.Contains(t, stdout, "→ gero runs git for a few operations")
 	})
 
 	t.Run("--output env is refused", func(t *testing.T) {

@@ -2,8 +2,10 @@ package doctor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/ghcli"
@@ -110,7 +112,60 @@ func (gitCheck) Description() string { return "Looks for git and the name and em
 func (gitCheck) Online() bool        { return false }
 func (gitCheck) Needs() []string     { return nil }
 
-func (gitCheck) Run(context.Context) Result { return Result{} }
+// gitIdentity lists the git config keys the check reads, each with the example
+// value shown in the fix.
+var gitIdentity = []struct{ key, example string }{
+	{"user.name", "Your Name"},
+	{"user.email", "you@example.com"},
+}
+
+func (c gitCheck) Run(ctx context.Context) Result {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	version, err := c.git.Version(ctx)
+	switch {
+	case errors.Is(err, gitcli.ErrNotFound):
+		return Result{
+			Status:  StatusFail,
+			Message: err.Error(),
+			Remediation: "gero runs git for a few operations, such as abbreviating a commit hash in " +
+				"gero repo branch-tags: install it from https://git-scm.com",
+		}
+	case err != nil:
+		return Result{
+			Status:      StatusFail,
+			Message:     fmt.Sprintf("git --version failed: %v", err),
+			Remediation: "run `git --version` yourself to see why",
+		}
+	}
+	var unset, fixes []string
+	for _, id := range gitIdentity {
+		value, err := c.git.Config(ctx, id.key)
+		if err != nil {
+			return Result{
+				Status:      StatusWarn,
+				Message:     fmt.Sprintf("could not read %s: %v", id.key, err),
+				Remediation: fmt.Sprintf("run `git config %s` yourself to see why", id.key),
+			}
+		}
+		if value == "" {
+			unset = append(unset, id.key)
+			fixes = append(fixes, fmt.Sprintf("git config --global %s %q", id.key, id.example))
+		}
+	}
+	if len(unset) == 0 {
+		return Result{Status: StatusOK, Message: version + ", user.name and user.email are set"}
+	}
+	verb := "is"
+	if len(unset) > 1 {
+		verb = "are"
+	}
+	return Result{
+		Status:      StatusWarn,
+		Message:     fmt.Sprintf("%s, but %s %s not set", version, strings.Join(unset, " and "), verb),
+		Remediation: "set it so commits gero makes are yours: " + strings.Join(fixes, " && "),
+	}
+}
 
 // gitBinary is the GitBinary backed by internal/git/gitcli.
 type gitBinary struct{}

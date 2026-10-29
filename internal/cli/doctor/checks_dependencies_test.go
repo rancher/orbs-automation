@@ -258,3 +258,18 @@ func TestGitCheckGivesUpOnAHungGit(t *testing.T) {
 	assert.Contains(t, got.Message, "context deadline exceeded")
 	assert.Less(t, time.Since(start), 5*time.Second)
 }
+
+func TestGitBinaryUsesGitOnPath(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo 'git version 9.9.9';;\nconfig) echo \"value-for-$3\";;\nesac\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755))
+	t.Setenv("PATH", dir)
+
+	version, err := gitBinary{}.Version(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "git version 9.9.9", version)
+
+	value, err := gitBinary{}.Config(context.Background(), "user.name")
+	require.NoError(t, err)
+	assert.Equal(t, "value-for-user.name", value)
+}
