@@ -125,8 +125,8 @@ var scalars = []scalar{
 }
 
 func validateOutput(v string) error {
-	if v != OutputText && v != OutputJSON {
-		return fmt.Errorf("must be %q or %q, got %q", OutputText, OutputJSON, v)
+	if v != OutputText && v != OutputJSON && v != OutputEnv {
+		return fmt.Errorf("must be %q, %q or %q, got %q", OutputText, OutputJSON, OutputEnv, v)
 	}
 	return nil
 }

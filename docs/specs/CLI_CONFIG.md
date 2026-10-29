@@ -51,7 +51,7 @@ Candidate set, names not final **(leaning)**:
 |---|---|---|---|
 | `configDir` | `GERO_CONFIG_DIR` | `--config-dir` | Where the central application config is (section 4) |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
-| `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default) or `json` |
+| `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
 | `host` | `GERO_HOST` | `--host` | GitHub host, if we ever target non-github.com (IMPLEMENTATION §3) |
 | n/a | `GERO_LOG` | `-v` | Log level ([CLI_OUTPUT](CLI_OUTPUT.md) section 2) |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
