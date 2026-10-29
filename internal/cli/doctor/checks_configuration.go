@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/cli/configresolve"
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -181,4 +182,54 @@ func (userFileCheck) Description() string { return "Loads the user file the way 
 func (userFileCheck) Online() bool        { return false }
 func (userFileCheck) Needs() []string     { return nil }
 
-func (userFileCheck) Run(context.Context) Result { return Result{} }
+func (c userFileCheck) Run(context.Context) Result {
+	getenv := c.env.Getenv
+	if getenv == nil {
+		getenv = func(string) string { return "" }
+	}
+	file, path, err := clicfg.OpenUserFile(getenv, c.env.Home)
+	if err != nil {
+		return Result{
+			Status:      StatusFail,
+			Message:     err.Error(),
+			Remediation: "GERO_CONFIG names a file that cannot be opened: fix the path, or unset it",
+		}
+	}
+	if file == nil {
+		return Result{Status: StatusOK, Message: "no user file at " + path + " (optional)"}
+	}
+	defer file.Close()
+	// Load the file the way every command does. The GERO_* variables are masked,
+	// so a bad value in the environment is not blamed on the file.
+	_, err = clicfg.Load(clicfg.Inputs{
+		Getenv:       withoutGeroVars(getenv),
+		UserFile:     file,
+		UserFileName: path,
+		Home:         c.env.Home,
+	})
+	if err != nil {
+		message := err.Error()
+		// A YAML error names the file; a rejected value does not.
+		if !strings.Contains(message, path) {
+			message = path + ": " + message
+		}
+		return Result{
+			Status:  StatusFail,
+			Message: message,
+			Remediation: "fix what the message names, or move the file aside to use the defaults; " +
+				"the keys are listed in docs/specs/CLI_CONFIG.md",
+		}
+	}
+	return Result{Status: StatusOK, Message: path}
+}
+
+// withoutGeroVars hides the GERO_* variables from the loader, which would
+// otherwise let them override, and be validated against, the file's values.
+func withoutGeroVars(getenv func(string) string) func(string) string {
+	return func(name string) string {
+		if strings.HasPrefix(name, "GERO_") {
+			return ""
+		}
+		return getenv(name)
+	}
+}
