@@ -141,3 +141,21 @@ func TestResolveNoTokenErrorCarriesTheHostAndTheHint(t *testing.T) {
 		})
 	}
 }
+
+func TestDescribeTokenSource(t *testing.T) {
+	tests := map[string]string{
+		"GH_TOKEN":                "environment variable GH_TOKEN",
+		"GITHUB_TOKEN":            "environment variable GITHUB_TOKEN",
+		"GH_ENTERPRISE_TOKEN":     "environment variable GH_ENTERPRISE_TOKEN",
+		"GITHUB_ENTERPRISE_TOKEN": "environment variable GITHUB_ENTERPRISE_TOKEN",
+		"oauth_token":             "gh config file",
+		"gh":                      "gh auth token (keyring)",
+		"something-new":           "something-new",
+		"":                        "",
+	}
+	for source, want := range tests {
+		t.Run(source, func(t *testing.T) {
+			assert.Equal(t, want, DescribeTokenSource(source))
+		})
+	}
+}
