@@ -1,6 +1,6 @@
 # CLI Framework
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built so far: the cobra root, `--version`, the global flags `--config-dir`, `--upstream`, `--output` and `--json` (resolved into `clicfg.Settings` in the root `PersistentPreRunE`), `semver check` and `repo branch-tags`. The rest of the command tree is stubs, and `--dry-run`, `-v`, `--no-color`, gating and exit codes are not built. Only `config show` and `repo branch-tags` read `Settings`, the latter through `internal/workspace` for the repository.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built so far: the cobra root, `--version`, the global flags `--config-dir`, `--upstream`, `--output` and `--json` (resolved into `clicfg.Settings` in the root `PersistentPreRunE`), `semver check`, `repo branch-tags`, `config show` and `config validate`. The rest of the command tree is stubs, and `--dry-run`, `-v`, `--no-color`, gating and exit codes are not built. `config show`, `config validate` and `repo branch-tags` read `Settings`, the last two through `internal/workspace` (the central config and the repository). `config validate` prints a one-line summary on success and has no `--json` form yet; a missing config directory exits 1 until the exit-code helper maps it to 2.
 
 How `gero` is built as a CLI: framework, command tree, global flags, context gating and exit codes. Product design is in [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md). Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md).
 

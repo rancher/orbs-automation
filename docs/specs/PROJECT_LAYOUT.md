@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** agreed. The `cmd/`, `internal/cli/`, `internal/clicfg/`, `internal/git/` and `internal/semver` parts are built and lint-enforced. `internal/config` is built as a loader only (no validation or defaults yet), `internal/workspace` is built for the central config directory and the current repository only, and `internal/ui` and `test/integration/` are not built.
+**Status:** agreed. The `cmd/`, `internal/cli/`, `internal/clicfg/`, `internal/git/` and `internal/semver` parts are built and lint-enforced. `internal/config` is built (loader, `WithDefaults` and `Validate`), `internal/workspace` is built for the central config, its directory and the current repository only, and `internal/ui` and `test/integration/` are not built.
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
