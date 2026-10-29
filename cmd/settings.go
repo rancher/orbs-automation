@@ -63,9 +63,19 @@ func loadSettings(getenv func(string) string, home string) func(*cobra.Command, 
 }
 
 // loadSettingsForDoctor is loadSettings for gero doctor, which has to run to
-// report a user file that cannot be loaded.
+// report a user file that cannot be loaded. When loading fails it loads again
+// without the user file, so doctor still sees the flags, the environment and the
+// defaults, and its user-file check reports what was wrong with the file. If the
+// second load fails too, the problem is not the file, and that error is returned.
 func loadSettingsForDoctor(getenv func(string) string, home string) func(*cobra.Command, []string) error {
-	return loadSettings(getenv, home)
+	strict := loadSettings(getenv, home)
+	withoutFile := settingsLoader(getenv, home, true)
+	return func(cmd *cobra.Command, args []string) error {
+		if err := strict(cmd, args); err == nil {
+			return nil
+		}
+		return withoutFile(cmd, args)
+	}
 }
 
 // settingsLoader is loadSettings, optionally without reading the user file.
