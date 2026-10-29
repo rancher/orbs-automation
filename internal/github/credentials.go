@@ -78,4 +78,18 @@ func (*NoTokenError) Unwrap() error { return ErrNoToken }
 // DescribeTokenSource turns the source name go-gh reports for a token, such as
 // "GH_TOKEN" or "oauth_token", into words for a person. A source it does not
 // know is returned as it is.
-func DescribeTokenSource(_ string) string { return "" }
+func DescribeTokenSource(source string) string {
+	if s, ok := tokenSources[source]; ok {
+		return s
+	}
+	return source
+}
+
+var tokenSources = map[string]string{
+	"GH_TOKEN":                "environment variable GH_TOKEN",
+	"GITHUB_TOKEN":            "environment variable GITHUB_TOKEN",
+	"GH_ENTERPRISE_TOKEN":     "environment variable GH_ENTERPRISE_TOKEN",
+	"GITHUB_ENTERPRISE_TOKEN": "environment variable GITHUB_ENTERPRISE_TOKEN",
+	"oauth_token":             "gh config file",
+	"gh":                      "gh auth token (keyring)",
+}
