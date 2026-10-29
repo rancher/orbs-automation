@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/rancher/orbs-automation/internal/cli/configshow"
-	"github.com/rancher/orbs-automation/internal/errs"
+	"github.com/rancher/orbs-automation/internal/cli/configvalidate"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +18,18 @@ func init() {
 		&cobra.Command{
 			Use:   "validate",
 			Short: "Validate the application config",
-			RunE: func(*cobra.Command, []string) error {
-				return errs.NotImplemented("gero config validate")
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				cwd, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+				out, err := configvalidate.Run(settingsFrom(cmd), cwd)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprint(cmd.OutOrStdout(), out)
+				return err
 			},
 		},
 		&cobra.Command{
