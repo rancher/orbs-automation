@@ -37,6 +37,7 @@ func defaultChecks(b Build) []Check {
 		NewVersionCheck(b),
 		NewGhCheck(ghBinary{}),
 		NewAuthTokenCheck(github.GoGh{}),
+		NewAuthAPICheck(authstatusVerifier{}),
 	}
 }
 
