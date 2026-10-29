@@ -1,6 +1,6 @@
 # Execution Context
 
-**Status:** draft. Nothing here is built except the pieces named under [What differs by context](#what-differs-by-context). Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
+**Status:** draft. Detection is built (see [Detecting the context](#detecting-the-context)), and so are the pieces of [What differs by context](#what-differs-by-context) that name an owner other than this spec. The rest is under [Not built yet](#not-built-yet). Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
 
 How one `gero` command behaves on an engineer's workstation and in CI, and who it acts as in each. [CLI_FRAMEWORK](CLI_FRAMEWORK.md) decides which commands are CI-only. This spec covers what every command that runs in both has in common, above all the ones that write. The first of those is [PUSH_TO_REPO](PUSH_TO_REPO.md): an engineer runs it locally and the PRs carry their name, and CI runs it and the PRs carry the bot's name. The same command and the same code do both.
 
@@ -12,8 +12,8 @@ How one `gero` command behaves on an engineer's workstation and in CI, and who i
 
 One function in `internal/clicfg` decides, once, and the result is `Settings.CI`. Nothing else reads `CI` or `GITHUB_ACTIONS`.
 
-* CI is `GITHUB_ACTIONS=true`, or `CI=true`. This is what the loader does today.
-* `GERO_CONTEXT=ci|workstation` forces the answer **(leaning)**. It lets a developer reproduce a CI failure locally, lets a test pin the context, and lets a developer who exports `CI=true` for another tool keep their user file.
+* CI is `GITHUB_ACTIONS=true`, or `CI=true`.
+* `GERO_CONTEXT=ci|workstation` forces the answer and wins over both. It lets a developer reproduce a CI failure locally, lets a test pin the context, and lets a developer who exports `CI=true` for another tool keep their user file. Any other value is a usage error naming the variable.
 * CI-only gating additionally needs `GITHUB_ACTIONS=true` itself, because `CI=true` is not proof of a GitHub runner ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
 
 ## What differs by context
@@ -79,7 +79,7 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 ## Not built yet
 
-* `GERO_CONTEXT`, the single detection function and its use everywhere `CI` or `GITHUB_ACTIONS` is read.
+* CI-only gating on `GITHUB_ACTIONS=true` itself, so that `GERO_CONTEXT=ci` alone does not satisfy it.
 * The bot identity setting, commit identity resolution and the `auth status` fallback for installation tokens.
 * The `gitcli` push, the `signCommits` key and signing through `git`.
 * The write-command contract: preflight line, throwaway clone, `--yes`.

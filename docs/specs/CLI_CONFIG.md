@@ -58,7 +58,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 * Optional. A missing file is fine; a malformed file, or one with an unknown key, is a loud error naming the file and key.
 * `gero config show` lists the file it loaded as `userFile`, first in the table, with `env` as its source when `GERO_CONFIG` named it and `default` otherwise, or `(none)` when no file applies. `gero doctor` checks that the file loads ([DOCTOR](DOCTOR.md)).
 * No secrets. Tokens stay with `gh` or the environment.
-* **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file.
+* **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file. What counts as CI is decided in one place ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)).
 * The main use is per-developer behavior that must not leak into the shared tool. The motivating case: locally `origin` is a developer's fork, while in CI `origin` is the real source, so `upstream` tells `gero` which remote to treat as the real source.
 * It never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no `root` or layout key: it would encode a workstation convention not everyone follows.
 
@@ -74,6 +74,7 @@ Names are not final **(leaning)**.
 | `host` | `GERO_HOST` | `--host` | GitHub host, if we ever target non-github.com |
 | n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md)). A setting named `log`; no user-file key |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
+| n/a | `GERO_CONTEXT` | n/a | `ci` or `workstation`, forcing the execution context ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)). Recorded as `Settings.CI`; no user-file key |
 
 Env and flag names derive from the file key by one rule, so the table is a check, not a source of truth. The loader is table-tested for precedence and for unknown keys ([TESTING](TESTING.md)).
 
