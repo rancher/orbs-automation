@@ -15,9 +15,13 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 )
 
+// NotFoundHint is the advice for a missing central config directory. It is the
+// tail of ErrNotFound, and gero doctor shows it as the fix.
+const NotFoundHint = "set one of --config-dir, GERO_CONFIG_DIR or configDir in the user file, " +
+	"or run from a checkout of the central repo (./config)"
+
 // ErrNotFound is returned when no source names a config directory.
-var ErrNotFound = errors.New("central config directory not found: set one of --config-dir, " +
-	"GERO_CONFIG_DIR or configDir in the user file, or run from a checkout of the central repo (./config)")
+var ErrNotFound = errors.New("central config directory not found: " + NotFoundHint)
 
 // SourceCwd is the ConfigDir.Source of a directory found in the working
 // directory.
