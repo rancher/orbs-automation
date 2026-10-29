@@ -4,7 +4,10 @@
 // reads these globals, and anything deeper is handed the value as an argument.
 package version
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // Set by GoReleaser through -ldflags -X.
 var (
@@ -24,5 +27,9 @@ func String() string {
 
 // JSON describes the build as a JSON object with the keys version, commit and date.
 func JSON() ([]byte, error) {
-	return []byte("{}"), nil
+	return json.Marshal(struct {
+		Version string `json:"version"`
+		Commit  string `json:"commit"`
+		Date    string `json:"date"`
+	}{Version, Commit, Date})
 }
