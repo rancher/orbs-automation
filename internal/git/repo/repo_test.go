@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/stretchr/testify/assert"
@@ -268,5 +269,58 @@ func TestShallowClone(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Empty(t, got)
+	})
+}
+
+func TestRemotes(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		repo, err := Open(newRepo(t).dir)
+		require.NoError(t, err)
+
+		got, err := repo.Remotes()
+
+		require.NoError(t, err)
+		assert.Empty(t, got)
+	})
+
+	t.Run("urls by remote name", func(t *testing.T) {
+		r := newRepo(t)
+		_, err := r.repo.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{"git@github.com:danpock/rancher.git"}})
+		require.NoError(t, err)
+		_, err = r.repo.CreateRemote(&config.RemoteConfig{Name: "upstream", URLs: []string{
+			"https://github.com/rancher/rancher.git", "https://mirror.example.com/rancher/rancher.git"}})
+		require.NoError(t, err)
+		repo, err := Open(r.dir)
+		require.NoError(t, err)
+
+		got, err := repo.Remotes()
+
+		require.NoError(t, err)
+		assert.Equal(t, map[string][]string{
+			"origin":   {"git@github.com:danpock/rancher.git"},
+			"upstream": {"https://github.com/rancher/rancher.git", "https://mirror.example.com/rancher/rancher.git"},
+		}, got)
+	})
+
+	t.Run("agrees with git remote -v", func(t *testing.T) {
+		requireGit(t)
+		r := newRepo(t)
+		for _, args := range [][]string{
+			{"remote", "add", "origin", "git@github.com:danpock/rancher.git"},
+			{"remote", "add", "upstream", "https://github.com/rancher/rancher.git"},
+		} {
+			out, err := exec.Command("git", append([]string{"-C", r.dir}, args...)...).CombinedOutput()
+			require.NoError(t, err, "%s", out)
+		}
+		repo, err := Open(r.dir)
+		require.NoError(t, err)
+
+		got, err := repo.Remotes()
+
+		require.NoError(t, err)
+		assert.Equal(t, map[string][]string{
+			"origin":   {"git@github.com:danpock/rancher.git"},
+			"upstream": {"https://github.com/rancher/rancher.git"},
+		}, got)
 	})
 }
