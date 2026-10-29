@@ -1,6 +1,6 @@
 # Doctor
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version`, `gh`, `auth-token` and `auth-api` checks. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version`, `gh`, `auth-token`, `auth-api` and `rate-limit` checks. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
 
 `gero doctor` checks that a developer's workstation is set up to use `gero`, and says how to fix what is not. It is the first thing to run when something is off, and the output is meant to be pasted into an issue. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md); output rules are in [CLI_OUTPUT](CLI_OUTPUT.md).
 
@@ -50,7 +50,7 @@ Each one reuses the package that already does the work (section 7).
 | `repos` | configuration | no | never; `warn` for each project with no clone or several equal ones; needs `config` | `internal/cli/configresolve` |
 | `auth-token` | authentication | no | no token is found for the default host; names the variables to set; reports where the token came from and never the token. It runs the same resolver as every command, so it may call `gh auth token` | `internal/github` (`Resolve`, `NoTokenError`, `DescribeTokenSource`) |
 | `auth-api` | authentication | yes | GitHub rejects the token, with advice that depends on where the token came from (replace an environment variable, or `gh auth login` again); `warn` on a timeout or any other error, since a network problem says nothing about the token; needs `auth-token` | `internal/cli/authstatus` (`Check`) |
-| `rate-limit` | authentication | yes | never; `warn` when little of the limit is left; needs `auth-api` | go-github |
+| `rate-limit` | authentication | yes | never; `warn` when under a tenth of the core limit is left, saying when the window resets, or when the limit cannot be read; needs `auth-api` | `internal/github` (`CoreRateLimit`) |
 
 Checks arrive with the feature that depends on them, in the same change. Likely next: token permissions for opening PRs, access to the tracker repo and its issues, push access to each fork, and clones far behind upstream. A check for something that does not exist yet is not added.
 
