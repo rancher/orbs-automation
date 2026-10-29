@@ -219,3 +219,31 @@ func TestRenderHintsStayOutOfMachineFormats(t *testing.T) {
 	assert.Contains(t, env, "GERO_UPSTREAM=\n")
 	assert.NotContains(t, env, "inferred")
 }
+
+func TestRenderTextPointsAtResolveWhenReposSearchIsSet(t *testing.T) {
+	s := load(t, "repos:\n  search:\n    - /work/suse\n", nil, nil)
+
+	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^repos\.search\s+/work/suse\s+file$`, out)
+	assert.True(t, strings.HasSuffix(out, "\nrun `gero config resolve repos` to see where each repo resolves\n"), out)
+}
+
+func TestRenderTextHasNoResolveHintWithoutReposSearch(t *testing.T) {
+	out, err := Render(load(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n", nil, nil), workspace.ConfigDir{}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.NotContains(t, out, "config resolve")
+}
+
+func TestRenderResolveHintStaysOutOfMachineFormats(t *testing.T) {
+	s := load(t, "repos:\n  search:\n    - /work/suse\n", nil, nil)
+
+	for _, format := range []string{clicfg.OutputJSON, clicfg.OutputEnv} {
+		out, err := Render(s, workspace.ConfigDir{}, format)
+
+		require.NoError(t, err)
+		assert.NotContains(t, out, "config resolve", format)
+	}
+}
