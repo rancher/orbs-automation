@@ -1,6 +1,6 @@
 # Doctor
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Nothing is built.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version` check. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
 
 `gero doctor` checks that a developer's workstation is set up to use `gero`, and says how to fix what is not. It is the first thing to run when something is off, and the output is meant to be pasted into an issue. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md); output rules are in [CLI_OUTPUT](CLI_OUTPUT.md).
 
