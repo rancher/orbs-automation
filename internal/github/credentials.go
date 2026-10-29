@@ -38,8 +38,8 @@ type Credentials struct {
 }
 
 // Resolve returns the credentials for host, or for the default host when host
-// is empty. When no token is found the error wraps ErrNoToken and says which
-// variables to set.
+// is empty. When no token is found the error is a *NoTokenError, which wraps
+// ErrNoToken and says which variables to set.
 func Resolve(a Auth, host string) (Credentials, error) {
 	hostSource := SourceExplicit
 	if host == "" {
@@ -47,7 +47,7 @@ func Resolve(a Auth, host string) (Credentials, error) {
 	}
 	token, tokenSource := a.TokenForHost(host)
 	if token == "" {
-		return Credentials{}, fmt.Errorf("%w for %s: %s", ErrNoToken, host, tokenHint(a, host))
+		return Credentials{}, &NoTokenError{Host: host, Hint: tokenHint(a, host)}
 	}
 	return Credentials{Host: host, HostSource: hostSource, Token: token, TokenSource: tokenSource}, nil
 }
@@ -69,6 +69,8 @@ type NoTokenError struct {
 	Hint string // how to supply one
 }
 
-func (*NoTokenError) Error() string { return "" }
+func (e *NoTokenError) Error() string {
+	return fmt.Sprintf("%s for %s: %s", ErrNoToken, e.Host, e.Hint)
+}
 
-func (*NoTokenError) Unwrap() error { return nil }
+func (*NoTokenError) Unwrap() error { return ErrNoToken }
