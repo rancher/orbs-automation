@@ -375,3 +375,15 @@ func TestRunStopsWhenTheCallerCancelsMidCheck(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Empty(t, got)
 }
+
+func TestRunWithACancelledContextRunsNothing(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	var ran []string
+
+	got, err := Run(ctx, []Check{fakeCheck{name: "a", ran: &ran}}, Options{})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, ran)
+	assert.Empty(t, got)
+}
