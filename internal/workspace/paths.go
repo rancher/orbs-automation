@@ -1,6 +1,15 @@
 package workspace
 
-import "errors"
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+
+	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/git/repo"
+)
 
 // How a RepoPath was found: where the winning rule looked.
 const (
@@ -36,8 +45,19 @@ type RepoPath struct {
 // clones match equally, is a row with Err set, not a failure of the call.
 func (w *Workspace) RepoPaths(slugs []string) []RepoPath {
 	out := make([]RepoPath, len(slugs))
+	if len(slugs) == 0 {
+		return out
+	}
+	here := w.cwdClone()
+	var scanned []clone
+	scan := func() []clone {
+		if scanned == nil {
+			scanned = scanClones(w.settings.Repos.Search)
+		}
+		return scanned
+	}
 	for i, slug := range slugs {
-		out[i] = RepoPath{Slug: slug, Err: errors.New("not implemented")}
+		out[i] = w.repoPath(slug, here, scan)
 	}
 	return out
 }
@@ -47,4 +67,158 @@ func (w *Workspace) RepoPaths(slugs []string) []RepoPath {
 func (w *Workspace) RepoPath(slug string) (RepoPath, error) {
 	rp := w.RepoPaths([]string{slug})[0]
 	return rp, rp.Err
+}
+
+func (w *Workspace) repoPath(slug string, here *clone, scan func() []clone) RepoPath {
+	if here != nil && here.matches(slug) == strong {
+		return RepoPath{Slug: slug, Path: here.path, Source: PathCwd}
+	}
+	for key, p := range w.settings.Repos.Paths {
+		if strings.EqualFold(key, slug) {
+			return RepoPath{Slug: slug, Path: p, Source: PathSettings}
+		}
+	}
+	if rp, ok := fromScan(slug, scan()); ok {
+		return rp
+	}
+	if here != nil {
+		_, name, _ := strings.Cut(slug, "/")
+		sibling := filepath.Join(filepath.Dir(here.path), name)
+		if info, err := os.Stat(sibling); name != "" && err == nil && info.IsDir() {
+			return RepoPath{Slug: slug, Path: sibling, Source: PathSibling}
+		}
+	}
+	return RepoPath{Slug: slug, Err: ErrRepoNotFound}
+}
+
+// fromScan picks the clone for slug: the only strong match, else the only weak
+// one. Several of the best strength are ambiguous. ok is false when none match.
+func fromScan(slug string, clones []clone) (RepoPath, bool) {
+	var strongs, weaks []string
+	for _, c := range clones {
+		switch c.matches(slug) {
+		case strong:
+			strongs = append(strongs, c.path)
+		case weak:
+			weaks = append(weaks, c.path)
+		}
+	}
+	found := strongs
+	if len(found) == 0 {
+		found = weaks
+	}
+	switch len(found) {
+	case 0:
+		return RepoPath{}, false
+	case 1:
+		return RepoPath{Slug: slug, Path: found[0], Source: PathScan}, true
+	}
+	slices.Sort(found)
+	return RepoPath{Slug: slug, Candidates: found, Err: ErrRepoAmbiguous}, true
+}
+
+// strength is how well a clone's remotes match a slug.
+type strength int
+
+const (
+	none   strength = iota
+	weak            // only a same-name remote under another owner: a fork
+	strong          // a remote that is the slug itself
+)
+
+// clone is a local repository and the slugs its remote URLs name.
+type clone struct {
+	path  string
+	slugs []string
+}
+
+func (c clone) matches(slug string) strength {
+	owner, name, _ := strings.Cut(slug, "/")
+	best := none
+	for _, s := range c.slugs {
+		o, n, _ := strings.Cut(s, "/")
+		switch {
+		case strings.EqualFold(s, slug):
+			return strong
+		case strings.EqualFold(n, name) && !strings.EqualFold(o, owner):
+			best = weak
+		}
+	}
+	return best
+}
+
+// cwdClone returns the repository containing the working directory, or nil
+// when there is none or its remotes cannot be read.
+func (w *Workspace) cwdClone() *clone {
+	r, err := w.Current()
+	if err != nil {
+		return nil
+	}
+	return clonePath(r.Root(), r)
+}
+
+// clonePath returns the clone at path for the opened repository r, or nil when
+// its remotes cannot be read.
+func clonePath(path string, r *repo.Repo) *clone {
+	remotes, err := r.Remotes()
+	if err != nil {
+		return nil
+	}
+	c := &clone{path: path}
+	for _, urls := range remotes {
+		for _, u := range urls {
+			if slug, err := git.SlugFromURL(u); err == nil {
+				c.slugs = append(c.slugs, slug)
+			}
+		}
+	}
+	return c
+}
+
+// scanClones finds the clones directly below each dir and one level further
+// down, without looking inside a clone. A directory that cannot be read is
+// skipped, and a clone found twice is listed once.
+func scanClones(dirs []string) []clone {
+	var out []clone
+	seen := map[string]bool{}
+	add := func(path string) bool {
+		r, err := repo.Open(path)
+		if err != nil {
+			return false
+		}
+		if !seen[path] {
+			seen[path] = true
+			if c := clonePath(path, r); c != nil {
+				out = append(out, *c)
+			}
+		}
+		return true
+	}
+	for _, dir := range dirs {
+		for _, child := range subdirs(dir) {
+			if add(child) {
+				continue
+			}
+			for _, grandchild := range subdirs(child) {
+				add(grandchild)
+			}
+		}
+	}
+	return out
+}
+
+// subdirs lists the directories directly inside dir, or nothing when dir
+// cannot be read.
+func subdirs(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if e.IsDir() {
+			out = append(out, filepath.Join(dir, e.Name()))
+		}
+	}
+	return out
 }

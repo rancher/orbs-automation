@@ -46,6 +46,16 @@ func clones(t *testing.T, root string, layout map[string]map[string]string) {
 	}
 }
 
+// realPath resolves symlinks in p. go-git reports a repository root with them
+// resolved (/tmp is /private/tmp on macOS), so paths derived from the working
+// directory's repository are compared in that form.
+func realPath(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	require.NoError(t, err)
+	return r
+}
+
 // workspaceFor opens a Workspace at cwd with the given repos.search and
 // repos.paths settings.
 func workspaceFor(t *testing.T, cwd string, search []string, paths map[string]string) *Workspace {
@@ -61,7 +71,7 @@ func TestRepoPathsCwd(t *testing.T) {
 		got := workspaceFor(t, dir, nil, nil).RepoPaths([]string{rancherSlug})
 
 		require.Len(t, got, 1)
-		assert.Equal(t, RepoPath{Slug: rancherSlug, Path: dir, Source: PathCwd}, got[0])
+		assert.Equal(t, RepoPath{Slug: rancherSlug, Path: realPath(t, dir), Source: PathCwd}, got[0])
 	})
 
 	t.Run("from a subdirectory, the path is the repository root", func(t *testing.T) {
@@ -70,7 +80,7 @@ func TestRepoPathsCwd(t *testing.T) {
 
 		got := workspaceFor(t, subdir(t, dir), nil, nil).RepoPaths([]string{rancherSlug})
 
-		assert.Equal(t, RepoPath{Slug: rancherSlug, Path: dir, Source: PathCwd}, got[0])
+		assert.Equal(t, RepoPath{Slug: rancherSlug, Path: realPath(t, dir), Source: PathCwd}, got[0])
 	})
 
 	t.Run("a repository for another slug is not the match", func(t *testing.T) {
@@ -90,7 +100,7 @@ func TestRepoPathsCwd(t *testing.T) {
 		got := workspaceFor(t, dir, []string{search}, map[string]string{rancherSlug: "/elsewhere"}).RepoPaths([]string{rancherSlug})
 
 		assert.Equal(t, PathCwd, got[0].Source)
-		assert.Equal(t, dir, got[0].Path)
+		assert.Equal(t, realPath(t, dir), got[0].Path)
 	})
 
 	t.Run("outside any repository", func(t *testing.T) {
@@ -247,7 +257,7 @@ func TestRepoPathsSibling(t *testing.T) {
 
 		got := workspaceFor(t, filepath.Join(parent, "orbs-automation"), nil, nil).RepoPaths([]string{"rancher/scc-operator"})
 
-		assert.Equal(t, RepoPath{Slug: "rancher/scc-operator", Path: filepath.Join(parent, "scc-operator"), Source: PathSibling}, got[0])
+		assert.Equal(t, RepoPath{Slug: "rancher/scc-operator", Path: filepath.Join(realPath(t, parent), "scc-operator"), Source: PathSibling}, got[0])
 	})
 
 	t.Run("from a subdirectory of the repository", func(t *testing.T) {
@@ -258,7 +268,7 @@ func TestRepoPathsSibling(t *testing.T) {
 
 		got := workspaceFor(t, subdir(t, root), nil, nil).RepoPaths([]string{"rancher/scc-operator"})
 
-		assert.Equal(t, filepath.Join(parent, "scc-operator"), got[0].Path)
+		assert.Equal(t, filepath.Join(realPath(t, parent), "scc-operator"), got[0].Path)
 	})
 
 	t.Run("no such directory", func(t *testing.T) {
