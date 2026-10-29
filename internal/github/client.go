@@ -15,13 +15,14 @@ var ErrUnsupportedHost = errors.New("unsupported GitHub host")
 
 // NewClient returns a go-github REST client for the resolved credentials: the
 // token goes only to the host's own API, and a GitHub Enterprise Server host
-// gets its /api/v3 and /api/uploads URLs. Extra options (a transport for
-// tests, a user agent) are applied last.
+// gets its /api/v3 and /api/uploads URLs. The User-Agent is gero's own
+// (UserAgent). Extra options (a transport for tests, a different user agent)
+// are applied last.
 func NewClient(c Credentials, opts ...gogithub.ClientOptionsFunc) (*gogithub.Client, error) {
 	if c.Token == "" {
 		return nil, fmt.Errorf("%w for %s", ErrNoToken, c.Host)
 	}
-	all := []gogithub.ClientOptionsFunc{gogithub.WithAuthToken(c.Token)}
+	all := []gogithub.ClientOptionsFunc{gogithub.WithAuthToken(c.Token), gogithub.WithUserAgent(UserAgent())}
 	switch {
 	case c.Host == "github.com":
 	case c.Host == "github.localhost" || strings.HasSuffix(c.Host, ".ghe.com"):
