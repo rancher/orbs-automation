@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+
+	"github.com/rancher/orbs-automation/internal/cli/configshow"
 	"github.com/rancher/orbs-automation/internal/errs"
 	"github.com/spf13/cobra"
 )
@@ -20,9 +23,16 @@ func init() {
 		},
 		&cobra.Command{
 			Use:   "show",
-			Short: "Show the application config",
-			RunE: func(*cobra.Command, []string) error {
-				return errs.NotImplemented("gero config show")
+			Short: "Show the resolved CLI config and where each value came from",
+			Args:  cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				s := settingsFrom(cmd)
+				out, err := configshow.Render(s, s.Output)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprint(cmd.OutOrStdout(), out)
+				return err
 			},
 		},
 	)
