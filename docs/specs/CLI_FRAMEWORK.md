@@ -28,12 +28,14 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero config validate` | either | Runs without credentials |
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
 | `gero lines resolve` | either | Read-only |
-| `gero repo check-semver [tag]` | either | Read-only; port of the shared `check-semver` script. Emits env-style output |
+| `gero semver check [tag]` | either | Read-only; port of the shared `check-semver` script. Takes a string (argument or `GITHUB_REF_NAME`) and never opens a repository. Emits env-style output |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
 | `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |
 | `gero dashboard` | either | Moonshot; the name may become `triage` |
+
+A noun names the thing a command operates on. `gero repo` is for commands that read a repository (its refs, HEAD, tags), so repo selection (`--repo`, the inferred upstream and path in [CLI_CONFIG](CLI_CONFIG.md)) applies to everything under it. `gero semver` works on version strings and never opens a repository. The noun names the domain, not the implementation: `semver check` is the lenient script port (any text, one leading `v` stripped). Later verbs such as `compare` or `bump` may use a strict SemVer parser, which needs its own entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md); they get their own verbs and must not change what `check` accepts.
 
 Global (persistent) flags:
 

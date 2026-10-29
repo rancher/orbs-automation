@@ -1,4 +1,4 @@
-// Package checksemver holds the logic of gero repo check-semver, a port of the
+// Package checksemver holds the logic of gero semver check, a port of the
 // check-semver script. It is framework-free: cmd/ owns the cobra wiring.
 package checksemver
 

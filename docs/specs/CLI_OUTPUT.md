@@ -7,7 +7,7 @@ How `gero` talks to the user: command output, logging, and the seam for interact
 ## 1. Output
 
 * **Data to stdout, diagnostics to stderr.** A script can always pipe stdout.
-* Commands whose results feed shell or GitHub Actions (`gero repo check-semver`, `gero repo branch-tags`) also support `--output env`: `KEY=value` lines on stdout, one per line, safe to append to `$GITHUB_OUTPUT` or `$GITHUB_ENV`. Key names are documented next to the command.
+* Commands whose results feed shell or GitHub Actions (`gero semver check`, `gero repo branch-tags`) also support `--output env`: `KEY=value` lines on stdout, one per line, safe to append to `$GITHUB_OUTPUT` or `$GITHUB_ENV`. Key names are documented next to the command.
 * Human output uses `text/tabwriter` and plain lines. No table or styling library.
 * Every command that emits data supports `--json` through `encoding/json`, with a stable field naming scheme documented next to the command. JSON output is never interleaved with human text.
 * Color is off when `NO_COLOR` is set, `--no-color` is passed, or stdout is not a TTY. No color library until output needs more than a few escape codes.

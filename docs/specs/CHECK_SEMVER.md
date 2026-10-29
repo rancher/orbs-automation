@@ -1,6 +1,8 @@
 # check-semver
 
-**Status:** agreed. Items marked **(leaning)** are proposals. The faithful port (sections 1 to 4, default behavior) is built: `internal/semver`, `internal/cli/checksemver` and the `gero repo check-semver` command. The opt-in improvements in section 6 and the parity test are not built yet.
+The command is `gero semver check`. `check` is the lenient script port described here. Strict SemVer operations, if they come, are separate verbs under `gero semver` and do not change `check` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md) section 2).
+
+**Status:** agreed. Items marked **(leaning)** are proposals. The faithful port (sections 1 to 4, default behavior) is built: `internal/semver`, `internal/cli/checksemver` and the `gero semver check` command. The opt-in improvements in section 6 and the parity test are not built yet.
 
 Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by [IMPLEMENTATION §4](../IMPLEMENTATION.md).
 
@@ -22,7 +24,7 @@ Quirks of that regex: `1.2.3-` counts as a prerelease, `01.2.3-rc` is accepted d
 
 ## 2. Faithful port (the default)
 
-What makes `gero repo check-semver` a faithful port. Each point matches the script exactly:
+What makes `gero semver check` a faithful port. Each point matches the script exactly:
 
 1. **Input.** The argument, else `GITHUB_REF_NAME`. An empty argument falls through to the variable. Extra arguments are ignored.
 2. **Prefix.** One leading lowercase `v` is stripped. Uppercase `V` is not, and `vv1.2.3` loses one `v`. The SemVer FAQ says `v1.2.3` is not itself a semantic version and calls a `v` prefix a common convention, so it gives no rule for `V`; the script's behavior stands.
@@ -33,7 +35,7 @@ What makes `gero repo check-semver` a faithful port. Each point matches the scri
 7. **Missing tag.** Neither argument nor `GITHUB_REF_NAME`: an error on stderr and exit 1.
 
 ```
-gero repo check-semver [tag]
+gero semver check [tag]
 ```
 
 * **Context:** either (read-only, no credentials).

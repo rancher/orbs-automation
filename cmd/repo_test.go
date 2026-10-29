@@ -7,25 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Wiring only: the logic is tested in internal/cli/checksemver.
-func TestRepoCheckSemverWiring(t *testing.T) {
-	t.Setenv("GITHUB_REF_NAME", "")
-
-	t.Run("argument, extra arguments ignored", func(t *testing.T) {
-		stdout, _, err := execRoot(t, "repo", "check-semver", "v1.2.3-rc.1", "ignored")
-
-		require.NoError(t, err)
-		assert.Equal(t, "HAS_PRERELEASE=true\nHAS_BUILD_META=false\n", stdout)
-	})
-
-	t.Run("no tag is an error with empty stdout", func(t *testing.T) {
-		stdout, _, err := execRoot(t, "repo", "check-semver")
-
-		assert.Error(t, err)
-		assert.Empty(t, stdout)
-	})
-}
-
 // Wiring only: the logic is tested in internal/cli/branchtags.
 func TestRepoBranchTagsWiring(t *testing.T) {
 	t.Chdir(t.TempDir()) // not inside any repository, so no tags
