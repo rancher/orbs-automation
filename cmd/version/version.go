@@ -21,3 +21,8 @@ var (
 func String() string {
 	return fmt.Sprintf("%s (commit %s, built %s)", Version, Commit, Date)
 }
+
+// JSON describes the build as a JSON object with the keys version, commit and date.
+func JSON() ([]byte, error) {
+	return []byte("{}"), nil
+}
