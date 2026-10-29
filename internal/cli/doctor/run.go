@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/github"
 )
 
 // Flags are the command-line choices of one gero doctor run.
@@ -35,6 +36,7 @@ func defaultChecks(b Build) []Check {
 	return []Check{
 		NewVersionCheck(b),
 		NewGhCheck(ghBinary{}),
+		NewAuthTokenCheck(github.GoGh{}),
 	}
 }
 

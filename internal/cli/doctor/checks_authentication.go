@@ -2,6 +2,8 @@ package doctor
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/github"
 )
@@ -22,4 +24,14 @@ func (authTokenCheck) Description() string {
 func (authTokenCheck) Online() bool    { return false }
 func (authTokenCheck) Needs() []string { return nil }
 
-func (authTokenCheck) Run(context.Context) Result { return Result{} }
+func (c authTokenCheck) Run(context.Context) Result {
+	creds, err := github.Resolve(c.auth, "")
+	var noToken *github.NoTokenError
+	switch {
+	case errors.As(err, &noToken):
+		return Result{Status: StatusFail, Message: "no token found for " + noToken.Host, Remediation: noToken.Hint}
+	case err != nil:
+		return Result{Status: StatusFail, Message: err.Error()}
+	}
+	return Result{Status: StatusOK, Message: fmt.Sprintf("%s for %s", github.DescribeTokenSource(creds.TokenSource), creds.Host)}
+}
