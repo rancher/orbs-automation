@@ -310,3 +310,13 @@ func TestOpenUserFile(t *testing.T) {
 		assert.ErrorIs(t, err, os.ErrNotExist)
 	})
 }
+
+func TestLoadAcceptsEnvOutput(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(map[string]string{"GERO_OUTPUT": "env"})})
+	require.NoError(t, err)
+	assert.Equal(t, OutputEnv, s.Output)
+
+	s, err = Load(Inputs{UserFile: file("output: env\n")})
+	require.NoError(t, err)
+	assert.Equal(t, OutputEnv, s.Output)
+}
