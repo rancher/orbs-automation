@@ -25,8 +25,9 @@ without manual intervention, with gh-style commands: gero <category> <action>.`,
 
 func init() {
 	// Setting Version makes cobra print it for --version. The flag is declared
-	// here, without a shorthand: cobra would otherwise claim -v, which is
-	// reserved for --verbose (docs/specs/CLI_FRAMEWORK.md).
+	// here, without a shorthand: cobra would otherwise claim -v, which belongs
+	// to --verbose (docs/specs/CLI_FRAMEWORK.md). `gero version` is the
+	// primary form (versioncmd.go).
 	rootCmd.Version = version.String()
 	rootCmd.Flags().Bool("version", false, "version for gero")
 	addGlobalFlags(rootCmd)
