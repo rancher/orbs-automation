@@ -132,3 +132,9 @@ func (r *Repo) creatorDate(hash plumbing.Hash) (int64, error) {
 		return 0, err
 	}
 }
+
+// Remotes returns the URLs of each configured remote, keyed by remote name. A
+// repository without remotes gives an empty map.
+func (r *Repo) Remotes() (map[string][]string, error) {
+	return nil, errors.New("not implemented")
+}
