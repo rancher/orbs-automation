@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
 // Flags are the command-line choices of one gero doctor run.
@@ -42,11 +43,16 @@ func Main(ctx context.Context, env Environment, f Flags, b Build) (string, error
 
 // defaultChecks is every check gero doctor knows, in the order they run. A
 // check's needs must come before it.
-func defaultChecks(b Build, _ Environment) []Check {
+func defaultChecks(b Build, env Environment) []Check {
+	ws := workspace.Open(env.Settings, env.Cwd)
 	return []Check{
 		NewVersionCheck(b),
 		NewGitCheck(gitBinary{}),
 		NewGhCheck(ghBinary{}),
+		NewUserFileCheck(env),
+		NewConfigDirCheck(ws),
+		NewConfigCheck(ws),
+		NewReposCheck(ws),
 		NewAuthTokenCheck(github.GoGh{}),
 		NewAuthAPICheck(authstatusVerifier{}),
 		NewRateLimitCheck(githubRateLimiter{}, time.Now),
