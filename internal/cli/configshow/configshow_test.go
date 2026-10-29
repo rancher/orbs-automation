@@ -51,6 +51,22 @@ func TestEntries(t *testing.T) {
 				"output":   {"output", "text", "default"},
 				"upstream": {"upstream", "", "default"},
 				"fork":     {"fork", "", "default"},
+				"log":      {"log", "warn", "default"},
+			},
+		},
+		{
+			name:  "log from env, then flag",
+			env:   map[string]string{"GERO_LOG": "info"},
+			flags: map[string]string{"log": "debug"},
+			want: map[string]Entry{
+				"log": {"log", "debug", "flag"},
+			},
+		},
+		{
+			name: "log from env",
+			env:  map[string]string{"GERO_LOG": "error"},
+			want: map[string]Entry{
+				"log": {"log", "error", "env"},
 			},
 		},
 		{
