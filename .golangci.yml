@@ -102,6 +102,16 @@ linters:
           deny:
             - pkg: github.com/cli/go-gh
               desc: go-gh is only allowed in internal/github/gogh.go, and only pkg/auth (docs/specs/DEPENDENCY_POLICY.md)
+        # go-github types stay inside internal/github; the rest of gero sees
+        # narrow consumer-side interfaces (docs/IMPLEMENTATION.md section 3).
+        nogogithub:
+          list-mode: lax
+          files:
+            - "!**/internal/github/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/google/go-github
+              desc: go-github is only allowed in internal/github (docs/IMPLEMENTATION.md section 3)
         # Commands reach the repository on disk through internal/workspace, so
         # a repo is found and a slug resolved by one rule everywhere
         # (docs/specs/PROJECT_LAYOUT.md section 6, CLI_CONFIG.md section 3a).

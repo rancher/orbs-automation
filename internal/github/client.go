@@ -2,6 +2,8 @@ package github
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	gogithub "github.com/google/go-github/v93/github"
 )
@@ -15,6 +17,18 @@ var ErrUnsupportedHost = errors.New("unsupported GitHub host")
 // token goes only to the host's own API, and a GitHub Enterprise Server host
 // gets its /api/v3 and /api/uploads URLs. Extra options (a transport for
 // tests, a user agent) are applied last.
-func NewClient(_ Credentials, opts ...gogithub.ClientOptionsFunc) (*gogithub.Client, error) {
-	return gogithub.NewClient(opts...)
+func NewClient(c Credentials, opts ...gogithub.ClientOptionsFunc) (*gogithub.Client, error) {
+	if c.Token == "" {
+		return nil, fmt.Errorf("%w for %s", ErrNoToken, c.Host)
+	}
+	all := []gogithub.ClientOptionsFunc{gogithub.WithAuthToken(c.Token)}
+	switch {
+	case c.Host == "github.com":
+	case c.Host == "github.localhost" || strings.HasSuffix(c.Host, ".ghe.com"):
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedHost, c.Host)
+	default:
+		base := "https://" + c.Host
+		all = append(all, gogithub.WithEnterpriseURLs(base, base))
+	}
+	return gogithub.NewClient(append(all, opts...)...)
 }
