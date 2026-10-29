@@ -22,11 +22,17 @@ func Login(ctx context.Context, c Credentials, opts ...gogithub.ClientOptionsFun
 	}
 	user, _, err := client.Users.Get(ctx, "")
 	if err != nil {
-		var resp *gogithub.ErrorResponse
-		if errors.As(err, &resp) && resp.Response != nil && resp.Response.StatusCode == http.StatusUnauthorized {
+		if isUnauthorized(err) {
 			return "", fmt.Errorf("%w on %s", ErrBadCredentials, c.Host)
 		}
 		return "", fmt.Errorf("ask %s who the token belongs to: %w", c.Host, err)
 	}
 	return user.GetLogin(), nil
+}
+
+// isUnauthorized reports whether err is GitHub answering 401: the token was
+// not accepted.
+func isUnauthorized(err error) bool {
+	var resp *gogithub.ErrorResponse
+	return errors.As(err, &resp) && resp.Response != nil && resp.Response.StatusCode == http.StatusUnauthorized
 }
