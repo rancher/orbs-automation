@@ -113,3 +113,23 @@ func TestConfigWithoutGit(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestConfigForwardsTheVariablesThatChooseConfigFiles(t *testing.T) {
+	fakeGit(t, "printf '%s' \"${GIT_CONFIG_GLOBAL-unset}\"\n")
+	t.Setenv("GIT_CONFIG_GLOBAL", "/somewhere/gitconfig")
+
+	v, err := Config(context.Background(), "user.name")
+
+	require.NoError(t, err)
+	assert.Equal(t, "/somewhere/gitconfig", v)
+}
+
+func TestVersionDoesNotCarryGitVariablesIntoGit(t *testing.T) {
+	fakeGit(t, "printf '%s' \"${GIT_DIR-unset}\"\n")
+	t.Setenv("GIT_DIR", "/elsewhere")
+
+	v, err := Version(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, "unset", v)
+}
