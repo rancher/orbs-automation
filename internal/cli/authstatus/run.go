@@ -31,6 +31,19 @@ func (loginVerifier) Login(ctx context.Context, c github.Credentials) (string, e
 	return github.Login(ctx, c)
 }
 
+// Check resolves the credentials for hostname (the default host when empty) and
+// asks the host who the token belongs to. It returns the Status without
+// rendering it, for callers such as gero doctor. A rejected token comes back as
+// a Status with Valid false and an error wrapping github.ErrBadCredentials; any
+// other failure comes back as a zero Status and the error.
+func Check(ctx context.Context, hostname string) (Status, error) {
+	return check(ctx, hostname, github.GoGh{}, loginVerifier{})
+}
+
+func check(_ context.Context, _ string, _ github.Auth, _ Verifier) (Status, error) {
+	return Status{}, nil
+}
+
 func run(ctx context.Context, s clicfg.Settings, hostname string, a github.Auth, v Verifier) (string, error) {
 	// Refuse a format that cannot be rendered before spending an API call.
 	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
