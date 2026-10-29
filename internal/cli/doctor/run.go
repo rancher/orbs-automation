@@ -23,16 +23,26 @@ type Flags struct {
 // exit non-zero: a check failed, or one warned under --strict.
 var ErrChecksFailed = errors.New("some doctor checks failed")
 
-// Main runs gero doctor and returns the report in the format s.Output. The
-// report is returned along with ErrChecksFailed, so the caller prints it and
+// Environment is what the checks that look at this machine need besides the
+// build: the resolved settings, the working directory, and the home directory
+// and environment the user file is found from.
+type Environment struct {
+	Settings clicfg.Settings
+	Cwd      string
+	Home     string
+	Getenv   func(string) string
+}
+
+// Main runs gero doctor and returns the report in the format env.Settings.Output.
+// The report is returned along with ErrChecksFailed, so the caller prints it and
 // then exits non-zero.
-func Main(ctx context.Context, s clicfg.Settings, f Flags, b Build) (string, error) {
-	return run(ctx, s, f, b, defaultChecks(b))
+func Main(ctx context.Context, env Environment, f Flags, b Build) (string, error) {
+	return run(ctx, env.Settings, f, b, defaultChecks(b, env))
 }
 
 // defaultChecks is every check gero doctor knows, in the order they run. A
 // check's needs must come before it.
-func defaultChecks(b Build) []Check {
+func defaultChecks(b Build, _ Environment) []Check {
 	return []Check{
 		NewVersionCheck(b),
 		NewGitCheck(gitBinary{}),

@@ -92,7 +92,7 @@ func TestGhCheckGivesUpOnAHungGh(t *testing.T) {
 }
 
 func TestDefaultChecksAreConsistent(t *testing.T) {
-	checks := defaultChecks(testBuild)
+	checks := defaultChecks(testBuild, Environment{})
 
 	_, err := validate(checks)
 

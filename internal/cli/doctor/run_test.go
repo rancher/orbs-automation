@@ -146,7 +146,7 @@ func TestRunAnInconsistentRegistryIsAnError(t *testing.T) {
 }
 
 func TestMainRunsTheDefaultChecks(t *testing.T) {
-	out, err := Main(context.Background(), settings(clicfg.OutputText), Flags{Names: []string{"version"}}, testBuild)
+	out, err := Main(context.Background(), Environment{Settings: settings(clicfg.OutputText)}, Flags{Names: []string{"version"}}, testBuild)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "✔ version: gero 0.4.0 on linux/arm64\n")

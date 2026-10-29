@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -44,7 +45,13 @@ failed or, with --strict, warned.`,
 			}
 			// The report is written even when a check failed and the command
 			// exits non-zero.
-			out, err := doctor.Main(cmd.Context(), settingsFrom(cmd), flags, build)
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			home, _ := os.UserHomeDir()
+			env := doctor.Environment{Settings: settingsFrom(cmd), Cwd: cwd, Home: home, Getenv: os.Getenv}
+			out, err := doctor.Main(cmd.Context(), env, flags, build)
 			if out != "" {
 				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 			}
