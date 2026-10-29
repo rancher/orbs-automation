@@ -208,14 +208,9 @@ func (c userFileCheck) Run(context.Context) Result {
 		Home:         c.env.Home,
 	})
 	if err != nil {
-		message := err.Error()
-		// A YAML error names the file; a rejected value does not.
-		if !strings.Contains(message, path) {
-			message = path + ": " + message
-		}
 		return Result{
 			Status:  StatusFail,
-			Message: message,
+			Message: err.Error(), // the loader names the file and the key
 			Remediation: "fix what the message names, or move the file aside to use the defaults; " +
 				"the keys are listed in docs/specs/CLI_CONFIG.md",
 		}
