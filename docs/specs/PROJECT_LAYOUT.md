@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** agreed. The `cmd/`, `internal/cli/`, `internal/clicfg/`, `internal/git/` and `internal/semver` parts are built and lint-enforced. `internal/config`, `internal/ui` and `test/integration/` are not.
+**Status:** agreed. The `cmd/`, `internal/cli/`, `internal/clicfg/`, `internal/git/` and `internal/semver` parts are built and lint-enforced. `internal/config` is built as a loader only (no validation or defaults yet), and `internal/workspace`, `internal/ui` and `test/integration/` are not built.
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -20,6 +20,7 @@ cmd/version/         build info (Version, Commit, Date) set by GoReleaser throug
 internal/cli/<cmd>/  one subpackage per command: its logic as plain functions, no cobra
 internal/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
 internal/config/     application config: types, loader, validation, defaults
+internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (CLI_CONFIG 3a)
 internal/ui/         output and prompt seam, plain-text implementation first   (CLI_OUTPUT)
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/repo/   local repository access with go-git; the only importer of go-git
@@ -54,6 +55,7 @@ main.go -> cmd -> internal/cli/<cmd>  ->  domain packages  ->  internal/config, 
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any other `internal/` package, but not another command package. Shared command code goes in a third, smaller package.
 * Domain packages (`semver`, `git`, `config`, ...) never import `internal/cli/...` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
 * `internal/clicfg` and `internal/config` do not import each other. `Settings` is passed down by the command, never read from a global.
+* `internal/workspace` is where the two meet. It imports `clicfg`, `config` and `internal/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd, getenv)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
 * Domain packages take their dependencies as arguments (a `*slog.Logger`, a GitHub client interface, a `Settings` value). No package-level logger, client or config singleton.
 * Interfaces are defined where they are consumed, so a domain package can be tested without the real GitHub client.
 * No import cycles, and no cross-domain imports without a reason recorded here. If two domain packages need each other, the shared part is a third, smaller package.
@@ -83,7 +85,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 
 * The `internal/` rule is compiler-enforced.
 * Imports of third-party modules are checked by the depguard allow-list ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
-* **The `cmd/` boundary is lint-enforced.** A second depguard rule scoped to `cmd/` (`files: ["**/cmd/**"]`, strict) allows only `$gostd`, `github.com/spf13/cobra`, `github.com/rancher/orbs-automation/cmd`, `.../internal/cli`, `.../internal/clicfg` and `.../internal/errs` (depguard matches by prefix, so subpackages are covered). A matching rule for `main.go` allows only `$gostd` and `github.com/rancher/orbs-automation/cmd`. A third rule, `nocobra`, denies `github.com/spf13/cobra` in every file outside `cmd/`, `main.go` and tests, so `internal/cli/` and the domain packages cannot import it. Three more `deny` rules keep git access and YAML in one place each: `nogogit` allows go-git only in `internal/git/repo`, `noexec` allows `os/exec` only in `internal/git/gitcli`, and `noyaml` allows the YAML library only in `internal/clicfg` and `internal/config`. The rest of dependency direction (section 3) is by review for now. A depguard rule per package can be added once there are enough packages to be worth it.
+* **The `cmd/` boundary is lint-enforced.** A second depguard rule scoped to `cmd/` (`files: ["**/cmd/**"]`, strict) allows only `$gostd`, `github.com/spf13/cobra`, `github.com/rancher/orbs-automation/cmd`, `.../internal/cli`, `.../internal/clicfg` and `.../internal/errs` (depguard matches by prefix, so subpackages are covered). A matching rule for `main.go` allows only `$gostd` and `github.com/rancher/orbs-automation/cmd`. A third rule, `nocobra`, denies `github.com/spf13/cobra` in every file outside `cmd/`, `main.go` and tests, so `internal/cli/` and the domain packages cannot import it. Three more `deny` rules keep git access and YAML in one place each: `nogogit` allows go-git only in `internal/git/repo`, `noexec` allows `os/exec` only in `internal/git/gitcli`, and `noyaml` allows the YAML library only in `internal/clicfg` and `internal/config`. A `oneDoor` deny rule keeps the workspace seam closed: `internal/cli/...` may not import `internal/git/repo` or the `internal/config` loader directly, only `workspace` (a command's pure logic may still take `internal/git` and domain types). Add it with the first command that reads central config, since today `configdir` is the only such code. `branchtags` imports `internal/git/repo` directly today, so it needs a temporary allow entry until `workspace` offers the current repo, when it moves over and the entry goes. The rest of dependency direction (section 3) is by review for now. A depguard rule per package can be added once there are enough packages to be worth it.
 
 ## Open questions
 

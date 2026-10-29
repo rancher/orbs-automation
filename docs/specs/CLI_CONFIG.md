@@ -118,7 +118,10 @@ Rules:
 * It is lazy and per command: a command that needs no remote does not fail because the CWD is not a repo.
 * A user-file value always beats inference.
 * `gero config show` reports each value's source (`flag`, `env`, `file`, `inferred (reason)`, `default`). Verbose mode logs inferred values before any write (push, PR).
-* `internal/clicfg` stays pure (flags, env, file, defaults; unset stays zero) and does not import git. A separate resolver package (working name `internal/workspace`) takes `Settings` and a small repo-access interface and does the inference.
+* `internal/clicfg` stays pure (flags, env, file, defaults; unset stays zero) and does not import git. A separate resolver package, `internal/workspace`, takes `Settings` and does the inference.
+* **One door.** `workspace` is the only way a command gets "settings plus the world": the central config directory (section 4), the loaded application config, the current repo, and the local path, upstream and fork for a slug. Each rule exists once there, so the same CLI inputs cannot resolve differently in different commands. `cmd/` knows nothing about it. Each `internal/cli/<cmd>` calls `workspace.Open(settings, cwd, getenv)`, which takes plain values and builds its own real dependencies (file system, go-git opener). The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake. Resolution is lazy: `Open` does no I/O, and a method does only the work its caller needs.
+* A command package may not locate the central config, discover a repo, or scan for clones itself. Lint enforces this ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6).
+* `configdir` (section 4) is the first such rule. It moves into `workspace` when `internal/config` gets its first consumer, and `gero config show` and `gero config resolve repos` then read through the same `Workspace` as every other command.
 * `gero config show` may report one slug's resolved path with an `inferred (reason)` source, but it never enumerates repos. For an unset-from-file `repos.search` it shows a hint pointing at `gero config resolve repos`.
 
 ## 3b. Resolving repo paths
