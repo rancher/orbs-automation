@@ -151,3 +151,50 @@ func TestConfigShowConfigDirUnsetOutsideCentralRepo(t *testing.T) {
 	assert.Empty(t, got["configDir"].Value)
 	assert.Equal(t, "default", got["configDir"].Source)
 }
+
+// isolateGero clears the settings a developer's environment could leak in.
+func isolateGero(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"GERO_CONFIG", "GERO_CONFIG_DIR", "GERO_UPSTREAM", "GERO_OUTPUT", "CI", "GITHUB_ACTIONS"} {
+		t.Setenv(k, "")
+	}
+}
+
+func TestConfigValidateAcceptsTheCheckedInConfig(t *testing.T) {
+	isolateGero(t)
+	dir, err := filepath.Abs("../config")
+	require.NoError(t, err)
+
+	stdout, _, err := execRoot(t, "config", "validate", "--config-dir", dir)
+
+	require.NoError(t, err)
+	assert.Contains(t, stdout, "config OK")
+	assert.Contains(t, stdout, dir)
+}
+
+func TestConfigValidateReportsProblems(t *testing.T) {
+	isolateGero(t)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.project.yaml"), []byte(`apiVersion: gero/v1alpha1
+kind: Project
+name: a
+spec:
+  repo:
+    name: not-a-slug
+`), 0o600))
+
+	_, _, err := execRoot(t, "config", "validate", "--config-dir", dir)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "repo.name")
+}
+
+func TestConfigValidateWithoutConfigDirectory(t *testing.T) {
+	isolateGero(t)
+	t.Chdir(t.TempDir())
+
+	_, _, err := execRoot(t, "config", "validate")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--config-dir")
+}
