@@ -133,6 +133,41 @@ func TestLogsAreJSONInCI(t *testing.T) {
 	assert.Equal(t, "settings loaded", line["msg"])
 }
 
+func TestForcedContextChoosesLogHandler(t *testing.T) {
+	t.Run("GERO_CONTEXT=ci logs JSON without CI variables", func(t *testing.T) {
+		t.Setenv("GITHUB_ACTIONS", "")
+		t.Setenv("CI", "")
+		t.Setenv("GERO_CONTEXT", "ci")
+
+		_, stderr, err := execRoot(t, "-vv", "version")
+
+		require.NoError(t, err)
+		var line map[string]any
+		require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(stderr)), &line), stderr)
+	})
+
+	t.Run("GERO_CONTEXT=workstation logs text under GITHUB_ACTIONS", func(t *testing.T) {
+		t.Setenv("GITHUB_ACTIONS", "true")
+		t.Setenv("GERO_CONTEXT", "workstation")
+
+		_, stderr, err := execRoot(t, "-vv", "version")
+
+		require.NoError(t, err)
+		var line map[string]any
+		assert.Error(t, json.Unmarshal([]byte(strings.TrimSpace(stderr)), &line), stderr)
+		assert.Contains(t, stderr, "settings loaded")
+	})
+}
+
+func TestInvalidGeroContextFails(t *testing.T) {
+	t.Setenv("GERO_CONTEXT", "laptop")
+
+	_, _, err := execRoot(t, "version")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GERO_CONTEXT")
+}
+
 // resetFlags returns the global flags to their defaults and unmarks them as
 // set, since the shared root command would otherwise carry them from one test
 // into the next.

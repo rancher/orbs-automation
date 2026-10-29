@@ -233,6 +233,10 @@ func TestInCI(t *testing.T) {
 		{"CI=true", map[string]string{"CI": "true"}, true},
 		{"GITHUB_ACTIONS=true", map[string]string{"GITHUB_ACTIONS": "true"}, true},
 		{"CI=false", map[string]string{"CI": "false"}, false},
+		{"GERO_CONTEXT=ci forces CI", map[string]string{"GERO_CONTEXT": "ci"}, true},
+		{"GERO_CONTEXT=workstation beats CI=true", map[string]string{"GERO_CONTEXT": "workstation", "CI": "true"}, false},
+		{"GERO_CONTEXT=workstation beats GITHUB_ACTIONS=true", map[string]string{"GERO_CONTEXT": "workstation", "GITHUB_ACTIONS": "true"}, false},
+		{"GERO_CONTEXT=ci beats CI=false", map[string]string{"GERO_CONTEXT": "ci", "CI": "false"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -242,6 +246,72 @@ func TestInCI(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestInCIRejectsUnknownContext(t *testing.T) {
+	_, err := InCI(env(map[string]string{"GERO_CONTEXT": "laptop"}))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GERO_CONTEXT")
+	assert.Contains(t, err.Error(), `"laptop"`)
+	assert.Contains(t, err.Error(), ContextCI)
+	assert.Contains(t, err.Error(), ContextWorkstation)
+}
+
+func TestLoadRecordsContext(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"workstation by default", nil, false},
+		{"CI=true", map[string]string{"CI": "true"}, true},
+		{"GERO_CONTEXT=ci", map[string]string{"GERO_CONTEXT": "ci"}, true},
+		{"GERO_CONTEXT=workstation beats CI=true", map[string]string{"GERO_CONTEXT": "workstation", "CI": "true"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{Getenv: env(tt.env)})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.CI)
+		})
+	}
+}
+
+func TestLoadRejectsUnknownContext(t *testing.T) {
+	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_CONTEXT": "laptop"})})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GERO_CONTEXT")
+}
+
+func TestOpenUserFileFollowsForcedContext(t *testing.T) {
+	t.Run("workstation forced in a CI environment loads the file", func(t *testing.T) {
+		home := writeUserFile(t, "upstream: x\n")
+
+		r, _, err := OpenUserFile(env(map[string]string{"CI": "true", "GERO_CONTEXT": "workstation"}), home)
+
+		require.NoError(t, err)
+		require.NotNil(t, r)
+		defer r.Close()
+	})
+
+	t.Run("CI forced on a workstation ignores the file", func(t *testing.T) {
+		home := writeUserFile(t, "upstream: x\n")
+
+		r, _, err := OpenUserFile(env(map[string]string{"GERO_CONTEXT": "ci"}), home)
+
+		require.NoError(t, err)
+		assert.Nil(t, r)
+	})
+
+	t.Run("unknown context is an error", func(t *testing.T) {
+		_, _, err := OpenUserFile(env(map[string]string{"GERO_CONTEXT": "laptop"}), t.TempDir())
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "GERO_CONTEXT")
+	})
 }
 
 func TestUserFilePath(t *testing.T) {
