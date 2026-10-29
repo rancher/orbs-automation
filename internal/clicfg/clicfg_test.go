@@ -404,3 +404,25 @@ func TestLoadAcceptsEnvOutput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, OutputEnv, s.Output)
 }
+
+func TestLoadGitHubActions(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"empty environment", nil, false},
+		{"CI=true", map[string]string{"CI": "true"}, false},
+		{"GERO_CONTEXT=ci", map[string]string{"GERO_CONTEXT": "ci"}, false},
+		{"GITHUB_ACTIONS=true", map[string]string{"GITHUB_ACTIONS": "true"}, true},
+		{"GITHUB_ACTIONS=false", map[string]string{"GITHUB_ACTIONS": "false"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{Getenv: env(tt.env)})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.GitHubActions)
+		})
+	}
+}

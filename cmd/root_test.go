@@ -178,3 +178,41 @@ func resetFlags() {
 		f.Changed = false
 	}
 }
+
+func TestCIOnlyCommandsNeedGitHubActions(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+	}{
+		{"workstation", map[string]string{"GITHUB_ACTIONS": "", "CI": "", "GERO_CONTEXT": ""}, true},
+		{"CI=true is not a GitHub runner", map[string]string{"GITHUB_ACTIONS": "", "CI": "true", "GERO_CONTEXT": ""}, true},
+		{"GERO_CONTEXT=ci alone", map[string]string{"GITHUB_ACTIONS": "", "CI": "", "GERO_CONTEXT": "ci"}, true},
+		{"GERO_CONTEXT=workstation on a runner", map[string]string{"GITHUB_ACTIONS": "true", "CI": "", "GERO_CONTEXT": "workstation"}, true},
+		{"GitHub runner", map[string]string{"GITHUB_ACTIONS": "true", "CI": "", "GERO_CONTEXT": ""}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				t.Setenv(k, v)
+			}
+
+			_, _, err := execRoot(t, "ci:reconcile")
+
+			require.Error(t, err) // the command itself is not implemented yet
+			if tt.wantErr {
+				assert.Contains(t, err.Error(), "GITHUB_ACTIONS")
+			} else {
+				assert.NotContains(t, err.Error(), "GITHUB_ACTIONS")
+			}
+		})
+	}
+}
+
+func TestOtherCommandsRunOutsideGitHubActions(t *testing.T) {
+	t.Setenv("GITHUB_ACTIONS", "")
+
+	_, _, err := execRoot(t, "version")
+
+	require.NoError(t, err)
+}
