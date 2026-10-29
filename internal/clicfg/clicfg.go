@@ -43,6 +43,7 @@ func (s Source) String() string {
 const (
 	OutputText = "text"
 	OutputJSON = "json"
+	OutputEnv  = "env" // KEY=value lines for $GITHUB_OUTPUT and $GITHUB_ENV
 )
 
 // FlagLookup reports the value of the flag named name and whether it was set
