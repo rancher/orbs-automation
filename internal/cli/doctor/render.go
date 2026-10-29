@@ -1,5 +1,14 @@
 package doctor
 
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+	"text/tabwriter"
+
+	"github.com/rancher/orbs-automation/internal/clicfg"
+)
+
 // Build says which gero produced a report, for the header and the JSON.
 type Build struct {
 	Version string `json:"version"`
@@ -15,15 +24,172 @@ type Report struct {
 	Outcomes []Outcome
 }
 
+// categoryOrder is the order of the known groups in the text output. A category
+// not listed comes after them, in the order it first appears.
+var categoryOrder = []string{"environment", "dependencies", "configuration", "authentication"}
+
+// markers keep the text readable without color.
+var markers = map[Status]string{
+	StatusOK:   "✔",
+	StatusWarn: "⚠",
+	StatusFail: "✗",
+	StatusSkip: "○",
+}
+
+func unsupported(format string) error {
+	return fmt.Errorf("gero doctor does not support output format %q (use text or json)", format)
+}
+
 // Render formats r as clicfg.OutputText or clicfg.OutputJSON. A check's message
 // is whatever the check chose to say, and no check is given a token to say it
 // with.
-func Render(_ Report, _ string) (string, error) {
-	return "", nil
+func Render(r Report, format string) (string, error) {
+	switch format {
+	case clicfg.OutputText:
+		return renderText(r), nil
+	case clicfg.OutputJSON:
+		return renderJSON(r)
+	}
+	return "", unsupported(format)
+}
+
+func renderText(r Report) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "gero %s (commit %s, built %s)\n", r.Build.Version, r.Build.Commit, r.Build.Date)
+	for _, category := range orderedCategories(r.Outcomes) {
+		fmt.Fprintf(&b, "\n%s\n", strings.ToUpper(category[:1])+category[1:])
+		for _, o := range r.Outcomes {
+			if o.Category != category {
+				continue
+			}
+			msg := o.Message
+			if o.Status == StatusSkip {
+				msg = "skipped, " + o.SkipReason
+			}
+			fmt.Fprintf(&b, "  %s %s: %s\n", markers[o.Status], o.Name, msg)
+			if o.Remediation != "" {
+				fmt.Fprintf(&b, "    → %s\n", o.Remediation)
+			}
+		}
+	}
+	n := Summarize(r.Outcomes)
+	fmt.Fprintf(&b, "\nSummary: %d ok, %d %s, %d failed, %d skipped\n", n.OK, n.Warn, plural(n.Warn, "warning"), n.Fail, n.Skip)
+	switch online := NeedOnline(r.Outcomes); {
+	case online == 1:
+		b.WriteString("1 check needs --online. ")
+	case online > 1:
+		fmt.Fprintf(&b, "%d checks need --online. ", online)
+	}
+	switch {
+	case n.Fail > 0:
+		b.WriteString("Some checks failed: fix the errors above, then run gero doctor again.\n")
+	case n.Warn > 0:
+		b.WriteString("Ready, with warnings.\n")
+	default:
+		b.WriteString("Your workstation is ready to use gero.\n")
+	}
+	return b.String()
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return word + "s"
+}
+
+// orderedCategories lists the categories present in outcomes: the known ones in
+// categoryOrder, then the others in the order they first appear.
+func orderedCategories(outcomes []Outcome) []string {
+	present := map[string]bool{}
+	var seen []string
+	for _, o := range outcomes {
+		if !present[o.Category] {
+			present[o.Category] = true
+			seen = append(seen, o.Category)
+		}
+	}
+	var out []string
+	known := map[string]bool{}
+	for _, c := range categoryOrder {
+		known[c] = true
+		if present[c] {
+			out = append(out, c)
+		}
+	}
+	for _, c := range seen {
+		if !known[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func renderJSON(r Report) (string, error) {
+	type check struct {
+		Name        string `json:"name"`
+		Category    string `json:"category"`
+		Online      bool   `json:"online"`
+		Status      string `json:"status"`
+		Message     string `json:"message"`
+		Remediation string `json:"remediation"`
+		SkipReason  string `json:"skipReason,omitempty"`
+	}
+	type summary struct {
+		OK   int `json:"ok"`
+		Warn int `json:"warn"`
+		Fail int `json:"fail"`
+		Skip int `json:"skip"`
+	}
+	checks := make([]check, 0, len(r.Outcomes)) // an empty list, never null
+	for _, o := range r.Outcomes {
+		checks = append(checks, check{o.Name, o.Category, o.Online, o.Status.String(), o.Message, o.Remediation, o.SkipReason})
+	}
+	n := Summarize(r.Outcomes)
+	return marshal(struct {
+		Gero    Build   `json:"gero"`
+		Checks  []check `json:"checks"`
+		Summary summary `json:"summary"`
+	}{r.Build, checks, summary{n.OK, n.Warn, n.Fail, n.Skip}})
 }
 
 // RenderChecks formats the check list for --list-checks as clicfg.OutputText or
 // clicfg.OutputJSON.
-func RenderChecks(_ []Check, _ string) (string, error) {
-	return "", nil
+func RenderChecks(checks []Check, format string) (string, error) {
+	switch format {
+	case clicfg.OutputText:
+		var b strings.Builder
+		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "NAME\tCATEGORY\tONLINE\tDESCRIPTION")
+		for _, c := range checks {
+			online := "no"
+			if c.Online() {
+				online = "yes"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", c.Name(), c.Category(), online, c.Description())
+		}
+		_ = w.Flush() // writes to a strings.Builder, which cannot fail
+		return b.String(), nil
+	case clicfg.OutputJSON:
+		type entry struct {
+			Name        string `json:"name"`
+			Category    string `json:"category"`
+			Description string `json:"description"`
+			Online      bool   `json:"online"`
+		}
+		list := make([]entry, 0, len(checks))
+		for _, c := range checks {
+			list = append(list, entry{c.Name(), c.Category(), c.Description(), c.Online()})
+		}
+		return marshal(list)
+	}
+	return "", unsupported(format)
+}
+
+func marshal(v any) (string, error) {
+	out, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(out) + "\n", nil
 }
