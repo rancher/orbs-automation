@@ -34,7 +34,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 ### A. Distribution & Execution Model
 * **Binary:** `gero`, a standalone CLI. It does not require being a `gh` extension.
 * **Developer Machines:** Distributed as precompiled binaries attached to GitHub Releases in the central repository. Installed locally or compiled via `go install`. Self-update logic is explicitly out of scope for v1.0.0.
-* **GitHub Access:** Uses the Go API libraries `go-gh` (auth, host resolution, transport) and `go-github` (typed REST) directly. Authentication reuses `GH_TOKEN` / `GITHUB_TOKEN` or the local `gh` session where available. `gh` itself is only shelled out to for interactive or passthrough steps. See `IMPLEMENTATION.md`.
+* **GitHub Access:** Uses the Go API libraries `go-gh` (`pkg/auth` only: token and host resolution) and `go-github` (typed REST) directly. Authentication reuses `GH_TOKEN` / `GITHUB_TOKEN` or the local `gh` session where available. `gh` itself is only shelled out to for interactive or passthrough steps. See `IMPLEMENTATION.md`.
 * **Execution Contexts:** Commands are either CI-only (the reconciler and anything needing GHA-provided tokens, failing fast elsewhere) or work in either context.
 * **CI Runners:** Workflows in CI fetch a pinned, tagged release version of the `gero` binary during initial setup steps. Running `go run` dynamically in CI is prohibited to avoid module download latency and compilation overhead.
 

@@ -21,18 +21,23 @@ How the CLI itself is built (framework, CLI config and its precedence, output, l
 
 ## 3. GitHub Access
 
-Use two Go libraries together, and shell out to `gh` only where it adds something.
+Use two Go libraries, each for one job, and shell out to `gh` only where it adds something. A spike (go-gh v2.17.0, go-github v93.0.0) confirmed the behavior below.
 
-* **`cli/go-gh`:** auth and host resolution, the authenticated HTTP client, GraphQL, current-repo detection. It is an ordinary Go module and does not require running as a `gh` extension.
-  * Token resolution: `GH_TOKEN` / `GITHUB_TOKEN`, then `gh`'s config; keyring-stored tokens fall back to running `gh auth token`, which requires `gh` on `PATH`. **(unverified)**
-* **`google/go-github`:** typed REST calls (issues, tags, PRs, releases, check runs).
-  * Build it on the `*http.Client` from `go-gh` (`api.NewHTTPClient`) so both share one token and transport. **(unverified)**
-  * It bumps major versions often. Pin it and keep usage behind our own interfaces.
-  * Enterprise hosts need the base URL set explicitly. Open question: do we ever target non-github.com hosts?
+* **`cli/go-gh`, only `v2/pkg/auth`:** it resolves the token and the host, so `gero` bridges off the user's `gh` setup on a workstation. It is an ordinary Go module and does not require running as a `gh` extension. Its `pkg/api` (HTTP client, GraphQL) is **not** imported: that package pulls in a GraphQL library, `httpretty` and a timezone library, and go-github can authenticate by itself. `pkg/auth` imports only `gopkg.in/yaml.v3` (a second copy of YAML code in the binary, not importable from our code, used only to read `gh`'s config files) and `safeexec`. A `replace gopkg.in/yaml.v3 => go.yaml.in/yaml/v3` works and go-gh passes against it, but only at a version different from the one we require (Go rejects the same version under two paths), so it swaps the unmaintained source for a maintained one without removing the second copy, and it breaks the day Renovate bumps the replacement to our version. We do not add it for now.
+  * Token order for `github.com`, `ghe.com` and `github.localhost`: `GH_TOKEN`, `GITHUB_TOKEN`, `hosts.<host>.oauth_token` in `gh`'s config file, then `gh auth token --secure-storage --hostname <host>`. `gh` is found through `GH_PATH`, then `PATH`.
+  * Other (enterprise) hosts ignore `GH_TOKEN` and `GITHUB_TOKEN`; they use `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, the config file, then `gh`.
+  * Failures are silent: no token, a missing `gh` or a failing `gh` all give `"", "default"`. `gero` wraps that in an error that says which variables to set or to run `gh auth login`.
+  * The `gh` config file is read once per process, so a test sets `GH_CONFIG_DIR` before the first call.
+  * `DefaultHost` honors `GH_HOST`, then a lone host in `hosts.yml`, then `github.com`.
+* **`google/go-github`:** typed REST calls (issues, tags, PRs, releases, check runs). It is the main API client.
+  * Authenticate with `github.WithAuthToken(token)` using the token from `pkg/auth`. The token goes only to the client's own API origins. It is sent as `Authorization: Bearer`.
+  * Tests inject a fake `http.RoundTripper` with `github.WithTransport`, so no network or port is needed.
+  * It bumps major versions often, and v93 changed `NewClient` to take options and return an error. Pin it and keep usage behind our own interfaces.
+  * Enterprise hosts need the URLs set explicitly: `WithEnterpriseURLs("https://ghe.example.com", "https://ghe.example.com")` gives `/api/v3/` and `/api/uploads/`. Open question: do we ever target non-github.com hosts?
 * **`gh` via subprocess:** only for interactive or human-facing steps (e.g. `gh auth login`, browser handoffs) and pure passthrough. Not used for logic that must be tested or that runs in CI.
 * **`go-git/go-git`:** the preferred git tooling for local operations (reading refs and tags, cloning, committing rendered workflows). It needs no `git` binary on the machine and avoids running a subprocess with inherited environment and config, which is safer and more portable. Keep usage behind our own interfaces. PR creation goes through the API.
   * **`git` via `os/exec` is an escape hatch, not a fallback.** go-git is the implementation. There is no try-go-git-then-git at runtime and no matching API on both sides. The `git` binary is used only for a specific operation go-git cannot do, or does differently from git in a way that matters, and each use records the reason next to the code. All such uses live in `internal/git/gitcli`, the only package allowed to import `os/exec` (lint-enforced), so that package is the list of what go-git could not do. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
-* **GraphQL** via the `go-gh` client, only if REST proves insufficient (e.g. batched state queries).
+* **GraphQL** only if REST proves insufficient (e.g. batched state queries). That is the point to add the rest of `go-gh` (`pkg/api`) as a dependency, with its own entry in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md). Until then REST goes through `go-github`.
 
 ### Interfaces
 

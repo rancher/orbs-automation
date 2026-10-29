@@ -91,5 +91,5 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 ## Open questions
 
 * Decided: how flags reach `internal/clicfg` ([CLI_CONFIG](CLI_CONFIG.md) "Flag source"): `cmd/` hands `internal/clicfg` a `FlagLookup`, so `clicfg` stays cobra-free. Why `clicfg` lives at the base of `internal/` and not under `internal/cli/`: it is a cobra-free leaf that other packages may use, while `internal/cli/` is one package per command. Per-command flags still reach `internal/cli/<cmd>/` as an options struct.
-* Whether `internal/github` wraps `go-gh` and `go-github` behind one interface, or exposes two. Decided with the GitHub access spike (IMPLEMENTATION §3).
+* Decided with the GitHub access spike (IMPLEMENTATION §3): `internal/github` uses `go-gh/v2/pkg/auth` to resolve the token and host and `go-github` for REST, behind narrow consumer-side interfaces. There is no `go-gh` HTTP client to wrap.
 * Whether generated code (for example JSON schema from config types) gets its own directory.
