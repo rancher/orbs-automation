@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -274,4 +275,29 @@ func TestRateLimitCheckThatCannotReadTheLimitIsAWarning(t *testing.T) {
 		Message:     "could not read the rate limit: boom",
 		Remediation: "run again, and check your network connection if it keeps failing",
 	}, got)
+}
+
+// noTokenAnywhere leaves no token where go-gh looks, so the real adapters stop
+// at the resolver, before any request. go-gh reads gh's config once per process,
+// so that points at an empty directory before the first read.
+func noTokenAnywhere(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{
+		"GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST", "GH_PATH",
+	} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("GH_CONFIG_DIR", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	_ = os.Unsetenv("GH_DEBUG")
+}
+
+func TestRealAdaptersStopAtTheResolverWhenThereIsNoToken(t *testing.T) {
+	noTokenAnywhere(t)
+
+	_, err := authstatusVerifier{}.Verify(context.Background())
+	assert.ErrorIs(t, err, github.ErrNoToken)
+
+	_, err = githubRateLimiter{}.RateLimit(context.Background())
+	assert.ErrorIs(t, err, github.ErrNoToken)
 }

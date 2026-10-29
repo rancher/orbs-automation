@@ -131,7 +131,36 @@ func (rateLimitCheck) Description() string {
 func (rateLimitCheck) Online() bool    { return true }
 func (rateLimitCheck) Needs() []string { return []string{"auth-api"} }
 
-func (rateLimitCheck) Run(context.Context) Result { return Result{} }
+func (c rateLimitCheck) Run(ctx context.Context) Result {
+	limit, err := c.limiter.RateLimit(ctx)
+	if err != nil {
+		return Result{
+			Status:      StatusWarn,
+			Message:     "could not read the rate limit: " + err.Error(),
+			Remediation: "run again, and check your network connection if it keeps failing",
+		}
+	}
+	left := fmt.Sprintf("%d of %d requests left in this window (%s)", limit.Remaining, limit.Limit, c.resets(limit.Reset))
+	// Under a tenth of the limit is low enough that a command making many
+	// requests, such as the reconciler, could run dry partway.
+	if limit.Remaining*10 < limit.Limit {
+		return Result{
+			Status:      StatusWarn,
+			Message:     "only " + left,
+			Remediation: "wait for the window to reset: commands that make many requests will fail until then",
+		}
+	}
+	return Result{Status: StatusOK, Message: left}
+}
+
+// resets says when the window resets, to the nearest minute.
+func (c rateLimitCheck) resets(at time.Time) string {
+	minutes := int(at.Sub(c.now()).Round(time.Minute) / time.Minute)
+	if minutes <= 0 {
+		return "resets within a minute"
+	}
+	return fmt.Sprintf("resets in %dm", minutes)
+}
 
 // githubRateLimiter is the RateLimiter backed by internal/github, for the token
 // every command would use.

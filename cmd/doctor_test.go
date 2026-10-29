@@ -175,7 +175,22 @@ func TestDoctorWiring(t *testing.T) {
 		require.ErrorIs(t, err, doctor.ErrChecksFailed)
 		assert.Contains(t, stdout, "✗ auth-token: no token found for github.com\n")
 		assert.Contains(t, stdout, "○ auth-api: skipped, needs auth-token\n")
+		assert.Contains(t, stdout, "○ rate-limit: skipped, needs auth-api\n", "a skipped prerequisite skips what needs it")
 		assert.NotContains(t, stdout, "--online. ", "nothing was left waiting on --online")
+	})
+
+	t.Run("naming rate-limit pulls in the whole chain it needs", func(t *testing.T) {
+		resetDoctorFlags(t)
+		noGitHubAuth(t)
+		stubGh(t)
+
+		stdout, _, err := execRoot(t, "doctor", "rate-limit")
+
+		require.ErrorIs(t, err, doctor.ErrChecksFailed)
+		assert.Contains(t, stdout, "✗ auth-token: no token found for github.com\n")
+		assert.Contains(t, stdout, "○ auth-api: skipped, needs auth-token\n")
+		assert.Contains(t, stdout, "○ rate-limit: skipped, needs auth-api\n")
+		assert.NotContains(t, stdout, "gh:", "only the named check and what it needs")
 	})
 
 	t.Run("naming auth-api runs it online and pulls in auth-token", func(t *testing.T) {
