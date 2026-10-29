@@ -12,3 +12,4 @@ gero
 *~
 kubeconfig*.yaml
 .vscode
+/.tmp
