@@ -1,0 +1,165 @@
+package config
+
+import (
+	"os"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// valid returns a small config that passes Validate: project a takes updates
+// from project b, and external x tracks b.
+func valid() Config {
+	return Config{
+		Projects: []Project{
+			{
+				Name: "a",
+				Repo: Repo{Name: "o/a", DefaultBranch: "main"},
+				Release: Release{
+					Branches:   "perLine",
+					TagPattern: "v*",
+					Lines: []ProjectLine{
+						{Line: "v2.16"},
+						{Line: "v2.15", Branch: "release/v2.15"},
+					},
+				},
+				Sources: []Source{{
+					From:   "b",
+					Accept: Accept{When: "stable", Lines: "all"},
+					Update: Update{Strategy: "bump"},
+				}},
+			},
+			{
+				Name:    "b",
+				Repo:    Repo{Name: "o/b", DefaultBranch: "main"},
+				Release: Release{Branches: "single", TagPattern: "v*"},
+			},
+		},
+		Externals: []External{{
+			Name:          "x",
+			Repo:          Repo{Name: "t/x", DefaultBranch: "main"},
+			Relationships: []Relationship{{Project: "b", Action: "trackOnly"}},
+		}},
+		Lines: &RancherLines{Name: "rancher", Lines: []Line{
+			{ID: "v2.16", Phase: "development"},
+			{ID: "v2.15", Phase: "ga"},
+		}},
+	}
+}
+
+func TestValidateAcceptsValidConfig(t *testing.T) {
+	assert.NoError(t, valid().Validate())
+}
+
+func TestValidateAcceptsEmptyConfig(t *testing.T) {
+	assert.NoError(t, Config{}.Validate())
+}
+
+func TestValidateProblems(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Config)
+		want   []string // every one must appear in the error
+	}{
+		{"repo name without owner", func(c *Config) { c.Projects[0].Repo.Name = "a" }, []string{`Project "a"`, "repo.name"}},
+		{"repo name with trailing slash", func(c *Config) { c.Projects[0].Repo.Name = "o/" }, []string{"repo.name"}},
+		{"repo name with extra path", func(c *Config) { c.Projects[0].Repo.Name = "a/b/c" }, []string{"repo.name"}},
+		{"empty default branch", func(c *Config) { c.Projects[0].Repo.DefaultBranch = "" }, []string{"repo.defaultBranch"}},
+		{"unknown release.branches", func(c *Config) { c.Projects[0].Release.Branches = "weekly" }, []string{"release.branches", `"weekly"`}},
+		{"empty tag pattern", func(c *Config) { c.Projects[0].Release.TagPattern = "" }, []string{"release.tagPattern"}},
+		{"line not in RancherLines", func(c *Config) { c.Projects[0].Release.Lines[1].Line = "v9.9" }, []string{"release.lines[1]", "v9.9"}},
+		{"empty line", func(c *Config) { c.Projects[0].Release.Lines[1].Line = "" }, []string{"release.lines[1]", "line is required"}},
+		{
+			"line without branch outside development",
+			func(c *Config) { c.Projects[0].Release.Lines[1].Branch = "" },
+			[]string{"release.lines[1]", "v2.15", "has no branch"},
+		},
+		{
+			"line listed twice",
+			func(c *Config) {
+				c.Projects[0].Release.Lines = append(c.Projects[0].Release.Lines, ProjectLine{Line: "v2.15", Branch: "x"})
+			},
+			[]string{"release.lines[2]", "listed twice"},
+		},
+		{"lines used without RancherLines", func(c *Config) { c.Lines = nil }, []string{"RancherLines"}},
+		{"source from unknown project", func(c *Config) { c.Projects[0].Sources[0].From = "nope" }, []string{"sources[0]", `"nope"`}},
+		{"source from itself", func(c *Config) { c.Projects[0].Sources[0].From = "a" }, []string{"sources[0]", "itself"}},
+		{"unknown accept.when", func(c *Config) { c.Projects[0].Sources[0].Accept.When = "rc" }, []string{"accept.when", `"rc"`}},
+		{"unknown accept.lines", func(c *Config) { c.Projects[0].Sources[0].Accept.Lines = "some" }, []string{"accept.lines", `"some"`}},
+		{"empty update strategy", func(c *Config) { c.Projects[0].Sources[0].Update.Strategy = "" }, []string{"update.strategy"}},
+		{"external repo name", func(c *Config) { c.Externals[0].Repo.Name = "x" }, []string{`External "x"`, "repo.name"}},
+		{
+			"relationship to unknown project",
+			func(c *Config) { c.Externals[0].Relationships[0].Project = "nope" },
+			[]string{"relationships[0]", `"nope"`},
+		},
+		{
+			"unknown relationship action",
+			func(c *Config) { c.Externals[0].Relationships[0].Action = "watch" },
+			[]string{"relationships[0]", "action", `"watch"`},
+		},
+		{
+			"two actions for one pair",
+			func(c *Config) {
+				c.Externals[0].Relationships = append(c.Externals[0].Relationships, Relationship{Project: "b", Action: "notify"})
+			},
+			[]string{"relationships[1]", "more than one"},
+		},
+		{"unknown phase", func(c *Config) { c.Lines.Lines[0].Phase = "beta" }, []string{"lines[0]", "phase", `"beta"`}},
+		{"empty line id", func(c *Config) { c.Lines.Lines[0].ID = "" }, []string{"lines[0]", "id is required"}},
+		{
+			"duplicate line id",
+			func(c *Config) { c.Lines.Lines[1].ID = "v2.16" },
+			[]string{"lines[1]", "duplicate line"},
+		},
+		{"repo shared by two projects", func(c *Config) { c.Projects[1].Repo.Name = "o/a" }, []string{`Project "b"`, "also used by", `Project "a"`}},
+		{"repo shared by a project and an external", func(c *Config) { c.Externals[0].Repo.Name = "O/B" }, []string{`External "x"`, "also used by", `Project "b"`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := valid()
+			tt.mutate(&c)
+
+			err := c.Validate()
+
+			require.Error(t, err)
+			for _, w := range tt.want {
+				assert.Contains(t, err.Error(), w)
+			}
+		})
+	}
+}
+
+func TestValidateReportsEveryProblem(t *testing.T) {
+	c := valid()
+	c.Projects[0].Repo.Name = "a"
+	c.Projects[0].Release.Branches = "weekly"
+	c.Externals[0].Relationships[0].Action = "watch"
+
+	err := c.Validate()
+
+	require.Error(t, err)
+	for _, w := range []string{"repo.name", "release.branches", "action"} {
+		assert.Contains(t, err.Error(), w)
+	}
+}
+
+func TestValidateAcceptsLineWithoutBranchWhileInDevelopment(t *testing.T) {
+	c := valid()
+	require.Empty(t, c.Projects[0].Release.Lines[0].Branch)
+
+	assert.NoError(t, c.Validate())
+}
+
+// The checked-in directories must validate once defaults are applied.
+func TestValidateRepoConfigDirs(t *testing.T) {
+	for _, dir := range []string{"../../config", "../../config-mock"} {
+		t.Run(dir, func(t *testing.T) {
+			c, err := Load(os.DirFS(dir))
+			require.NoError(t, err)
+
+			assert.NoError(t, c.WithDefaults().Validate())
+		})
+	}
+}
