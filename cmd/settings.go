@@ -86,7 +86,7 @@ func loadSettings(getenv func(string) string, home string) func(*cobra.Command, 
 		cmd.SetContext(context.WithValue(ctx, settingsKey{}, s))
 		logger := logging.New(cmd.ErrOrStderr(), s.LogLevel, clicfg.InCI(getenv))
 		logger.Debug("settings loaded",
-			"configDir", s.ConfigDir, "output", s.Output, "upstream", s.Upstream, "log", s.LogLevel)
+			"output", s.Output, "upstream", s.Upstream, "log", s.LogLevel)
 		return nil
 	}
 }
