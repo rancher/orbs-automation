@@ -96,7 +96,7 @@ func TestDefaultChecksAreConsistent(t *testing.T) {
 	_, err := validate(checks)
 
 	require.NoError(t, err, "every need must be registered before the check that has it")
-	assert.Equal(t, []string{"version", "gh"}, checkNames(checks))
+	assert.Equal(t, []string{"version", "gh", "auth-token"}, checkNames(checks))
 }
 
 func checkNames(checks []Check) []string {
