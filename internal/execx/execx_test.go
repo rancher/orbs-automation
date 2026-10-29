@@ -55,6 +55,14 @@ func TestLookup(t *testing.T) {
 		assert.ErrorIs(t, err, ErrNotFound)
 	})
 
+	t.Run("reports an allowed path that does not exist", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "nope")
+
+		_, err := New(missing).Lookup(missing)
+
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
+
 	t.Run("resolves once, so a later PATH change cannot swap the binary", func(t *testing.T) {
 		first := fakeBin(t, "execx-fake", "echo first")
 		r := New("execx-fake")

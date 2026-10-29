@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,7 +121,7 @@ func (r *Runner) Lookup(name string) (string, error) {
 		return path, nil
 	}
 	path, err := exec.LookPath(name)
-	if errors.Is(err, exec.ErrNotFound) {
+	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("%w: %s", ErrNotFound, name)
 	}
 	if err != nil {
