@@ -126,7 +126,7 @@ Rules:
 
 ## 3b. Resolving repo paths
 
-`gero config resolve repos [slug]` answers "where does each repo live on this machine, and how did `gero` decide?". `config show` reports raw values and their sources. This command runs the same `internal/workspace` resolver the other commands use, so its output is what they would act on. It is read-only and supports `--json`.
+`gero config resolve repos [slug]` answers "where does each repo live on this machine, and how did `gero` decide?". `config show` reports raw values and their sources. This command runs the same `internal/workspace` resolver (`Workspace.RepoPath`) the other commands use, so its output is what they would act on. The slugs come from `Workspace.Config()`, so an invalid config is rejected before anything is scanned. It is read-only and supports `--json`.
 
 Resolution order for one slug is the one in section 3a: the CWD repo if its slug matches, then `repos.paths`, then the `repos.search` scan, then the flat sibling.
 
@@ -134,7 +134,7 @@ Resolution order for one slug is the one in section 3a: the CWD repo if its slug
 
 **Cost.** Most commands resolve one slug, usually from the CWD repo or `repos.paths`, and never scan. The scan runs only when those miss, and it is built once per command and matched against every slug asked for. Resolving all slugs is this command's case.
 
-**Output.** One row per central-config slug (`spec.repo.name`) with the path and how it was found: `cwd`, `repos.paths`, `repos.search scan`, or `sibling`. Unresolved and ambiguous slugs are rows, not errors: an ambiguous row lists the candidate paths and names `repos.paths.<slug>` as the key to set. The command exits non-zero if any row is unresolved or ambiguous. An optional `<slug>` argument limits the output to that repo. `--verbose` also logs the scanned directories, the remotes read from each clone, and why each candidate matched or not.
+**Output.** One row per Project in the central config (its `spec.repo.name` slug). External projects get no rows for now: they are not cloned for any command today, and they can be added once one needs a local path. Each row has the path and how it was found: `cwd`, `repos.paths`, `repos.search scan`, or `sibling`. Unresolved and ambiguous slugs are rows, not errors: an ambiguous row lists the candidate paths and names `repos.paths.<slug>` as the key to set. The command exits non-zero if any row is unresolved or ambiguous. An optional `<slug>` argument limits the output to that repo. `--verbose` also logs the scanned directories, the remotes read from each clone, and why each candidate matched or not.
 
 ## 4. Locating the central application config
 
