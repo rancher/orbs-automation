@@ -29,6 +29,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
 | `gero config resolve repos [slug]` | either | Read-only; local path of each central-config repo and how it was found ([CLI_CONFIG](CLI_CONFIG.md) section 3b); `--json` supported |
 | `gero auth status [--hostname host]` | either | Read-only; the host and token source gero would use (`GH_TOKEN`, `GITHUB_TOKEN`, gh config, gh keyring) and the login GitHub reports for the token; the token is never printed. `--json` supported |
+| `gero doctor [check...]` | either (built for workstations) | Read-only; checks the workstation setup and says how to fix what is not. Offline unless `--online`; `--json`, `--list-checks` and `--strict` ([DOCTOR](DOCTOR.md)) |
 | `gero version` | either | Read-only; prints the build version, commit and date, the same text as `--version`. `--json` supported |
 | `gero lines resolve` | either | Read-only |
 | `gero semver check [tag]` | either | Read-only; port of the shared `check-semver` script. Takes a string (argument or `GITHUB_REF_NAME`) and never opens a repository. Emits env-style output |

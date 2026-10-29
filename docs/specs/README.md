@@ -8,6 +8,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [CLI_FRAMEWORK](CLI_FRAMEWORK.md) | cobra, command tree, global flags, context gating, exit codes |
 | [CLI_CONFIG](CLI_CONFIG.md) | CLI config versus application config, sources and precedence, user file, locating central config |
 | [CLI_OUTPUT](CLI_OUTPUT.md) | stdout and stderr, `--json`, color, logging, the `internal/ui` seam |
+| [DOCTOR](DOCTOR.md) | `gero doctor`: workstation health checks, statuses, `--online`, output, exit codes |
 | [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) | Stdlib-first, approved modules, the depguard allow-list |
 | [TESTING](TESTING.md) | How the CLI layer is tested |
 | [CHECK_SEMVER](CHECK_SEMVER.md) | Port of the shared `check-semver` script: decisions, command, library, test plan |
