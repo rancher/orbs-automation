@@ -341,3 +341,37 @@ func TestFailed(t *testing.T) {
 	assert.True(t, Failed(fail, false))
 	assert.False(t, Failed(nil, true))
 }
+
+func TestStatusStringUnknown(t *testing.T) {
+	assert.Equal(t, "Status(9)", Status(9).String())
+}
+
+func TestRunNamedDiamondRunsEachCheckOnce(t *testing.T) {
+	var ran []string
+	checks := []Check{
+		fakeCheck{name: "a", ran: &ran},
+		fakeCheck{name: "b", needs: []string{"a"}, ran: &ran},
+		fakeCheck{name: "c", needs: []string{"a"}, ran: &ran},
+		fakeCheck{name: "d", needs: []string{"b", "c"}, ran: &ran},
+	}
+
+	got, err := Run(context.Background(), checks, Options{Names: []string{"d"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b", "c", "d"}, names(got))
+	assert.Equal(t, []string{"a", "b", "c", "d"}, ran)
+}
+
+func TestRunStopsWhenTheCallerCancelsMidCheck(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	block := make(chan struct{})
+	t.Cleanup(func() { close(block) })
+	checks := []Check{
+		fakeCheck{name: "stuck", run: func(context.Context) Result { cancel(); <-block; return Result{} }},
+	}
+
+	got, err := Run(ctx, checks, Options{})
+
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, got)
+}
