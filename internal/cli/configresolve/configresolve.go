@@ -102,9 +102,9 @@ func renderText(rows []workspace.RepoPath) string {
 		path, source := r.Path, r.Source
 		switch {
 		case errors.Is(r.Err, workspace.ErrRepoAmbiguous):
-			path = fmt.Sprintf("(ambiguous: %s; set repos.paths.%s)", strings.Join(r.Candidates, ", "), r.Slug)
+			path = fmt.Sprintf("(ambiguous: %s; set repos.paths.%s to choose one)", strings.Join(r.Candidates, ", "), r.Slug)
 		case r.Err != nil:
-			path = fmt.Sprintf("(not found; set repos.paths.%s)", r.Slug)
+			path = fmt.Sprintf("(not found: clone it under a repos.search directory or set repos.paths.%s)", r.Slug)
 		}
 		if source == "" {
 			source = "-"
