@@ -5,7 +5,11 @@
 // See docs/specs/CLI_CONFIG.md.
 package clicfg
 
-import "io"
+import (
+	"io"
+	"strings"
+	"unicode"
+)
 
 // Source says which layer a Settings value came from.
 type Source int
@@ -18,7 +22,18 @@ const (
 	SourceFlag
 )
 
-func (s Source) String() string { return "" }
+func (s Source) String() string {
+	switch s {
+	case SourceFile:
+		return "file"
+	case SourceEnv:
+		return "env"
+	case SourceFlag:
+		return "flag"
+	default:
+		return "default"
+	}
+}
 
 // Output formats.
 const (
@@ -70,21 +85,63 @@ type Settings struct {
 // Source reports the layer key (a user-file key such as "configDir") came from.
 // Keys that only exist in the file report SourceFile when set.
 func (s Settings) Source(key string) Source {
-	return SourceDefault
+	return s.sources[key]
+}
+
+// scalar is a key that can come from a flag, the environment or the file.
+type scalar struct {
+	name  string // file key; flag and env names derive from it
+	def   string
+	field func(*Settings) *string
+}
+
+var scalars = []scalar{
+	{name: "configDir", field: func(s *Settings) *string { return &s.ConfigDir }},
+	{name: "output", def: OutputText, field: func(s *Settings) *string { return &s.Output }},
+	{name: "upstream", field: func(s *Settings) *string { return &s.Upstream }},
 }
 
 // Load resolves Settings. Precedence per key: flag, env, user file, default.
 func Load(in Inputs) (Settings, error) {
-	return Settings{}, nil
+	getenv := in.Getenv
+	if getenv == nil {
+		getenv = func(string) string { return "" }
+	}
+	s := Settings{sources: map[string]Source{}}
+	for _, k := range scalars {
+		v, src := k.def, SourceDefault
+		if ev := getenv(EnvName(k.name)); ev != "" {
+			v, src = ev, SourceEnv
+		}
+		if in.Flags != nil {
+			if fv, set := in.Flags(FlagName(k.name)); set {
+				v, src = fv, SourceFlag
+			}
+		}
+		*k.field(&s) = v
+		s.sources[k.name] = src
+	}
+	return s, nil
 }
 
 // EnvName derives the environment variable for a file key:
 // configDir -> GERO_CONFIG_DIR.
 func EnvName(key string) string {
-	return ""
+	return "GERO_" + strings.ToUpper(splitWords(key, '_'))
 }
 
 // FlagName derives the flag for a file key: configDir -> config-dir.
 func FlagName(key string) string {
-	return ""
+	return strings.ToLower(splitWords(key, '-'))
+}
+
+func splitWords(key string, sep rune) string {
+	var b strings.Builder
+	for i, r := range key {
+		if i > 0 && unicode.IsUpper(r) {
+			b.WriteRune(sep)
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
