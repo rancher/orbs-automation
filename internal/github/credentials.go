@@ -60,3 +60,15 @@ func tokenHint(a Auth, host string) string {
 	}
 	return `set GH_TOKEN or GITHUB_TOKEN, or run "gh auth login"`
 }
+
+// NoTokenError is the error Resolve returns when no source supplies a token. It
+// carries the host and the advice separately, so a caller can show each in its
+// own place. It wraps ErrNoToken.
+type NoTokenError struct {
+	Host string // the host no token was found for
+	Hint string // how to supply one
+}
+
+func (*NoTokenError) Error() string { return "" }
+
+func (*NoTokenError) Unwrap() error { return nil }
