@@ -2,6 +2,8 @@ package clicfg
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -219,4 +221,92 @@ func TestLoadExpandsFlagAndEnvPathsButAllowsRelative(t *testing.T) {
 	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_CONFIG_DIR": "./config"})})
 	require.NoError(t, err)
 	assert.Equal(t, "./config", s.ConfigDir)
+}
+
+func TestInCI(t *testing.T) {
+	assert.False(t, InCI(env(nil)))
+	assert.True(t, InCI(env(map[string]string{"CI": "true"})))
+	assert.True(t, InCI(env(map[string]string{"GITHUB_ACTIONS": "true"})))
+	assert.False(t, InCI(env(map[string]string{"CI": "false"})))
+}
+
+func TestUserFilePath(t *testing.T) {
+	tests := []struct {
+		name         string
+		env          map[string]string
+		wantPath     string
+		wantExplicit bool
+	}{
+		{"home default", nil, "/home/dan/.config/gero/config.yaml", false},
+		{"xdg", map[string]string{"XDG_CONFIG_HOME": "/xdg"}, "/xdg/gero/config.yaml", false},
+		{"explicit wins", map[string]string{"GERO_CONFIG": "/x/c.yaml", "XDG_CONFIG_HOME": "/xdg"}, "/x/c.yaml", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, explicit := UserFilePath(env(tt.env), "/home/dan")
+
+			assert.Equal(t, tt.wantPath, path)
+			assert.Equal(t, tt.wantExplicit, explicit)
+		})
+	}
+}
+
+func writeUserFile(t *testing.T, content string) (home string) {
+	t.Helper()
+	home = t.TempDir()
+	dir := filepath.Join(home, ".config", "gero")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o600))
+	return home
+}
+
+func TestOpenUserFile(t *testing.T) {
+	t.Run("present at default path", func(t *testing.T) {
+		home := writeUserFile(t, "upstream: x\n")
+
+		r, path, err := OpenUserFile(env(nil), home)
+
+		require.NoError(t, err)
+		require.NotNil(t, r)
+		defer r.Close()
+		assert.Equal(t, filepath.Join(home, ".config", "gero", "config.yaml"), path)
+		b, err := io.ReadAll(r)
+		require.NoError(t, err)
+		assert.Equal(t, "upstream: x\n", string(b))
+	})
+
+	t.Run("absent at default path is fine", func(t *testing.T) {
+		r, _, err := OpenUserFile(env(nil), t.TempDir())
+
+		require.NoError(t, err)
+		assert.Nil(t, r)
+	})
+
+	t.Run("CI ignores the default file", func(t *testing.T) {
+		home := writeUserFile(t, "upstream: x\n")
+
+		r, _, err := OpenUserFile(env(map[string]string{"CI": "true"}), home)
+
+		require.NoError(t, err)
+		assert.Nil(t, r)
+	})
+
+	t.Run("CI honors explicit GERO_CONFIG", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "c.yaml")
+		require.NoError(t, os.WriteFile(p, []byte("upstream: x\n"), 0o600))
+
+		r, path, err := OpenUserFile(env(map[string]string{"CI": "true", "GERO_CONFIG": p}), t.TempDir())
+
+		require.NoError(t, err)
+		require.NotNil(t, r)
+		defer r.Close()
+		assert.Equal(t, p, path)
+	})
+
+	t.Run("explicit but missing is an error", func(t *testing.T) {
+		_, _, err := OpenUserFile(env(map[string]string{"GERO_CONFIG": "/nope/c.yaml"}), t.TempDir())
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	})
 }
