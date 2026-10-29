@@ -69,8 +69,11 @@ func TestReposTextTable(t *testing.T) {
 	assert.Contains(t, lines[2], "/src/op-a")
 	assert.Contains(t, lines[2], "/src/op-b")
 	assert.Contains(t, lines[2], "repos.paths.rancher/scc-operator", "names the key to set")
+	assert.Contains(t, lines[2], "to choose one")
 	assert.Contains(t, lines[3], "rancher/charts")
 	assert.Contains(t, lines[3], "not found")
+	assert.Contains(t, lines[3], "clone it under a repos.search directory", "a missing clone is fixed by cloning")
+	assert.Contains(t, lines[3], "or set repos.paths.rancher/charts", "or by pointing at an existing one")
 }
 
 func TestReposAllResolvedIsNotAnError(t *testing.T) {
