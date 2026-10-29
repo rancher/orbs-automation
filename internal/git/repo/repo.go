@@ -136,5 +136,14 @@ func (r *Repo) creatorDate(hash plumbing.Hash) (int64, error) {
 // Remotes returns the URLs of each configured remote, keyed by remote name. A
 // repository without remotes gives an empty map.
 func (r *Repo) Remotes() (map[string][]string, error) {
-	return nil, errors.New("not implemented")
+	remotes, err := r.repo.Remotes()
+	if err != nil {
+		return nil, fmt.Errorf("read remotes: %w", err)
+	}
+	out := make(map[string][]string, len(remotes))
+	for _, rm := range remotes {
+		c := rm.Config()
+		out[c.Name] = slices.Clone(c.URLs)
+	}
+	return out, nil
 }
