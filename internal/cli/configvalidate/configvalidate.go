@@ -4,6 +4,8 @@
 package configvalidate
 
 import (
+	"fmt"
+
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -20,9 +22,22 @@ type Workspace interface {
 // It returns a one-line summary on success, and on failure the error naming
 // every problem, or workspace.ErrNotFound when there is no config directory.
 func Run(s clicfg.Settings, cwd string) (string, error) {
-	return "", nil
+	return run(workspace.Open(s, cwd))
 }
 
 func run(ws Workspace) (string, error) {
-	return "", nil
+	dir, err := ws.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	cfg, err := ws.Config()
+	if err != nil {
+		return "", err
+	}
+	lines := 0
+	if cfg.Lines != nil {
+		lines = len(cfg.Lines.Lines)
+	}
+	return fmt.Sprintf("config OK: %s (projects: %d, externals: %d, lines: %d)\n",
+		dir.Dir, len(cfg.Projects), len(cfg.Externals), lines), nil
 }
