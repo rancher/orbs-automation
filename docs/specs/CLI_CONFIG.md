@@ -121,7 +121,6 @@ If none resolves, the command fails with a message listing these four places. Th
 ## Not built yet
 
 * The `inferred` source in `gero config show` ([WORKSPACE](WORKSPACE.md)).
-* The file's name in the error for a rejected value. A YAML error names the file, but `configDir (from file): path "x" must be absolute` names only the key.
 * A reader for `fork`, `githubUser` and `branchPrefix`.
 
 ## Open questions
