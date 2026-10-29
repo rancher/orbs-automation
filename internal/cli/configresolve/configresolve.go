@@ -98,13 +98,16 @@ func renderText(rows []workspace.RepoPath) string {
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "SLUG\tPATH\tSOURCE")
+	var notFound, ambiguous bool
 	for _, r := range rows {
 		path, source := r.Path, r.Source
 		switch {
 		case errors.Is(r.Err, workspace.ErrRepoAmbiguous):
-			path = fmt.Sprintf("(ambiguous: %s; set repos.paths.%s to choose one)", strings.Join(r.Candidates, ", "), r.Slug)
+			path = fmt.Sprintf("(ambiguous: %s)", strings.Join(r.Candidates, ", "))
+			ambiguous = true
 		case r.Err != nil:
-			path = fmt.Sprintf("(not found: clone it under a repos.search directory or set repos.paths.%s)", r.Slug)
+			path = "(not found)"
+			notFound = true
 		}
 		if source == "" {
 			source = "-"
@@ -112,6 +115,15 @@ func renderText(rows []workspace.RepoPath) string {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", r.Slug, path, source)
 	}
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	if notFound || ambiguous {
+		b.WriteString("\n")
+	}
+	if notFound {
+		b.WriteString("not found: clone it under a repos.search directory, or set repos.paths.<slug>\n")
+	}
+	if ambiguous {
+		b.WriteString("ambiguous: set repos.paths.<slug> to choose one\n")
+	}
 	return b.String()
 }
 
