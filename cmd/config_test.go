@@ -97,3 +97,57 @@ func TestConfigShowBadUserFile(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, stdout)
 }
+
+// inCentralRepo changes into a temp directory that looks like a checkout of
+// the central repo (config/*.project.yaml) and returns its config directory.
+func inCentralRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "config"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config", "rancher-rancher.project.yaml"), nil, 0o600))
+	t.Chdir(dir)
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	return filepath.Join(wd, "config")
+}
+
+func TestConfigShowConfigDirFromWorkingDirectory(t *testing.T) {
+	want := inCentralRepo(t)
+
+	got := configShow(t, "", nil)
+
+	assert.Equal(t, want, got["configDir"].Value)
+	assert.Equal(t, "cwd", got["configDir"].Source)
+}
+
+func TestConfigShowConfigDirExplicitBeatsWorkingDirectory(t *testing.T) {
+	inCentralRepo(t)
+
+	t.Run("flag", func(t *testing.T) {
+		got := configShow(t, "", nil, "--config-dir", "/flag")
+
+		assert.Equal(t, "/flag", got["configDir"].Value)
+		assert.Equal(t, "flag", got["configDir"].Source)
+	})
+	t.Run("env", func(t *testing.T) {
+		got := configShow(t, "", map[string]string{"GERO_CONFIG_DIR": "/env"})
+
+		assert.Equal(t, "/env", got["configDir"].Value)
+		assert.Equal(t, "env", got["configDir"].Source)
+	})
+	t.Run("user file", func(t *testing.T) {
+		got := configShow(t, "configDir: /file\n", nil)
+
+		assert.Equal(t, "/file", got["configDir"].Value)
+		assert.Equal(t, "file", got["configDir"].Source)
+	})
+}
+
+func TestConfigShowConfigDirUnsetOutsideCentralRepo(t *testing.T) {
+	t.Chdir(t.TempDir())
+
+	got := configShow(t, "", nil)
+
+	assert.Empty(t, got["configDir"].Value)
+	assert.Equal(t, "default", got["configDir"].Source)
+}

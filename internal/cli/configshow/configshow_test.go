@@ -147,3 +147,38 @@ func TestRenderUnknownFormat(t *testing.T) {
 
 	assert.Error(t, err)
 }
+
+func TestEntriesResolvedConfigDir(t *testing.T) {
+	resolved := configdir.Result{Dir: "/work/config", Source: configdir.SourceCwd}
+
+	t.Run("resolved directory replaces the unset setting", func(t *testing.T) {
+		got := byKey(Entries(load(t, "", nil, nil), resolved))
+
+		assert.Equal(t, Entry{"configDir", "/work/config", "cwd"}, got["configDir"])
+	})
+
+	t.Run("zero result keeps the setting as loaded", func(t *testing.T) {
+		got := byKey(Entries(load(t, "configDir: /file\n", nil, nil), configdir.Result{}))
+
+		assert.Equal(t, Entry{"configDir", "/file", "file"}, got["configDir"])
+	})
+
+	t.Run("other entries are untouched", func(t *testing.T) {
+		got := byKey(Entries(load(t, "upstream: rancher\n", nil, nil), resolved))
+
+		assert.Equal(t, Entry{"upstream", "rancher", "file"}, got["upstream"])
+	})
+}
+
+func TestRenderResolvedConfigDir(t *testing.T) {
+	resolved := configdir.Result{Dir: "/work/config", Source: configdir.SourceCwd}
+	s := load(t, "", nil, nil)
+
+	text, err := Render(s, resolved, clicfg.OutputText)
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^configDir\s+/work/config\s+cwd$`, text)
+
+	env, err := Render(s, resolved, clicfg.OutputEnv)
+	require.NoError(t, err)
+	assert.Contains(t, env, "GERO_CONFIG_DIR=/work/config\n")
+}
