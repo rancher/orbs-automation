@@ -1,6 +1,6 @@
 # CLI Framework
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built so far: the cobra root, `--version` and `gero version`, the global flags `--config-dir`, `--upstream`, `--output`, `--json` and `-v`/`--verbose` (resolved into `clicfg.Settings` in the root `PersistentPreRunE`), `semver check`, `repo branch-tags`, `config show`, `config validate`, `config resolve repos`, `auth status` and `doctor` (the runner and the `version`, `git`, `gh`, `auth-token`, `auth-api` and `rate-limit` checks so far; [DOCTOR](DOCTOR.md)). The rest of the command tree is stubs, and `--dry-run`, `--no-color`, gating and exit codes are not built. `config show`, `config validate`, `config resolve repos` and `repo branch-tags` read `Settings`, the last three through `internal/workspace` (the central config, repo paths and the repository). `auth status` resolves the host and token through `internal/github` (go-gh's `pkg/auth`), asks the host who the token belongs to, supports text and json (not `--output env`), never prints the token, and prints its result before exiting 1 when GitHub rejects the token. `config resolve repos` supports text and json, has no `--verbose` yet, and prints its table before exiting 1 when a repo is unresolved or ambiguous. `config validate` prints a one-line summary on success and has no `--json` form yet; a missing config directory exits 1 until the exit-code helper maps it to 2.
+**Status:** agreed, and implemented for the command tree's first commands. Items marked **(leaning)** are proposals; see Not built yet at the end for the gaps.
 
 How `gero` is built as a CLI: framework, command tree, global flags, context gating and exit codes. Product design is in [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md). Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md).
 
@@ -17,18 +17,18 @@ How `gero` is built as a CLI: framework, command tree, global flags, context gat
 
 **Viper adoption trigger.** Revisit only if CLI config grows past roughly ten keys, needs nested or per-command sections, needs more than one file format, or needs watching or remote sources. The swap stays local because everything downstream reads one resolved `Settings` struct from `internal/clicfg`.
 
-**Structure.** The root command and global flags live in `cmd/`, which imports only cobra, the standard library, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/errs` (lint-enforced, see [PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6). All cobra code stays in `cmd/`: the command tree, help text, flags, annotations and gating. A command's `RunE` there is glue only: it turns args, flags and the environment into plain values, calls the command's package `internal/cli/<cmd>/` (plain functions, no cobra), writes the output and returns the error. That package builds dependencies from `Settings` and calls into domain packages in `internal/`, so the logic is testable without cobra, and `cmd/` needs only wiring tests.
+**Structure.** The root command and global flags live in `cmd/`, which imports only cobra, the standard library, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/errs` (lint-enforced, see Enforcement in [PROJECT_LAYOUT](PROJECT_LAYOUT.md)). All cobra code stays in `cmd/`: the command tree, help text, flags, annotations and gating. A command's `RunE` there is glue only: it turns args, flags and the environment into plain values, calls the command's package `internal/cli/<cmd>/` (plain functions, no cobra), writes the output and returns the error. That package builds dependencies from `Settings` and calls into domain packages in `internal/`, so the logic is testable without cobra, and `cmd/` needs only wiring tests.
 
 ## 2. Command tree and global flags
 
-Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only or either (IMPLEMENTATION §2).
+Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only or either ([execution contexts](../IMPLEMENTATION.md#execution-contexts)).
 
 | Command | Context | Notes |
 |---|---|---|
 | `gero config validate` | either | Runs without credentials |
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
-| `gero config resolve repos [slug]` | either | Read-only; local path of each central-config repo and how it was found ([CLI_CONFIG](CLI_CONFIG.md) section 3b); `--json` supported |
-| `gero auth status [--hostname host]` | either | Read-only; the host and token source gero would use (`GH_TOKEN`, `GITHUB_TOKEN`, gh config, gh keyring) and the login GitHub reports for the token; the token is never printed. `--json` supported |
+| `gero config resolve repos [slug]` | either | Read-only; local path of each central-config repo and how it was found ([WORKSPACE](WORKSPACE.md)); `--json` supported. Prints its table before exiting 1 when a repo is unresolved or ambiguous |
+| `gero auth status [--hostname host]` | either | Read-only; the host and token source gero would use (`GH_TOKEN`, `GITHUB_TOKEN`, gh config, gh keyring) and the login GitHub reports for the token; the token is never printed. Prints its result before exiting 1 when GitHub rejects the token. `--json` supported |
 | `gero doctor [check...]` | either (built for workstations) | Read-only; checks the workstation setup and says how to fix what is not. Offline unless `--online`; `--json`, `--list-checks` and `--strict` ([DOCTOR](DOCTOR.md)) |
 | `gero version` | either | Read-only; prints the build version, commit and date, the same text as `--version`. `--json` supported |
 | `gero lines resolve` | either | Read-only |
@@ -45,14 +45,14 @@ Global (persistent) flags:
 
 | Flag | Meaning |
 |---|---|
-| `--config-dir` | [CLI_CONFIG](CLI_CONFIG.md) section 4 |
+| `--config-dir` | Where the central config is ([CLI_CONFIG](CLI_CONFIG.md)) |
 | `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing. Read-only commands accept and ignore it. Default is off, with `verify` as the explicit check mode **(leaning)**. |
-| `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md) section 1); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
-| `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md) section 2): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
-| `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md) section 1) |
+| `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
+| `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
+| `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md)) |
 | `--version` | Prints the version and exits, with no shorthand. Root only, not persistent. The value comes from `cmd/version`, set by GoReleaser through `-ldflags -X` (`.goreleaser.yaml`); a plain `go build` prints `dev`. `gero version` is the primary form and prints the same text |
 
-Per-command flags, such as the per-release override of `requiresPrerelease` (IMPLEMENTATION §4), are defined with their command and follow `--kebab-case`.
+Per-command flags, such as the per-release override of `requiresPrerelease` ([release rules](../IMPLEMENTATION.md#release-rules)), are defined with their command and follow `--kebab-case`.
 
 ## 3. Execution-context gating
 
@@ -68,6 +68,12 @@ A command declares its context with a cobra annotation, for example `gero/contex
 | 3 | `--dry-run` or `verify` found drift **(leaning)** |
 
 One helper maps errors to codes so commands return errors and never call `os.Exit`.
+
+## Not built yet
+
+* The rest of the command tree beyond the commands in the table that do something today; the others are stubs.
+* `--dry-run`, `--no-color`, context gating and the exit-code helper. Until the helper exists, a usage or validation error exits 1, not 2.
+* `--json` for `config validate`, and `--output env` for `auth status`.
 
 ## Open questions
 

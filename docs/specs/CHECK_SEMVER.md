@@ -2,9 +2,9 @@
 
 The command is `gero semver check`. `check` is the lenient script port described here. Strict SemVer operations, if they come, are separate verbs under `gero semver` and do not change `check` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md) section 2).
 
-**Status:** agreed. Items marked **(leaning)** are proposals. The faithful port (sections 1 to 4, default behavior) is built: `internal/semver`, `internal/cli/checksemver` and the `gero semver check` command. The opt-in improvements in section 6 and the parity test are not built yet.
+**Status:** implemented for the faithful port (sections 1 to 4). Not built yet: the opt-in improvements in section 6 and the parity test.
 
-Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by [IMPLEMENTATION §4](../IMPLEMENTATION.md).
+Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by the [release rules](../IMPLEMENTATION.md#release-rules).
 
 ## 1. What the script does today
 
@@ -40,7 +40,7 @@ gero semver check [tag]
 
 * **Context:** either (read-only, no credentials).
 * The command reads the environment and passes the string down. The library never reads it.
-* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 2). `cmd/repo.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
+* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/repo.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
 
 ## 3. Library
 
@@ -126,9 +126,9 @@ Approved improvements. None of them is part of the faithful port. During the por
 | **SemVer grammar** | Regex only. `1.2.3-`, `01.2.3-rc` and `1.2.3-rc..1` count as prereleases | Input valid under SemVer 2.0.0 is classified by the real grammar, and anything else is non-SemVer. Non-SemVer tags stay legal | Yes: `HAS_PRERELEASE` flips for those inputs |
 | **Non-SemVer `+`** | `hotfix+urgent` has `HAS_BUILD_META=true` | Build metadata is a SemVer concept, so non-SemVer text reports `false` | Yes: `HAS_BUILD_META` flips |
 | **`IS_SEMVER` key** | Two keys only | A third env line, `IS_SEMVER=true\|false`, after the two original keys | Yes for strict consumers of the file, otherwise additive |
-| **Missing-tag exit code** | Exit 1 | Exit 2, a usage error ([CLI_FRAMEWORK](CLI_FRAMEWORK.md) section 4) | Yes: scripts checking for exactly 1 |
+| **Missing-tag exit code** | Exit 1 | Exit 2, a usage error ([exit codes](CLI_FRAMEWORK.md#4-exit-codes)) | Yes: scripts checking for exactly 1 |
 | **`--json`** | Not available | Full detail: `input`, `version`, `isSemver`, `hasPrerelease`, `hasBuildMeta`, `major`, `minor`, `patch`, `prerelease`, `buildMeta` (`major`, `minor`, `patch` omitted when not SemVer) | No: new format, default unchanged |
 | **Extra env keys** | Not available | Opt-in env format with `VERSION`, `MAJOR`, `MINOR`, `PATCH`, `PRERELEASE`, `BUILD_META` | No: new format |
 | **`--strict`** (open) | Never fails on bad input | Exit 2 on non-SemVer input, for release-only workflows | No: purely additive |
 
-`--json` field names are stable once released ([CLI_OUTPUT](CLI_OUTPUT.md) section 1). `--output env` is the explicit name of the default format.
+`--json` field names are stable once released ([CLI_OUTPUT](CLI_OUTPUT.md)). `--output env` is the explicit name of the default format.

@@ -1,6 +1,6 @@
 # CLI Output
 
-**Status:** agreed. Logging is built (the `-v` flag, `GERO_LOG`, the logger in the root command). Output rules in section 1 are followed by the commands that exist; `--no-color` and `internal/ui` are not built.
+**Status:** implemented for output and logging. Color control and `internal/ui` are agreed, not built.
 
 How `gero` talks to the user: command output, logging, and the seam for interactive features. Flags that control these are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
 
@@ -19,7 +19,7 @@ Standard library `log/slog`, written to stderr. Default level `warn`, `-v` for `
 * **Precedence.** `-v` beats `GERO_LOG`, which beats the default, the same order as every other setting ([CLI_CONFIG](CLI_CONFIG.md)). The level is a setting named `log`, so `gero config show` reports it and its source. There is no user-file key for it.
 * **stdout is untouched.** Logs go to stderr only, so `-v` never changes `--json` or `--output env` output.
 * **Levels.** `warn` is something the user should act on. `info` is what the command decided or did: inferred values, repositories touched, writes. `debug` is how it did it: git invocations, API calls, timings. Which events land at which level is recorded here as commands add them.
-* **Built so far.** `debug` logs the resolved settings once, after the flags and the environment are read. The root command builds the logger (`internal/cli/logging`) and does not pass it down yet, so no command logs. It will be handed to the first command that logs, and `workspace` will then log the resolved config directory and its source at `debug`.
+* **Today** the root command builds the logger (`internal/cli/logging`) and `debug` logs the resolved settings once. The logger is handed to the first command that logs, and `workspace` then logs the resolved config directory and its source at `debug`.
 
 ## 3. TUI and interactive features
 
@@ -29,6 +29,12 @@ Deferred. Nothing in v0.x or v1.0.0 needs prompts beyond handing off to `gh auth
 * Any prompt or rich rendering goes through one internal package, `internal/ui`, behind an interface with a plain-text implementation first. This is the seam that lets a TUI arrive later without touching commands.
 * Interactive behavior is opt-in and automatically disabled when stdin or stdout is not a TTY, or when running in CI.
 * The likely future stack is the Charm libraries (bubbletea, huh, lipgloss). No dependency is added until a feature needs it, and the addition then gets an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md). The web dashboard (ARCHITECTURE_DESIGN §6) is a separate, later surface.
+
+## Not built yet
+
+* `--no-color`, and `NO_COLOR` and TTY detection beyond what commands do by default.
+* `internal/ui`.
+* Handing the logger to commands.
 
 ## Open questions
 

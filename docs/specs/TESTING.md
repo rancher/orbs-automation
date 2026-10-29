@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** agreed. The unit tier is in use: `testing` with `testify` (`require` for preconditions, `assert` for checks), in-process command tests and table tests. `go.uber.org/mock` is used for one seam so far (`branchtags.Repository`). Golden files and the `test/integration` sub-module are not set up yet.
+**Status:** implemented for the unit tier. The integration tier is agreed, not built.
 
 How the CLI layer is tested.
 
@@ -14,6 +14,11 @@ How the CLI layer is tested.
 * **Mutation testing is optional, with [gremlins](https://github.com/go-gremlins/gremlins).** To check how strong the tests are, run `gremlins unleash` from the repository root. It mutates a temporary copy, so the working tree is untouched, and it takes seconds at the current size. It is a developer tool each person installs globally (package manager, or `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`). It is **not** in `go.mod`, since it brings dependencies (viper, among others) that the [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) keeps out of the root module, and it is not a CI gate. Do not mutate code by hand to check a test.
   * Fix **lived** mutants with a test, or with simpler code when the mutant is equivalent (for example `len(s) > 7` to `>=` before `s[:7]`: `min(len(s), 7)` has nothing to mutate).
   * Known noise: gremlins reports a `case` condition in a `switch` as not covered, because Go's coverage profile only attributes the case body. A `main`-style `os.Exit` wrapper such as `cmd.Execute` is also not covered, by design.
+
+## Not built yet
+
+* The `test/integration` sub-module and its CI job.
+* Golden files under `testdata/`.
 
 ## Open questions
 
