@@ -152,6 +152,44 @@ func TestDoctorWiring(t *testing.T) {
 		assert.Contains(t, stdout, "Some checks failed")
 	})
 
+	t.Run("offline, the online checks are skipped and counted", func(t *testing.T) {
+		resetDoctorFlags(t)
+		stubGh(t)
+		withToken(t)
+
+		stdout, _, err := execRoot(t, "doctor")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "○ auth-api: skipped, run with --online\n")
+		assert.Contains(t, stdout, "1 check needs --online. ")
+	})
+
+	t.Run("--online without a token skips auth-api instead of calling GitHub", func(t *testing.T) {
+		resetDoctorFlags(t)
+		noGitHubAuth(t)
+		stubGh(t)
+
+		stdout, _, err := execRoot(t, "doctor", "--online")
+
+		require.ErrorIs(t, err, doctor.ErrChecksFailed)
+		assert.Contains(t, stdout, "✗ auth-token: no token found for github.com\n")
+		assert.Contains(t, stdout, "○ auth-api: skipped, needs auth-token\n")
+		assert.NotContains(t, stdout, "--online. ", "nothing was left waiting on --online")
+	})
+
+	t.Run("naming auth-api runs it online and pulls in auth-token", func(t *testing.T) {
+		resetDoctorFlags(t)
+		noGitHubAuth(t)
+		stubGh(t)
+
+		stdout, _, err := execRoot(t, "doctor", "auth-api")
+
+		require.ErrorIs(t, err, doctor.ErrChecksFailed)
+		assert.Contains(t, stdout, "✗ auth-token: no token found for github.com\n")
+		assert.Contains(t, stdout, "○ auth-api: skipped, needs auth-token\n")
+		assert.NotContains(t, stdout, "gh:", "only the named check and what it needs")
+	})
+
 	t.Run("--output env is refused", func(t *testing.T) {
 		resetDoctorFlags(t)
 

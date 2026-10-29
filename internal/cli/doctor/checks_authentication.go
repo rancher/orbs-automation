@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/cli/authstatus"
 	"github.com/rancher/orbs-automation/internal/github"
@@ -60,7 +61,39 @@ func (authAPICheck) Description() string {
 func (authAPICheck) Online() bool    { return true }
 func (authAPICheck) Needs() []string { return []string{"auth-token"} }
 
-func (authAPICheck) Run(context.Context) Result { return Result{} }
+func (c authAPICheck) Run(ctx context.Context) Result {
+	st, err := c.verifier.Verify(ctx)
+	switch {
+	case err == nil:
+		return Result{Status: StatusOK, Message: fmt.Sprintf("signed in as %s on %s", st.Login, st.Host)}
+	case errors.Is(err, github.ErrBadCredentials):
+		return Result{
+			Status:      StatusFail,
+			Message:     fmt.Sprintf("GitHub rejected the token from %s on %s", github.DescribeTokenSource(st.TokenSource), st.Host),
+			Remediation: rejectedRemediation(st),
+		}
+	}
+	// Anything else, such as a refused connection, says nothing about the token.
+	return Result{
+		Status:      StatusWarn,
+		Message:     "could not ask GitHub: " + err.Error(),
+		Remediation: "check your network connection, proxy settings or VPN, then run again",
+	}
+}
+
+// rejectedRemediation says how to replace the token that GitHub rejected, which
+// depends on where it came from: an environment variable is replaced or unset,
+// while a gh login is renewed with gh.
+func rejectedRemediation(st authstatus.Status) string {
+	if strings.HasSuffix(st.TokenSource, "_TOKEN") {
+		return fmt.Sprintf("the token in %s is invalid or expired: replace it, or unset it to fall back to your gh login", st.TokenSource)
+	}
+	login := `"gh auth login"`
+	if st.Host != "github.com" {
+		login = fmt.Sprintf(`"gh auth login --hostname %s"`, st.Host)
+	}
+	return "the gh login is invalid or expired: sign in again with " + login
+}
 
 // authstatusVerifier is the TokenVerifier backed by gero auth status.
 type authstatusVerifier struct{}
