@@ -1,6 +1,9 @@
 package doctor
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // versionCheck reports which gero is running and on what. It always passes: it
 // exists so the output of gero doctor says what it was run with.
@@ -17,4 +20,6 @@ func (versionCheck) Description() string {
 func (versionCheck) Online() bool    { return false }
 func (versionCheck) Needs() []string { return nil }
 
-func (versionCheck) Run(context.Context) Result { return Result{} }
+func (c versionCheck) Run(context.Context) Result {
+	return Result{Status: StatusOK, Message: fmt.Sprintf("gero %s on %s/%s", c.build.Version, c.build.OS, c.build.Arch)}
+}
