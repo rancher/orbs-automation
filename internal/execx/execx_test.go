@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,6 +129,71 @@ func TestRunEnvironment(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "secret=given home=unset", string(got.Stdout))
 	})
+
+	t.Run("InheritEnv is the opt-out back to what os/exec would give", func(t *testing.T) {
+		fakeBin(t, "execx-fake", show)
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("EXECX_SECRET", "hunter2")
+
+		got, err := New("execx-fake").Run(context.Background(), Cmd{Name: "execx-fake", Env: InheritEnv()})
+
+		require.NoError(t, err)
+		assert.Equal(t, "secret=hunter2 home="+home, string(got.Stdout))
+	})
+
+	t.Run("appending to DefaultEnv adds to the default", func(t *testing.T) {
+		fakeBin(t, "execx-fake", show)
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("EXECX_SECRET", "hunter2")
+
+		got, err := New("execx-fake").Run(context.Background(), Cmd{Name: "execx-fake", Env: append(DefaultEnv(), "EXECX_SECRET=added")})
+
+		require.NoError(t, err)
+		assert.Equal(t, "secret=added home="+home, string(got.Stdout))
+	})
+}
+
+func TestDefaultEnv(t *testing.T) {
+	t.Run("keeps the allow list and drops everything else", func(t *testing.T) {
+		kept := []string{
+			"PATH=/usr/bin", "HOME=/home/x", "USER=x", "LOGNAME=x", "TMPDIR=/tmp/x", "TERM=xterm",
+			"LANG=C", "LC_ALL=C", "LC_CTYPE=C", "XDG_CONFIG_HOME=/home/x/.config", "XDG_CACHE_HOME=/home/x/.cache",
+		}
+		dropped := []string{"GH_TOKEN=t", "GITHUB_TOKEN=t", "EXECX_SECRET=s", "AWS_SECRET_ACCESS_KEY=k", "GIT_CONFIG_GLOBAL=/x", "LCX=y", "XDGX=y"}
+		for _, kv := range append(append([]string{}, kept...), dropped...) {
+			k, v, _ := strings.Cut(kv, "=")
+			t.Setenv(k, v)
+		}
+
+		got := DefaultEnv()
+
+		for _, kv := range kept {
+			assert.Contains(t, got, kv)
+		}
+		for _, kv := range dropped {
+			assert.NotContains(t, got, kv)
+		}
+	})
+
+	t.Run("leaves out a variable that is not set instead of passing it empty", func(t *testing.T) {
+		t.Setenv("PATH", "/usr/bin")
+		require.NoError(t, os.Unsetenv("LOGNAME"))
+
+		got := DefaultEnv()
+
+		assert.Contains(t, got, "PATH=/usr/bin")
+		for _, kv := range got {
+			assert.NotEqual(t, "LOGNAME=", kv)
+		}
+	})
+}
+
+func TestInheritEnv(t *testing.T) {
+	t.Setenv("EXECX_SECRET", "hunter2")
+
+	assert.Equal(t, os.Environ(), InheritEnv())
 }
 
 func TestRunFailures(t *testing.T) {
