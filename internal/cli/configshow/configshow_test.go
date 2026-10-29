@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/cli/configdir"
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,7 +86,7 @@ func TestEntries(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), configdir.Result{}))
+			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), workspace.ConfigDir{}))
 
 			for k, want := range tt.want {
 				assert.Equal(t, want, got[k], k)
@@ -98,18 +98,18 @@ func TestEntries(t *testing.T) {
 func TestEntriesOrderIsStable(t *testing.T) {
 	s := load(t, "repos:\n  paths:\n    b/b: /b\n    a/a: /a\n", nil, nil)
 
-	first := Entries(s, configdir.Result{})
+	first := Entries(s, workspace.ConfigDir{})
 
 	assert.NotEmpty(t, first)
 	for range 5 {
-		assert.Equal(t, first, Entries(s, configdir.Result{}))
+		assert.Equal(t, first, Entries(s, workspace.ConfigDir{}))
 	}
 }
 
 func TestRenderText(t *testing.T) {
 	s := load(t, "fork: origin\n", nil, map[string]string{"upstream": "rancher"})
 
-	out, err := Render(s, configdir.Result{}, clicfg.OutputText)
+	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+rancher\s+flag$`, out)
@@ -121,7 +121,7 @@ func TestRenderText(t *testing.T) {
 func TestRenderJSON(t *testing.T) {
 	s := load(t, "fork: origin\n", map[string]string{"GERO_OUTPUT": "json"}, nil)
 
-	out, err := Render(s, configdir.Result{}, clicfg.OutputJSON)
+	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputJSON)
 
 	require.NoError(t, err)
 	var got map[string]struct{ Value, Source string }
@@ -135,7 +135,7 @@ func TestRenderJSON(t *testing.T) {
 func TestRenderEnv(t *testing.T) {
 	s := load(t, "upstream: rancher\n", nil, nil)
 
-	out, err := Render(s, configdir.Result{}, clicfg.OutputEnv)
+	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputEnv)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "GERO_UPSTREAM=rancher\n")
@@ -143,13 +143,13 @@ func TestRenderEnv(t *testing.T) {
 }
 
 func TestRenderUnknownFormat(t *testing.T) {
-	_, err := Render(clicfg.Settings{}, configdir.Result{}, "xml")
+	_, err := Render(clicfg.Settings{}, workspace.ConfigDir{}, "xml")
 
 	assert.Error(t, err)
 }
 
 func TestEntriesResolvedConfigDir(t *testing.T) {
-	resolved := configdir.Result{Dir: "/work/config", Source: configdir.SourceCwd}
+	resolved := workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}
 
 	t.Run("resolved directory replaces the unset setting", func(t *testing.T) {
 		got := byKey(Entries(load(t, "", nil, nil), resolved))
@@ -158,7 +158,7 @@ func TestEntriesResolvedConfigDir(t *testing.T) {
 	})
 
 	t.Run("zero result keeps the setting as loaded", func(t *testing.T) {
-		got := byKey(Entries(load(t, "configDir: /file\n", nil, nil), configdir.Result{}))
+		got := byKey(Entries(load(t, "configDir: /file\n", nil, nil), workspace.ConfigDir{}))
 
 		assert.Equal(t, Entry{"configDir", "/file", "file"}, got["configDir"])
 	})
@@ -171,7 +171,7 @@ func TestEntriesResolvedConfigDir(t *testing.T) {
 }
 
 func TestRenderResolvedConfigDir(t *testing.T) {
-	resolved := configdir.Result{Dir: "/work/config", Source: configdir.SourceCwd}
+	resolved := workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}
 	s := load(t, "", nil, nil)
 
 	text, err := Render(s, resolved, clicfg.OutputText)
@@ -184,7 +184,7 @@ func TestRenderResolvedConfigDir(t *testing.T) {
 }
 
 func TestRenderTextHintsForUnsetKeys(t *testing.T) {
-	out, err := Render(load(t, "", nil, nil), configdir.Result{}, clicfg.OutputText)
+	out, err := Render(load(t, "", nil, nil), workspace.ConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+\(inferred from remotes\)\s+default$`, out)
@@ -197,7 +197,7 @@ func TestRenderTextHintsForUnsetKeys(t *testing.T) {
 func TestRenderTextHintsOnlyWhereNothingIsSet(t *testing.T) {
 	s := load(t, "upstream: rancher\n", nil, map[string]string{"config-dir": "/flag"})
 
-	out, err := Render(s, configdir.Result{}, clicfg.OutputText)
+	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+rancher\s+file$`, out)
@@ -207,14 +207,14 @@ func TestRenderTextHintsOnlyWhereNothingIsSet(t *testing.T) {
 func TestRenderHintsStayOutOfMachineFormats(t *testing.T) {
 	s := load(t, "", nil, nil)
 
-	js, err := Render(s, configdir.Result{}, clicfg.OutputJSON)
+	js, err := Render(s, workspace.ConfigDir{}, clicfg.OutputJSON)
 	require.NoError(t, err)
 	var got map[string]struct{ Value, Source string }
 	require.NoError(t, json.Unmarshal([]byte(js), &got), js)
 	assert.Empty(t, got["upstream"].Value)
 	assert.Equal(t, "default", got["upstream"].Source)
 
-	env, err := Render(s, configdir.Result{}, clicfg.OutputEnv)
+	env, err := Render(s, workspace.ConfigDir{}, clicfg.OutputEnv)
 	require.NoError(t, err)
 	assert.Contains(t, env, "GERO_UPSTREAM=\n")
 	assert.NotContains(t, env, "inferred")

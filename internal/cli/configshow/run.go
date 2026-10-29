@@ -3,7 +3,6 @@ package configshow
 import (
 	"errors"
 
-	"github.com/rancher/orbs-automation/internal/cli/configdir"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -22,12 +21,8 @@ func Run(s clicfg.Settings, cwd string) (string, error) {
 }
 
 func run(s clicfg.Settings, ws Workspace) (string, error) {
-	var dir configdir.Result
-	d, err := ws.ConfigDir()
-	switch {
-	case err == nil:
-		dir = configdir.Result{Dir: d.Dir, Source: d.Source}
-	case !errors.Is(err, workspace.ErrNotFound):
+	dir, err := ws.ConfigDir()
+	if err != nil && !errors.Is(err, workspace.ErrNotFound) {
 		return "", err
 	}
 	return Render(s, dir, s.Output)

@@ -1,7 +1,7 @@
 // Package config loads the central application config: the YAML documents under
 // config/ (Project, RancherLines, External). It is framework-free and takes an
 // fs.FS, so it is table-testable. It does not read CLI settings; the caller
-// locates the directory (see internal/cli/configdir). Shapes are documented in
+// locates the directory (see internal/workspace). Shapes are documented in
 // config/README.md.
 package config
 
