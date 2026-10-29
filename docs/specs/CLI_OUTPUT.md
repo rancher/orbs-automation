@@ -32,22 +32,23 @@ Deferred. Nothing in v0.x or v1.0.0 needs prompts beyond handing off to `gh auth
 
 ### Library research for the confirmation, color and tables
 
-Read from module sources and `go.mod` files, **(unverified)** by a build: the sandbox's module proxy was unreachable and the offline cache lacks the dependencies of the extra `go-gh` packages and of `huh`, so only the stdlib variant was built.
+A spike built one confirm-and-table program per option in a scratch module (`huh` v2 as `charm.land/huh/v2`, `go-gh` v2.17.0, `golang.org/x/term`), then ran each with stdin closed and piped. It did not run on a real TTY, and the checksum database was off, so the downloads were not verified. Items marked **(unverified)** below come from reading source.
 
 | Option | Gives | Cost |
 |---|---|---|
-| Our own yes/no on `golang.org/x/term` | TTY check, plain `[y/N]` line read from stdin | About 20 lines. `x/term` is already in `go.sum` through go-git, so it is a free promotion to a direct dependency |
+| Our own yes/no on `golang.org/x/term` | TTY check, plain `[y/N]` line read from stdin | About 20 lines, 2 modules and a 2.5 MB binary. `x/term` is already in `go.sum` through go-git, so it is a free promotion to a direct dependency |
 | `go-gh/pkg/term` | TTY, size, color-depth detection | Pulls only `termenv`. Reads `GH_FORCE_TTY`, `CLICOLOR*` and `NO_COLOR`, so it follows `gh`'s variables, not `GERO_*` |
-| `go-gh/pkg/prompter` | `Confirm`, `Select`, `Input`, `Password` | Built on `AlecAivazis/survey`, which is archived upstream. Also imports `pkg/text`, which pulls lipgloss v2 |
+| `go-gh/pkg/prompter` | `Confirm`, `Select`, `Input`, `Password` | Built on `AlecAivazis/survey`, which is archived upstream. With the table printer, 29 modules and a 10 MB binary, more than `huh` |
 | `go-gh/pkg/tableprinter` | TTY table, TSV when piped | Imports `pkg/text`, so lipgloss v2 and reflow too |
-| `huh` (Charm) | Confirm, select, input, forms, an accessible plain mode | About 25 modules: bubbletea, bubbles, lipgloss, catppuccin, xpty and more. Raw mode and redraws, so it needs a real TTY and is harder to test |
+| `huh` (Charm) | Confirm, select, input, forms, an accessible plain mode | 25 modules and a 6.1 MB binary for one confirm. Raw mode and redraws, and it opens `/dev/tty` itself, so it is harder to test |
 | `lipgloss` | Styles, layout, color profile | Worth it for styled tables and panels, not for a few escape codes |
 
 * **The confirmation does not justify a library.** One yes/no is a few lines behind `internal/ui`, which is testable with a fake reader and has no non-TTY path to get wrong. Everything else (`Select`, `Input`, forms) is where `huh` earns its weight, and `internal/ui` is the seam that makes adopting it a change in one file **(leaning)**.
 * **Detection stays ours.** TTY, `NO_COLOR`, `--no-color` and the `GERO_*` variables are decided in `internal/clicfg` next to the context signs. Importing `go-gh/pkg/term` would add a second reader of `CLICOLOR` and friends.
 * **Avoid `survey`.** It is archived, and `huh` is the maintained route if prompts grow.
 * **Tables and color later.** Plain `text/tabwriter` and a handful of escape codes cover v0.x. If output wants real styling, lipgloss is the pick, and `go-gh/pkg/tableprinter` is the cheaper option if only tables are wanted. Either gets an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) first.
-* **Still to check** with network access: the real module count and binary-size delta of `huh` and `go-gh/pkg/tableprinter` (`go mod why`, `go build` of each), and how `huh` behaves with stdin closed, which is the CI case.
+* **Neither prompt library copes without a TTY, so we check first anyway.** With stdin closed or piped, `go-gh`'s prompter still wrote cursor-position escape codes to stdout and then failed with `could not prompt: EOF`, ignoring a piped `y`. `huh` failed with `could not open TTY: open /dev/tty`. Our own line reader returned `EOF` and `y` correctly. The non-TTY rule in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract) (fail unless `--non-interactive`) is a check in `gero`, not something a library gives us.
+* **Still to check:** both libraries on a real TTY, and `huh`'s accessible mode.
 
 ## Not built yet
 
