@@ -2,6 +2,7 @@ package authstatus
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
@@ -30,6 +31,25 @@ func (loginVerifier) Login(ctx context.Context, c github.Credentials) (string, e
 	return github.Login(ctx, c)
 }
 
-func run(_ context.Context, _ clicfg.Settings, _ string, _ github.Auth, _ Verifier) (string, error) {
-	return "", nil
+func run(ctx context.Context, s clicfg.Settings, hostname string, a github.Auth, v Verifier) (string, error) {
+	// Refuse a format that cannot be rendered before spending an API call.
+	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
+		return "", unsupported(s.Output)
+	}
+	creds, err := github.Resolve(a, hostname)
+	if err != nil {
+		return "", err
+	}
+	st := Status{Host: creds.Host, HostSource: creds.HostSource, TokenSource: creds.TokenSource}
+	login, err := v.Login(ctx, creds)
+	rejected := errors.Is(err, github.ErrBadCredentials)
+	if err != nil && !rejected {
+		return "", err
+	}
+	st.Valid, st.Login = !rejected, login
+	out, renderErr := Render(st, s.Output)
+	if renderErr != nil {
+		return "", renderErr
+	}
+	return out, err
 }
