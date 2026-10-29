@@ -1,6 +1,6 @@
 # Doctor
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version` and `gh` checks. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version`, `gh` and `auth-token` checks. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
 
 `gero doctor` checks that a developer's workstation is set up to use `gero`, and says how to fix what is not. It is the first thing to run when something is off, and the output is meant to be pasted into an issue. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md); output rules are in [CLI_OUTPUT](CLI_OUTPUT.md).
 
@@ -48,7 +48,7 @@ Each one reuses the package that already does the work (section 7).
 | `config-dir` | configuration | no | no central config directory is found | `internal/workspace` |
 | `config` | configuration | no | the application config does not validate; needs `config-dir` | `internal/cli/configvalidate` |
 | `repos` | configuration | no | never; `warn` for each project with no clone or several equal ones; needs `config` | `internal/cli/configresolve` |
-| `auth-token` | authentication | no | no token is found for the host; names the variables to set | `internal/github` |
+| `auth-token` | authentication | no | no token is found for the default host; names the variables to set; reports where the token came from and never the token. It runs the same resolver as every command, so it may call `gh auth token` | `internal/github` (`Resolve`, `NoTokenError`, `DescribeTokenSource`) |
 | `auth-api` | authentication | yes | GitHub rejects the token; `warn` on a timeout; needs `auth-token` | `internal/cli/authstatus` |
 | `rate-limit` | authentication | yes | never; `warn` when little of the limit is left; needs `auth-api` | go-github |
 
@@ -63,8 +63,8 @@ gero 0.4.0 (commit abc1234, built 2026-10-29)
 
 Dependencies
   ✔ git: 2.51.0, user.name and user.email are set
-  ⚠ gh: not found
-    → gero reads a token from the gh keyring through it; install it from https://cli.github.com, or set GH_TOKEN
+  ⚠ gh: gh not found on PATH
+    → gero reads a token from the gh keyring through it: install it from https://cli.github.com, or set GH_TOKEN (or fix GH_PATH, if you set it)
 
 Configuration
   ✔ config-dir: /Users/me/work/orbs-automation/config (cwd)
@@ -73,7 +73,7 @@ Configuration
   ○ repos: skipped, needs config
 
 Authentication
-  ✔ auth-token: environment variable GH_TOKEN
+  ✔ auth-token: environment variable GH_TOKEN for github.com
   ○ auth-api: skipped, run with --online
 
 Summary: 3 ok, 1 warning, 1 failed, 2 skipped
