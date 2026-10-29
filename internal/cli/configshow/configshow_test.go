@@ -47,20 +47,20 @@ func TestEntries(t *testing.T) {
 		{
 			name: "defaults only",
 			want: map[string]Entry{
-				"output":   {"output", "text", clicfg.SourceDefault},
-				"upstream": {"upstream", "", clicfg.SourceDefault},
-				"fork":     {"fork", "", clicfg.SourceDefault},
+				"output":   {"output", "text", "default"},
+				"upstream": {"upstream", "", "default"},
+				"fork":     {"fork", "", "default"},
 			},
 		},
 		{
 			name: "user file values",
 			file: "upstream: rancher\nfork: origin\nbranchPrefix: dan/\nconfigDir: ~/cfg\n",
 			want: map[string]Entry{
-				"upstream":     {"upstream", "rancher", clicfg.SourceFile},
-				"fork":         {"fork", "origin", clicfg.SourceFile},
-				"branchPrefix": {"branchPrefix", "dan/", clicfg.SourceFile},
-				"configDir":    {"configDir", "/home/dev/cfg", clicfg.SourceFile},
-				"output":       {"output", "text", clicfg.SourceDefault},
+				"upstream":     {"upstream", "rancher", "file"},
+				"fork":         {"fork", "origin", "file"},
+				"branchPrefix": {"branchPrefix", "dan/", "file"},
+				"configDir":    {"configDir", "/home/dev/cfg", "file"},
+				"output":       {"output", "text", "default"},
 			},
 		},
 		{
@@ -69,17 +69,17 @@ func TestEntries(t *testing.T) {
 			env:   map[string]string{"GERO_UPSTREAM": "fromenv", "GERO_OUTPUT": "json"},
 			flags: map[string]string{"upstream": "fromflag"},
 			want: map[string]Entry{
-				"upstream": {"upstream", "fromflag", clicfg.SourceFlag},
-				"output":   {"output", "json", clicfg.SourceEnv},
+				"upstream": {"upstream", "fromflag", "flag"},
+				"output":   {"output", "json", "env"},
 			},
 		},
 		{
 			name: "repos sections",
 			file: "repos:\n  search: [/src]\n  paths:\n    rancher/rancher: /r\n  overrides:\n    rancher/scc-operator:\n      upstream: rancher\n",
 			want: map[string]Entry{
-				"repos.search":                                  {"repos.search", "/src", clicfg.SourceFile},
-				"repos.paths.rancher/rancher":                   {"repos.paths.rancher/rancher", "/r", clicfg.SourceFile},
-				"repos.overrides.rancher/scc-operator.upstream": {"repos.overrides.rancher/scc-operator.upstream", "rancher", clicfg.SourceFile},
+				"repos.search":                                  {"repos.search", "/src", "file"},
+				"repos.paths.rancher/rancher":                   {"repos.paths.rancher/rancher", "/r", "file"},
+				"repos.overrides.rancher/scc-operator.upstream": {"repos.overrides.rancher/scc-operator.upstream", "rancher", "file"},
 			},
 		},
 	}

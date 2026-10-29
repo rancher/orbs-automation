@@ -17,7 +17,7 @@ import (
 type Entry struct {
 	Key    string // user-file key, dotted for nested keys (repos.paths.<slug>)
 	Value  string
-	Source clicfg.Source
+	Source string // clicfg layer name (default, file, env, flag) or a resolver's reason
 }
 
 // scalarKeys are the keys that have a flag and an environment variable, and so
@@ -36,19 +36,19 @@ func Entries(s clicfg.Settings) []Entry {
 		entry(s, "branchPrefix", s.BranchPrefix),
 	}
 	if len(s.Repos.Search) > 0 {
-		es = append(es, Entry{"repos.search", strings.Join(s.Repos.Search, ","), clicfg.SourceFile})
+		es = append(es, Entry{"repos.search", strings.Join(s.Repos.Search, ","), clicfg.SourceFile.String()})
 	}
 	for _, slug := range sortedKeys(s.Repos.Paths) {
-		es = append(es, Entry{"repos.paths." + slug, s.Repos.Paths[slug], clicfg.SourceFile})
+		es = append(es, Entry{"repos.paths." + slug, s.Repos.Paths[slug], clicfg.SourceFile.String()})
 	}
 	for _, slug := range sortedKeys(s.Repos.Overrides) {
-		es = append(es, Entry{"repos.overrides." + slug + ".upstream", s.Repos.Overrides[slug].Upstream, clicfg.SourceFile})
+		es = append(es, Entry{"repos.overrides." + slug + ".upstream", s.Repos.Overrides[slug].Upstream, clicfg.SourceFile.String()})
 	}
 	return es
 }
 
 func entry(s clicfg.Settings, key, value string) Entry {
-	return Entry{Key: key, Value: value, Source: s.Source(key)}
+	return Entry{Key: key, Value: value, Source: s.Source(key).String()}
 }
 
 func sortedKeys[V any](m map[string]V) []string {
@@ -97,7 +97,7 @@ func renderJSON(es []Entry) (string, error) {
 	}
 	m := make(map[string]field, len(es))
 	for _, e := range es {
-		m[e.Key] = field{e.Value, e.Source.String()}
+		m[e.Key] = field{e.Value, e.Source}
 	}
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
