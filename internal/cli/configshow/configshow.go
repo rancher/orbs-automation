@@ -23,7 +23,7 @@ type Entry struct {
 
 // scalarKeys are the keys that have a flag and an environment variable, and so
 // the ones the env format can express.
-var scalarKeys = []string{"configDir", "output", "upstream"}
+var scalarKeys = []string{"configDir", "output", "log", "upstream"}
 
 // hints say what an unset key falls back to. Text output shows one in place of
 // "(unset)"; json and env never do, so scripts never read a hint as data. They
@@ -49,6 +49,7 @@ func Entries(s clicfg.Settings, dir workspace.ConfigDir) []Entry {
 	es := []Entry{
 		configDir,
 		entry(s, "output", s.Output),
+		entry(s, "log", s.LogLevel),
 		entry(s, "upstream", s.Upstream),
 		entry(s, "fork", s.Fork),
 		entry(s, "githubUser", s.GitHubUser),
