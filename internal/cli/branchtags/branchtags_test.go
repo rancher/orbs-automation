@@ -7,13 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	gogit "github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/repo"
+	"github.com/rancher/orbs-automation/internal/git/repo/repotest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -185,28 +182,6 @@ func TestRender(t *testing.T) {
 
 // The tests below use real directories, so the real opener functions run.
 
-// newMainRepo creates a repository whose branch is main, with one commit
-// tagged main-1111111, and returns its directory and commit.
-func newMainRepo(t *testing.T) (dir string, commit plumbing.Hash) {
-	t.Helper()
-	dir = t.TempDir()
-	r, err := gogit.PlainInitWithOptions(dir, &gogit.PlainInitOptions{
-		InitOptions: gogit.InitOptions{DefaultBranch: plumbing.NewBranchReferenceName("main")},
-	})
-	require.NoError(t, err)
-	wt, err := r.Worktree()
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "f.txt"), []byte("x"), 0o600))
-	_, err = wt.Add("f.txt")
-	require.NoError(t, err)
-	sig := &object.Signature{Name: "t", Email: "t@example.com", When: time.Now()}
-	commit, err = wt.Commit("first", &gogit.CommitOptions{Author: sig, Committer: sig})
-	require.NoError(t, err)
-	_, err = r.CreateTag("main-1111111", commit, nil)
-	require.NoError(t, err)
-	return dir, commit
-}
-
 func TestResolveRealDirectoryNotARepository(t *testing.T) {
 	dir := t.TempDir()
 
@@ -227,7 +202,7 @@ func TestResolveRealDirectoryNotARepository(t *testing.T) {
 }
 
 func TestResolveRealRepository(t *testing.T) {
-	dir, commit := newMainRepo(t)
+	dir, commit := repotest.NewMainRepo(t)
 
 	t.Run("CI mode finds tags from a subdirectory", func(t *testing.T) {
 		sub := filepath.Join(dir, "a", "b")
