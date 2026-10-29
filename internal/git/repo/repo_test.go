@@ -324,3 +324,27 @@ func TestRemotes(t *testing.T) {
 		}, got)
 	})
 }
+
+func TestRoot(t *testing.T) {
+	r := newRepo(t)
+	sub := filepath.Join(r.dir, "a", "b")
+	require.NoError(t, os.MkdirAll(sub, 0o750))
+	want, err := filepath.EvalSymlinks(r.dir)
+	require.NoError(t, err)
+
+	for name, open := range map[string]func() (*Repo, error){
+		"Open":                   func() (*Repo, error) { return Open(r.dir) },
+		"Discover at the root":   func() (*Repo, error) { return Discover(r.dir) },
+		"Discover from a subdir": func() (*Repo, error) { return Discover(sub) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo, err := open()
+			require.NoError(t, err)
+
+			got, err := filepath.EvalSymlinks(repo.Root())
+
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
+		})
+	}
+}
