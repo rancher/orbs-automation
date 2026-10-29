@@ -93,6 +93,7 @@ type Settings struct {
 	BranchPrefix string
 	Repos        Repos
 	UserFile     string // path of the user file that was loaded; empty when none applied
+	CI           bool   // the process runs in CI rather than on a workstation
 
 	sources map[string]Source
 }
@@ -169,6 +170,9 @@ func Load(in Inputs) (Settings, error) {
 		return Settings{}, err
 	}
 	s := Settings{sources: map[string]Source{}}
+	if s.CI, err = InCI(getenv); err != nil {
+		return Settings{}, err
+	}
 	label := userFileLabel(in.UserFileName)
 	// Record the file only when one was read: a name with no reader is where we
 	// looked, not a file that was loaded. GERO_CONFIG is the one way to name it.

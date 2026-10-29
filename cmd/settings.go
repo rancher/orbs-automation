@@ -109,7 +109,7 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 			ctx = context.Background()
 		}
 		cmd.SetContext(context.WithValue(ctx, settingsKey{}, s))
-		logger := logging.New(cmd.ErrOrStderr(), s.LogLevel, clicfg.InCI(getenv))
+		logger := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
 		logger.Debug("settings loaded",
 			"output", s.Output, "upstream", s.Upstream, "log", s.LogLevel)
 		return nil

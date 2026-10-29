@@ -224,10 +224,24 @@ func TestLoadExpandsFlagAndEnvPathsButAllowsRelative(t *testing.T) {
 }
 
 func TestInCI(t *testing.T) {
-	assert.False(t, InCI(env(nil)))
-	assert.True(t, InCI(env(map[string]string{"CI": "true"})))
-	assert.True(t, InCI(env(map[string]string{"GITHUB_ACTIONS": "true"})))
-	assert.False(t, InCI(env(map[string]string{"CI": "false"})))
+	tests := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"empty environment", nil, false},
+		{"CI=true", map[string]string{"CI": "true"}, true},
+		{"GITHUB_ACTIONS=true", map[string]string{"GITHUB_ACTIONS": "true"}, true},
+		{"CI=false", map[string]string{"CI": "false"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := InCI(env(tt.env))
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestUserFilePath(t *testing.T) {
