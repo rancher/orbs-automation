@@ -404,3 +404,25 @@ func TestLoadAcceptsEnvOutput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, OutputEnv, s.Output)
 }
+
+func TestLoadBotUser(t *testing.T) {
+	t.Run("unset", func(t *testing.T) {
+		s, err := Load(Inputs{Getenv: env(nil)})
+
+		require.NoError(t, err)
+		assert.Empty(t, s.BotUser)
+	})
+
+	t.Run("GERO_BOT_USER is the bot login", func(t *testing.T) {
+		s, err := Load(Inputs{Getenv: env(map[string]string{"GERO_BOT_USER": "rancher-scc-bot[bot]"})})
+
+		require.NoError(t, err)
+		assert.Equal(t, "rancher-scc-bot[bot]", s.BotUser)
+	})
+
+	t.Run("the user file cannot set it", func(t *testing.T) {
+		_, err := Load(Inputs{Getenv: env(nil), UserFile: strings.NewReader("botUser: someone\n"), UserFileName: "config.yaml"})
+
+		require.Error(t, err)
+	})
+}

@@ -94,6 +94,7 @@ type Settings struct {
 	Repos        Repos
 	UserFile     string // path of the user file that was loaded; empty when none applied
 	CI           bool   // the process runs in CI rather than on a workstation
+	BotUser      string // GERO_BOT_USER: the bot's login, from the workflow; env only
 
 	sources map[string]Source
 }
