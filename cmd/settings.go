@@ -59,15 +59,30 @@ func flagLookup(cmd *cobra.Command) clicfg.FlagLookup {
 // from flags, getenv and the user file under home, and stores it on the command
 // for settingsFrom.
 func loadSettings(getenv func(string) string, home string) func(*cobra.Command, []string) error {
+	return settingsLoader(getenv, home, false)
+}
+
+// loadSettingsForDoctor is loadSettings for gero doctor, which has to run to
+// report a user file that cannot be loaded.
+func loadSettingsForDoctor(getenv func(string) string, home string) func(*cobra.Command, []string) error {
+	return loadSettings(getenv, home)
+}
+
+// settingsLoader is loadSettings, optionally without reading the user file.
+func settingsLoader(getenv func(string) string, home string, skipUserFile bool) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, _ []string) error {
-		file, path, err := clicfg.OpenUserFile(getenv, home)
-		if err != nil {
-			return err
-		}
 		var userFile io.Reader
-		if file != nil {
-			defer file.Close()
-			userFile = file
+		path := ""
+		if !skipUserFile {
+			file, p, err := clicfg.OpenUserFile(getenv, home)
+			if err != nil {
+				return err
+			}
+			path = p
+			if file != nil {
+				defer file.Close()
+				userFile = file
+			}
 		}
 		s, err := clicfg.Load(clicfg.Inputs{
 			Flags:        flagLookup(cmd),

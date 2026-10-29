@@ -12,9 +12,13 @@ import (
 )
 
 func init() {
+	home, _ := os.UserHomeDir()
 	doctorCmd := &cobra.Command{
 		Use:   "doctor [check...]",
 		Short: "Check that this workstation is set up to use gero",
+		// A user file that cannot be loaded must not stop the command that
+		// reports it, so doctor loads settings its own way.
+		PersistentPreRunE: loadSettingsForDoctor(os.Getenv, home),
 		Long: `Check that this workstation is set up to use gero, and say how to fix what is
 not. It is read-only and never prints a token.
 
