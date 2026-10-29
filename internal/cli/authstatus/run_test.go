@@ -115,3 +115,52 @@ func TestRunUnsupportedFormatFailsBeforeAskingGitHub(t *testing.T) {
 	assert.Empty(t, out)
 	assert.Empty(t, v.calls, "no API call for a format that cannot be rendered")
 }
+
+func TestCheckReturnsTheStatusOfAWorkingToken(t *testing.T) {
+	v := &fakeVerifier{login: "octocat"}
+
+	st, err := check(context.Background(), "", goodAuth(), v)
+
+	require.NoError(t, err)
+	assert.Equal(t, Status{Host: "github.com", HostSource: "default", TokenSource: "GH_TOKEN", Valid: true, Login: "octocat"}, st)
+	require.Len(t, v.calls, 1)
+	assert.Equal(t, secret, v.calls[0].Token, "the token goes to the verifier, and only there")
+}
+
+func TestCheckNamedHost(t *testing.T) {
+	v := &fakeVerifier{login: "octocat"}
+
+	st, err := check(context.Background(), "ghe.example.com", goodAuth(), v)
+
+	require.NoError(t, err)
+	assert.Equal(t, "ghe.example.com", st.Host)
+	assert.Equal(t, github.SourceExplicit, st.HostSource)
+}
+
+func TestCheckRejectedTokenIsAStatusAndAnError(t *testing.T) {
+	v := &fakeVerifier{err: github.ErrBadCredentials}
+
+	st, err := check(context.Background(), "", goodAuth(), v)
+
+	require.ErrorIs(t, err, github.ErrBadCredentials)
+	assert.Equal(t, Status{Host: "github.com", HostSource: "default", TokenSource: "GH_TOKEN", Valid: false}, st)
+}
+
+func TestCheckOtherFailureHasNoStatus(t *testing.T) {
+	boom := errors.New("connection refused")
+
+	st, err := check(context.Background(), "", goodAuth(), &fakeVerifier{err: boom})
+
+	require.ErrorIs(t, err, boom)
+	assert.Equal(t, Status{}, st)
+}
+
+func TestCheckWithoutATokenHasNoStatus(t *testing.T) {
+	v := &fakeVerifier{}
+
+	st, err := check(context.Background(), "", fakeAuth{defaultHost: "github.com", hostSource: "default"}, v)
+
+	require.ErrorIs(t, err, github.ErrNoToken)
+	assert.Equal(t, Status{}, st)
+	assert.Empty(t, v.calls)
+}
