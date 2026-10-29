@@ -1,6 +1,6 @@
 # Doctor
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version`, `gh`, `auth-token`, `auth-api` and `rate-limit` checks. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built: the runner (order, `Needs`, `--online` gating, named selection, timeouts, panics), the text and json renderers, `--list-checks`, `--strict`, the `gero doctor` command, and the `version`, `git`, `gh`, `auth-token`, `auth-api` and `rate-limit` checks. The other checks in section 2 are not built. A usage error, such as an unknown check name, exits 1 until the exit-code helper maps it to 2.
 
 `gero doctor` checks that a developer's workstation is set up to use `gero`, and says how to fix what is not. It is the first thing to run when something is off, and the output is meant to be pasted into an issue. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md); output rules are in [CLI_OUTPUT](CLI_OUTPUT.md).
 
@@ -42,7 +42,7 @@ Each one reuses the package that already does the work (section 7).
 | Check | Category | Online | Fails when | Reuses |
 |---|---|---|---|---|
 | `version` | environment | no | never; reports the version, commit, OS and architecture | `cmd/version` |
-| `git` | dependencies | no | `git` is not on `PATH`; `warn` when `user.name` or `user.email` is unset | `internal/git/gitcli` |
+| `git` | dependencies | no | `git` is not on `PATH` or will not report a version, since `gero repo branch-tags` runs it; `warn` when `user.name` or `user.email` is unset, since commits gero makes will need them. It asks git itself, so includes and system config count; bounds its calls so a hung `git` cannot hang the run | `internal/git/gitcli` (`Version`, `Config`) |
 | `gh` | dependencies | no | never; `warn` when `gh` is not on `PATH`, since the keyring token fallback and `gh auth login` depend on it; reports the version and path when found; bounds `gh --version` so a hung `gh` cannot hang the run | `internal/ghcli`, which finds `gh` the way go-gh does (`GH_PATH`, then `PATH`) |
 | `user-file` | configuration | no | the user file exists and does not parse, or has an unknown key | `internal/clicfg` |
 | `config-dir` | configuration | no | no central config directory is found | `internal/workspace` |
