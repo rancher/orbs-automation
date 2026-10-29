@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -51,7 +53,7 @@ func decodeFile(r io.Reader, name string) (fileConfig, error) {
 // InCI reports whether the process runs in CI, where the user file is ignored
 // unless GERO_CONFIG is set.
 func InCI(getenv func(string) string) bool {
-	return false
+	return getenv("CI") == "true" || getenv("GITHUB_ACTIONS") == "true"
 }
 
 // UserFilePath returns where the user file lives: GERO_CONFIG, else
@@ -59,7 +61,13 @@ func InCI(getenv func(string) string) bool {
 // is true when GERO_CONFIG named it. We avoid os.UserConfigDir because it points
 // at ~/Library/Application Support on macOS.
 func UserFilePath(getenv func(string) string, home string) (path string, explicit bool) {
-	return "", false
+	if p := getenv("GERO_CONFIG"); p != "" {
+		return p, true
+	}
+	if x := getenv("XDG_CONFIG_HOME"); x != "" {
+		return filepath.Join(x, "gero", "config.yaml"), false
+	}
+	return filepath.Join(home, ".config", "gero", "config.yaml"), false
 }
 
 // OpenUserFile opens the user file for Load. It returns a nil reader (and no
@@ -67,5 +75,16 @@ func UserFilePath(getenv func(string) string, home string) (path string, explici
 // without GERO_CONFIG. A GERO_CONFIG that names a missing file is an error,
 // since it is almost certainly a typo. The caller closes a non-nil reader.
 func OpenUserFile(getenv func(string) string, home string) (io.ReadCloser, string, error) {
-	return nil, "", nil
+	path, explicit := UserFilePath(getenv, home)
+	if InCI(getenv) && !explicit {
+		return nil, path, nil
+	}
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) && !explicit {
+		return nil, path, nil
+	}
+	if err != nil {
+		return nil, path, fmt.Errorf("user config: %w", err)
+	}
+	return f, path, nil
 }
