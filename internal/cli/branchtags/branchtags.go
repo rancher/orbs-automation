@@ -6,8 +6,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/git/repo"
+	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
 //go:generate go tool mockgen -source=branchtags.go -destination=mock_repository_test.go -package=branchtags
@@ -20,38 +21,35 @@ type Repository interface {
 	Head() (ref, short string, err error)
 }
 
-// opener opens the repository in dir.
-type opener func(dir string) (Repository, error)
+// opener opens the repository the workspace is in.
+type opener func() (Repository, error)
 
 // Resolve computes the branch tags for the current ref and commit. Both come
 // from GITHUB_REF and GITHUB_SHA when both are set, else from the repository
-// in dir, which must have a .git directory there.
-func Resolve(getenv func(string) string, dir string) (git.BranchTags, error) {
-	return resolve(getenv, dir, openStrict, openDiscover)
+// in the working directory cwd, which must have a .git directory there.
+func Resolve(s clicfg.Settings, getenv func(string) string, cwd string) (git.BranchTags, error) {
+	ws := workspace.Open(s, cwd)
+	return resolve(getenv, func() (Repository, error) {
+		r, err := ws.CurrentAtRoot()
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
+	}, func() (Repository, error) {
+		r, err := ws.Current()
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
+	})
 }
 
-func openStrict(dir string) (Repository, error) {
-	r, err := repo.Open(dir)
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
-}
-
-func openDiscover(dir string) (Repository, error) {
-	r, err := repo.Discover(dir)
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
-}
-
-func resolve(getenv func(string) string, dir string, open, discover opener) (git.BranchTags, error) {
+func resolve(getenv func(string) string, open, discover opener) (git.BranchTags, error) {
 	if ref, sha := getenv("GITHUB_REF"), getenv("GITHUB_SHA"); ref != "" && sha != "" {
-		return git.ResolveBranchTags(ref, git.Short(sha), tagsFrom(dir, discover))
+		return git.ResolveBranchTags(ref, git.Short(sha), tagsFrom(discover))
 	}
 
-	r, err := open(dir)
+	r, err := open()
 	if err != nil {
 		return git.BranchTags{}, err
 	}
@@ -62,13 +60,13 @@ func resolve(getenv func(string) string, dir string, open, discover opener) (git
 	return git.ResolveBranchTags(ref, short, r)
 }
 
-// tagsFrom lists tags from the repository found from dir upward. Like the
-// script, which only runs git tag here, a missing repository is not an error:
-// there are simply no tags.
-func tagsFrom(dir string, discover opener) git.Tags {
+// tagsFrom lists tags from the repository found from the working directory
+// upward. Like the script, which only runs git tag here, a missing repository
+// is not an error: there are simply no tags.
+func tagsFrom(discover opener) git.Tags {
 	return lazyTags(func() ([]string, error) {
-		r, err := discover(dir)
-		if errors.Is(err, repo.ErrNotRepository) {
+		r, err := discover()
+		if errors.Is(err, workspace.ErrNotRepository) {
 			return nil, nil
 		}
 		if err != nil {

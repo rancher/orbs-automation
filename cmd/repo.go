@@ -25,7 +25,7 @@ else from the git repository in the current directory.`,
 			// Faithful to the script: errors are printed to stdout, once.
 			SilenceErrors: true,
 			RunE: func(cmd *cobra.Command, _ []string) error {
-				res, err := branchtags.Resolve(os.Getenv, ".")
+				res, err := branchtags.Resolve(settingsFrom(cmd), os.Getenv, ".")
 				if err != nil {
 					_, _ = fmt.Fprintln(cmd.OutOrStdout(), err)
 					return err

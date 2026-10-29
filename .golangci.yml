@@ -94,15 +94,12 @@ linters:
         # Commands reach the repository on disk through internal/workspace, so
         # a repo is found and a slug resolved by one rule everywhere
         # (docs/specs/PROJECT_LAYOUT.md section 6, CLI_CONFIG.md section 3a).
-        # TODO: branchtags opens the repository itself; drop its exemption once
-        # workspace offers the current repo. Loading central config is not
-        # denied yet: depguard works per package, and commands will need the
-        # internal/config types.
+        # Loading central config is not denied yet: depguard works per package,
+        # and commands will need the internal/config types.
         oneDoor:
           list-mode: lax
           files:
             - "**/internal/cli/**"
-            - "!**/internal/cli/branchtags/**"
             - "!$test"
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/git/repo

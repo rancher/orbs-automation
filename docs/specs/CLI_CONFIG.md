@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built: `internal/clicfg` (flags, env, user file, defaults, source tracking) and the global flags in `cmd/`. `gero config show` (resolved values and their sources, as text, json or env) and central config directory resolution (section 4, `workspace.Open(...).ConfigDir()` in `internal/workspace`, shown as source `cwd` for the `./config` fallback). Not built: CWD inference and repo path resolution (the rest of `internal/workspace`, `gero config resolve repos`, section 3b), the `inferred` source, and any other command that reads `Settings`.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built: `internal/clicfg` (flags, env, user file, defaults, source tracking) and the global flags in `cmd/`. `gero config show` (resolved values and their sources, as text, json or env) and central config directory resolution (section 4, `workspace.Open(...).ConfigDir()` in `internal/workspace`, shown as source `cwd` for the `./config` fallback). The current repository is built too (`Workspace.Current` and `CurrentAtRoot`, used by `gero repo branch-tags`). Not built: the rest of CWD inference and repo path resolution (the rest of `internal/workspace`, `gero config resolve repos`, section 3b), the `inferred` source, and any other command that reads `Settings`.
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
 

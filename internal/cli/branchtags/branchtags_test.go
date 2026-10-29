@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/repo"
 	"github.com/rancher/orbs-automation/internal/git/repo/repotest"
@@ -22,7 +23,7 @@ func env(vars map[string]string) func(string) string {
 
 // serve returns an opener that hands out r and records how often it is called.
 func serve(r Repository, err error, calls *int) opener {
-	return func(string) (Repository, error) {
+	return func() (Repository, error) {
 		*calls++
 		return r, err
 	}
@@ -31,7 +32,7 @@ func serve(r Repository, err error, calls *int) opener {
 // neverOpened fails the test if the command opens a repository this way.
 func neverOpened(t *testing.T) opener {
 	t.Helper()
-	return func(string) (Repository, error) {
+	return func() (Repository, error) {
 		t.Error("opened a repository where none is expected")
 		return nil, errors.New("unexpected open")
 	}
@@ -45,7 +46,7 @@ func TestResolveFromCI(t *testing.T) {
 	vars := map[string]string{"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": "abcdef1234567890"}
 
 	var discovered int
-	got, err := resolve(env(vars), ".", neverOpened(t), serve(r, nil, &discovered))
+	got, err := resolve(env(vars), neverOpened(t), serve(r, nil, &discovered))
 
 	require.NoError(t, err)
 	assert.Equal(t, git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}, got)
@@ -56,7 +57,7 @@ func TestResolveFromCIWithoutRepository(t *testing.T) {
 	vars := map[string]string{"GITHUB_REF": "refs/heads/release/v2.x", "GITHUB_SHA": "abcdef1234567"}
 
 	var calls int
-	got, err := resolve(env(vars), ".", neverOpened(t), serve(nil, repo.ErrNotRepository, &calls))
+	got, err := resolve(env(vars), neverOpened(t), serve(nil, repo.ErrNotRepository, &calls))
 
 	require.NoError(t, err, "a missing repository is not an error in CI mode")
 	assert.Equal(t, git.BranchTags{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef1"}, got)
@@ -67,7 +68,7 @@ func TestResolveFromCIOtherOpenErrorIsReturned(t *testing.T) {
 	vars := map[string]string{"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": "abcdef1"}
 
 	var calls int
-	_, err := resolve(env(vars), ".", neverOpened(t), serve(nil, boom, &calls))
+	_, err := resolve(env(vars), neverOpened(t), serve(nil, boom, &calls))
 
 	assert.ErrorIs(t, err, boom)
 }
@@ -86,7 +87,7 @@ func TestResolveFromRepository(t *testing.T) {
 			r.EXPECT().NewestFirst().Return([]string{"v2.x-head-1111111"}, nil)
 
 			var calls int
-			got, err := resolve(env(vars), ".", serve(r, nil, &calls), neverOpened(t))
+			got, err := resolve(env(vars), serve(r, nil, &calls), neverOpened(t))
 
 			require.NoError(t, err)
 			// The local abbreviation is used as given, even past 7 characters.
@@ -138,7 +139,7 @@ func TestResolveErrors(t *testing.T) {
 			}
 
 			var calls int
-			_, err := resolve(env(tt.vars), ".", serve(r, tt.open, &calls), neverOpened(t))
+			_, err := resolve(env(tt.vars), serve(r, tt.open, &calls), neverOpened(t))
 
 			assert.ErrorIs(t, err, tt.want)
 		})
@@ -151,7 +152,7 @@ func TestResolveUnsupportedCIRef(t *testing.T) {
 	vars := map[string]string{"GITHUB_REF": "refs/pull/12/merge", "GITHUB_SHA": "abcdef1"}
 
 	var calls int
-	_, err := resolve(env(vars), ".", neverOpened(t), serve(r, nil, &calls))
+	_, err := resolve(env(vars), neverOpened(t), serve(r, nil, &calls))
 
 	assert.ErrorIs(t, err, git.ErrUnsupportedRef)
 }
@@ -186,7 +187,7 @@ func TestResolveRealDirectoryNotARepository(t *testing.T) {
 	dir := t.TempDir()
 
 	t.Run("local mode requires a repository", func(t *testing.T) {
-		_, err := Resolve(env(nil), dir)
+		_, err := Resolve(clicfg.Settings{}, env(nil), dir)
 
 		assert.ErrorIs(t, err, repo.ErrNotRepository)
 	})
@@ -194,7 +195,7 @@ func TestResolveRealDirectoryNotARepository(t *testing.T) {
 	t.Run("CI mode treats it as having no tags", func(t *testing.T) {
 		vars := map[string]string{"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": "abcdef1234567"}
 
-		got, err := Resolve(env(vars), dir)
+		got, err := Resolve(clicfg.Settings{}, env(vars), dir)
 
 		require.NoError(t, err)
 		assert.Equal(t, git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1"}, got)
@@ -209,7 +210,7 @@ func TestResolveRealRepository(t *testing.T) {
 		require.NoError(t, os.MkdirAll(sub, 0o750))
 		vars := map[string]string{"GITHUB_REF": "refs/heads/main", "GITHUB_SHA": "abcdef1234567"}
 
-		got, err := Resolve(env(vars), sub)
+		got, err := Resolve(clicfg.Settings{}, env(vars), sub)
 
 		require.NoError(t, err)
 		assert.Equal(t, git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}, got)
@@ -220,7 +221,7 @@ func TestResolveRealRepository(t *testing.T) {
 			t.Skip("git binary not available")
 		}
 
-		got, err := Resolve(env(nil), dir)
+		got, err := Resolve(clicfg.Settings{}, env(nil), dir)
 
 		require.NoError(t, err)
 		assert.Equal(t, "head", got.BranchTag)
