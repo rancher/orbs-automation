@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/rancher/orbs-automation/internal/cli/configdir"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 )
 
@@ -25,8 +26,10 @@ type Entry struct {
 var scalarKeys = []string{"configDir", "output", "upstream"}
 
 // Entries flattens s into one Entry per setting, in display order: the scalar
-// keys, then the repos sections with their map keys sorted.
-func Entries(s clicfg.Settings) []Entry {
+// keys, then the repos sections with their map keys sorted. dir is the resolved
+// central config directory and overrides the configDir entry; the zero Result
+// (nothing resolved) leaves it as loaded.
+func Entries(s clicfg.Settings, _ configdir.Result) []Entry {
 	es := []Entry{
 		entry(s, "configDir", s.ConfigDir),
 		entry(s, "output", s.Output),
@@ -62,8 +65,8 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // Render formats s as clicfg.OutputText, OutputJSON or OutputEnv. The env
 // format lists only the keys that have an environment variable.
-func Render(s clicfg.Settings, format string) (string, error) {
-	es := Entries(s)
+func Render(s clicfg.Settings, dir configdir.Result, format string) (string, error) {
+	es := Entries(s, dir)
 	switch format {
 	case clicfg.OutputText:
 		return renderText(es), nil

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/cli/configdir"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -85,7 +86,7 @@ func TestEntries(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags)))
+			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), configdir.Result{}))
 
 			for k, want := range tt.want {
 				assert.Equal(t, want, got[k], k)
@@ -97,18 +98,18 @@ func TestEntries(t *testing.T) {
 func TestEntriesOrderIsStable(t *testing.T) {
 	s := load(t, "repos:\n  paths:\n    b/b: /b\n    a/a: /a\n", nil, nil)
 
-	first := Entries(s)
+	first := Entries(s, configdir.Result{})
 
 	assert.NotEmpty(t, first)
 	for range 5 {
-		assert.Equal(t, first, Entries(s))
+		assert.Equal(t, first, Entries(s, configdir.Result{}))
 	}
 }
 
 func TestRenderText(t *testing.T) {
 	s := load(t, "fork: origin\n", nil, map[string]string{"upstream": "rancher"})
 
-	out, err := Render(s, clicfg.OutputText)
+	out, err := Render(s, configdir.Result{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+rancher\s+flag$`, out)
@@ -120,7 +121,7 @@ func TestRenderText(t *testing.T) {
 func TestRenderJSON(t *testing.T) {
 	s := load(t, "fork: origin\n", map[string]string{"GERO_OUTPUT": "json"}, nil)
 
-	out, err := Render(s, clicfg.OutputJSON)
+	out, err := Render(s, configdir.Result{}, clicfg.OutputJSON)
 
 	require.NoError(t, err)
 	var got map[string]struct{ Value, Source string }
@@ -134,7 +135,7 @@ func TestRenderJSON(t *testing.T) {
 func TestRenderEnv(t *testing.T) {
 	s := load(t, "upstream: rancher\n", nil, nil)
 
-	out, err := Render(s, clicfg.OutputEnv)
+	out, err := Render(s, configdir.Result{}, clicfg.OutputEnv)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "GERO_UPSTREAM=rancher\n")
@@ -142,7 +143,7 @@ func TestRenderEnv(t *testing.T) {
 }
 
 func TestRenderUnknownFormat(t *testing.T) {
-	_, err := Render(clicfg.Settings{}, "xml")
+	_, err := Render(clicfg.Settings{}, configdir.Result{}, "xml")
 
 	assert.Error(t, err)
 }
