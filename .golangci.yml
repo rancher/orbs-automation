@@ -46,6 +46,7 @@ linters:
             - github.com/spf13/cobra
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
+            - github.com/rancher/orbs-automation/internal/clicfg
             - github.com/rancher/orbs-automation/internal/errs
         # cobra stays in cmd/. internal/cli/ and domain packages must not
         # import it, so the CLI framework can be swapped by touching cmd/ only.

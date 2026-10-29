@@ -3,7 +3,7 @@
 **Status:** agreed. The YAML library is `go.yaml.in/yaml/v3` (leaning).
 
 * **Standard library first.** Fewer dependencies means a smaller supply-chain surface and less to audit.
-* A new dependency needs an entry here (or the IMPLEMENTATION section it belongs to) saying what the standard library would cost us. Enforced by a `depguard` allow-list in `.golangci.yml`, so an unlisted import fails lint. A second, narrower rule restricts `cmd/` to the standard library, cobra, `cmd/...`, `internal/cli/...` and `internal/errs`, and a `nocobra` rule keeps cobra out of everything except `cmd/` ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6).
+* A new dependency needs an entry here (or the IMPLEMENTATION section it belongs to) saying what the standard library would cost us. Enforced by a `depguard` allow-list in `.golangci.yml`, so an unlisted import fails lint. A second, narrower rule restricts `cmd/` to the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/errs`, and a `nocobra` rule keeps cobra out of everything except `cmd/` ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 6).
 * Approved now:
 
 | Module | For |
