@@ -19,6 +19,13 @@ import (
 // no local clone or several equally good ones.
 var ErrUnresolved = errors.New("some repositories have no unique local clone")
 
+// The advice for each kind of unresolved row, shown under the table and by
+// gero doctor.
+const (
+	HintNotFound  = "clone it under a repos.search directory, or set repos.paths.<slug>"
+	HintAmbiguous = "set repos.paths.<slug> to choose one"
+)
+
 // Workspace is what Repos needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
@@ -119,10 +126,10 @@ func renderText(rows []workspace.RepoPath) string {
 		b.WriteString("\n")
 	}
 	if notFound {
-		b.WriteString("not found: clone it under a repos.search directory, or set repos.paths.<slug>\n")
+		b.WriteString("not found: " + HintNotFound + "\n")
 	}
 	if ambiguous {
-		b.WriteString("ambiguous: set repos.paths.<slug> to choose one\n")
+		b.WriteString("ambiguous: " + HintAmbiguous + "\n")
 	}
 	return b.String()
 }
