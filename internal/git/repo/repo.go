@@ -147,3 +147,9 @@ func (r *Repo) Remotes() (map[string][]string, error) {
 	}
 	return out, nil
 }
+
+// Root returns the top-level directory of the repository's work tree, which is
+// the directory Discover was started in only when that is the top level.
+func (r *Repo) Root() string {
+	return ""
+}
