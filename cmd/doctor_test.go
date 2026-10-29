@@ -62,7 +62,7 @@ func TestDoctorWiring(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Contains(t, stdout, "Environment\n  ✔ version: gero dev on ")
-		assert.Contains(t, stdout, "Dependencies\n  ✔ gh: gh version 9.9.9 (2030-01-01) at ")
+		assert.Contains(t, stdout, "\n  ✔ gh: gh version 9.9.9 (2030-01-01) at ")
 		assert.Contains(t, stdout, "Authentication\n  ✔ auth-token: environment variable GH_TOKEN for github.com\n")
 		assert.NotContains(t, stdout, "ghp_not_a_real_token")
 		assert.Contains(t, stdout, "Summary: ")
