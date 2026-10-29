@@ -127,6 +127,15 @@ var scalars = []scalar{
 		fromFile: func(f *fileConfig) string { return f.Output },
 	},
 	{
+		// Flag and env only: -v and -vv map onto it in cmd/, and there is no
+		// user-file key.
+		name:     "log",
+		def:      LogWarn,
+		validate: validateLog,
+		field:    func(s *Settings) *string { return &s.LogLevel },
+		fromFile: func(*fileConfig) string { return "" },
+	},
+	{
 		name:     "upstream",
 		field:    func(s *Settings) *string { return &s.Upstream },
 		fromFile: func(f *fileConfig) string { return f.Upstream },
@@ -138,6 +147,14 @@ func validateOutput(v string) error {
 		return fmt.Errorf("must be %q, %q or %q, got %q", OutputText, OutputJSON, OutputEnv, v)
 	}
 	return nil
+}
+
+func validateLog(v string) error {
+	switch v {
+	case LogDebug, LogInfo, LogWarn, LogError:
+		return nil
+	}
+	return fmt.Errorf("must be %q, %q, %q or %q, got %q", LogDebug, LogInfo, LogWarn, LogError, v)
 }
 
 // Load resolves Settings. Precedence per key: flag, env, user file, default.
