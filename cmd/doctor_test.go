@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,6 +67,7 @@ func withToken(t *testing.T) {
 
 // Wiring only: the logic is tested in internal/cli/doctor.
 func TestDoctorWiring(t *testing.T) {
+	withConfigDir(t, nil)
 	t.Run("runs the checks offline and prints the report", func(t *testing.T) {
 		resetDoctorFlags(t)
 		stubGh(t)
@@ -232,6 +234,55 @@ func TestDoctorWiring(t *testing.T) {
 		assert.Contains(t, stdout, "→ gero runs git for a few operations")
 	})
 
+	t.Run("no config directory fails config-dir and skips what needs it", func(t *testing.T) {
+		resetDoctorFlags(t)
+		stubGh(t)
+		withToken(t)
+		t.Setenv("GERO_CONFIG_DIR", "") // the working directory, cmd/, holds no config either
+
+		stdout, _, err := execRoot(t, "doctor")
+
+		require.ErrorIs(t, err, doctor.ErrChecksFailed)
+		assert.Contains(t, stdout, "✗ config-dir: no central config directory found\n")
+		assert.Contains(t, stdout, "→ set one of --config-dir, GERO_CONFIG_DIR or configDir in the user file")
+		assert.Contains(t, stdout, "○ config: skipped, needs config-dir\n")
+		assert.Contains(t, stdout, "○ repos: skipped, needs config\n")
+	})
+
+	t.Run("an invalid config fails config and skips repos", func(t *testing.T) {
+		resetDoctorFlags(t)
+		stubGh(t)
+		withToken(t)
+		bad := "apiVersion: gero/v1alpha1\nkind: Project\nname: %s\nspec:\n  repo:\n    name: not-a-slug\n"
+		withConfigDir(t, map[string]string{
+			"a.project.yaml": fmt.Sprintf(bad, "a"),
+			"b.project.yaml": fmt.Sprintf(bad, "b"),
+		})
+
+		stdout, _, err := execRoot(t, "doctor")
+
+		require.ErrorIs(t, err, doctor.ErrChecksFailed)
+		assert.Regexp(t, `✗ config: \d+ problems in the central config\n`, stdout)
+		assert.Contains(t, stdout, "→ run `gero config validate` for the details")
+		assert.Contains(t, stdout, "○ repos: skipped, needs config\n")
+	})
+
+	t.Run("a project with no clone is a warning", func(t *testing.T) {
+		resetDoctorFlags(t)
+		stubGh(t)
+		withToken(t)
+		good := "apiVersion: gero/v1alpha1\nkind: Project\nname: a\nspec:\n  repo:\n    name: gero-test/zz-no-such-repo\n"
+		withConfigDir(t, map[string]string{"a.project.yaml": good})
+
+		stdout, _, err := execRoot(t, "doctor")
+
+		require.NoError(t, err, "a warning does not fail the run")
+		assert.Contains(t, stdout, "✔ config: 1 project, 0 externals, 0 lines\n")
+		assert.Contains(t, stdout, "⚠ repos: 1 of 1 project has no unique local clone: gero-test/zz-no-such-repo (not found)\n")
+		assert.Contains(t, stdout, "→ not found: clone it under a repos.search directory, or set repos.paths.<slug>; "+
+			"run `gero config resolve repos` for the details")
+	})
+
 	t.Run("--output env is refused", func(t *testing.T) {
 		resetDoctorFlags(t)
 
@@ -255,4 +306,16 @@ func TestDoctorWiring(t *testing.T) {
 			assert.False(t, b, name)
 		}
 	})
+}
+
+// withConfigDir points GERO_CONFIG_DIR at a new directory holding files (name to
+// content), so the configuration checks do not depend on the working directory.
+// No files is an empty directory, which is a valid config with nothing in it.
+func withConfigDir(t *testing.T, files map[string]string) {
+	t.Helper()
+	dir := t.TempDir()
+	for name, content := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
+	}
+	t.Setenv("GERO_CONFIG_DIR", dir)
 }

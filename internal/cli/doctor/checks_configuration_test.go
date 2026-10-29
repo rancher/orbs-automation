@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/config"
@@ -125,6 +126,12 @@ func TestConfigCheckProblemsFail(t *testing.T) {
 	}{
 		{"several problems", errors.Join(errors.New("a"), errors.New("b")), "2 problems in the central config"},
 		{"one problem", errors.New("a"), "1 problem in the central config"},
+		{
+			// The shape the workspace returns: the join, wrapped with the directory.
+			name: "wrapped with the config directory",
+			err:  fmt.Errorf("config directory /work/config: %w", errors.Join(errors.New("a"), errors.New("b"), errors.New("c"))),
+			want: "3 problems in the central config",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -2,7 +2,11 @@ package doctor
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 
+	"github.com/rancher/orbs-automation/internal/cli/configresolve"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -31,7 +35,16 @@ func (configDirCheck) Description() string {
 func (configDirCheck) Online() bool    { return false }
 func (configDirCheck) Needs() []string { return nil }
 
-func (configDirCheck) Run(context.Context) Result { return Result{} }
+func (c configDirCheck) Run(context.Context) Result {
+	dir, err := c.ws.ConfigDir()
+	switch {
+	case errors.Is(err, workspace.ErrNotFound):
+		return Result{Status: StatusFail, Message: "no central config directory found", Remediation: workspace.NotFoundHint}
+	case err != nil:
+		return Result{Status: StatusFail, Message: err.Error()}
+	}
+	return Result{Status: StatusOK, Message: fmt.Sprintf("%s (%s)", dir.Dir, dir.Source)}
+}
 
 // configCheck loads the central application config and reports whether it is
 // usable. It needs config-dir.
@@ -46,7 +59,41 @@ func (configCheck) Description() string { return "Loads the central config and r
 func (configCheck) Online() bool        { return false }
 func (configCheck) Needs() []string     { return []string{"config-dir"} }
 
-func (configCheck) Run(context.Context) Result { return Result{} }
+func (c configCheck) Run(context.Context) Result {
+	cfg, err := c.ws.Config()
+	if err != nil {
+		n := problemCount(err)
+		return Result{
+			Status:      StatusFail,
+			Message:     fmt.Sprintf("%d %s in the central config", n, plural(n, "problem")),
+			Remediation: validateHint,
+		}
+	}
+	lines := 0
+	if cfg.Lines != nil {
+		lines = len(cfg.Lines.Lines)
+	}
+	return Result{Status: StatusOK, Message: fmt.Sprintf("%d %s, %d %s, %d %s",
+		len(cfg.Projects), plural(len(cfg.Projects), "project"),
+		len(cfg.Externals), plural(len(cfg.Externals), "external"),
+		lines, plural(lines, "line"))}
+}
+
+// validateHint points at the command that lists every problem with the config.
+const validateHint = "run `gero config validate` for the details"
+
+// problemCount counts the problems in a config error. The validator joins one
+// error per problem, and the workspace wraps that join with the directory, so
+// the count is found by walking the chain. An error that is not a join counts
+// as one problem.
+func problemCount(err error) int {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if joined, ok := e.(interface{ Unwrap() []error }); ok {
+			return len(joined.Unwrap())
+		}
+	}
+	return 1
+}
 
 // reposCheck looks for a local clone of each Project in the central config. It
 // needs config.
@@ -63,7 +110,63 @@ func (reposCheck) Description() string {
 func (reposCheck) Online() bool    { return false }
 func (reposCheck) Needs() []string { return []string{"config"} }
 
-func (reposCheck) Run(context.Context) Result { return Result{} }
+func (c reposCheck) Run(context.Context) Result {
+	cfg, err := c.ws.Config()
+	if err != nil {
+		return Result{
+			Status:      StatusWarn,
+			Message:     "could not read the central config: " + err.Error(),
+			Remediation: validateHint,
+		}
+	}
+	if len(cfg.Projects) == 0 {
+		return Result{Status: StatusOK, Message: "no projects in the central config"}
+	}
+	slugs := make([]string, len(cfg.Projects))
+	for i, p := range cfg.Projects {
+		slugs[i] = p.Repo.Name
+	}
+	total := len(slugs)
+	var unresolved []string
+	var notFound, ambiguous bool
+	for _, r := range c.ws.RepoPaths(slugs) {
+		switch {
+		case r.Err == nil:
+		case errors.Is(r.Err, workspace.ErrRepoAmbiguous):
+			ambiguous = true
+			unresolved = append(unresolved, r.Slug+" (ambiguous)")
+		default:
+			notFound = true
+			unresolved = append(unresolved, r.Slug+" (not found)")
+		}
+	}
+	if len(unresolved) == 0 {
+		return Result{Status: StatusOK, Message: fmt.Sprintf("%d of %d %s %s a local clone",
+			total, total, plural(total, "project"), have(total))}
+	}
+	var advice []string
+	if notFound {
+		advice = append(advice, "not found: "+configresolve.HintNotFound)
+	}
+	if ambiguous {
+		advice = append(advice, "ambiguous: "+configresolve.HintAmbiguous)
+	}
+	advice = append(advice, "run `gero config resolve repos` for the details")
+	return Result{
+		Status: StatusWarn,
+		Message: fmt.Sprintf("%d of %d %s %s no unique local clone: %s",
+			len(unresolved), total, plural(total, "project"), have(len(unresolved)), strings.Join(unresolved, ", ")),
+		Remediation: strings.Join(advice, "; "),
+	}
+}
+
+// have is the verb that agrees with a count: "has" for one, "have" otherwise.
+func have(n int) string {
+	if n == 1 {
+		return "has"
+	}
+	return "have"
+}
 
 // userFileCheck loads the user file the way every command does, so a file that
 // would stop a command is reported here instead.
