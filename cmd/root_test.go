@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,6 +43,22 @@ func TestRootVersionFlagHasNoShorthand(t *testing.T) {
 	require.NotNil(t, f)
 	assert.Empty(t, f.Shorthand)
 	assert.Nil(t, rootCmd.Flags().ShorthandLookup("v"), "-v must stay free for --verbose")
+}
+
+func TestVersionSubcommand(t *testing.T) {
+	stdout, _, err := execRoot(t, "version")
+
+	require.NoError(t, err)
+	assert.Equal(t, "gero version dev (commit none, built unknown)\n", stdout)
+}
+
+func TestVersionSubcommandJSON(t *testing.T) {
+	stdout, _, err := execRoot(t, "version", "--json")
+
+	require.NoError(t, err)
+	var got map[string]string
+	require.NoError(t, json.Unmarshal([]byte(stdout), &got))
+	assert.Equal(t, map[string]string{"version": "dev", "commit": "none", "date": "unknown"}, got)
 }
 
 // resetFlags returns the global flags to their defaults and unmarks them as
