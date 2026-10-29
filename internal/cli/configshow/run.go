@@ -1,6 +1,9 @@
 package configshow
 
 import (
+	"errors"
+
+	"github.com/rancher/orbs-automation/internal/cli/configdir"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -15,9 +18,17 @@ type Workspace interface {
 // config directory resolved from the working directory cwd. A directory that
 // cannot be found is not an error: it is shown as unset.
 func Run(s clicfg.Settings, cwd string) (string, error) {
-	return "", nil
+	return run(s, workspace.Open(s, cwd))
 }
 
 func run(s clicfg.Settings, ws Workspace) (string, error) {
-	return "", nil
+	var dir configdir.Result
+	d, err := ws.ConfigDir()
+	switch {
+	case err == nil:
+		dir = configdir.Result{Dir: d.Dir, Source: d.Source}
+	case !errors.Is(err, workspace.ErrNotFound):
+		return "", err
+	}
+	return Render(s, dir, s.Output)
 }
