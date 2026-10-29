@@ -98,7 +98,9 @@ func renderText(es []Entry) string {
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
+	search := false
 	for _, e := range es {
+		search = search || e.Key == "repos.search"
 		v := e.Value
 		if v == "" {
 			v = "(unset)"
@@ -109,6 +111,9 @@ func renderText(es []Entry) string {
 		fmt.Fprintf(w, "%s\t%s\t%s\n", e.Key, v, e.Source)
 	}
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	if search {
+		b.WriteString("\nrun `gero config resolve repos` to see where each repo resolves\n")
+	}
 	return b.String()
 }
 
