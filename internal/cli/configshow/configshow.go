@@ -29,9 +29,13 @@ var scalarKeys = []string{"configDir", "output", "upstream"}
 // keys, then the repos sections with their map keys sorted. dir is the resolved
 // central config directory and overrides the configDir entry; the zero Result
 // (nothing resolved) leaves it as loaded.
-func Entries(s clicfg.Settings, _ configdir.Result) []Entry {
+func Entries(s clicfg.Settings, dir configdir.Result) []Entry {
+	configDir := entry(s, "configDir", s.ConfigDir)
+	if dir != (configdir.Result{}) {
+		configDir = Entry{Key: "configDir", Value: dir.Dir, Source: dir.Source}
+	}
 	es := []Entry{
-		entry(s, "configDir", s.ConfigDir),
+		configDir,
 		entry(s, "output", s.Output),
 		entry(s, "upstream", s.Upstream),
 		entry(s, "fork", s.Fork),
