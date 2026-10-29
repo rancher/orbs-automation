@@ -33,6 +33,8 @@ Typed REST calls (issues, tags, PRs, releases, check runs). It is the main API c
 
 **`git` via a subprocess is an escape hatch, not a fallback.** go-git is the implementation. There is no try-go-git-then-git at runtime and no matching API on both sides. The `git` binary is used only for a specific operation go-git cannot do, or does differently from git in a way that matters, and each use records the reason next to the code. All such uses live in `internal/git/gitcli`, which starts git through `internal/execx`, so `gitcli` is the list of what go-git could not do. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
 
+**Push and commit signing** are where the escape hatch is expected to be used first, because they depend on the engineer's SSH agent, credential helpers and signing configuration. The reasoning, and who the commits are attributed to in each context, is in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
+
 ## `gh` via subprocess
 
 Only for interactive or human-facing steps (for example `gh auth login` and browser handoffs) and pure passthrough. It is not used for logic that must be tested or that runs in CI. `gero doctor` runs `gh --version` through `internal/ghcli` so its report says which `gh` token resolution would use. Tokens are never read this way: go-gh runs `gh auth token` itself.
