@@ -91,6 +91,17 @@ linters:
           deny:
             - pkg: go.yaml.in/yaml
               desc: YAML is only allowed in internal/clicfg and internal/config (docs/specs/DEPENDENCY_POLICY.md)
+        # go-gh is used for token and host resolution only, through
+        # internal/github.GoGh. Its pkg/api is not approved
+        # (docs/specs/DEPENDENCY_POLICY.md).
+        nogogh:
+          list-mode: lax
+          files:
+            - "!**/internal/github/gogh.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/cli/go-gh
+              desc: go-gh is only allowed in internal/github/gogh.go, and only pkg/auth (docs/specs/DEPENDENCY_POLICY.md)
         # Commands reach the repository on disk through internal/workspace, so
         # a repo is found and a slug resolved by one rule everywhere
         # (docs/specs/PROJECT_LAYOUT.md section 6, CLI_CONFIG.md section 3a).
