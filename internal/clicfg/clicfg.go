@@ -6,7 +6,11 @@
 package clicfg
 
 import (
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -90,15 +94,40 @@ func (s Settings) Source(key string) Source {
 
 // scalar is a key that can come from a flag, the environment or the file.
 type scalar struct {
-	name  string // file key; flag and env names derive from it
-	def   string
-	field func(*Settings) *string
+	name     string // file key; flag and env names derive from it
+	def      string
+	path     bool // expand "~" and $VAR; file values must then be absolute
+	validate func(string) error
+	field    func(*Settings) *string
+	fromFile func(*fileConfig) string
 }
 
 var scalars = []scalar{
-	{name: "configDir", field: func(s *Settings) *string { return &s.ConfigDir }},
-	{name: "output", def: OutputText, field: func(s *Settings) *string { return &s.Output }},
-	{name: "upstream", field: func(s *Settings) *string { return &s.Upstream }},
+	{
+		name:     "configDir",
+		path:     true,
+		field:    func(s *Settings) *string { return &s.ConfigDir },
+		fromFile: func(f *fileConfig) string { return f.ConfigDir },
+	},
+	{
+		name:     "output",
+		def:      OutputText,
+		validate: validateOutput,
+		field:    func(s *Settings) *string { return &s.Output },
+		fromFile: func(f *fileConfig) string { return f.Output },
+	},
+	{
+		name:     "upstream",
+		field:    func(s *Settings) *string { return &s.Upstream },
+		fromFile: func(f *fileConfig) string { return f.Upstream },
+	},
+}
+
+func validateOutput(v string) error {
+	if v != OutputText && v != OutputJSON {
+		return fmt.Errorf("must be %q or %q, got %q", OutputText, OutputJSON, v)
+	}
+	return nil
 }
 
 // Load resolves Settings. Precedence per key: flag, env, user file, default.
@@ -107,9 +136,17 @@ func Load(in Inputs) (Settings, error) {
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
+	fc, err := decodeFile(in.UserFile, in.UserFileName)
+	if err != nil {
+		return Settings{}, err
+	}
 	s := Settings{sources: map[string]Source{}}
+
 	for _, k := range scalars {
 		v, src := k.def, SourceDefault
+		if fv := k.fromFile(&fc); fv != "" {
+			v, src = fv, SourceFile
+		}
 		if ev := getenv(EnvName(k.name)); ev != "" {
 			v, src = ev, SourceEnv
 		}
@@ -118,10 +155,85 @@ func Load(in Inputs) (Settings, error) {
 				v, src = fv, SourceFlag
 			}
 		}
+		if k.path && src != SourceDefault {
+			if v, err = expandPath(v, in.Home, getenv); err != nil {
+				return Settings{}, fmt.Errorf("%s (from %s): %w", k.name, src, err)
+			}
+			if src == SourceFile && !filepath.IsAbs(v) {
+				return Settings{}, fmt.Errorf("%s (from file): path %q must be absolute", k.name, v)
+			}
+		}
+		if k.validate != nil {
+			if err := k.validate(v); err != nil {
+				return Settings{}, fmt.Errorf("%s (from %s): %w", k.name, src, err)
+			}
+		}
 		*k.field(&s) = v
 		s.sources[k.name] = src
 	}
+
+	s.Fork, s.GitHubUser, s.BranchPrefix = fc.Fork, fc.GitHubUser, fc.BranchPrefix
+	for key, v := range map[string]string{"fork": fc.Fork, "githubUser": fc.GitHubUser, "branchPrefix": fc.BranchPrefix} {
+		if v != "" {
+			s.sources[key] = SourceFile
+		}
+	}
+	if s.Repos, err = resolveRepos(fc.Repos, in.Home, getenv); err != nil {
+		return Settings{}, err
+	}
 	return s, nil
+}
+
+var slugRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+func resolveRepos(r fileRepos, home string, getenv func(string) string) (Repos, error) {
+	out := Repos{Overrides: map[string]RepoOverride{}, Paths: map[string]string{}}
+	for _, dir := range r.Search {
+		p, err := absPath("repos.search", dir, home, getenv)
+		if err != nil {
+			return Repos{}, err
+		}
+		out.Search = append(out.Search, p)
+	}
+	for slug, dir := range r.Paths {
+		if !slugRE.MatchString(slug) {
+			return Repos{}, fmt.Errorf("repos.paths: %q is not an owner/name slug", slug)
+		}
+		p, err := absPath("repos.paths."+slug, dir, home, getenv)
+		if err != nil {
+			return Repos{}, err
+		}
+		out.Paths[slug] = p
+	}
+	for slug, o := range r.Overrides {
+		if !slugRE.MatchString(slug) {
+			return Repos{}, fmt.Errorf("repos.overrides: %q is not an owner/name slug", slug)
+		}
+		out.Overrides[slug] = RepoOverride{Upstream: o.Upstream}
+	}
+	return out, nil
+}
+
+func absPath(key, p, home string, getenv func(string) string) (string, error) {
+	p, err := expandPath(p, home, getenv)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", key, err)
+	}
+	if !filepath.IsAbs(p) {
+		return "", fmt.Errorf("%s: path %q must be absolute", key, p)
+	}
+	return filepath.Clean(p), nil
+}
+
+// expandPath replaces a leading "~" with home and expands $VAR and ${VAR}.
+func expandPath(p, home string, getenv func(string) string) (string, error) {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home == "" {
+			return "", fmt.Errorf("cannot expand %q: no home directory", p)
+		}
+		p = home + p[1:]
+	}
+	return os.Expand(p, getenv), nil
 }
 
 // EnvName derives the environment variable for a file key:
