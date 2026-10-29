@@ -18,6 +18,7 @@ main.go              entry point: calls cmd.Execute(), nothing else
 cmd/                 all cobra code: root command, command tree, flags, help text, groups, gating; imports only internal/cli, internal/clicfg and internal/errs
 cmd/version/         build info (Version, Commit, Date) set by GoReleaser through -ldflags -X; read only by cmd/, passed down as a value
 internal/cli/<cmd>/  one subpackage per command: its logic as plain functions, no cobra
+internal/cli/logging/ shared, not a command: builds the *slog.Logger, called once by cmd/   (CLI_OUTPUT)
 internal/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
 internal/config/     application config: types, loader, validation, defaults
 internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (CLI_CONFIG 3a)

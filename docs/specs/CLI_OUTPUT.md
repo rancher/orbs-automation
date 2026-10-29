@@ -19,7 +19,7 @@ Standard library `log/slog`, written to stderr. Default level `warn`, `-v` for `
 * **Precedence.** `-v` beats `GERO_LOG`, which beats the default, the same order as every other setting ([CLI_CONFIG](CLI_CONFIG.md)). The level is a setting named `log`, so `gero config show` reports it and its source. There is no user-file key for it.
 * **stdout is untouched.** Logs go to stderr only, so `-v` never changes `--json` or `--output env` output.
 * **Levels.** `warn` is something the user should act on. `info` is what the command decided or did: inferred values, repositories touched, writes. `debug` is how it did it: git invocations, API calls, timings. Which events land at which level is recorded here as commands add them.
-* **Built so far.** `debug` logs the resolved settings once, after the flags and the environment are read. No command logs yet.
+* **Built so far.** `debug` logs the resolved settings once, after the flags and the environment are read. The root command builds the logger (`internal/cli/logging`) and does not pass it down yet, so no command logs. It will be handed to the first command that logs, and `workspace` will then log the resolved config directory and its source at `debug`.
 
 ## 3. TUI and interactive features
 
