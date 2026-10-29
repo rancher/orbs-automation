@@ -4,7 +4,7 @@ import "github.com/cli/go-gh/v2/pkg/auth"
 
 // GoGh is the Auth backed by go-gh's pkg/auth. It reads GH_TOKEN, GITHUB_TOKEN
 // and their enterprise forms, gh's config files, and falls back to running
-// "gh auth token" (docs/IMPLEMENTATION.md section 3). It is the only file that
+// "gh auth token" (docs/specs/GITHUB_ACCESS.md). It is the only file that
 // imports go-gh.
 type GoGh struct{}
 

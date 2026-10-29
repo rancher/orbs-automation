@@ -27,7 +27,7 @@ var scalarKeys = []string{"configDir", "output", "log", "upstream"}
 
 // hints say what an unset key falls back to. Text output shows one in place of
 // "(unset)"; json and env never do, so scripts never read a hint as data. They
-// describe the rules in docs/specs/CLI_CONFIG.md sections 3a and 4, and each
+// describe the rules in docs/specs/WORKSPACE.md and docs/specs/CLI_CONFIG.md, and each
 // goes away as internal/workspace infers a real value for its key.
 var hints = map[string]string{
 	"configDir":    "none; ./config in a central checkout",

@@ -104,7 +104,7 @@ linters:
             - pkg: github.com/cli/go-gh
               desc: go-gh is only allowed in internal/github/gogh.go, and only pkg/auth (docs/specs/DEPENDENCY_POLICY.md)
         # go-github types stay inside internal/github; the rest of gero sees
-        # narrow consumer-side interfaces (docs/IMPLEMENTATION.md section 3).
+        # narrow consumer-side interfaces (docs/specs/GITHUB_ACCESS.md).
         nogogithub:
           list-mode: lax
           files:
@@ -112,10 +112,10 @@ linters:
             - "!$test"
           deny:
             - pkg: github.com/google/go-github
-              desc: go-github is only allowed in internal/github (docs/IMPLEMENTATION.md section 3)
+              desc: go-github is only allowed in internal/github (docs/specs/GITHUB_ACCESS.md)
         # Commands reach the repository on disk through internal/workspace, so
         # a repo is found and a slug resolved by one rule everywhere
-        # (docs/specs/PROJECT_LAYOUT.md section 6, CLI_CONFIG.md section 3a).
+        # (docs/specs/PROJECT_LAYOUT.md, docs/specs/WORKSPACE.md).
         # Loading central config is not denied yet: depguard works per package,
         # and commands will need the internal/config types.
         oneDoor:

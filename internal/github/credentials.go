@@ -1,6 +1,6 @@
 // Package github is gero's access to GitHub. This file resolves which host to
 // talk to and which token to use, bridging off the user's gh setup
-// (docs/IMPLEMENTATION.md section 3). It does no I/O itself: the environment,
+// (docs/specs/GITHUB_ACCESS.md). It does no I/O itself: the environment,
 // gh's config and the gh binary are reached through Auth.
 package github
 

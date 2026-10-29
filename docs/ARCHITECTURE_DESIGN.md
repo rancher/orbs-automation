@@ -34,7 +34,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 ### A. Distribution & Execution Model
 * **Binary:** `gero`, a standalone CLI. It does not require being a `gh` extension.
 * **Developer Machines:** Distributed as precompiled binaries attached to GitHub Releases in the central repository. Installed locally or compiled via `go install`. Self-update logic is explicitly out of scope for v1.0.0.
-* **GitHub Access:** Uses the Go API libraries `go-gh` (`pkg/auth` only: token and host resolution) and `go-github` (typed REST) directly. Authentication reuses `GH_TOKEN` / `GITHUB_TOKEN` or the local `gh` session where available. `gh` itself is only shelled out to for interactive or passthrough steps. See `IMPLEMENTATION.md`.
+* **GitHub Access:** Uses the Go API libraries `go-gh` (`pkg/auth` only: token and host resolution) and `go-github` (typed REST) directly. Authentication reuses `GH_TOKEN` / `GITHUB_TOKEN` or the local `gh` session where available. `gh` itself is only shelled out to for interactive or passthrough steps. See [GITHUB_ACCESS](specs/GITHUB_ACCESS.md).
 * **Execution Contexts:** Commands are either CI-only (the reconciler and anything needing GHA-provided tokens, failing fast elsewhere) or work in either context.
 * **CI Runners:** Workflows in CI fetch a pinned, tagged release version of the `gero` binary during initial setup steps. Running `go run` dynamically in CI is prohibited to avoid module download latency and compilation overhead.
 
@@ -67,7 +67,7 @@ Kinds so far (names are not final):
 * `External`: a third-party project we track (`trackOnly`, `react`) or notify.
 * `WorkflowsConfig`: how workflows are rendered into a repo's branches. This lives in the target repo's `gero.yaml`, not centrally, and is the only kind allowed there for now.
 
-Real configs and their README are in [`../config/`](../config/README.md); illustrative mock files are in [`../config-mock/`](../config-mock/) and [`../mock-repos/`](../mock-repos/). Details, defaults and open questions are in `IMPLEMENTATION.md`.
+Real configs and their README are in [`../config/`](../config/README.md); illustrative mock files are in [`../config-mock/`](../config-mock/) and [`../mock-repos/`](../mock-repos/). Shape, placement, defaults and validation are in [APP_CONFIG](specs/APP_CONFIG.md).
 
 ---
 
@@ -115,7 +115,7 @@ To interface cleanly with QA without coupling engineering builds directly to QA 
 2. **QA Pipeline Execution:** The QA repo executes its automated test suites.
 3. **Observed Result:** The reconciler observes the QA run's conclusion by correlation ID and records it on the tracking issue as evidence. The final stable promotion remains a human decision.
 
-What a QA run proves it tested (Rancher version, chart version or image) must be agreed with the QA owners first. See `IMPLEMENTATION.md` and `projects/observability-e2e.md`.
+What a QA run proves it tested (Rancher version, chart version or image) must be agreed with the QA owners first. See the [QA handshake notes](IMPLEMENTATION.md#qa-handshake-v3-undecided) and [observability-e2e](projects/observability-e2e.md).
 
 ---
 

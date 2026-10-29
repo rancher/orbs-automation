@@ -1,7 +1,7 @@
 // Package workspace is the one door from CLI Settings to the world a command
 // acts on: the central config directory today, later the loaded application
 // config and the local path, upstream and fork of a repo
-// (docs/specs/CLI_CONFIG.md sections 3a and 4). Each rule lives here once, so
+// (docs/specs/WORKSPACE.md and docs/specs/CLI_CONFIG.md). Each rule lives here once, so
 // the same inputs resolve the same way in every command. It is framework-free
 // and does no I/O until a method needs it.
 package workspace
