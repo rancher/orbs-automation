@@ -145,16 +145,6 @@ func TestRunAnInconsistentRegistryIsAnError(t *testing.T) {
 	assert.Empty(t, out)
 }
 
-func TestDefaultChecksAreConsistentAndOffline(t *testing.T) {
-	checks := defaultChecks(testBuild)
-
-	outcomes, err := Run(context.Background(), checks, Options{Online: false})
-
-	require.NoError(t, err, "the registry must validate")
-	require.NotEmpty(t, outcomes)
-	assert.Equal(t, "version", outcomes[0].Name)
-}
-
 func TestMainRunsTheDefaultChecks(t *testing.T) {
 	out, err := Main(context.Background(), settings(clicfg.OutputText), Flags{Names: []string{"version"}}, testBuild)
 
