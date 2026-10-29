@@ -29,7 +29,13 @@ var scalarKeys = []string{"configDir", "output", "upstream"}
 // "(unset)"; json and env never do, so scripts never read a hint as data. They
 // describe the rules in docs/specs/CLI_CONFIG.md sections 3a and 4, and each
 // goes away as internal/workspace infers a real value for its key.
-var hints = map[string]string{}
+var hints = map[string]string{
+	"configDir":    "none; ./config in a central checkout",
+	"upstream":     "inferred from remotes",
+	"fork":         "inferred from remotes",
+	"githubUser":   "inferred from the fork remote",
+	"branchPrefix": "none",
+}
 
 // Entries flattens s into one Entry per setting, in display order: the scalar
 // keys, then the repos sections with their map keys sorted. dir is the resolved
