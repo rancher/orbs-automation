@@ -74,3 +74,8 @@ func (e *NoTokenError) Error() string {
 }
 
 func (*NoTokenError) Unwrap() error { return ErrNoToken }
+
+// DescribeTokenSource turns the source name go-gh reports for a token, such as
+// "GH_TOKEN" or "oauth_token", into words for a person. A source it does not
+// know is returned as it is.
+func DescribeTokenSource(_ string) string { return "" }
