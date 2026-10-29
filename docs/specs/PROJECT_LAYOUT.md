@@ -25,7 +25,8 @@ internal/workspace/  the one door from Settings to the world: config dir, loaded
 internal/ui/         output and prompt seam, plain-text implementation first   (CLI_OUTPUT)
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/repo/   local repository access with go-git; the only importer of go-git
-internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; the only importer of os/exec
+internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; an importer of os/exec
+internal/ghcli/      finds and runs the gh binary for gero doctor (version only); the other importer of os/exec
 internal/...         domain packages as they arrive: lines, bump, reconcile, github
 test/integration/    separate Go module (own go.mod) for integration tests     (TESTING)
 ```

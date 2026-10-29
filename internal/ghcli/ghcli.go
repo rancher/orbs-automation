@@ -8,6 +8,9 @@ package ghcli
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
 )
 
 // ErrNotFound is returned when no gh binary can be found.
@@ -16,12 +19,32 @@ var ErrNotFound = errors.New("gh not found")
 // Locate returns the path of the gh binary that go-gh would run for a token:
 // GH_PATH when it is set, otherwise gh on PATH. getenv is os.Getenv in
 // production.
-func Locate(_ func(string) string) (string, error) {
-	return "", nil
+func Locate(getenv func(string) string) (string, error) {
+	if p := getenv("GH_PATH"); p != "" {
+		path, err := exec.LookPath(p)
+		if err != nil {
+			return "", fmt.Errorf("%w: GH_PATH is set to %s, which is not an executable file", ErrNotFound, p)
+		}
+		return path, nil
+	}
+	path, err := exec.LookPath("gh")
+	if err != nil {
+		return "", fmt.Errorf("%w on PATH", ErrNotFound)
+	}
+	return path, nil
 }
 
 // Version runs "gh --version" for the binary at path and returns its first line,
 // for example "gh version 2.100.0 (2026-09-03)".
-func Version(_ context.Context, _ string) (string, error) {
-	return "", nil
+func Version(ctx context.Context, path string) (string, error) {
+	out, err := exec.CommandContext(ctx, path, "--version").Output()
+	if err != nil {
+		return "", fmt.Errorf("gh --version: %w", err)
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", errors.New("gh --version printed nothing")
+	}
+	return line, nil
 }
