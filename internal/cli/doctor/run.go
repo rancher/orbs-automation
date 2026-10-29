@@ -34,6 +34,7 @@ func Main(ctx context.Context, s clicfg.Settings, f Flags, b Build) (string, err
 func defaultChecks(b Build) []Check {
 	return []Check{
 		NewVersionCheck(b),
+		NewGhCheck(ghBinary{}),
 	}
 }
 

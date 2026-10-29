@@ -2,7 +2,11 @@ package doctor
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
+
+	"github.com/rancher/orbs-automation/internal/ghcli"
 )
 
 // GhBinary is what the gh check needs from the gh binary. It is defined here,
@@ -38,4 +42,34 @@ func (ghCheck) Description() string {
 func (ghCheck) Online() bool    { return false }
 func (ghCheck) Needs() []string { return nil }
 
-func (ghCheck) Run(context.Context) Result { return Result{} }
+func (c ghCheck) Run(ctx context.Context) Result {
+	path, err := c.gh.Locate()
+	if err != nil {
+		return Result{
+			Status:  StatusWarn,
+			Message: err.Error(),
+			Remediation: "gero reads a token from the gh keyring through it: install it from https://cli.github.com, " +
+				"or set GH_TOKEN (or fix GH_PATH, if you set it)",
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	version, err := c.gh.Version(ctx, path)
+	if err != nil {
+		return Result{
+			Status:      StatusWarn,
+			Message:     fmt.Sprintf("found at %s, but running it failed: %v", path, err),
+			Remediation: "run `gh --version` yourself to see why",
+		}
+	}
+	return Result{Status: StatusOK, Message: fmt.Sprintf("%s at %s", version, path)}
+}
+
+// ghBinary is the GhBinary backed by internal/ghcli.
+type ghBinary struct{}
+
+func (ghBinary) Locate() (string, error) { return ghcli.Locate(os.Getenv) }
+
+func (ghBinary) Version(ctx context.Context, path string) (string, error) {
+	return ghcli.Version(ctx, path)
+}

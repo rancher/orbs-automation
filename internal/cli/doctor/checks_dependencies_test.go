@@ -3,6 +3,8 @@ package doctor
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -103,4 +105,20 @@ func checkNames(checks []Check) []string {
 		out[i] = c.Name()
 	}
 	return out
+}
+
+func TestGhBinaryUsesGhOnPath(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\necho 'gh version 9.9.9 (2030-01-01)'\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755))
+	t.Setenv("PATH", dir)
+	t.Setenv("GH_PATH", "")
+
+	path, err := ghBinary{}.Locate()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(dir, "gh"), path)
+
+	version, err := ghBinary{}.Version(context.Background(), path)
+	require.NoError(t, err)
+	assert.Equal(t, "gh version 9.9.9 (2030-01-01)", version)
 }
