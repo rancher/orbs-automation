@@ -30,6 +30,7 @@ var scalarKeys = []string{"configDir", "output", "log", "upstream"}
 // describe the rules in docs/specs/WORKSPACE.md and docs/specs/CLI_CONFIG.md, and each
 // goes away as internal/workspace infers a real value for its key.
 var hints = map[string]string{
+	"userFile":     "none",
 	"configDir":    "none; ./config in a central checkout",
 	"upstream":     "inferred from remotes",
 	"fork":         "inferred from remotes",
@@ -37,8 +38,9 @@ var hints = map[string]string{
 	"branchPrefix": "none",
 }
 
-// Entries flattens s into one Entry per setting, in display order: the scalar
-// keys, then the repos sections with their map keys sorted. dir is the resolved
+// Entries flattens s into one Entry per setting, in display order: the user
+// file the values came from, the scalar keys, then the repos sections with their
+// map keys sorted. dir is the resolved
 // central config directory and overrides the configDir entry; the zero Result
 // (nothing resolved) leaves it as loaded.
 func Entries(s clicfg.Settings, dir workspace.ConfigDir) []Entry {
@@ -47,6 +49,7 @@ func Entries(s clicfg.Settings, dir workspace.ConfigDir) []Entry {
 		configDir = Entry{Key: "configDir", Value: dir.Dir, Source: dir.Source}
 	}
 	es := []Entry{
+		entry(s, "userFile", s.UserFile),
 		configDir,
 		entry(s, "output", s.Output),
 		entry(s, "log", s.LogLevel),

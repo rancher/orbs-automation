@@ -169,6 +169,15 @@ func Load(in Inputs) (Settings, error) {
 		return Settings{}, err
 	}
 	s := Settings{sources: map[string]Source{}}
+	// Record the file only when one was read: a name with no reader is where we
+	// looked, not a file that was loaded. GERO_CONFIG is the one way to name it.
+	if in.UserFile != nil {
+		s.UserFile = in.UserFileName
+	}
+	s.sources["userFile"] = SourceDefault
+	if getenv("GERO_CONFIG") != "" {
+		s.sources["userFile"] = SourceEnv
+	}
 
 	for _, k := range scalars {
 		v, src := k.def, SourceDefault
