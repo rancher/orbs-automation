@@ -21,8 +21,10 @@ type Cmd struct {
 	Args []string
 	// Dir is the working directory, or "" for the current one.
 	Dir string
-	// Env is the environment as "KEY=value" entries. Nil means a minimal
-	// default environment, not everything gero inherited.
+	// Env is the environment as "KEY=value" entries, exactly what the program
+	// gets. Nil means DefaultEnv, not everything gero inherited. To add to the
+	// default, append to DefaultEnv(); to get what os/exec would give, use
+	// InheritEnv().
 	Env []string
 }
 
@@ -45,6 +47,18 @@ type ExitError struct {
 func (e *ExitError) Error() string { return "" }
 
 func (e *ExitError) Unwrap() error { return nil }
+
+// DefaultEnv returns the part of gero's environment a program gets when Cmd.Env
+// is nil: PATH, HOME, USER, LOGNAME, TMPDIR, TERM, LANG, and the LC_ and XDG_
+// variables. Credentials and the rest, such as GH_TOKEN, are left out so a
+// child process only sees what it was meant to.
+func DefaultEnv() []string { return nil }
+
+// InheritEnv returns the whole environment of the gero process, which is what
+// os/exec gives a program when Cmd.Env is nil. It is the explicit opt-out of
+// DefaultEnv: a caller that needs it says so, and that is easy to find in
+// review.
+func InheritEnv() []string { return nil }
 
 // Runner runs the binaries it was built with.
 type Runner struct {
