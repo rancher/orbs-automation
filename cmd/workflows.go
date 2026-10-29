@@ -15,14 +15,18 @@ func init() {
 			Use:   "sync",
 			Short: "Render canonical workflows into a target repository",
 			RunE: func(*cobra.Command, []string) error {
-				return errs.NotImplemented("gero workflows sync")
+				return errs.NotImplemented("gero workflows sync",
+					"Renders the canonical workflows into .github/workflows/ of a target repository, "+
+						"shows a dry-run diff first, then opens a PR or commits the changes. Honors --dry-run.")
 			},
 		},
 		&cobra.Command{
 			Use:   "verify",
 			Short: "Check rendered workflows for drift",
 			RunE: func(*cobra.Command, []string) error {
-				return errs.NotImplemented("gero workflows verify")
+				return errs.NotImplemented("gero workflows verify",
+					"Read-only. Compares a target repository's rendered workflows with the canonical "+
+						"templates and reports any drift.")
 			},
 		},
 	)
