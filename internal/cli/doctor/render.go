@@ -57,7 +57,7 @@ func renderText(r Report) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "gero %s (commit %s, built %s)\n", r.Build.Version, r.Build.Commit, r.Build.Date)
 	for _, category := range orderedCategories(r.Outcomes) {
-		fmt.Fprintf(&b, "\n%s\n", strings.ToUpper(category[:1])+category[1:])
+		fmt.Fprintf(&b, "\n%s\n", title(category))
 		for _, o := range r.Outcomes {
 			if o.Category != category {
 				continue
@@ -89,6 +89,15 @@ func renderText(r Report) string {
 		b.WriteString("Your workstation is ready to use gero.\n")
 	}
 	return b.String()
+}
+
+// title is the heading of a category group. A check with no category lands in
+// "Other" rather than breaking the report.
+func title(category string) string {
+	if category == "" {
+		return "Other"
+	}
+	return strings.ToUpper(category[:1]) + category[1:]
 }
 
 func plural(n int, word string) string {

@@ -3,6 +3,7 @@ package doctor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -36,6 +37,28 @@ func defaultChecks(b Build) []Check {
 	}
 }
 
-func run(_ context.Context, _ clicfg.Settings, _ Flags, _ Build, _ []Check) (string, error) {
-	return "", nil
+func run(ctx context.Context, s clicfg.Settings, f Flags, b Build, checks []Check) (string, error) {
+	// Refuse a format that cannot be rendered before running anything, since
+	// an online check costs real requests.
+	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
+		return "", unsupported(s.Output)
+	}
+	if f.ListChecks {
+		return RenderChecks(checks, s.Output)
+	}
+	outcomes, err := Run(ctx, checks, Options{Online: f.Online, Timeout: f.Timeout, Names: f.Names})
+	if errors.Is(err, ErrUnknownCheck) {
+		return "", fmt.Errorf("%w (see gero doctor --list-checks)", err)
+	}
+	if err != nil {
+		return "", err
+	}
+	out, err := Render(Report{Build: b, Outcomes: outcomes}, s.Output)
+	if err != nil {
+		return "", err
+	}
+	if Failed(outcomes, f.Strict) {
+		return out, ErrChecksFailed
+	}
+	return out, nil
 }

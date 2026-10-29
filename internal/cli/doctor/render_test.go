@@ -100,6 +100,17 @@ func TestRenderTextUnknownCategoriesComeLastInTheOrderSeen(t *testing.T) {
 	assert.Regexp(t, `(?s)Dependencies.*Zebra.*Mongoose`, got)
 }
 
+func TestRenderTextCheckWithoutACategoryGoesUnderOther(t *testing.T) {
+	got, err := Render(Report{Build: testBuild, Outcomes: []Outcome{
+		{Name: "g", Category: "dependencies", Status: StatusOK, Message: "ok"},
+		{Name: "x", Status: StatusOK, Message: "ok"},
+	}}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.Contains(t, got, "\nOther\n  ✔ x: ok\n")
+	assert.Regexp(t, `(?s)Dependencies.*Other`, got)
+}
+
 func TestRenderJSON(t *testing.T) {
 	got, err := Render(Report{Build: testBuild, Outcomes: mixedOutcomes()}, clicfg.OutputJSON)
 
