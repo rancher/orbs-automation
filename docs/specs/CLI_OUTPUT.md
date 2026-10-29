@@ -41,12 +41,13 @@ A spike built one confirm-and-table program per option in a scratch module (`huh
 | `go-gh/pkg/prompter` | `Confirm`, `Select`, `Input`, `Password` | Built on `AlecAivazis/survey`, which is archived upstream. With the table printer, 29 modules and a 10 MB binary, more than `huh` |
 | `go-gh/pkg/tableprinter` | TTY table, TSV when piped | Imports `pkg/text`, so lipgloss v2 and reflow too |
 | `huh` (Charm) | Confirm, select, input, forms, an accessible plain mode | 25 modules and a 6.1 MB binary for one confirm. Raw mode and redraws, and it opens `/dev/tty` itself, so it is harder to test |
-| `lipgloss` | Styles, layout, color profile | Worth it for styled tables and panels, not for a few escape codes |
+| `lipgloss` v2 with `colorprofile` | Styles, borders, layout, color downgrade | Measured on top of our own prompt: 17 modules (2 without it) and a 4.9 MB binary (2.5 MB without), so about 15 modules and 2.4 MB for styling alone. Piped output carried no color codes through `colorprofile.NewWriter`, but box-drawing borders stay, so a plain mode still needs its own border choice |
+| `text/tabwriter` | Aligned columns | Stdlib: no modules, 2.4 MB binary |
 
 * **The confirmation does not justify a library.** One yes/no is a few lines behind `internal/ui`, which is testable with a fake reader and has no non-TTY path to get wrong. Everything else (`Select`, `Input`, forms) is where `huh` earns its weight, and `internal/ui` is the seam that makes adopting it a change in one file **(leaning)**.
 * **Detection stays ours.** TTY, `NO_COLOR`, `--no-color` and the `GERO_*` variables are decided in `internal/clicfg` next to the context signs. Importing `go-gh/pkg/term` would add a second reader of `CLICOLOR` and friends.
 * **Avoid `survey`.** It is archived, and `huh` is the maintained route if prompts grow.
-* **Tables and color later.** Plain `text/tabwriter` and a handful of escape codes cover v0.x. If output wants real styling, lipgloss is the pick, and `go-gh/pkg/tableprinter` is the cheaper option if only tables are wanted. Either gets an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) first.
+* **Tables and color later.** Plain `text/tabwriter` and a handful of escape codes cover v0.x. If output wants real styling, lipgloss is the pick (about 15 modules and 2.4 MB, measured), and `go-gh/pkg/tableprinter` is the cheaper option if only tables are wanted. Either gets an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) first.
 * **Neither prompt library copes without a TTY, so we check first anyway.** With stdin closed or piped, `go-gh`'s prompter still wrote cursor-position escape codes to stdout and then failed with `could not prompt: EOF`, ignoring a piped `y`. `huh` failed with `could not open TTY: open /dev/tty`. Our own line reader returned `EOF` and `y` correctly. The non-TTY rule in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract) (fail unless `--non-interactive`) is a check in `gero`, not something a library gives us.
 * **Still to check:** both libraries on a real TTY, and `huh`'s accessible mode.
 
