@@ -4,7 +4,10 @@
 // gh's config and the gh binary are reached through Auth.
 package github
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // ErrNoToken is returned when no source supplies a token for the host.
 var ErrNoToken = errors.New("no GitHub token found")
@@ -37,6 +40,23 @@ type Credentials struct {
 // Resolve returns the credentials for host, or for the default host when host
 // is empty. When no token is found the error wraps ErrNoToken and says which
 // variables to set.
-func Resolve(_ Auth, _ string) (Credentials, error) {
-	return Credentials{}, nil
+func Resolve(a Auth, host string) (Credentials, error) {
+	hostSource := SourceExplicit
+	if host == "" {
+		host, hostSource = a.DefaultHost()
+	}
+	token, tokenSource := a.TokenForHost(host)
+	if token == "" {
+		return Credentials{}, fmt.Errorf("%w for %s: %s", ErrNoToken, host, tokenHint(a, host))
+	}
+	return Credentials{Host: host, HostSource: hostSource, Token: token, TokenSource: tokenSource}, nil
+}
+
+// tokenHint says how to supply a token for host. Enterprise hosts ignore
+// GH_TOKEN and GITHUB_TOKEN, so the advice differs.
+func tokenHint(a Auth, host string) string {
+	if a.IsEnterprise(host) {
+		return fmt.Sprintf("set GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN, or run \"gh auth login --hostname %s\"", host)
+	}
+	return `set GH_TOKEN or GITHUB_TOKEN, or run "gh auth login"`
 }
