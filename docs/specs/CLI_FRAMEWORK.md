@@ -1,6 +1,6 @@
 # CLI Framework
 
-**Status:** agreed. Items marked **(leaning)** are proposals. Built so far: the cobra root, `--version`, `repo check-semver` and `repo branch-tags`. The rest of the command tree is stubs, and global flags, gating and exit codes are not built.
+**Status:** agreed. Items marked **(leaning)** are proposals. Built so far: the cobra root, `--version`, the global flags `--config-dir`, `--upstream`, `--output` and `--json` (resolved into `clicfg.Settings` in the root `PersistentPreRunE`), `repo check-semver` and `repo branch-tags`. The rest of the command tree is stubs, and `--dry-run`, `-v`, `--no-color`, gating and exit codes are not built. No command reads `Settings` yet.
 
 How `gero` is built as a CLI: framework, command tree, global flags, context gating and exit codes. Product design is in [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md). Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md).
 

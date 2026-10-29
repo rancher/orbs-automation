@@ -29,6 +29,9 @@ func init() {
 	// reserved for --verbose (docs/specs/CLI_FRAMEWORK.md).
 	rootCmd.Version = version.String()
 	rootCmd.Flags().Bool("version", false, "version for gero")
+	addGlobalFlags(rootCmd)
+	home, _ := os.UserHomeDir()
+	rootCmd.PersistentPreRunE = loadSettings(os.Getenv, home)
 	rootCmd.AddGroup(&groups.CIGroup)
 	ci.RegisterSubcommands(rootCmd)
 }

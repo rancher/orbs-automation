@@ -12,6 +12,8 @@ import (
 // wrote to stdout and stderr. It resets the shared root command afterwards.
 func execRoot(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
+	// Keep a developer's real user file out of the tests.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	var out, errOut bytes.Buffer
 	rootCmd.SetOut(&out)
 	rootCmd.SetErr(&errOut)
