@@ -11,7 +11,7 @@ var ErrNotRepository = repo.ErrNotRepository
 // from it upward as git does, so subdirectories and worktrees work. It returns
 // ErrNotRepository when there is none.
 func (w *Workspace) Current() (*repo.Repo, error) {
-	return nil, nil
+	return repo.Discover(w.cwd)
 }
 
 // CurrentAtRoot returns the repository whose .git directory is in the working
@@ -19,5 +19,5 @@ func (w *Workspace) Current() (*repo.Repo, error) {
 // returns ErrNotRepository otherwise. It exists for commands that must match
 // the script they port, which only looks in the current directory.
 func (w *Workspace) CurrentAtRoot() (*repo.Repo, error) {
-	return nil, nil
+	return repo.Open(w.cwd)
 }
