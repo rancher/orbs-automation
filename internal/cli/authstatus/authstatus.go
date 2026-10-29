@@ -23,23 +23,13 @@ type Status struct {
 	Login       string `json:"login,omitempty"` // empty when the token is rejected
 }
 
-// hostSources and tokenSources turn the raw source names that go-gh reports
-// into words for the text output. JSON keeps the raw names, which scripts can
-// match on. A source not listed is shown as it is.
-var (
-	hostSources = map[string]string{
-		github.SourceExplicit: "--hostname",
-		"hosts":               "gh config",
-	}
-	tokenSources = map[string]string{
-		"GH_TOKEN":                "environment variable GH_TOKEN",
-		"GITHUB_TOKEN":            "environment variable GITHUB_TOKEN",
-		"GH_ENTERPRISE_TOKEN":     "environment variable GH_ENTERPRISE_TOKEN",
-		"GITHUB_ENTERPRISE_TOKEN": "environment variable GITHUB_ENTERPRISE_TOKEN",
-		"oauth_token":             "gh config file",
-		"gh":                      "gh auth token (keyring)",
-	}
-)
+// hostSources turns the host source names into words for the text output. JSON
+// keeps the raw names, which scripts can match on. A source not listed is shown
+// as it is. Token sources are described by github.DescribeTokenSource.
+var hostSources = map[string]string{
+	github.SourceExplicit: "--hostname",
+	"hosts":               "gh config",
+}
 
 // Render formats st as clicfg.OutputText or clicfg.OutputJSON. The token is
 // not part of Status, so it cannot appear.
@@ -64,15 +54,15 @@ func renderText(st Status) string {
 	}
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "Host:\t%s (%s)\n", st.Host, label(hostSources, st.HostSource))
-	fmt.Fprintf(w, "Token:\t%s\n", label(tokenSources, st.TokenSource))
+	fmt.Fprintf(w, "Host:\t%s (%s)\n", st.Host, hostLabel(st.HostSource))
+	fmt.Fprintf(w, "Token:\t%s\n", github.DescribeTokenSource(st.TokenSource))
 	fmt.Fprintf(w, "Login:\t%s\n", login)
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 	return b.String()
 }
 
-func label(names map[string]string, source string) string {
-	if s, ok := names[source]; ok {
+func hostLabel(source string) string {
+	if s, ok := hostSources[source]; ok {
 		return s
 	}
 	return source
