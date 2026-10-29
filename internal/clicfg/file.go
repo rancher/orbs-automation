@@ -32,6 +32,15 @@ type fileRepoOverride struct {
 	Upstream string `yaml:"upstream"`
 }
 
+// userFileLabel is how an error names the user file: its path, or "user config"
+// when it has none.
+func userFileLabel(name string) string {
+	if name == "" {
+		return "user config"
+	}
+	return name
+}
+
 // decodeFile parses the user file strictly: an unknown key is an error. A nil
 // reader or an empty file is an empty config.
 func decodeFile(r io.Reader, name string) (fileConfig, error) {
@@ -39,9 +48,7 @@ func decodeFile(r io.Reader, name string) (fileConfig, error) {
 	if r == nil {
 		return fc, nil
 	}
-	if name == "" {
-		name = "user config"
-	}
+	name = userFileLabel(name)
 	dec := yaml.NewDecoder(r)
 	dec.KnownFields(true)
 	if err := dec.Decode(&fc); err != nil && !errors.Is(err, io.EOF) {

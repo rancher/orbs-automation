@@ -169,6 +169,7 @@ func Load(in Inputs) (Settings, error) {
 		return Settings{}, err
 	}
 	s := Settings{sources: map[string]Source{}}
+	label := userFileLabel(in.UserFileName)
 	// Record the file only when one was read: a name with no reader is where we
 	// looked, not a file that was loaded. GERO_CONFIG is the one way to name it.
 	if in.UserFile != nil {
@@ -194,15 +195,15 @@ func Load(in Inputs) (Settings, error) {
 		}
 		if k.path && src != SourceDefault {
 			if v, err = expandPath(v, in.Home, getenv); err != nil {
-				return Settings{}, fmt.Errorf("%s (from %s): %w", k.name, src, err)
+				return Settings{}, fmt.Errorf("%s: %w", where(k.name, src, label), err)
 			}
 			if src == SourceFile && !filepath.IsAbs(v) {
-				return Settings{}, fmt.Errorf("%s (from file): path %q must be absolute", k.name, v)
+				return Settings{}, fmt.Errorf("%s: path %q must be absolute", where(k.name, src, label), v)
 			}
 		}
 		if k.validate != nil {
 			if err := k.validate(v); err != nil {
-				return Settings{}, fmt.Errorf("%s (from %s): %w", k.name, src, err)
+				return Settings{}, fmt.Errorf("%s: %w", where(k.name, src, label), err)
 			}
 		}
 		*k.field(&s) = v
@@ -216,9 +217,19 @@ func Load(in Inputs) (Settings, error) {
 		}
 	}
 	if s.Repos, err = resolveRepos(fc.Repos, in.Home, getenv); err != nil {
-		return Settings{}, err
+		return Settings{}, fmt.Errorf("%s: %w", label, err) // the repos keys exist only in the file
 	}
 	return s, nil
+}
+
+// where says what a rejected value came from, so the message sends the developer
+// to the right place: the user file and key, or the key and the environment
+// variable or flag that set it.
+func where(key string, src Source, fileLabel string) string {
+	if src == SourceFile {
+		return fileLabel + ": " + key
+	}
+	return fmt.Sprintf("%s (from %s)", key, src)
 }
 
 var slugRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
