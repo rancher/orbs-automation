@@ -40,8 +40,21 @@ func Check(ctx context.Context, hostname string) (Status, error) {
 	return check(ctx, hostname, github.GoGh{}, loginVerifier{})
 }
 
-func check(_ context.Context, _ string, _ github.Auth, _ Verifier) (Status, error) {
-	return Status{}, nil
+func check(ctx context.Context, hostname string, a github.Auth, v Verifier) (Status, error) {
+	creds, err := github.Resolve(a, hostname)
+	if err != nil {
+		return Status{}, err
+	}
+	st := Status{Host: creds.Host, HostSource: creds.HostSource, TokenSource: creds.TokenSource}
+	login, err := v.Login(ctx, creds)
+	if errors.Is(err, github.ErrBadCredentials) {
+		return st, err
+	}
+	if err != nil {
+		return Status{}, err
+	}
+	st.Valid, st.Login = true, login
+	return st, nil
 }
 
 func run(ctx context.Context, s clicfg.Settings, hostname string, a github.Auth, v Verifier) (string, error) {
@@ -49,17 +62,10 @@ func run(ctx context.Context, s clicfg.Settings, hostname string, a github.Auth,
 	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
 		return "", unsupported(s.Output)
 	}
-	creds, err := github.Resolve(a, hostname)
-	if err != nil {
+	st, err := check(ctx, hostname, a, v)
+	if err != nil && !errors.Is(err, github.ErrBadCredentials) {
 		return "", err
 	}
-	st := Status{Host: creds.Host, HostSource: creds.HostSource, TokenSource: creds.TokenSource}
-	login, err := v.Login(ctx, creds)
-	rejected := errors.Is(err, github.ErrBadCredentials)
-	if err != nil && !rejected {
-		return "", err
-	}
-	st.Valid, st.Login = !rejected, login
 	out, renderErr := Render(st, s.Output)
 	if renderErr != nil {
 		return "", renderErr
