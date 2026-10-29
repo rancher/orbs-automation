@@ -61,19 +61,24 @@ func TestReposTextTable(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrUnresolved)
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
-	require.Len(t, lines, 4, out)
+	require.Len(t, lines, 7, out) // header, 3 rows, blank, 2 hints
 	assert.Equal(t, []string{"SLUG", "PATH", "SOURCE"}, strings.Fields(lines[0]))
 	assert.Equal(t, []string{"rancher/rancher", "/src/rancher", "repos.search", "scan"}, strings.Fields(lines[1]))
-	assert.Contains(t, lines[2], "rancher/scc-operator")
-	assert.Contains(t, lines[2], "ambiguous")
-	assert.Contains(t, lines[2], "/src/op-a")
-	assert.Contains(t, lines[2], "/src/op-b")
-	assert.Contains(t, lines[2], "repos.paths.rancher/scc-operator", "names the key to set")
-	assert.Contains(t, lines[2], "to choose one")
-	assert.Contains(t, lines[3], "rancher/charts")
-	assert.Contains(t, lines[3], "not found")
-	assert.Contains(t, lines[3], "clone it under a repos.search directory", "a missing clone is fixed by cloning")
-	assert.Contains(t, lines[3], "or set repos.paths.rancher/charts", "or by pointing at an existing one")
+	assert.Equal(t, []string{"rancher/scc-operator", "(ambiguous:", "/src/op-a,", "/src/op-b)", "-"}, strings.Fields(lines[2]))
+	assert.Equal(t, []string{"rancher/charts", "(not", "found)", "-"}, strings.Fields(lines[3]))
+	assert.Empty(t, lines[4])
+	assert.Equal(t, "not found: clone it under a repos.search directory, or set repos.paths.<slug>", lines[5])
+	assert.Equal(t, "ambiguous: set repos.paths.<slug> to choose one", lines[6])
+}
+
+func TestReposTextHintsOnlyForWhatWentWrong(t *testing.T) {
+	ws := mixed()
+	ws.cfg.Projects = ws.cfg.Projects[2:] // rancher/charts, not found
+
+	out, _ := repos(ws, clicfg.OutputText, nil)
+
+	assert.Contains(t, out, "not found: clone it")
+	assert.NotContains(t, out, "ambiguous")
 }
 
 func TestReposAllResolvedIsNotAnError(t *testing.T) {
@@ -84,6 +89,7 @@ func TestReposAllResolvedIsNotAnError(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "/src/rancher")
+	assert.NotContains(t, out, "repos.paths", "no hints when nothing went wrong")
 }
 
 func TestReposJSON(t *testing.T) {
