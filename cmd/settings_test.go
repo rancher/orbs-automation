@@ -40,7 +40,7 @@ func TestGlobalFlagsDeclared(t *testing.T) {
 }
 
 func TestRootDeclaresGlobalFlagsAndLoadsSettings(t *testing.T) {
-	for _, name := range []string{"config-dir", "upstream", "output", "json"} {
+	for _, name := range []string{"config-dir", "upstream", "output", "json", "verbose"} {
 		assert.NotNil(t, rootCmd.PersistentFlags().Lookup(name), "flag --%s", name)
 	}
 	assert.NotNil(t, rootCmd.PersistentPreRunE)
@@ -61,6 +61,12 @@ func TestFlagLookup(t *testing.T) {
 		{"json is output json", []string{"--json"}, "output", "json", true},
 		{"explicit output beats json", []string{"--json", "--output", "env"}, "output", "env", true},
 		{"unknown name", []string{"--upstream", "x"}, "nope", "", false},
+		{"no -v leaves log unset", nil, "log", "", false},
+		{"-v is info", []string{"-v"}, "log", "info", true},
+		{"--verbose is info", []string{"--verbose"}, "log", "info", true},
+		{"-vv is debug", []string{"-vv"}, "log", "debug", true},
+		{"-v -v is debug", []string{"-v", "-v"}, "log", "debug", true},
+		{"-vvv stays debug", []string{"-vvv"}, "log", "debug", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
