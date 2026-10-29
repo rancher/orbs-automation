@@ -47,6 +47,7 @@ Global (persistent) flags:
 |---|---|
 | `--config-dir` | Where the central config is ([CLI_CONFIG](CLI_CONFIG.md)) |
 | `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing. Read-only commands accept and ignore it. Default is off, with `verify` as the explicit check mode **(leaning)**. |
+| `--non-interactive` | Never prompt, and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing **(leaning)** |
 | `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
 | `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md)) |
@@ -79,6 +80,5 @@ One helper maps errors to codes so commands return errors and never call `os.Exi
 
 ## Open questions
 
-* Whether `--dry-run` should become the default for commands that write to GitHub.
 * Whether exit code 3 for drift is wanted, or `verify` output alone is enough.
 * Final name for `gero dashboard` versus `triage`.

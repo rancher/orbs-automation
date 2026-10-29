@@ -23,7 +23,7 @@ One function in `internal/clicfg` decides, once, and the result is `Settings.CI`
 | User file | Loaded | Ignored unless `GERO_CONFIG` is set | [CLI_CONFIG](CLI_CONFIG.md) |
 | `upstream` default | Remote matching the slug, else the only remote | `origin` | [WORKSPACE](WORKSPACE.md) |
 | Log handler | Text | JSON | [CLI_OUTPUT](CLI_OUTPUT.md) |
-| Interaction | Opt-in, when stdin and stdout are a TTY | Never | [CLI_OUTPUT](CLI_OUTPUT.md) |
+| Interaction | Prompts when stdin and stdout are a TTY, unless `--non-interactive` | Never prompts; a write needs `--non-interactive` | [CLI_OUTPUT](CLI_OUTPUT.md) |
 | Ref and commit inputs | The repository | `GITHUB_REF`, `GITHUB_SHA` | [BRANCH_TAGS](BRANCH_TAGS.md) |
 | Token | `GH_TOKEN`, then the `gh` login | `GH_TOKEN` from the workflow | [GITHUB_ACCESS](GITHUB_ACCESS.md) |
 | Actor identity | The engineer | The bot | this spec |
@@ -73,7 +73,7 @@ Every command that writes to git or GitHub follows these rules in both contexts.
 2. **`--dry-run` parity.** A dry run computes and prints everything, including the branch names and PR titles, and changes nothing remote. It takes the same path as a real run up to the first write.
 3. **Never touch the engineer's checkout.** Edits happen in a throwaway clone or worktree under the temp directory, in both contexts. A `gero` run leaves the clones it found exactly as they were, including after a dry run or a failure.
 4. **Per-target results.** A fan-out reports each target and tolerates partial failure ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)), so exit code and output do not depend on the context.
-5. **Confirmation only for a suspicious CI context.** A command that works on a workstation does not ask for confirmation there: the engineer ran it. The exception is a CI context that looks like a workstation, such as `GERO_CONTEXT=ci` set where `GITHUB_ACTIONS` is not, or a TTY is attached. That is the case where a write meant for the bot could land under someone's own token, so the command prints the preflight line and asks, unless `--yes` is passed. Real CI never asks. Whether `--dry-run` should be the default for these commands is the open question in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
+5. **One confirmation per command, and a flag to skip it.** Before a command starts writing it prints the preflight line and asks once, "proceed?", in both contexts. `--non-interactive` answers yes and never prompts, which is how a workflow, or a script, runs the same command. Without the flag and without a TTY the command fails before any write, with a message naming the flag, so a forgotten flag in CI is a loud failure and not a hang or a silent yes. `--dry-run` writes nothing and so never asks. `--dry-run` stays opt-in: making it the default would mean every real run needs `--dry-run=false`, so the confirmation is the safety instead.
 
 ## Testing
 
@@ -83,7 +83,7 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 * The bot identity (`GERO_BOT_USER`), the `User-Agent`, the cross-repo token check, commit identity resolution and the `auth status` fallback for installation tokens.
 * The `gitcli` push, the `signCommits` key and signing through `git`.
-* The write-command contract: preflight line, throwaway clone, `--yes` for a suspicious CI context.
+* The write-command contract: preflight line, throwaway clone, the confirmation and `--non-interactive`.
 * Any write command at all. These are the rules the first one is built against.
 
 ## Decided
@@ -91,10 +91,9 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 * Bot commits are not verified for now.
 * The bot's login comes from the workflow as `GERO_BOT_USER`, with the token, from Vault. `gero` is the name in prose and the `User-Agent`.
 * Only the descriptive labels are fixed in the tool (a constant, or config if it ever needs to vary): the full `User-Agent` and its short form for "Created with: ..." lines in PRs and comments. Nothing that identifies an account is config. The login, the token and so the App all come from the environment, so different targets using different Apps is the workflow's choice per step.
-* No confirmation on a workstation, except for a CI context that shows workstation signs.
+* A write command confirms once per command, before it starts writing, in both contexts. `--non-interactive` skips it. `--dry-run` does not become the default.
 * A cross-repo write checks the token and refuses the default `GITHUB_TOKEN`.
 
 ## Open questions
 
-* Whether `--dry-run` should be the default for write commands ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
-* Which signs make a forced CI context "suspicious" (no `GITHUB_ACTIONS`, a TTY, a user file present), and whether one is enough.
+* Whether `--non-interactive` also has an environment form (`GERO_NON_INTERACTIVE`) **(leaning)**, and whether a bare `--yes` is kept as an alias.
