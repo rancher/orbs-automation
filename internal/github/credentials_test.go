@@ -106,3 +106,38 @@ func TestResolveNoToken(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveNoTokenErrorCarriesTheHostAndTheHint(t *testing.T) {
+	tests := []struct {
+		name     string
+		auth     *fakeAuth
+		host     string
+		wantHost string
+		wantHint string
+	}{
+		{
+			name:     "default host",
+			auth:     &fakeAuth{defaultHost: [2]string{"github.com", "default"}},
+			wantHost: "github.com",
+			wantHint: `set GH_TOKEN or GITHUB_TOKEN, or run "gh auth login"`,
+		},
+		{
+			name:     "enterprise host",
+			auth:     &fakeAuth{enterprise: map[string]bool{"ghe.example.com": true}},
+			host:     "ghe.example.com",
+			wantHost: "ghe.example.com",
+			wantHint: `set GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN, or run "gh auth login --hostname ghe.example.com"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Resolve(tt.auth, tt.host)
+
+			var noToken *NoTokenError
+			require.ErrorAs(t, err, &noToken)
+			assert.Equal(t, tt.wantHost, noToken.Host)
+			assert.Equal(t, tt.wantHint, noToken.Hint)
+			assert.ErrorIs(t, err, ErrNoToken)
+		})
+	}
+}
