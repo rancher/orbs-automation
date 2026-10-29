@@ -1,0 +1,109 @@
+package doctor
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// userFileEnv returns an Environment whose environment is vars, with a new home
+// directory.
+func userFileEnv(t *testing.T, vars map[string]string) (Environment, string) {
+	t.Helper()
+	home := t.TempDir()
+	return Environment{Home: home, Getenv: func(k string) string { return vars[k] }}, home
+}
+
+// writeUserFile writes content to a new file and returns its path.
+func writeUserFile(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+	return path
+}
+
+func TestUserFileCheckMetadata(t *testing.T) {
+	c := NewUserFileCheck(Environment{})
+
+	assert.Equal(t, "user-file", c.Name())
+	assert.Equal(t, "configuration", c.Category())
+	assert.False(t, c.Online())
+	assert.Empty(t, c.Needs())
+	assert.NotEmpty(t, c.Description())
+}
+
+func TestUserFileCheckWithNoFileIsFine(t *testing.T) {
+	env, home := userFileEnv(t, nil)
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	want := filepath.Join(home, ".config", "gero", "config.yaml")
+	assert.Equal(t, Result{Status: StatusOK, Message: "no user file at " + want + " (optional)"}, got)
+}
+
+func TestUserFileCheckWithoutAnEnvironmentDoesNotPanic(t *testing.T) {
+	got := NewUserFileCheck(Environment{Home: t.TempDir()}).Run(context.Background())
+
+	assert.Equal(t, StatusOK, got.Status)
+	assert.Contains(t, got.Message, "no user file at ")
+}
+
+func TestUserFileCheckLoadedFileReportsItsPath(t *testing.T) {
+	path := writeUserFile(t, "output: json\nrepos:\n  search:\n    - /src\n")
+	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path})
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: path}, got)
+}
+
+func TestUserFileCheckFileThatWouldStopACommandFails(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"an unknown key", "bogus: 1\n", "bogus"},
+		{"a path that is not absolute", "configDir: relative/dir\n", "absolute"},
+		{"a file that is not YAML", "output: [unclosed\n", "yaml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := writeUserFile(t, tt.content)
+			env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path})
+
+			got := NewUserFileCheck(env).Run(context.Background())
+
+			assert.Equal(t, StatusFail, got.Status)
+			assert.Contains(t, got.Message, path, "the message names the file")
+			assert.Contains(t, got.Message, tt.want)
+			assert.Contains(t, got.Remediation, "move the file aside")
+			assert.Contains(t, got.Remediation, "docs/specs/CLI_CONFIG.md")
+		})
+	}
+}
+
+func TestUserFileCheckGeroConfigNamingAMissingFileFails(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.yaml")
+	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": missing})
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	assert.Equal(t, StatusFail, got.Status)
+	assert.Contains(t, got.Message, missing)
+	assert.Contains(t, got.Remediation, "GERO_CONFIG")
+}
+
+func TestUserFileCheckJudgesTheFileNotTheEnvironment(t *testing.T) {
+	path := writeUserFile(t, "output: json\n")
+	// An invalid GERO_OUTPUT is a problem, but not the file's.
+	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path, "GERO_OUTPUT": "bogus"})
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: path}, got)
+}
