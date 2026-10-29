@@ -1,6 +1,6 @@
 # Doctor
 
-**Status:** implemented for the runner, both renderers and the `version`, `git`, `gh`, `auth-token`, `auth-api` and `rate-limit` checks. Items marked **(leaning)** are proposals.
+**Status:** implemented. Items marked **(leaning)** are proposals; see Not built yet at the end for the gap.
 
 `gero doctor` checks that a developer's workstation is set up to use `gero`, and says how to fix what is not. It is the first thing to run when something is off, and the output is meant to be pasted into an issue. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md); output rules are in [CLI_OUTPUT](CLI_OUTPUT.md).
 
@@ -11,6 +11,7 @@ Prior art is `rancher-deployer doctor`: a `Checker` with `Name`, `Category` and 
 * **Built for workstations.** The checks assume an engineer's machine with a user file and local clones. Nothing stops it from running in CI, and it has no CI-specific behavior, but no workflow is expected to call it: CI makes its own assumptions about the runner and has no user-level config. It is an either-context command with no gating ([CLI_FRAMEWORK §3](CLI_FRAMEWORK.md)).
 * **Read-only.** It never changes anything and never prints a token. There is no `--fix`. A remediation is text a person reads, ideally with the exact command.
 * **Offline by default.** Checks that need the network run only with `--online`. A plain `gero doctor` works on a plane and never makes a request.
+* **It runs when the user file is broken.** Every other command stops on a user file it cannot load. When loading fails, `gero doctor` loads its settings again without the file, so it can report the problem in `user-file`. A bad flag or environment value still stops it: only the file is excused.
 
 ## 2. Checks
 
@@ -44,10 +45,10 @@ Each one reuses the package that already does the work (section 7).
 | `version` | environment | no | never; reports the version, commit, OS and architecture | `cmd/version` |
 | `git` | dependencies | no | `git` is not on `PATH` or will not report a version, since `gero repo branch-tags` runs it; `warn` when `user.name` or `user.email` is unset, since commits gero makes will need them. It asks git itself, so includes and system config count; bounds its calls so a hung `git` cannot hang the run | `internal/git/gitcli` (`Version`, `Config`) |
 | `gh` | dependencies | no | never; `warn` when `gh` is not on `PATH`, since the keyring token fallback and `gh auth login` depend on it; reports the version and path when found; bounds `gh --version` so a hung `gh` cannot hang the run | `internal/ghcli`, which finds `gh` the way go-gh does (`GH_PATH`, then `PATH`) |
-| `user-file` | configuration | no | the user file exists and does not parse, or has an unknown key | `internal/clicfg` |
-| `config-dir` | configuration | no | no central config directory is found | `internal/workspace` |
-| `config` | configuration | no | the application config does not validate; needs `config-dir` | `internal/cli/configvalidate` |
-| `repos` | configuration | no | never; `warn` for each project with no clone or several equal ones; needs `config` | `internal/cli/configresolve` |
+| `user-file` | configuration | no | the user file exists and a command would refuse it: it does not parse, has an unknown key, or holds a value such as a relative path. It is judged on its own, with the `GERO_*` variables masked, so a bad environment value is not blamed on the file. With no file it is `ok`, saying where one would go | `internal/clicfg` (`OpenUserFile`, `Load`) |
+| `config-dir` | configuration | no | no central config directory is found; the fix is the advice in `workspace.NotFoundHint` | `internal/workspace` (`ConfigDir`) |
+| `config` | configuration | no | the application config does not validate, counting the problems the validator found; needs `config-dir` | `internal/workspace` (`Config`) |
+| `repos` | configuration | no | never; `warn` when a project has no local clone or several equally good ones, with the fix for each kind; needs `config` | `internal/workspace` (`RepoPaths`), and the fix text from `internal/cli/configresolve` |
 | `auth-token` | authentication | no | no token is found for the default host; names the variables to set; reports where the token came from and never the token. It runs the same resolver as every command, so it may call `gh auth token` | `internal/github` (`Resolve`, `NoTokenError`, `DescribeTokenSource`) |
 | `auth-api` | authentication | yes | GitHub rejects the token, with advice that depends on where the token came from (replace an environment variable, or `gh auth login` again); `warn` on a timeout or any other error, since a network problem says nothing about the token; needs `auth-token` | `internal/cli/authstatus` (`Check`) |
 | `rate-limit` | authentication | yes | never; `warn` when under a tenth of the core limit is left, saying when the window resets, or when the limit cannot be read; needs `auth-api` | `internal/github` (`CoreRateLimit`) |
@@ -67,8 +68,9 @@ Dependencies
     → gero reads a token from the gh keyring through it: install it from https://cli.github.com, or set GH_TOKEN (or fix GH_PATH, if you set it)
 
 Configuration
+  ✔ user-file: /Users/me/.config/gero/config.yaml
   ✔ config-dir: /Users/me/work/orbs-automation/config (cwd)
-  ✗ config: 2 problems in config/projects.yaml
+  ✗ config: 2 problems in the central config
     → run `gero config validate` for the details
   ○ repos: skipped, needs config
 
@@ -112,7 +114,7 @@ Following [CLI_FRAMEWORK §4](CLI_FRAMEWORK.md):
 
 ## 7. Reuse
 
-A check calls the same code as the focused command and never parses its text output. Today `configvalidate`, `configresolve` and `authstatus` render a string; each needs a function that returns its data (problems, per-repo resolution, `authstatus.Status`), with the command's `Run` becoming that function plus a render step. That refactor is part of adding the check, under the existing tests. `gero auth status`, `config validate` and `config resolve repos` stay as the detailed, focused commands, and a doctor remediation points at them.
+A check calls the code behind the focused command and never parses its text output. The configuration checks ask the workspace, the one door to the central config and the local clones ([WORKSPACE](WORKSPACE.md)), through a small interface the doctor defines. The authentication checks use `authstatus.Check`, which returns the result as data, and `gero auth status` is that plus a render step. The focused commands (`auth status`, `config validate`, `config resolve repos`) stay as the detailed views, and a remediation points at them.
 
 ## 8. Testing
 
@@ -125,7 +127,6 @@ Follows [TESTING](TESTING.md).
 
 ## Not built yet
 
-* The `user-file`, `config-dir`, `config` and `repos` checks in the table.
 * The exit-code helper: until it exists a usage error, such as an unknown check name, exits 1, not 2.
 
 ## Open questions

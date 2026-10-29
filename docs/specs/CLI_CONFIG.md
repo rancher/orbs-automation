@@ -56,6 +56,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 
 * Path: `$XDG_CONFIG_HOME/gero/config.yaml`, else `~/.config/gero/config.yaml`. `GERO_CONFIG` overrides the path. We do not use `os.UserConfigDir` because it points at `~/Library/Application Support` on macOS, and `~/.gero` was rejected to match `gh`'s layout.
 * Optional. A missing file is fine; a malformed file, or one with an unknown key, is a loud error naming the file and key.
+* `gero config show` lists the file it loaded as `userFile`, first in the table, with `env` as its source when `GERO_CONFIG` named it and `default` otherwise, or `(none)` when no file applies. `gero doctor` checks that the file loads ([DOCTOR](DOCTOR.md)).
 * No secrets. Tokens stay with `gh` or the environment.
 * **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file.
 * The main use is per-developer behavior that must not leak into the shared tool. The motivating case: locally `origin` is a developer's fork, while in CI `origin` is the real source, so `upstream` tells `gero` which remote to treat as the real source.
@@ -120,6 +121,7 @@ If none resolves, the command fails with a message listing these four places. Th
 ## Not built yet
 
 * The `inferred` source in `gero config show` ([WORKSPACE](WORKSPACE.md)).
+* The file's name in the error for a rejected value. A YAML error names the file, but `configDir (from file): path "x" must be absolute` names only the key.
 * A reader for `fork`, `githubUser` and `branchPrefix`.
 
 ## Open questions
