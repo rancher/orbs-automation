@@ -9,6 +9,8 @@ package workspace
 import (
 	"errors"
 	"io/fs"
+	"os"
+	"path/filepath"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 )
@@ -39,7 +41,7 @@ type Workspace struct {
 // Open returns the Workspace for s and the working directory cwd, reading the
 // real file system there.
 func Open(s clicfg.Settings, cwd string) *Workspace {
-	return nil
+	return open(s, cwd, os.DirFS(cwd))
 }
 
 // open is Open with the working directory's file system injected.
@@ -51,5 +53,13 @@ func open(s clicfg.Settings, cwd string, cwdFS fs.FS) *Workspace {
 // set (flag, env or user file), else ./config when the working directory holds
 // config/*.project.yaml. It returns ErrNotFound when neither names one.
 func (w *Workspace) ConfigDir() (ConfigDir, error) {
-	return ConfigDir{}, nil
+	if w.settings.ConfigDir != "" {
+		return ConfigDir{Dir: w.settings.ConfigDir, Source: w.settings.Source("configDir").String()}, nil
+	}
+	if w.cwdFS != nil {
+		if m, err := fs.Glob(w.cwdFS, "config/*.project.yaml"); err == nil && len(m) > 0 {
+			return ConfigDir{Dir: filepath.Join(w.cwd, "config"), Source: SourceCwd}, nil
+		}
+	}
+	return ConfigDir{}, ErrNotFound
 }
