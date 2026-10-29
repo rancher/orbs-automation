@@ -161,7 +161,8 @@ func TestDoctorWiring(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Contains(t, stdout, "○ auth-api: skipped, run with --online\n")
-		assert.Contains(t, stdout, "1 check needs --online. ")
+		assert.Contains(t, stdout, "○ rate-limit: skipped, run with --online\n")
+		assert.Contains(t, stdout, "2 checks need --online. ")
 	})
 
 	t.Run("--online without a token skips auth-api instead of calling GitHub", func(t *testing.T) {

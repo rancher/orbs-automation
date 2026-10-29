@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/cli/authstatus"
 	"github.com/rancher/orbs-automation/internal/github"
@@ -100,4 +101,46 @@ type authstatusVerifier struct{}
 
 func (authstatusVerifier) Verify(ctx context.Context) (authstatus.Status, error) {
 	return authstatus.Check(ctx, "")
+}
+
+// RateLimiter asks GitHub how much of the token's rate limit is left. It is
+// defined here, where it is consumed, so tests can use a fake.
+type RateLimiter interface {
+	RateLimit(ctx context.Context) (github.RateLimit, error)
+}
+
+// rateLimitCheck warns when little of the token's core rate limit is left,
+// since commands that make many requests would fail partway. It is online and
+// needs auth-api, which proves the token works first.
+type rateLimitCheck struct {
+	limiter RateLimiter
+	now     func() time.Time
+}
+
+// NewRateLimitCheck returns the check named "rate-limit". now is time.Now in
+// production.
+func NewRateLimitCheck(r RateLimiter, now func() time.Time) Check {
+	return rateLimitCheck{limiter: r, now: now}
+}
+
+func (rateLimitCheck) Name() string     { return "rate-limit" }
+func (rateLimitCheck) Category() string { return "authentication" }
+func (rateLimitCheck) Description() string {
+	return "Warns when little of the token's GitHub rate limit is left"
+}
+func (rateLimitCheck) Online() bool    { return true }
+func (rateLimitCheck) Needs() []string { return []string{"auth-api"} }
+
+func (rateLimitCheck) Run(context.Context) Result { return Result{} }
+
+// githubRateLimiter is the RateLimiter backed by internal/github, for the token
+// every command would use.
+type githubRateLimiter struct{}
+
+func (githubRateLimiter) RateLimit(ctx context.Context) (github.RateLimit, error) {
+	creds, err := github.Resolve(github.GoGh{}, "")
+	if err != nil {
+		return github.RateLimit{}, err
+	}
+	return github.CoreRateLimit(ctx, creds)
 }

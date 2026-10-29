@@ -38,6 +38,7 @@ func defaultChecks(b Build) []Check {
 		NewGhCheck(ghBinary{}),
 		NewAuthTokenCheck(github.GoGh{}),
 		NewAuthAPICheck(authstatusVerifier{}),
+		NewRateLimitCheck(githubRateLimiter{}, time.Now),
 	}
 }
 
