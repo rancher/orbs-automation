@@ -98,7 +98,7 @@ func TestDefaultChecksAreConsistent(t *testing.T) {
 
 	require.NoError(t, err, "every need must be registered before the check that has it")
 	assert.Equal(t, []string{
-		"version", "git", "gh", "user-file", "config-dir", "config", "repos", "auth-token", "auth-api", "rate-limit",
+		"version", "git", "gh", "user-file", "config-dir", "config", "repos", "auth-token", "auth-api", "rate-limit", "commit-identity",
 	}, checkNames(checks))
 }
 

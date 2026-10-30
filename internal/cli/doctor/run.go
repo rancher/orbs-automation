@@ -56,6 +56,7 @@ func defaultChecks(b Build, env Environment) []Check {
 		NewAuthTokenCheck(github.GoGh{}),
 		NewAuthAPICheck(authstatusVerifier{}),
 		NewRateLimitCheck(githubRateLimiter{}, time.Now),
+		NewCommitIdentityCheck(settingsResolver{env.Settings}, env.Settings.CI),
 	}
 }
 

@@ -52,6 +52,7 @@ Each one reuses the package that already does the work (section 7).
 | `auth-token` | authentication | no | no token is found for the default host; names the variables to set; reports where the token came from and never the token. It runs the same resolver as every command, so it may call `gh auth token` | `internal/github` (`Resolve`, `NoTokenError`, `DescribeTokenSource`) |
 | `auth-api` | authentication | yes | GitHub rejects the token, with advice that depends on where the token came from (replace an environment variable, or `gh auth login` again); `warn` on a timeout or any other error, since a network problem says nothing about the token; needs `auth-token` | `internal/cli/authstatus` (`Check`) |
 | `rate-limit` | authentication | yes | never; `warn` when under a tenth of the core limit is left, saying when the window resets, or when the limit cannot be read; needs `auth-api` | `internal/github` (`CoreRateLimit`) |
+| `commit-identity` | authentication | in CI only | never; `warn` when no identity resolves (no `user.name`/`user.email` on a workstation, no `GERO_BOT_USER` or an unknown bot login in CI), since read-only commands need none; reports who commits would be attributed to; in CI needs `auth-api` | `internal/cli/identity` (`Resolve`) |
 
 Checks arrive with the feature that depends on them, in the same change. Likely next: token permissions for opening PRs, access to the tracker repo and its issues, push access to each fork, and clones far behind upstream. A check for something that does not exist yet is not added.
 
