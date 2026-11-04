@@ -99,6 +99,18 @@ func TestParseABlankDateIsNotSet(t *testing.T) {
 	assert.Equal(t, config.Dates{GA: day(2027, time.January, 1)}, got["v2.16"])
 }
 
+func TestParseSkipsRowsWithNoCells(t *testing.T) {
+	html := page("p", versionTable(stdHeader,
+		"<tr></tr>",
+		row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027")))
+
+	got, err := Parse(strings.NewReader(html), "p")
+
+	require.NoError(t, err)
+	assert.Len(t, got, 1)
+	assert.Contains(t, got, "v2.15")
+}
+
 func TestParsePlaceholdersAreNotSet(t *testing.T) {
 	for _, placeholder := range []string{"TBD", "tbd", "N/A", "Not Applicable", "-", "—", "–"} {
 		t.Run(placeholder, func(t *testing.T) {
@@ -132,6 +144,8 @@ func TestParseFailsLoudly(t *testing.T) {
 			"p", "version table",
 		},
 		{"missing EOM column", page("p", versionTable("<th>Version</th><th>GA</th><th>EOL</th>", row("2.15.x", "1 Jan 2026", "1 Jan 2027"))), "p", "EOM"},
+		{"missing GA column", page("p", versionTable("<th>Version</th><th>EOM</th><th>EOL</th>", row("2.15.x", "1 Jul 2026", "1 Jan 2027"))), "p", "GA"},
+		{"missing EOL column", page("p", versionTable("<th>Version</th><th>GA</th><th>EOM</th>", row("2.15.x", "1 Jan 2026", "1 Jul 2026"))), "p", "EOL"},
 		{"missing version column", page("p", versionTable("<th>GA</th><th>EOM</th><th>EOL</th>")), "p", "Version"},
 		{"table with unrelated headers", page("p", versionTable("<th>Name</th><th>Price</th>")), "p", "version table"},
 		{"version not a line", page("p", versionTable(stdHeader, row("latest", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"latest"`},
