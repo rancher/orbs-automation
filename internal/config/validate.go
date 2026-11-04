@@ -47,7 +47,7 @@ func (c Config) ValidateAt(now time.Time) error {
 	}
 	phases := map[string]string{} // line id to phase
 	if c.Lines != nil {
-		v.lines(c.Lines, phases)
+		v.lines(c.Lines, now, phases)
 	}
 	for _, p := range c.Projects {
 		v.project(p, projects, phases, c.Lines != nil)
@@ -71,7 +71,7 @@ func (v *validator) oneOf(where, field, got string, allowed ...string) {
 	}
 }
 
-func (v *validator) lines(l *RancherLines, phases map[string]string) {
+func (v *validator) lines(l *RancherLines, now time.Time, phases map[string]string) {
 	for i, ln := range l.Lines {
 		at := fmt.Sprintf("RancherLines %q: lines[%d]", l.Name, i)
 		if ln.ID == "" {
@@ -81,9 +81,14 @@ func (v *validator) lines(l *RancherLines, phases map[string]string) {
 		if _, dup := phases[ln.ID]; dup {
 			v.add("%s: duplicate line %q", at, ln.ID)
 		} else {
-			phases[ln.ID] = ln.Phase
+			phases[ln.ID] = ln.PhaseAt(now)
 		}
-		v.oneOf(at, "phase", ln.Phase, PhaseDevelopment, PhaseGA, PhaseEOM, PhaseEOL)
+		if ln.Phase != "" {
+			v.oneOf(at, "phase", ln.Phase, PhaseDevelopment, PhaseGA, PhaseEOM, PhaseEOL)
+		}
+		if err := ln.Dates.validate(); err != nil {
+			v.add("%s: %v", at, err)
+		}
 	}
 }
 

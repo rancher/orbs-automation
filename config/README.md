@@ -15,7 +15,9 @@ File names in this repo: `<name>.project.yaml`, `<name>.external.yaml`, `rancher
 
 ## Line phases
 
-`RancherLines` gives each line a `phase`, following the product dates (GA, EOM, EOL):
+`RancherLines` records each line's lifecycle dates under `dates` (`ga`, `eom`, `eol`, as `YYYY-MM-DD`), copied from the [SUSE lifecycle page](https://www.suse.com/lifecycle/#suse-rancher-prime). The phase is not stored: it is worked out from the dates and the current time, and each phase begins at 00:00 UTC on its date. A line with no `ga` date, or one in the future, is in `development`. The dates must be in order (`ga <= eom <= eol`).
+
+An optional `phase` on a line overrides the dates, for a line the page does not cover or to force a phase early.
 
 | Phase | Meaning |
 |---|---|
@@ -47,6 +49,6 @@ Documents use `apiVersion: gero/v1alpha1` until v1.0.0 of `gero`, when the shape
 
 ## Resolution rules
 
-* A `release.lines` entry with no `branch` resolves to the project's default branch only while that line's `phase` is `development`. Any other line without a branch is an error.
+* A `release.lines` entry with no `branch` resolves to the project's default branch only while that line's phase is `development`. Any other line without a branch is an error.
 * A source with `accept.lines: all` maps, per Rancher line, the source's release for that line to this project's branch for that line (e.g. kuberlr-kubectl `8.x` is line v2.15, which feeds BRO `release/v11.x`). A `universal` source feeds every line.
 * A repo's `gero.yaml` may only hold `WorkflowsConfig` documents for now; any other kind is an error. The reconciler reads central config, and fetches a repo's `gero.yaml` only when it is about to act on that repo.
