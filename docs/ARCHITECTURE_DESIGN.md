@@ -63,7 +63,7 @@ The central automation repo is the source of truth for the project list, how pro
 
 Kinds so far (names are not final):
 * `Project`: a repo we model. Its `spec` has `repo`, `release` (branch policy, tag pattern, line-to-branch mapping) and `sources` (what it takes updates from, with `accept` and `update`). Edges are declared once, on the consuming side, and the reverse view is derived. A project can be a consumer on one edge and a producer on another.
-* `RancherLines`: the set of Rancher lines with their phase and Kubernetes range. It has no branches; each project maps its own branches to line IDs.
+* `RancherLines`: the set of Rancher lines with their lifecycle dates (GA, EOM, EOL) and Kubernetes range. The phase is derived from the dates and the current UTC time. It has no branches; each project maps its own branches to line IDs.
 * `External`: a third-party project we track (`trackOnly`, `react`) or notify.
 * `WorkflowsConfig`: how workflows are rendered into a repo's branches. This lives in the target repo's `gero.yaml`, not centrally, and is the only kind allowed there for now.
 

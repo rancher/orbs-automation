@@ -20,7 +20,7 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 | Kind | Holds |
 |---|---|
 | `Project` | A repo we model: `repo`, `release` (branch policy, tag pattern, line-to-branch mapping) and `sources` (what it takes updates from, with `accept` and `update`) |
-| `RancherLines` | The Rancher lines with their phase and Kubernetes range. No branches: each project maps its own branches to line IDs |
+| `RancherLines` | The Rancher lines with their lifecycle dates and Kubernetes range. The phase is derived from the dates and the current time, with an optional `phase` override. No branches: each project maps its own branches to line IDs |
 | `External` | A third-party project we track (`trackOnly`, `react`) or notify |
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |
 
@@ -43,6 +43,7 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 * dangling project references, and that each `release.lines` entry names a known Rancher line
 * each project-to-project edge is declared once, under the consuming project's `sources`
+* each line's `dates` are in order (`ga <= eom <= eol`, and an `eom` needs a `ga`), and a `phase` override, when set, is one of `development`, `ga`, `eom`, `eol`. A project's `release.lines` entry with no `branch` is accepted only while the line's derived phase is `development`, so this check depends on the date it runs
 * **Roles belong to relationships, not projects.** A project can be a producer on one edge and a consumer on another (for example a chart repo that consumes an operator and feeds Rancher). Project config has no `role` field; producer and consumer are derived from the edges.
 * **One action per pair of projects:** `notify` (outbound) is mutually exclusive with `trackOnly` and `react` (inbound) between the same two projects, since both would imply a circular dependency. This applies to a pair, not to a project as a whole.
 * **Edge kinds are explicit.** A `sources` entry is a bump edge, an `External` `relationships[].action` names `trackOnly`, `react` or `notify`, and a QA test edge is added later, because the QA repo is related to others by something other than a bump.
