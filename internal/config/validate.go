@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // The values an enumerated field may take (config/README.md).
@@ -28,10 +29,17 @@ const (
 	PhaseEOL         = "eol"
 )
 
-// Validate checks c after WithDefaults, so an omitted field with a default is
-// already filled in. It reports every problem it finds, each naming the
-// document and field, as one joined error; it returns nil when c is valid.
+// Validate is ValidateAt for the current time.
 func (c Config) Validate() error {
+	return c.ValidateAt(time.Now())
+}
+
+// ValidateAt checks c after WithDefaults, so an omitted field with a default is
+// already filled in. A line's phase depends on the date, so now decides which
+// lines are still in development. It reports every problem it finds, each
+// naming the document and field, as one joined error; it returns nil when c is
+// valid.
+func (c Config) ValidateAt(now time.Time) error {
 	var v validator
 	projects := map[string]bool{}
 	for _, p := range c.Projects {

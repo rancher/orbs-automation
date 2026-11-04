@@ -101,7 +101,8 @@ type RancherLines struct {
 // Line is one Rancher line.
 type Line struct {
 	ID         string          `yaml:"id"`
-	Phase      string          `yaml:"phase"` // development, ga, eom or eol
+	Phase      string          `yaml:"phase"` // optional override: development, ga, eom or eol
+	Dates      Dates           `yaml:"dates"`
 	Kubernetes KubernetesRange `yaml:"kubernetes"`
 }
 
