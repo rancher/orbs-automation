@@ -65,3 +65,14 @@ func TestLoginWithoutTokenOrWithUnsupportedHost(t *testing.T) {
 	_, err = Login(context.Background(), Credentials{Host: "acme.ghe.com", Token: "tok"})
 	assert.ErrorIs(t, err, ErrUnsupportedHost)
 }
+
+func TestLoginForbiddenIsANonUserToken(t *testing.T) {
+	var last *http.Request
+
+	login, err := Login(context.Background(), Credentials{Host: "github.com", Token: "ghs_app"},
+		respondWith(&last, http.StatusForbidden, `{"message":"Resource not accessible by integration"}`))
+
+	require.ErrorIs(t, err, ErrNotUserToken)
+	assert.NotErrorIs(t, err, ErrBadCredentials)
+	assert.Empty(t, login)
+}

@@ -3,6 +3,7 @@ package authstatus
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -163,4 +164,25 @@ func TestCheckWithoutATokenHasNoStatus(t *testing.T) {
 	require.ErrorIs(t, err, github.ErrNoToken)
 	assert.Equal(t, Status{}, st)
 	assert.Empty(t, v.calls)
+}
+
+func TestRunReportsAnInstallationTokenInsteadOfFailing(t *testing.T) {
+	v := &fakeVerifier{err: fmt.Errorf("on github.com: %w", github.ErrNotUserToken)}
+
+	out, err := run(context.Background(), settings(clicfg.OutputText), "", goodAuth(), v)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Host:   github.com (default)\nToken:  environment variable GH_TOKEN\nLogin:  installation token\n", out)
+	assert.NotContains(t, out, secret)
+}
+
+func TestRunReportsAnInstallationTokenAsJSON(t *testing.T) {
+	v := &fakeVerifier{err: github.ErrNotUserToken}
+
+	out, err := run(context.Background(), settings(clicfg.OutputJSON), "", goodAuth(), v)
+
+	require.NoError(t, err)
+	assert.Contains(t, out, `"valid": true`)
+	assert.Contains(t, out, `"installationToken": true`)
+	assert.NotContains(t, out, `"login"`)
 }

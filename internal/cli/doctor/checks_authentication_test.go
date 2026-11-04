@@ -119,6 +119,14 @@ func TestAuthAPICheckMetadata(t *testing.T) {
 	assert.NotEmpty(t, c.Description())
 }
 
+func TestAuthAPICheckInstallationToken(t *testing.T) {
+	v := &fakeVerifier{status: authstatus.Status{Host: "github.com", Valid: true, Installation: true}}
+
+	got := NewAuthAPICheck(v).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: "using an installation token on github.com"}, got)
+}
+
 func TestAuthAPICheckAcceptedToken(t *testing.T) {
 	v := &fakeVerifier{status: authstatus.Status{Host: "github.com", TokenSource: "GH_TOKEN", Valid: true, Login: "octocat"}}
 
