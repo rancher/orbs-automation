@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -88,6 +89,37 @@ spec:
 	require.NoError(t, err)
 	require.NotNil(t, got.Lines)
 	assert.Equal(t, []Line{{ID: "v2.16", Phase: "development", Kubernetes: KubernetesRange{Min: "1.35", Max: "1.37"}}}, got.Lines.Lines)
+}
+
+func TestLoadDecodesLineDates(t *testing.T) {
+	fsys := fstest.MapFS{"rancher.lines.yaml": {Data: []byte(`apiVersion: gero/v1alpha1
+kind: RancherLines
+name: rancher
+spec:
+  lines:
+    - id: v2.15
+      dates:
+        ga: 2026-08-27
+        eom: 2027-02-27
+        eol: 2028-02-27
+      kubernetes:
+        min: "1.34"
+        max: "1.36"
+`)}}
+
+	got, err := Load(fsys)
+
+	require.NoError(t, err)
+	require.NotNil(t, got.Lines)
+	assert.Equal(t, []Line{{
+		ID: "v2.15",
+		Dates: Dates{
+			GA:  time.Date(2026, time.August, 27, 0, 0, 0, 0, time.UTC),
+			EOM: time.Date(2027, time.February, 27, 0, 0, 0, 0, time.UTC),
+			EOL: time.Date(2028, time.February, 27, 0, 0, 0, 0, time.UTC),
+		},
+		Kubernetes: KubernetesRange{Min: "1.34", Max: "1.36"},
+	}}, got.Lines.Lines)
 }
 
 func TestLoadDecodesExternal(t *testing.T) {
