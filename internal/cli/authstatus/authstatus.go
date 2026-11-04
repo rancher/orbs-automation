@@ -20,7 +20,10 @@ type Status struct {
 	HostSource  string `json:"hostSource"`
 	TokenSource string `json:"tokenSource"`
 	Valid       bool   `json:"valid"`
-	Login       string `json:"login,omitempty"` // empty when the token is rejected
+	Login       string `json:"login,omitempty"` // empty when the token is rejected or is an installation token
+	// Installation is true when GitHub accepts the token but reports no user,
+	// as it does for a GitHub App installation token.
+	Installation bool `json:"installationToken,omitempty"`
 }
 
 // hostSources turns the host source names into words for the text output. JSON
