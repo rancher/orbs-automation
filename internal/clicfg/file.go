@@ -89,7 +89,25 @@ func InCI(getenv func(string) string) (bool, error) {
 // a file. Signs are warnings only; nothing changes what a command does
 // (docs/specs/EXECUTION_CONTEXT.md).
 func WorkstationSigns(getenv func(string) string, home string, tty bool, exists func(string) bool) []string {
-	return nil
+	if getenv(EnvContext) != ContextCI {
+		return nil
+	}
+	var signs []string
+	runnerVars := []string{"GITHUB_ACTIONS", "GITHUB_RUN_ID", "GITHUB_REPOSITORY", "RUNNER_OS", "RUNNER_NAME", "RUNNER_TEMP"}
+	var set bool
+	for _, v := range runnerVars {
+		set = set || getenv(v) != ""
+	}
+	if !set {
+		signs = append(signs, "no GitHub Actions runner variables are set")
+	}
+	if tty {
+		signs = append(signs, "stdin and stdout are a terminal")
+	}
+	if path, explicit := UserFilePath(getenv, home); !explicit && exists(path) {
+		signs = append(signs, "a user file exists at "+path)
+	}
+	return signs
 }
 
 // UserFilePath returns where the user file lives: GERO_CONFIG, else
