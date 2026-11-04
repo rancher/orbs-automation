@@ -82,6 +82,16 @@ func InCI(getenv func(string) string) (bool, error) {
 	}
 }
 
+// WorkstationSigns lists the signs that a forced CI context (GERO_CONTEXT=ci)
+// is really a person's machine: none of the runner variables, a TTY, and a user
+// file at the default path. It returns nil when the context is not forced CI.
+// tty says whether stdin and stdout are terminals, and exists whether a path is
+// a file. Signs are warnings only; nothing changes what a command does
+// (docs/specs/EXECUTION_CONTEXT.md).
+func WorkstationSigns(getenv func(string) string, home string, tty bool, exists func(string) bool) []string {
+	return nil
+}
+
 // UserFilePath returns where the user file lives: GERO_CONFIG, else
 // $XDG_CONFIG_HOME/gero/config.yaml, else ~/.config/gero/config.yaml. explicit
 // is true when GERO_CONFIG named it. We avoid os.UserConfigDir because it points
