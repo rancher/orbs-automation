@@ -34,5 +34,8 @@ func Require(commandPath string, s clicfg.Settings) error {
 // which wins over GITHUB_TOKEN. Call it for every CI-only command that writes
 // elsewhere.
 func RequireCrossRepoToken(commandPath string, s clicfg.Settings) error {
+	if s.DefaultToken {
+		return fmt.Errorf("%s writes to another repository, but GH_TOKEN is unset or equal to GITHUB_TOKEN, which only reaches the repository the workflow runs in: set GH_TOKEN to a token for the target repository", commandPath)
+	}
 	return nil
 }
