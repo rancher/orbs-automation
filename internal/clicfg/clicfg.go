@@ -95,6 +95,10 @@ type Settings struct {
 	UserFile     string // path of the user file that was loaded; empty when none applied
 	CI           bool   // the process runs in CI rather than on a workstation
 	BotUser      string // GERO_BOT_USER: the bot's login, from the workflow; env only
+	// DefaultToken is true when the token in the environment is the workflow's
+	// default GITHUB_TOKEN: GITHUB_TOKEN is set and GH_TOKEN is unset or equal
+	// to it. Only the fact is kept, never a token.
+	DefaultToken bool
 
 	sources map[string]Source
 }

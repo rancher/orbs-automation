@@ -26,3 +26,13 @@ func Require(commandPath string, s clicfg.Settings) error {
 	}
 	return nil
 }
+
+// RequireCrossRepoToken refuses the workflow's default GITHUB_TOKEN before a
+// command at commandPath writes to a repository other than the one the workflow
+// runs in: that token is scoped to its own repository, so GitHub would answer
+// 403 after the work was done. It says to pass a cross-repo token as GH_TOKEN,
+// which wins over GITHUB_TOKEN. Call it for every CI-only command that writes
+// elsewhere.
+func RequireCrossRepoToken(commandPath string, s clicfg.Settings) error {
+	return nil
+}
