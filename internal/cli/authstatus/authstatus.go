@@ -52,8 +52,11 @@ func unsupported(format string) error {
 
 func renderText(st Status) string {
 	login := st.Login
-	if !st.Valid {
+	switch {
+	case !st.Valid:
 		login = "token rejected by GitHub"
+	case st.Installation:
+		login = "installation token"
 	}
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)

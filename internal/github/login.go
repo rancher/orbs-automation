@@ -49,5 +49,6 @@ func isUnauthorized(err error) bool {
 // isForbidden reports whether err is GitHub answering 403 (and not a rate
 // limit, which go-github reports as its own error type).
 func isForbidden(err error) bool {
-	return false
+	var resp *gogithub.ErrorResponse
+	return errors.As(err, &resp) && resp.Response != nil && resp.Response.StatusCode == http.StatusForbidden
 }

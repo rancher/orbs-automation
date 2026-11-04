@@ -50,6 +50,11 @@ func check(ctx context.Context, hostname string, a github.Auth, v Verifier) (Sta
 	if errors.Is(err, github.ErrBadCredentials) {
 		return st, err
 	}
+	if errors.Is(err, github.ErrNotUserToken) {
+		// An installation token works but has no user to report.
+		st.Valid, st.Installation = true, true
+		return st, nil
+	}
 	if err != nil {
 		return Status{}, err
 	}

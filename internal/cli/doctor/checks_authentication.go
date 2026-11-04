@@ -65,6 +65,8 @@ func (authAPICheck) Needs() []string { return []string{"auth-token"} }
 func (c authAPICheck) Run(ctx context.Context) Result {
 	st, err := c.verifier.Verify(ctx)
 	switch {
+	case err == nil && st.Installation:
+		return Result{Status: StatusOK, Message: fmt.Sprintf("using an installation token on %s", st.Host)}
 	case err == nil:
 		return Result{Status: StatusOK, Message: fmt.Sprintf("signed in as %s on %s", st.Login, st.Host)}
 	case errors.Is(err, github.ErrBadCredentials):
