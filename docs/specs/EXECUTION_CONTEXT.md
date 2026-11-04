@@ -82,7 +82,7 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 ## Not built yet
 
-* Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`) but no command calls it yet. Still to build: the cross-repo token check and the `auth status` fallback for installation tokens.
+* Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`) but only `gero doctor` (the `commit-identity` check) calls it so far. The cross-repo token check (`cigate.RequireCrossRepoToken`), the workstation-signs detection (`clicfg.WorkstationSigns`) and the `auth status` fallback for installation tokens exist too, and likewise wait for a command to call them. The fallback treats a 403 from `GET /user` as an installation token and is unverified against a real one.
 * The `gitcli` push, the `signCommits` key and signing through `git`.
 * The write-command contract: preflight line, throwaway clone, the confirmation and `--non-interactive`.
 * Any write command at all. These are the rules the first one is built against.
