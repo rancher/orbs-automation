@@ -76,4 +76,5 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 * How post-edit commands such as `go generate` get a toolchain that matches the target branch in both contexts. A workstation without it fails with a `gero doctor` hint.
 * Whether the throwaway clone should be shallow in CI when a strategy needs history.
 * Whether a reused PR's branch is force-updated or left alone when the new commit differs.
+* How a branch name is built from the consumer's `pullRequests.branchPrefix` template and the user's `branchPrefix` setting, which replaces it whole ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)). Whether the template covers the whole name or only a prefix before a fixed `<version>-<target>` tail, which placeholders exist, and how the reuse lookup stays independent of the name.
 * The command's name and where it sits in the tree ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
