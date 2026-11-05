@@ -46,6 +46,7 @@ type Repo struct {
 type Image struct {
 	Name       string   `yaml:"name"` // repository path in a registry, such as rancher/scc-operator
 	Registries []string `yaml:"registries"`
+	Since      string   `yaml:"since"` // a Rancher line ID: expected only from this line on; empty means every line
 }
 
 // Release is the project's release policy.

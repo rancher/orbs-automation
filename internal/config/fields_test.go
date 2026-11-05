@@ -45,6 +45,7 @@ var fieldClasses = map[string]string{
 
 	"Image.Name":       "plain",
 	"Image.Registries": "resolved:Project.EffectiveImages",
+	"Image.Since":      "resolved:Image.AppliesTo",
 
 	"PullRequests.Title":        "plain",
 	"PullRequests.BranchPrefix": "layered:the branchPrefix user setting replaces it whole",

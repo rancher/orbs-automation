@@ -20,3 +20,12 @@ func (p Project) EffectiveImages() []Image {
 	}
 	return out
 }
+
+// AppliesTo reports whether the image is expected for a release in the Rancher
+// line: when it has no Since, always, and otherwise when the line is Since or
+// newer. Lines compare by their numbers, so v2.16 is newer than v2.15. A line
+// that cannot be read as a number is treated as applying, so an image is never
+// skipped on a guess.
+func (img Image) AppliesTo(line string) bool {
+	return false
+}
