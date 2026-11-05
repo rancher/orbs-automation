@@ -3,6 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,7 +15,8 @@ import (
 )
 
 // fakeRegistry serves manifests for the images it has, optionally behind an
-// anonymous bearer token as Docker Hub does.
+// anonymous bearer token as Docker Hub does. It is an http.RoundTripper, so
+// tests need no port.
 type fakeRegistry struct {
 	images     map[string]bool // "name:tag"
 	needsToken bool
@@ -24,8 +26,10 @@ type fakeRegistry struct {
 	tokens     atomic.Int32
 	methods    []string
 	accepts    []string
-	srv        *httptest.Server
+	down       bool // every request fails to connect
 }
+
+const fakeHost = "registry.test"
 
 func newFake(t *testing.T, images ...string) *fakeRegistry {
 	t.Helper()
@@ -33,12 +37,22 @@ func newFake(t *testing.T, images ...string) *fakeRegistry {
 	for _, i := range images {
 		f.images[i] = true
 	}
-	f.srv = httptest.NewServer(http.HandlerFunc(f.serve))
-	t.Cleanup(f.srv.Close)
 	return f
 }
 
-func (f *fakeRegistry) host() string { return strings.TrimPrefix(f.srv.URL, "http://") }
+func (f *fakeRegistry) host() string { return fakeHost }
+
+func (f *fakeRegistry) RoundTrip(req *http.Request) (*http.Response, error) {
+	if err := req.Context().Err(); err != nil {
+		return nil, err
+	}
+	if f.down {
+		return nil, errors.New("connection refused")
+	}
+	rec := httptest.NewRecorder()
+	f.serve(rec, req)
+	return rec.Result(), nil
+}
 
 func (f *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/token" {
@@ -55,7 +69,7 @@ func (f *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 	f.accepts = append(f.accepts, r.Header.Get("Accept"))
 	if f.needsToken && r.Header.Get("Authorization") != "Bearer t0k" {
 		w.Header().Set("WWW-Authenticate",
-			`Bearer realm="`+f.srv.URL+`/token",service="registry.test",scope="repository:rancher/scc-operator:pull"`)
+			`Bearer realm="http://`+fakeHost+`/token",service="registry.test",scope="repository:rancher/scc-operator:pull"`)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -73,23 +87,25 @@ func (f *fakeRegistry) serve(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func checker() Checker { return Checker{Scheme: "http"} }
+func checker(f *fakeRegistry) Checker {
+	return Checker{Scheme: "http", Client: &http.Client{Transport: f}}
+}
 
 func TestExistsFound(t *testing.T) {
 	f := newFake(t, "rancher/scc-operator:v0.5.3")
-	got := checker().Exists(context.Background(), f.host(), "rancher/scc-operator", "v0.5.3")
+	got := checker(f).Exists(context.Background(), f.host(), "rancher/scc-operator", "v0.5.3")
 	assert.Equal(t, Result{Status: Found}, got)
 }
 
 func TestExistsNotFound(t *testing.T) {
 	f := newFake(t, "rancher/scc-operator:v0.5.3")
-	got := checker().Exists(context.Background(), f.host(), "rancher/scc-operator", "v9.9.9")
+	got := checker(f).Exists(context.Background(), f.host(), "rancher/scc-operator", "v9.9.9")
 	assert.Equal(t, Result{Status: NotFound}, got)
 }
 
 func TestExistsAsksWithHeadAndTheManifestTypes(t *testing.T) {
 	f := newFake(t, "o/a:v1")
-	checker().Exists(context.Background(), f.host(), "o/a", "v1")
+	checker(f).Exists(context.Background(), f.host(), "o/a", "v1")
 	require.Len(t, f.methods, 1)
 	assert.Equal(t, http.MethodHead, f.methods[0], "the image is not downloaded")
 	for _, mt := range []string{
@@ -106,7 +122,7 @@ func TestExistsFetchesAnAnonymousTokenWhenChallenged(t *testing.T) {
 	f := newFake(t, "rancher/scc-operator:v0.5.3")
 	f.needsToken = true
 
-	got := checker().Exists(context.Background(), f.host(), "rancher/scc-operator", "v0.5.3")
+	got := checker(f).Exists(context.Background(), f.host(), "rancher/scc-operator", "v0.5.3")
 
 	assert.Equal(t, Result{Status: Found}, got)
 	assert.EqualValues(t, 1, f.tokens.Load())
@@ -116,7 +132,7 @@ func TestExistsFetchesAnAnonymousTokenWhenChallenged(t *testing.T) {
 func TestExistsNotFoundBehindAToken(t *testing.T) {
 	f := newFake(t)
 	f.needsToken = true
-	got := checker().Exists(context.Background(), f.host(), "rancher/scc-operator", "v1")
+	got := checker(f).Exists(context.Background(), f.host(), "rancher/scc-operator", "v1")
 	assert.Equal(t, Result{Status: NotFound}, got)
 }
 
@@ -124,7 +140,7 @@ func TestExistsAcceptsAnAccessTokenField(t *testing.T) {
 	f := newFake(t, "rancher/scc-operator:v1")
 	f.needsToken = true
 	f.tokenJSON = `{"access_token":"t0k"}`
-	got := checker().Exists(context.Background(), f.host(), "rancher/scc-operator", "v1")
+	got := checker(f).Exists(context.Background(), f.host(), "rancher/scc-operator", "v1")
 	assert.Equal(t, Result{Status: Found}, got)
 }
 
@@ -133,7 +149,7 @@ func TestExistsIsUnreachableWhenTheTokenIsRefused(t *testing.T) {
 	f.needsToken = true
 	f.tokenJSON = `{"token":"wrong"}`
 
-	got := checker().Exists(context.Background(), f.host(), "rancher/scc-operator", "v1")
+	got := checker(f).Exists(context.Background(), f.host(), "rancher/scc-operator", "v1")
 
 	assert.Equal(t, Unreachable, got.Status)
 	assert.Contains(t, got.Detail, "401")
@@ -143,7 +159,7 @@ func TestExistsIsUnreachableWhenTheTokenIsRefused(t *testing.T) {
 func TestExistsIsUnreachableWhenAuthenticationIsNotAnonymous(t *testing.T) {
 	f := newFake(t)
 	f.status = http.StatusUnauthorized // no bearer challenge to follow
-	got := checker().Exists(context.Background(), f.host(), "o/a", "v1")
+	got := checker(f).Exists(context.Background(), f.host(), "o/a", "v1")
 	assert.Equal(t, Unreachable, got.Status)
 	assert.Contains(t, got.Detail, "authentication")
 }
@@ -152,7 +168,7 @@ func TestExistsIsUnreachableOnOtherStatuses(t *testing.T) {
 	for _, status := range []int{http.StatusInternalServerError, http.StatusForbidden, http.StatusTooManyRequests} {
 		f := newFake(t)
 		f.status = status
-		got := checker().Exists(context.Background(), f.host(), "o/a", "v1")
+		got := checker(f).Exists(context.Background(), f.host(), "o/a", "v1")
 		assert.Equal(t, Unreachable, got.Status, status)
 		assert.Contains(t, got.Detail, http.StatusText(status))
 	}
@@ -160,9 +176,8 @@ func TestExistsIsUnreachableOnOtherStatuses(t *testing.T) {
 
 func TestExistsIsUnreachableWhenTheRegistryCannotBeReached(t *testing.T) {
 	f := newFake(t)
-	host := f.host()
-	f.srv.Close()
-	got := checker().Exists(context.Background(), host, "o/a", "v1")
+	f.down = true
+	got := checker(f).Exists(context.Background(), f.host(), "o/a", "v1")
 	assert.Equal(t, Unreachable, got.Status)
 	assert.NotEmpty(t, got.Detail)
 }
@@ -171,7 +186,7 @@ func TestExistsStopsWhenTheContextIsCancelled(t *testing.T) {
 	f := newFake(t, "o/a:v1")
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	got := checker().Exists(ctx, f.host(), "o/a", "v1")
+	got := checker(f).Exists(ctx, f.host(), "o/a", "v1")
 	assert.Equal(t, Unreachable, got.Status)
 	assert.EqualValues(t, 0, f.manifests.Load())
 }
@@ -180,7 +195,7 @@ func TestExistsIsUnreachableOnABrokenTokenAnswer(t *testing.T) {
 	f := newFake(t, "o/a:v1")
 	f.needsToken = true
 	f.tokenJSON = `not json`
-	got := checker().Exists(context.Background(), f.host(), "o/a", "v1")
+	got := checker(f).Exists(context.Background(), f.host(), "o/a", "v1")
 	assert.Equal(t, Unreachable, got.Status)
 }
 
