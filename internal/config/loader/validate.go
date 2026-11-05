@@ -82,9 +82,9 @@ func (v *validator) repo(where string, r config.Repo) {
 	}
 }
 
-func (v *validator) images(where string, images []config.Image) {
+func (v *validator) images(where string, p config.Project, phases map[string]string, haveLines bool) {
 	names := map[string]bool{}
-	for i, img := range images {
+	for i, img := range p.Images {
 		at := fmt.Sprintf("%s: images[%d]", where, i)
 		switch {
 		case img.Name == "":
@@ -95,6 +95,17 @@ func (v *validator) images(where string, images []config.Image) {
 			v.add("%s: image %q is listed twice", at, img.Name)
 		}
 		names[img.Name] = true
+		if img.Since != "" {
+			_, known := phases[img.Since]
+			switch {
+			case len(p.Release.Lines) == 0:
+				v.add("%s: since %q needs release.lines, and this project lists none", at, img.Since)
+			case !haveLines:
+				v.add("%s: since %q needs a RancherLines document, and there is none", at, img.Since)
+			case !known:
+				v.add("%s: since %q is not in RancherLines", at, img.Since)
+			}
+		}
 		roles := map[string]bool{}
 		for j, role := range img.Registries {
 			rat := fmt.Sprintf("%s: registries[%d]", at, j)
@@ -115,7 +126,7 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 		v.add("%s: release.tagPattern is required", where)
 	}
 
-	v.images(where, p.Images)
+	v.images(where, p, phases, haveLines)
 
 	seen := map[string]bool{}
 	for i, l := range p.Release.Lines {
