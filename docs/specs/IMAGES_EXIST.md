@@ -1,6 +1,6 @@
 # Images exist
 
-**Status:** draft. Nothing here is built.
+**Status:** implemented.
 
 Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before a release is pushed downstream, check that the images it names are published where they must be. The command is `gero repo images exist`. The same check is the artifact precondition of a downstream bump ([PUSH_TO_REPO](PUSH_TO_REPO.md)), so the logic is a library, `internal/registry`, and the command is a thin wrapper over it.
 
@@ -44,7 +44,7 @@ Tests run the client against an `httptest` registry, including the token challen
 
 ## Not built yet
 
-Everything.
+* The downstream bump does not call `internal/registry` as its artifact precondition yet, because the bump engine does not exist ([PUSH_TO_REPO](PUSH_TO_REPO.md)).
 
 ## Open questions
 
