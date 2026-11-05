@@ -468,7 +468,7 @@ func TestCheckANamedBranchThatCannotBeReadIsAnError(t *testing.T) {
 
 // A producer with lines of its own feeds the consumer's branch for the line of
 // the release.
-func linedLoop(t *testing.T, tag string) (*fakeWorkspace, string) {
+func linedLoop(t *testing.T) *fakeWorkspace {
 	t.Helper()
 	ws := loopFixture()
 	producer := config.Project{
@@ -486,16 +486,14 @@ func linedLoop(t *testing.T, tag string) (*fakeWorkspace, string) {
 		{Line: "v2.14", Branch: "release/v2.14"},
 	}
 	ws.producer, ws.consumers = producer, []config.Consumer{c}
-	ws.refs["rancher/kuberlr"] = git.Refs{Tags: tags2("v8.1.0", "v9.0.0", "v7.0.0")}
+	ws.refs["rancher/kuberlr"] = git.Refs{Tags: tags("v8.1.0", "v9.0.0", "v7.0.0")}
 	ws.files["rancher/rancher@sha-main:build.yaml"] = "defaultSccOperatorImage: rancher/kuberlr:v9.0.0\n"
-	return ws, tag
+	return ws
 }
-
-func tags2(names ...string) []git.Tag { return tags(names...) }
 
 func TestCheckALinedProducerFeedsTheConsumersBranchForTheLine(t *testing.T) {
 	for tag, want := range map[string]string{"v8.1.0": "release/v2.15", "v9.0.0": "main"} {
-		ws, _ := linedLoop(t, tag)
+		ws := linedLoop(t)
 		got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: tag})
 		require.NoError(t, err, tag)
 		assert.Equal(t, []string{want}, branchesOf(got), tag)
@@ -503,14 +501,14 @@ func TestCheckALinedProducerFeedsTheConsumersBranchForTheLine(t *testing.T) {
 }
 
 func TestCheckATagInNoLineOfTheProducerHasNoTarget(t *testing.T) {
-	ws, _ := linedLoop(t, "v7.0.0")
+	ws := linedLoop(t)
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v7.0.0"})
 	assert.ErrorIs(t, err, ErrNoTargets)
 	assert.ErrorContains(t, err, "--branch")
 }
 
 func TestCheckAConsumerWithoutTheLineHasNoTarget(t *testing.T) {
-	ws, _ := linedLoop(t, "v8.1.0")
+	ws := linedLoop(t)
 	c := ws.consumers[0]
 	c.Project.Release.Lines = []config.ProjectLine{{Line: "v2.14", Branch: "release/v2.14"}}
 	ws.consumers[0] = c
@@ -520,7 +518,7 @@ func TestCheckAConsumerWithoutTheLineHasNoTarget(t *testing.T) {
 }
 
 func TestCheckAnExplicitUniversalAcceptFeedsEveryBranchWhateverTheProducerHas(t *testing.T) {
-	ws, _ := linedLoop(t, "v8.1.0")
+	ws := linedLoop(t)
 	c := ws.consumers[0]
 	c.Source.Accept.Lines = config.AcceptLinesUniversal
 	ws.consumers[0] = c
