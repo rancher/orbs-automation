@@ -426,3 +426,45 @@ func TestLoadBotUser(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestLoadDryRun(t *testing.T) {
+	tests := []struct {
+		name  string
+		env   map[string]string
+		flags map[string]string
+		want  bool
+		src   Source
+	}{
+		{"off by default", nil, nil, false, SourceDefault},
+		{"the flag", nil, map[string]string{"dry-run": "true"}, true, SourceFlag},
+		{"the env, true", map[string]string{"GERO_DRY_RUN": "true"}, nil, true, SourceEnv},
+		{"the env, 1", map[string]string{"GERO_DRY_RUN": "1"}, nil, true, SourceEnv},
+		{"the env, false", map[string]string{"GERO_DRY_RUN": "false"}, nil, false, SourceEnv},
+		{"the flag beats the env, on", map[string]string{"GERO_DRY_RUN": "false"}, map[string]string{"dry-run": "true"}, true, SourceFlag},
+		{"the flag beats the env, off", map[string]string{"GERO_DRY_RUN": "true"}, map[string]string{"dry-run": "false"}, false, SourceFlag},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{Getenv: env(tt.env), Flags: flags(tt.flags)})
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.DryRun)
+			assert.Equal(t, tt.src, s.Source("dryRun"))
+		})
+	}
+}
+
+func TestLoadDryRunRejectsAnythingElse(t *testing.T) {
+	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_DRY_RUN": "maybe"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dryRun")
+	assert.Contains(t, err.Error(), "maybe")
+
+	_, err = Load(Inputs{Flags: flags(map[string]string{"dry-run": "sometimes"})})
+	require.Error(t, err)
+}
+
+func TestLoadDryRunIsNotAUserFileKey(t *testing.T) {
+	_, err := Load(Inputs{UserFile: strings.NewReader("dryRun: true\n"), UserFileName: "config.yaml"})
+	require.Error(t, err, "a file that turned it on would turn it on for every run")
+	assert.Contains(t, err.Error(), "dryRun")
+}
