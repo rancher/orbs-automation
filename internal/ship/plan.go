@@ -79,7 +79,7 @@ type Plan struct {
 	Want     string           `json:"want"`    // what it should hold for the release
 	Status   Status           `json:"status"`
 	Blockers []string         `json:"blockers,omitempty"`
-	Images   *registry.Report `json:"images,omitempty"` // not checked when already up to date
+	Images   *registry.Report `json:"images,omitempty"`  // not checked when already up to date
 	Preview  *Preview         `json:"preview,omitempty"` // what a run would write; none when already up to date
 	Warnings []string         `json:"warnings,omitempty"`
 }
@@ -157,6 +157,14 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		plan.Status = StatusUpToDate
 		return plan, nil
 	}
+	preview, err := renderPreview(previewInput{
+		producer: producer, consumer: consumer, release: release, target: target,
+		strategy: strategy, file: file, current: current, want: want, userPrefix: in.BranchPrefix,
+	})
+	if err != nil {
+		return Plan{}, fmt.Errorf("render the PR: %w", err)
+	}
+	plan.Preview = &preview
 	images := registry.CheckProject(ctx, producer, prober, release.Tag)
 	plan.Images, plan.Warnings = &images, images.Warnings
 	if images.Failed() {
