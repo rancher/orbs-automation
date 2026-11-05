@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -199,4 +200,10 @@ func TestParseArgs(t *testing.T) {
 			assert.Equal(t, tt.arg, arg)
 		})
 	}
+}
+
+func TestRunNotInAProjectSaysToNameOne(t *testing.T) {
+	_, err := run(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, clicfg.OutputText, domain.Input{Branch: "main"}, false)
+	assert.ErrorIs(t, err, workspace.ErrNotProject)
+	assert.ErrorContains(t, err, "name the project")
 }
