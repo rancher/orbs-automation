@@ -173,3 +173,30 @@ func TestRunJSONHasTheFullPreview(t *testing.T) {
 	require.NotNil(t, got.Preview)
 	assert.Contains(t, got.Preview.Body, "gero:ship v1", "JSON always carries the body and message")
 }
+
+func TestParseArgs(t *testing.T) {
+	tests := []struct {
+		name, project, arg string
+		args               []string
+	}{
+		{"nothing is the repository you are in, latest", "", "", nil},
+		{"a project name", "scc-operator", "", []string{"scc-operator"}},
+		{"a project slug", "rancher/scc-operator", "", []string{"rancher/scc-operator"}},
+		{"a tag alone is for the repository you are in", "", "v0.5.3", []string{"v0.5.3"}},
+		{"a tag without its v", "", "0.5.3", []string{"0.5.3"}},
+		{"a prerelease tag", "", "v0.6.0-rc.1", []string{"v0.6.0-rc.1"}},
+		{"a line alone", "", "v2.15", []string{"v2.15"}},
+		{"a project and a tag", "scc-operator", "v0.5.3", []string{"scc-operator", "v0.5.3"}},
+		{"a project and a line", "scc-operator", "v2.15", []string{"scc-operator", "v2.15"}},
+		{"a name with digits is still a project", "scc-operator2", "", []string{"scc-operator2"}},
+		{"a name that starts with v is a project", "vault", "", []string{"vault"}},
+		{"a slug with a version-like name is a project", "rancher/v2.15", "", []string{"rancher/v2.15"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			project, arg := ParseArgs(tt.args)
+			assert.Equal(t, tt.project, project)
+			assert.Equal(t, tt.arg, arg)
+		})
+	}
+}
