@@ -82,6 +82,31 @@ func (v *validator) repo(where string, r config.Repo) {
 	}
 }
 
+func (v *validator) images(where string, images []config.Image) {
+	names := map[string]bool{}
+	for i, img := range images {
+		at := fmt.Sprintf("%s: images[%d]", where, i)
+		switch {
+		case img.Name == "":
+			v.add("%s: name is required", at)
+		case strings.ContainsAny(img.Name, " \t"):
+			v.add("%s: name %q must not contain spaces", at, img.Name)
+		case names[img.Name]:
+			v.add("%s: image %q is listed twice", at, img.Name)
+		}
+		names[img.Name] = true
+		roles := map[string]bool{}
+		for j, role := range img.Registries {
+			rat := fmt.Sprintf("%s: registries[%d]", at, j)
+			v.oneOf(rat, "registry", role, config.RegistryDockerHub, config.RegistryPrimeStaging, config.RegistryPrimeProduction)
+			if roles[role] {
+				v.add("%s: registry %q is listed twice", rat, role)
+			}
+			roles[role] = true
+		}
+	}
+}
+
 func (v *validator) project(p config.Project, projects map[string]bool, phases map[string]string, haveLines bool) {
 	where := fmt.Sprintf("Project %q", p.Name)
 	v.repo(where, p.Repo)
@@ -89,6 +114,8 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 	if p.Release.TagPattern == "" {
 		v.add("%s: release.tagPattern is required", where)
 	}
+
+	v.images(where, p.Images)
 
 	seen := map[string]bool{}
 	for i, l := range p.Release.Lines {
