@@ -29,7 +29,11 @@ internal/git/repo/   local repository access with go-git; the only importer of g
 internal/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
 internal/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
-internal/...         domain packages as they arrive: lines, bump, reconcile, github
+internal/ship/      one downstream PR: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO)
+internal/ship/templates/  the embedded commit, body and title templates and their placeholder renderer
+internal/patch/     the edit layer behind a strategy: one interface over file types, YAML first
+internal/yamledit/  changes one YAML value in place without reflowing the file; the third importer of the YAML library
+internal/...         domain packages as they arrive: lines, reconcile, github
 test/integration/    separate Go module (own go.mod) for integration tests     (TESTING)
 ```
 
