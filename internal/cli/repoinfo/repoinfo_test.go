@@ -22,6 +22,7 @@ type fakeWorkspace struct {
 	projectErr error
 	paths      map[string]workspace.RepoPath
 	tags       []git.Tag
+	branches   []git.Branch
 	tagsErr    error
 	asked      string
 	tagCalls   []string
@@ -47,6 +48,11 @@ func (f *fakeWorkspace) RepoPath(slug string) (workspace.RepoPath, error) {
 func (f *fakeWorkspace) UpstreamTags(_ context.Context, slug string) ([]git.Tag, error) {
 	f.tagCalls = append(f.tagCalls, slug)
 	return f.tags, f.tagsErr
+}
+
+func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
+	f.tagCalls = append(f.tagCalls, slug)
+	return git.Refs{Tags: f.tags, Branches: f.branches}, f.tagsErr
 }
 
 type fakeClone struct {
