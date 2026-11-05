@@ -25,7 +25,10 @@ The release is a tag, used as given, or a release line of the project, which
 resolves to the line's latest stable tag; with neither, the project's latest
 stable tag. --prerelease lets prereleases count. The consumers are the
 projects whose config takes updates from <project>; name one with --to when
-there are several, and the branch of the consumer to update with --branch.
+there are several. Every branch of the consumer that the release goes to is
+checked: all its release branches for a project that is not tied to release
+lines, or the branch for the release's line for one that is. --branch limits it
+to one branch of the consumer.
 
 Before anything is written the state is checked, from the host and not from
 any clone: the release and the target branch must exist, the consumer's
@@ -56,7 +59,7 @@ creates no PR yet.`,
 		},
 	}
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when several take updates from the project")
-	shipCmd.Flags().StringVar(&in.Branch, "branch", "", "the consumer's branch to update")
+	shipCmd.Flags().StringVar(&in.Branch, "branch", "", "check only this branch of the consumer, instead of every branch the release goes to")
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -29,7 +30,7 @@ func (f *fakeWorkspace) Consumers(string) (config.Project, []config.Consumer, er
 		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}, Release: config.Release{TagPattern: "v*"},
 	}
 	consumer := config.Consumer{
-		Project: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher"}},
+		Project: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}},
 		Source: config.Source{
 			From: "scc-operator", Accept: config.Accept{When: config.AcceptStable},
 			Update: config.Update{Strategy: "buildYamlBump", Params: map[string]string{"file": "build.yaml", "key": "image"}},
@@ -230,4 +231,38 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "this is a downgrade")
 	assert.Contains(t, out, "Images", "allowed, the check goes on")
+}
+
+func TestRunWithNoBranchChecksTheBranchesTheReleaseGoesTo(t *testing.T) {
+	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		clicfg.OutputText, domain.Input{Project: "scc-operator"}, false)
+	require.NoError(t, err)
+	assert.Contains(t, out, "Targets")
+	assert.Contains(t, out, "main", "the consumer's one branch, since it is not tied to release lines")
+}
+
+func previewPlanWithTargets() domain.Plan {
+	p := previewPlan()
+	ready := p.Targets[0]
+	upToDate := domain.TargetPlan{Target: domain.Target{Branch: "main", Commit: "3333333cccccc"}, Current: "b", Status: domain.StatusUpToDate}
+	failed := domain.TargetPlan{Target: domain.Target{Branch: "release/v2.12"}, Status: domain.StatusFailed, Error: "read build.yaml: gone"}
+	blocked := domain.TargetPlan{
+		Target: domain.Target{Branch: "release/v2.14", Commit: "4444444dddddd"}, Current: "c", Status: domain.StatusBlocked,
+		Blockers: []string{"downgrade: older"},
+	}
+	p.Targets = []domain.TargetPlan{upToDate, ready, blocked, failed}
+	p.Status = domain.StatusBlocked
+	return p
+}
+
+func TestRenderTextListsEveryTarget(t *testing.T) {
+	out := renderText(previewPlanWithTargets(), false)
+	for _, want := range []string{
+		"BRANCH", "main", "already up to date", "release/v2.15", "ready", "release/v2.14", "blocked", "release/v2.12", "failed",
+		"release/v2.14 blocked: downgrade: older", "release/v2.12 failed: read build.yaml: gone",
+	} {
+		assert.Contains(t, out, want)
+	}
+	assert.Contains(t, out, "bot/scc-operator-v0.5.3-v2.15", "only the target that needs a PR has a preview")
+	assert.Equal(t, 1, strings.Count(out, "status/auto-created"), "the labels once")
 }
