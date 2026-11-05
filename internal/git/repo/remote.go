@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	tagRefPrefix = "refs/tags/"
+	tagRefPrefix    = "refs/tags/"
+	branchRefPrefix = "refs/heads/"
 	peeledSuffix = "^{}"
 )
 
@@ -42,10 +43,6 @@ func ListRemoteRefs(ctx context.Context, url, token string) (git.Refs, error) {
 	return listRefs(ctx, goGitList, url, token)
 }
 
-func listRefs(ctx context.Context, list lister, url, token string) (git.Refs, error) {
-	return git.Refs{}, nil
-}
-
 func goGitList(ctx context.Context, url string, auth transport.AuthMethod) ([]*plumbing.Reference, error) {
 	remote := gogit.NewRemote(memory.NewStorage(), &config.RemoteConfig{Name: "origin", URLs: []string{url}})
 	// AppendPeeled is what makes an annotated tag report its commit: without it
@@ -53,28 +50,40 @@ func goGitList(ctx context.Context, url string, auth transport.AuthMethod) ([]*p
 	return remote.ListContext(ctx, &gogit.ListOptions{Auth: auth, PeelingOption: gogit.AppendPeeled})
 }
 
-func listTags(ctx context.Context, list lister, url, token string) ([]git.Tag, error) {
+func listRefs(ctx context.Context, list lister, url, token string) (git.Refs, error) {
 	refs, err := list(ctx, url, nil)
 	if errors.Is(err, transport.ErrAuthenticationRequired) {
 		if token == "" {
-			return nil, fmt.Errorf("list tags of %s: %w: it needs a token, set GH_TOKEN or sign in with gh", url, err)
+			return git.Refs{}, fmt.Errorf("list refs of %s: %w: it needs a token, set GH_TOKEN or sign in with gh", url, err)
 		}
 		refs, err = list(ctx, url, &http.BasicAuth{Username: "x-access-token", Password: token})
 	}
 	if err != nil {
-		return nil, fmt.Errorf("list tags of %s: %w", url, err)
+		return git.Refs{}, fmt.Errorf("list refs of %s: %w", url, err)
 	}
-	return tagsFromRefs(refs), nil
+	return refsFromReferences(refs), nil
 }
 
-// tagsFromRefs picks the tags out of the advertised references. An annotated
-// tag is advertised twice: the tag object under its name, and the commit it
-// peels to under name^{}. The commit is the one that matters.
-func tagsFromRefs(refs []*plumbing.Reference) []git.Tag {
+func listTags(ctx context.Context, list lister, url, token string) ([]git.Tag, error) {
+	refs, err := listRefs(ctx, list, url, token)
+	return refs.Tags, err
+}
+
+// refsFromReferences picks the tags and branches out of the advertised
+// references. An annotated tag is advertised twice: the tag object under its
+// name, and the commit it peels to under name^{}. The commit is the one that
+// matters. A branch is its head commit.
+func refsFromReferences(refs []*plumbing.Reference) git.Refs {
 	commits := map[string]string{}
 	peeled := map[string]string{}
+	var out git.Refs
 	for _, r := range refs {
-		name, ok := strings.CutPrefix(r.Name().String(), tagRefPrefix)
+		full := r.Name().String()
+		if name, ok := strings.CutPrefix(full, branchRefPrefix); ok {
+			out.Branches = append(out.Branches, git.Branch{Name: name, Commit: r.Hash().String()})
+			continue
+		}
+		name, ok := strings.CutPrefix(full, tagRefPrefix)
 		if !ok {
 			continue
 		}
@@ -84,13 +93,13 @@ func tagsFromRefs(refs []*plumbing.Reference) []git.Tag {
 			commits[name] = r.Hash().String()
 		}
 	}
-	out := make([]git.Tag, 0, len(commits))
 	for name, commit := range commits {
 		if p, ok := peeled[name]; ok {
 			commit = p
 		}
-		out = append(out, git.Tag{Name: name, Commit: commit})
+		out.Tags = append(out.Tags, git.Tag{Name: name, Commit: commit})
 	}
-	slices.SortFunc(out, func(a, b git.Tag) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out.Tags, func(a, b git.Tag) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out.Branches, func(a, b git.Branch) int { return strings.Compare(a.Name, b.Name) })
 	return out
 }
