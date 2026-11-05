@@ -6,11 +6,17 @@ package ship
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
+	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
 // ErrBlocked is returned, with the report still written, when the state check
@@ -20,13 +26,82 @@ var ErrBlocked = errors.New("the release cannot be shipped yet")
 // Run checks the state of shipping what in names, and renders the plan as
 // s.Output (text or json). The plan is returned even with ErrBlocked.
 func Run(ctx context.Context, s clicfg.Settings, cwd string, in domain.Input) (string, error) {
-	return "", nil
+	if err := checkFormat(s.Output); err != nil {
+		return "", err
+	}
+	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, in)
+}
+
+func checkFormat(format string) error {
+	if format != clicfg.OutputText && format != clicfg.OutputJSON {
+		return fmt.Errorf("output format %q is not supported by ship: use text or json", format)
+	}
+	return nil
 }
 
 func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, format string, in domain.Input) (string, error) {
-	return "", nil
+	if err := checkFormat(format); err != nil {
+		return "", err
+	}
+	plan, err := domain.Check(ctx, ws, prober, in)
+	if err != nil {
+		return "", err
+	}
+	var out string
+	if format == clicfg.OutputJSON {
+		if out, err = renderJSON(plan); err != nil {
+			return "", err
+		}
+	} else {
+		out = renderText(plan)
+	}
+	if plan.Status == domain.StatusBlocked {
+		return out, ErrBlocked
+	}
+	return out, nil
 }
 
-func renderText(p domain.Plan) string { return "" }
+func renderText(p domain.Plan) string {
+	var b strings.Builder
+	kind := "stable"
+	if !p.Release.Stable {
+		kind = "prerelease"
+	}
+	fmt.Fprintf(&b, "Ship %s %s (%s) to %s %s\n\n", p.Producer, p.Release.Tag, kind, p.Consumer, p.Target.Branch)
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	row := func(label, value string) { fmt.Fprintf(w, "  %s\t%s\n", label, value) }
+	row("strategy", fmt.Sprintf("%s (%s)", p.Strategy, p.File))
+	row("target", fmt.Sprintf("%s (%s)", p.Target.Branch, git.Short(p.Target.Commit)))
+	row("now", p.Current)
+	row("want", p.Want)
+	row("status", string(p.Status))
+	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	for _, blocker := range p.Blockers {
+		b.WriteString("  blocked: " + blocker + "\n")
+	}
+	if p.Images != nil && len(p.Images.Rows) > 0 {
+		b.WriteString("\nImages\n")
+		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		for _, r := range p.Images.Rows {
+			status := r.Status
+			if r.Detail != "" {
+				status += " (" + r.Detail + ")"
+			}
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", r.Image, r.Label, status, r.Reference)
+		}
+		_ = w.Flush()
+	}
+	for _, warning := range p.Warnings {
+		b.WriteString("\nWarning: " + warning + "\n")
+	}
+	b.WriteString("\nNothing was written.\n")
+	return b.String()
+}
 
-func renderJSON(p domain.Plan) (string, error) { return "", nil }
+func renderJSON(p domain.Plan) (string, error) {
+	b, err := json.MarshalIndent(p, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b) + "\n", nil
+}
