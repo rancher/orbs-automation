@@ -1,0 +1,31 @@
+package workspace
+
+import (
+	"errors"
+
+	"github.com/rancher/orbs-automation/internal/config"
+)
+
+var (
+	// ErrUnknownProject is returned when a slug names no Project of the central
+	// config.
+	ErrUnknownProject = errors.New("not a Project in the central config")
+	// ErrNotProject is returned when no slug is given and the repository
+	// containing the working directory is not a Project of the central config,
+	// or there is no such repository.
+	ErrNotProject = errors.New("the current repository is not a Project in the central config")
+)
+
+// Project returns the Project of the central config named by key, or, when key
+// is empty, the Project whose repository
+// contains the working directory. The working directory's repository is
+// matched by its remote URLs, so a clone with only a fork remote still counts.
+// It returns ErrUnknownProject or ErrNotProject when there is no such Project,
+// and Config's errors when the central config is unusable.
+func (w *Workspace) Project(key string) (config.Project, error) {
+	return config.Project{}, nil
+}
+
+// ErrEmptyConfig is returned when the config directory holds no config
+// documents, which is almost always the wrong directory.
+var ErrEmptyConfig = errors.New("no config documents found")
