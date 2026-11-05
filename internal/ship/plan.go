@@ -43,6 +43,9 @@ type Input struct {
 	To         string // the consumer, when there are several
 	Branch     string // the consumer's target branch
 	Prerelease bool   // let prereleases count
+	// BranchPrefix is the user's branchPrefix setting. When set it replaces the
+	// project's whole, and it is empty when the user has none.
+	BranchPrefix string
 }
 
 // Status is where the state check leaves a bump.
@@ -77,6 +80,7 @@ type Plan struct {
 	Status   Status           `json:"status"`
 	Blockers []string         `json:"blockers,omitempty"`
 	Images   *registry.Report `json:"images,omitempty"` // not checked when already up to date
+	Preview  *Preview         `json:"preview,omitempty"` // what a run would write; none when already up to date
 	Warnings []string         `json:"warnings,omitempty"`
 }
 
