@@ -18,6 +18,9 @@ var (
 	ErrAmbiguousConsumer = errors.New("several consumers")
 	// ErrBranchRequired is returned when no target branch was named.
 	ErrBranchRequired = errors.New("a target branch is required")
+	// ErrNoTargets is returned when no consumer branch can be worked out for the
+	// release, and none was named.
+	ErrNoTargets = errors.New("no target branch for the release")
 	// ErrBranchNotFound is returned when the consumer's repository has no branch
 	// of the name.
 	ErrBranchNotFound = errors.New("no such branch")
