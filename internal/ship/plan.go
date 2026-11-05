@@ -163,6 +163,19 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		plan.Status = StatusUpToDate
 		return plan, nil
 	}
+	if downgrade(strategy, current, want) {
+		plan.Downgrade = true
+		message := fmt.Sprintf("the release is older than what %s holds: %s, shipping %s",
+			consumerSlug, current, want)
+		if !in.AllowDowngrade {
+			// Stop here, as for a consumer that is up to date: nothing else is
+			// worth showing for a bump that will not happen.
+			plan.Status = StatusBlocked
+			plan.Blockers = append(plan.Blockers, "downgrade: "+message+"; pass --allow-downgrade to ship it anyway")
+			return plan, nil
+		}
+		plan.Warnings = append(plan.Warnings, "this is a downgrade: "+message)
+	}
 	preview, err := renderPreview(previewInput{
 		producer: producer, consumer: consumer, release: release, target: target,
 		strategy: strategy, file: file, current: current, want: want, userPrefix: in.BranchPrefix,
@@ -171,16 +184,6 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		return Plan{}, fmt.Errorf("render the PR: %w", err)
 	}
 	plan.Preview = &preview
-	if downgrade(strategy, current, want) {
-		plan.Downgrade = true
-		message := fmt.Sprintf("the release is older than what %s holds: %s, shipping %s",
-			consumerSlug, current, want)
-		if in.AllowDowngrade {
-			plan.Warnings = append(plan.Warnings, "this is a downgrade: "+message)
-		} else {
-			plan.Blockers = append(plan.Blockers, "downgrade: "+message+"; pass --allow-downgrade to ship it anyway")
-		}
-	}
 	images := registry.CheckProject(ctx, producer, prober, release.Tag)
 	plan.Images, plan.Warnings = &images, append(plan.Warnings, images.Warnings...)
 	if images.Failed() {
