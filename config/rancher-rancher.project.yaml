@@ -31,4 +31,4 @@ spec:
           file: build.yaml
           key: defaultSccOperatorImage
         postEdit:
-          - go generate ./...
+          - scripts/generate-buildconfig
