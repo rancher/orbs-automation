@@ -68,7 +68,7 @@ func riConsumer(strategy string) config.Consumer {
 		},
 		Source: config.Source{
 			From:   "scc-operator",
-			Accept: config.Accept{When: config.AcceptStable, Lines: config.AcceptLinesAll},
+			Accept: config.Accept{When: config.AcceptStable}, // accept.lines omitted: derived from the producer
 			Update: config.Update{Strategy: strategy, Params: map[string]string{"file": "build.yaml", "key": "defaultSccOperatorImage"}},
 		},
 	}

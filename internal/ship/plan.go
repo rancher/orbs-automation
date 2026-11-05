@@ -111,7 +111,7 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 	if err != nil {
 		return Plan{}, err
 	}
-	branches, err := res.branches(in)
+	branches, named, err := res.branches(in)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -123,7 +123,12 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 	for _, branch := range branches {
 		tp, err := res.checkTarget(ctx, ws, branch, in)
 		if err != nil {
-			return Plan{}, err
+			if named {
+				return Plan{}, err // asked for this branch, so not being able to read it is the answer
+			}
+			// One branch of several that could not be read does not stop the
+			// others: it is reported as failed.
+			tp = TargetPlan{Target: Target{Branch: branch}, Status: StatusFailed, Error: err.Error()}
 		}
 		needsPR = needsPR || tp.Status == StatusReady
 		plan.Targets = append(plan.Targets, tp)

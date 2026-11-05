@@ -69,13 +69,35 @@ func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
 	return res, nil
 }
 
-// branches returns the consumer branches to check. For now the user names one.
-func (r resolution) branches(in Input) ([]string, error) {
-	if in.Branch == "" {
-		return nil, fmt.Errorf("%w: the release branches of %s are %s",
-			ErrBranchRequired, r.consumer.Project.Repo.Name, strings.Join(r.consumer.Project.ReleaseBranches(), ", "))
+// branches returns the consumer branches to check, and whether the user named
+// them. A named branch is the only one. Otherwise the release's accept.lines
+// decides: a universal source goes to every release branch of the consumer, and
+// one that follows lines goes to the consumer's branch for the line the release
+// is in.
+func (r resolution) branches(in Input) (branches []string, named bool, err error) {
+	if in.Branch != "" {
+		return []string{in.Branch}, true, nil
 	}
-	return []string{in.Branch}, nil
+	consumer := r.consumer.Project
+	if r.consumer.Source.AcceptLines(r.producer) == config.AcceptLinesUniversal {
+		if branches = consumer.ReleaseBranches(); len(branches) == 0 {
+			return nil, false, fmt.Errorf("%w: %s has no release branches; name one with --branch", ErrNoTargets, consumer.Repo.Name)
+		}
+		return branches, false, nil
+	}
+	line := r.release.Line
+	if line == "" {
+		return nil, false, fmt.Errorf("%w: %s is in none of the release lines of %s, so there is no branch to follow it to; name one with --branch",
+			ErrNoTargets, r.release.Tag, r.producer.Repo.Name)
+	}
+	for _, l := range consumer.Release.Lines {
+		if l.Line == line {
+			branch, _ := consumer.Branch(l)
+			return []string{branch}, false, nil
+		}
+	}
+	return nil, false, fmt.Errorf("%w: %s has no release line %s, which %s is in; name a branch with --branch",
+		ErrNoTargets, consumer.Repo.Name, line, r.release.Tag)
 }
 
 // pickConsumer chooses the consumer to ship to: the one named by to, or the
