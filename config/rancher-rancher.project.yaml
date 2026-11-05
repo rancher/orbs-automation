@@ -32,3 +32,8 @@ spec:
           key: defaultSccOperatorImage
         postEdit:
           - scripts/generate-buildconfig
+  images:
+    - name: rancher/rancher
+    - name: rancher/rancher-agent
+    - name: rancher/rancher-server
+      since: v2.16
