@@ -56,7 +56,7 @@ var fieldClasses = map[string]string{
 	"Source.Update": "plain",
 
 	"Accept.When":  "default",
-	"Accept.Lines": "open:which of the project's branches a source release feeds",
+	"Accept.Lines": "resolved:Source.AcceptLines",
 
 	"Update.Strategy": "plain",
 	"Update.Params":   "plain",
