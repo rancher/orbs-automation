@@ -13,6 +13,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [APP_CONFIG](APP_CONFIG.md) | Application config: document shape, kinds, placement, validation |
 | [CLI_OUTPUT](CLI_OUTPUT.md) | stdout and stderr, `--json`, color, logging, the `internal/ui` seam |
 | [GITHUB_ACCESS](GITHUB_ACCESS.md) | Token and host, REST, local git, subprocesses, consumer-side interfaces |
+| [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md) | Shipping the central config and templates as one release file: compile command, verified fetch, cache, source precedence |
 | [DOCTOR](DOCTOR.md) | `gero doctor`: workstation health checks, statuses, `--online`, output, exit codes |
 | [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) | Stdlib-first, approved modules, the depguard allow-list |
 | [TESTING](TESTING.md) | How the CLI layer is tested |
