@@ -7,5 +7,13 @@ import "github.com/rancher/orbs-automation/internal/config"
 // the consumer project and the update method it names. There may be none. It
 // returns the errors Project does.
 func (w *Workspace) Links(key string) (producer config.Project, links []config.Link, err error) {
-	return config.Project{}, nil, nil
+	cfg, err := w.Config()
+	if err != nil {
+		return config.Project{}, nil, err
+	}
+	producer, err = w.projectIn(cfg, key)
+	if err != nil {
+		return config.Project{}, nil, err
+	}
+	return producer, cfg.Links(producer), nil
 }
