@@ -44,6 +44,9 @@ type Input struct {
 	To         string // the consumer, when there are several
 	Branch     string // the consumer's target branch
 	Prerelease bool   // let prereleases count
+	// DryRun is the invocation's --dry-run: compute and report, and create no
+	// branch or PR. It is carried into the plan so the report says which it is.
+	DryRun bool
 	// AllowDowngrade ships a release older than what the consumer holds, which is
 	// otherwise a blocker.
 	AllowDowngrade bool
@@ -95,6 +98,7 @@ type Plan struct {
 	Strategy string           `json:"strategy"`
 	File     string           `json:"file"`   // the consumer's file the strategy edits
 	Want     string           `json:"want"`   // what the consumer should hold for the release
+	DryRun   bool             `json:"dryRun"` // the run was a dry run: no branch or PR is created
 	Status   Status           `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
 	Targets  []TargetPlan     `json:"targets"`
 	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
