@@ -82,6 +82,9 @@ func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, forma
 		return "", err
 	}
 	plan, err := domain.Check(ctx, ws, prober, in)
+	if errors.Is(err, workspace.ErrNotProject) {
+		return "", fmt.Errorf("%w: name the project to ship as the first argument", err)
+	}
 	if err != nil {
 		return "", err
 	}
