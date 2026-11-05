@@ -33,6 +33,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero version` | either | Read-only; prints the build version, commit and date, the same text as `--version`. `--json` supported |
 | `gero lines resolve` | either | Read-only |
 | `gero semver check [tag]` | either | Read-only; port of the shared `check-semver` script. Takes a string (argument or `GITHUB_REF_NAME`) and never opens a repository. Emits env-style output |
+| `gero repo info [name|owner/name]` | either | Read-only; a Project's config entry, its latest stable and pre-release tags and their commits read from the host (per line for a project with a branch per line), and its local clone and the clone's state. Defaults to the repository you are in. `--offline` skips the host, and a failed read or a missing clone leaves the rest of the report. `--json` supported |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
@@ -52,6 +53,8 @@ Global (persistent) flags:
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
 | `--no-color` | Disables color ([CLI_OUTPUT](CLI_OUTPUT.md)) |
 | `--version` | Prints the version and exits, with no shorthand. Root only, not persistent. The value comes from `cmd/version`, set by GoReleaser through `-ldflags -X` (`.goreleaser.yaml`); a plain `go build` prints `dev`. `gero version` is the primary form and prints the same text |
+
+**Network policy.** A command that needs the network to do its job reads it, and does not ask first: an opt-in flag on every read would make the commands tedious to use. A command with a useful local-only mode takes `--offline` and says in its output what it did not read; making that a global flag is **(leaning)**. Reads that a public repository allows are made anonymously, and a token is sent only when the host asks for one. `gero doctor` is the exception, offline by default with `--online`, because it checks the workstation itself ([DOCTOR](DOCTOR.md)).
 
 Per-command flags, such as the per-release override of `requiresPrerelease` ([release rules](../IMPLEMENTATION.md#release-rules)), are defined with their command and follow `--kebab-case`.
 
