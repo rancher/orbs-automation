@@ -36,6 +36,9 @@ type Strategy interface {
 	Value(p Params, vars map[string]string) (string, error)
 	// Read returns the value the file src holds now.
 	Read(src []byte, p Params) (string, error)
+	// Write returns the file src with the value set to value, changing nothing
+	// else in it. Setting the value it already has returns src unchanged.
+	Write(src []byte, p Params, value string) ([]byte, error)
 	// Describe says what a bump from one value to another changes, in a phrase
 	// for the PR body's list of changes, such as "Updated `key` in `file`".
 	Describe(p Params, from, to string) string
@@ -83,6 +86,8 @@ func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
 	}
 	return templates.Render(text, vars)
 }
+
+func (yamlKey) Write(src []byte, p Params, value string) ([]byte, error) { return src, nil }
 
 func (yamlKey) Describe(p Params, from, to string) string {
 	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["key"], p["file"], from, to)
