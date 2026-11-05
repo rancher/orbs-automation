@@ -30,6 +30,9 @@ const (
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
 	Config() (config.Config, error)
+	// Project returns the Project with the given config name or owner/name
+	// slug, or the one in the working directory for "" or ".".
+	Project(key string) (config.Project, error)
 	RepoPaths(slugs []string) []workspace.RepoPath
 }
 
@@ -49,7 +52,7 @@ func repos(ws Workspace, format string, slugs []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	asked, err := projectSlugs(cfg, slugs)
+	asked, err := projectSlugs(ws, cfg, slugs)
 	if err != nil {
 		return "", err
 	}
@@ -71,34 +74,26 @@ func repos(ws Workspace, format string, slugs []string) (string, error) {
 	return out, nil
 }
 
-// projectSlugs returns the slug of every Project in cfg, or just the one named
-// by want, spelled as the config spells it. Externals have no rows.
-func projectSlugs(cfg config.Config, want []string) ([]string, error) {
-	var all []string
-	for _, p := range cfg.Projects {
-		all = append(all, p.Repo.Name)
-	}
+// projectSlugs returns the slug of every Project in cfg, or just the ones named
+// by want, each a config name, a slug or "." for the working directory's
+// Project, spelled as the config spells the slug. Externals have no rows.
+func projectSlugs(ws Workspace, cfg config.Config, want []string) ([]string, error) {
 	if len(want) == 0 {
+		all := make([]string, len(cfg.Projects))
+		for i, p := range cfg.Projects {
+			all[i] = p.Repo.Name
+		}
 		return all, nil
 	}
-	var out []string
-	for _, w := range want {
-		i := indexFold(all, w)
-		if i < 0 {
-			return nil, fmt.Errorf("%q is not a Project in the central config", w)
+	out := make([]string, 0, len(want))
+	for _, key := range want {
+		p, err := ws.Project(key)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, all[i])
+		out = append(out, p.Repo.Name)
 	}
 	return out, nil
-}
-
-func indexFold(list []string, s string) int {
-	for i, v := range list {
-		if strings.EqualFold(v, s) {
-			return i
-		}
-	}
-	return -1
 }
 
 func renderText(rows []workspace.RepoPath) string {
