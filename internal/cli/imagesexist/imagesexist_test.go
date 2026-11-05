@@ -326,6 +326,7 @@ func TestRenderTextWhenNoImageIsExpected(t *testing.T) {
 	out := renderText(r)
 	assert.Contains(t, out, "No image is expected for this tag")
 	assert.NotContains(t, out, "All required images were found")
+	assert.NotContains(t, out, "REFERENCE", "no empty table")
 }
 
 func TestRenderJSONHasTheWarnings(t *testing.T) {

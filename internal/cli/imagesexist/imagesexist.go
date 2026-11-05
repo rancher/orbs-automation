@@ -121,12 +121,13 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 			tag, p.Repo.Name))
 	}
 	for _, img := range images {
+		if !img.AppliesTo(line) {
+			continue // not expected for this tag, so it is neither checked nor listed
+		}
 		for _, role := range img.Registries {
 			reg, _ := registry.Lookup(role) // validation has rejected an unknown role
 			row := Row{Image: img.Name, Registry: role, Label: reg.Label, Reference: reg.Reference(img.Name, tag)}
 			switch {
-			case !img.AppliesTo(line):
-				row.Status, row.Detail = Skipped, "before "+img.Since
 			case !registry.Applies(role, tag):
 				row.Status, row.Detail = Skipped, "prerelease"
 			default:
@@ -178,6 +179,13 @@ func renderText(r Report) string {
 		kind = "prerelease"
 	}
 	fmt.Fprintf(&b, "%s %s (%s)\n\n", r.Project, r.Tag, kind)
+	if len(r.Rows) == 0 {
+		for _, w := range r.Warnings {
+			b.WriteString("Warning: " + w + "\n\n")
+		}
+		b.WriteString("No image is expected for this tag.\n")
+		return b.String()
+	}
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "IMAGE\tREGISTRY\tSTATUS\tREFERENCE")
 	var notFound, unreachable int
