@@ -5,6 +5,11 @@
 // authentication of its own.
 package registry
 
+import (
+	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/semver"
+)
+
 // Registry is a place images are published.
 type Registry struct {
 	Role  string // one of the config.Registry* values
@@ -15,7 +20,20 @@ type Registry struct {
 
 // Lookup returns the registry for a role, and false for an unknown one.
 func Lookup(role string) (Registry, bool) {
-	return Registry{}, false
+	r, ok := registries[role]
+	return r, ok
+}
+
+var registries = map[string]Registry{
+	config.RegistryDockerHub: {
+		Role: config.RegistryDockerHub, Label: "Docker Hub", Host: "registry-1.docker.io", Name: "docker.io",
+	},
+	config.RegistryPrimeStaging: {
+		Role: config.RegistryPrimeStaging, Label: "Prime Staging", Host: "stgregistry.suse.com", Name: "stgregistry.suse.com",
+	},
+	config.RegistryPrimeProduction: {
+		Role: config.RegistryPrimeProduction, Label: "Prime Production", Host: "registry.rancher.com", Name: "registry.rancher.com",
+	},
 }
 
 // Applies reports whether a release of tag must be in the registry: all of
@@ -23,11 +41,14 @@ func Lookup(role string) (Registry, bool) {
 // tag is one with no prerelease suffix, decided as the check-semver script does,
 // so a tag that is not a version at all counts as stable.
 func Applies(role, tag string) bool {
-	return false
+	if _, ok := registries[role]; !ok {
+		return false
+	}
+	return role != config.RegistryPrimeProduction || !semver.Classify(tag).HasPrerelease
 }
 
 // Reference returns the full reference to an image in a registry, such as
 // registry.rancher.com/rancher/scc-operator:v0.5.3.
 func (r Registry) Reference(image, tag string) string {
-	return ""
+	return r.Name + "/" + image + ":" + tag
 }
