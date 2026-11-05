@@ -2,10 +2,23 @@ package repo
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
 
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/rancher/orbs-automation/internal/git"
+)
+
+const (
+	tagRefPrefix = "refs/tags/"
+	peeledSuffix = "^{}"
 )
 
 // lister lists the references a remote advertises, as git ls-remote does.
@@ -23,9 +36,50 @@ func ListRemoteTags(ctx context.Context, url, token string) ([]git.Tag, error) {
 }
 
 func goGitList(ctx context.Context, url string, auth transport.AuthMethod) ([]*plumbing.Reference, error) {
-	return nil, nil
+	remote := gogit.NewRemote(memory.NewStorage(), &config.RemoteConfig{Name: "origin", URLs: []string{url}})
+	// AppendPeeled is what makes an annotated tag report its commit: without it
+	// the list holds only the tag object, whose hash is not a commit.
+	return remote.ListContext(ctx, &gogit.ListOptions{Auth: auth, PeelingOption: gogit.AppendPeeled})
 }
 
 func listTags(ctx context.Context, list lister, url, token string) ([]git.Tag, error) {
-	return nil, nil
+	refs, err := list(ctx, url, nil)
+	if errors.Is(err, transport.ErrAuthenticationRequired) {
+		if token == "" {
+			return nil, fmt.Errorf("list tags of %s: %w: it needs a token, set GH_TOKEN or sign in with gh", url, err)
+		}
+		refs, err = list(ctx, url, &http.BasicAuth{Username: "x-access-token", Password: token})
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list tags of %s: %w", url, err)
+	}
+	return tagsFromRefs(refs), nil
+}
+
+// tagsFromRefs picks the tags out of the advertised references. An annotated
+// tag is advertised twice: the tag object under its name, and the commit it
+// peels to under name^{}. The commit is the one that matters.
+func tagsFromRefs(refs []*plumbing.Reference) []git.Tag {
+	commits := map[string]string{}
+	peeled := map[string]string{}
+	for _, r := range refs {
+		name, ok := strings.CutPrefix(r.Name().String(), tagRefPrefix)
+		if !ok {
+			continue
+		}
+		if base, isPeeled := strings.CutSuffix(name, peeledSuffix); isPeeled {
+			peeled[base] = r.Hash().String()
+		} else {
+			commits[name] = r.Hash().String()
+		}
+	}
+	out := make([]git.Tag, 0, len(commits))
+	for name, commit := range commits {
+		if p, ok := peeled[name]; ok {
+			commit = p
+		}
+		out = append(out, git.Tag{Name: name, Commit: commit})
+	}
+	slices.SortFunc(out, func(a, b git.Tag) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
