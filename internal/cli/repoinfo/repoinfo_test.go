@@ -93,6 +93,11 @@ func fixture() *fakeWorkspace {
 			tag("main-abc1234"), tag("v2.13.0-rc.1"), tag("v2.12.1"), tag("v2.12.2-rc.1"),
 			tag("v2.12.0"), tag("v2.13.0-rc.10"), tag("v2.13.0-rc.2"),
 		},
+		branches: []git.Branch{
+			{Name: "main", Commit: "sha-head-main"},
+			{Name: "release/v2.12", Commit: "sha-head-release/v2.12"},
+			{Name: "release/v2.11", Commit: "sha-head-release/v2.11"}, // not a release branch of this project
+		},
 	}
 }
 
@@ -150,6 +155,44 @@ func TestInfoUpstreamTagsPerLine(t *testing.T) {
 	assert.Equal(t, info("v2.13.0-rc.10"), byLine["v2.13"].LatestPrerelease)
 	assert.Equal(t, info("v2.12.1"), byLine["v2.12"].LatestStable)
 	assert.Equal(t, info("v2.12.2-rc.1"), byLine["v2.12"].LatestPrerelease, "newer than v2.12.1, so a release is coming")
+}
+
+func TestInfoBranchHeadsPerLine(t *testing.T) {
+	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{})
+	require.NoError(t, err)
+
+	assert.Equal(t, "sha-head-main", got.Release.Lines[0].Head, "the development line is on the default branch")
+	assert.Equal(t, "sha-head-release/v2.12", got.Release.Lines[1].Head)
+	assert.Equal(t, []BranchInfo{
+		{Branch: "main", Commit: "sha-head-main"},
+		{Branch: "release/v2.12", Commit: "sha-head-release/v2.12"},
+	}, got.Upstream.Heads, "the heads of the branches a release touches")
+}
+
+func TestInfoBranchHeadsOfASingleBranchProject(t *testing.T) {
+	ws := fixture()
+	p := ws.projects["rancher/rancher"]
+	p.Release.Branches, p.Release.Lines = "single", nil
+	ws.projects["rancher/rancher"] = p
+	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
+	require.NoError(t, err)
+	assert.Equal(t, []BranchInfo{{Branch: "main", Commit: "sha-head-main"}}, got.Upstream.Heads)
+}
+
+func TestInfoAMissingBranchHasNoHead(t *testing.T) {
+	ws := fixture()
+	ws.branches = []git.Branch{{Name: "main", Commit: "sha-head-main"}}
+	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
+	require.NoError(t, err)
+	assert.Empty(t, got.Release.Lines[1].Head)
+	assert.Equal(t, BranchInfo{Branch: "release/v2.12"}, got.Upstream.Heads[1])
+	assert.Contains(t, renderText(got), "(not found)")
+}
+
+func TestInfoOfflineHasNoHeads(t *testing.T) {
+	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{Offline: true})
+	require.NoError(t, err)
+	assert.Empty(t, got.Release.Lines[0].Head)
 }
 
 func TestInfoUpstreamTagsFollowTheTagPattern(t *testing.T) {
@@ -225,21 +268,21 @@ func TestRenderTextHeadings(t *testing.T) {
 	out := renderText(got)
 
 	for _, want := range []string{
-		"rancher/rancher\n", "\nRelease lines\n", "\nLatest releases (upstream)\n", "\nLocal clone\n",
+		"rancher/rancher\n", "\nRelease lines\n", "\nUpstream\n", "\nLocal clone\n",
 	} {
 		assert.Contains(t, out, want)
 	}
 	for _, want := range []string{
 		"owned", "yes", "default branch", "main", "perLine",
-		"LATEST STABLE", "LATEST PRE-RELEASE",
+		"HEAD", "sha-hea", "LATEST STABLE", "LATEST PRE-RELEASE", "latest stable", "latest pre-release",
 		"v2.13", "main (default branch)", "release/v2.12",
 		"v2.12.1 (sha-v2.", // the commit is shown short; the fake's is shorter than 7 characters
 		"/src/rancher", "cwd", "abc1234",
 	} {
 		assert.Contains(t, out, want)
 	}
-	assert.Less(t, indexOf(out, "Release lines"), indexOf(out, "Latest releases (upstream)"))
-	assert.Less(t, indexOf(out, "Latest releases (upstream)"), indexOf(out, "Local clone"))
+	assert.Less(t, indexOf(out, "Release lines"), indexOf(out, "\nUpstream\n"))
+	assert.Less(t, indexOf(out, "\nUpstream\n"), indexOf(out, "Local clone"))
 }
 
 func indexOf(s, sub string) int {
@@ -288,7 +331,8 @@ func TestRenderTextSingleProjectHasNoLinesTable(t *testing.T) {
 	require.NoError(t, err)
 	out := renderText(got)
 	assert.NotContains(t, out, "Release lines")
-	assert.Contains(t, out, "Latest releases (upstream)")
+	assert.Contains(t, out, "\nUpstream\n")
+	assert.Contains(t, out, "head of main", "without a table, the branch head is in the upstream section")
 }
 
 func TestRenderJSON(t *testing.T) {
