@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 
@@ -40,8 +41,22 @@ type Options struct {
 // which case the project is the one the working directory is in and the
 // argument is the release. No arguments is that project's latest release.
 func ParseArgs(args []string) (project, arg string) {
-	return "", ""
+	switch len(args) {
+	case 0:
+		return "", ""
+	case 1:
+		if looksLikeARelease(args[0]) {
+			return "", args[0]
+		}
+		return args[0], ""
+	}
+	return args[0], args[1]
 }
+
+// release matches a version or a line: v0.5.3, 0.6.0-rc.1, v2.15.
+var release = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){1,2}([-+].*)?$`)
+
+func looksLikeARelease(s string) bool { return release.MatchString(s) }
 
 // Run checks the state of shipping what opts names, and renders the plan as
 // s.Output (text or json). The plan is returned even with ErrBlocked.
