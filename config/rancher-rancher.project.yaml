@@ -1,7 +1,7 @@
 # `r/r` repo Project config
 apiVersion: gero/v1alpha1
 kind: Project
-name: rancher-rancher
+name: rancher
 spec:
   repo:
     name: rancher/rancher
