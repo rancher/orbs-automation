@@ -121,7 +121,7 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 	}
 	plan := Plan{
 		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.consumer.Project.Repo.Name,
-		Strategy: res.consumer.Source.Update.Strategy, File: res.file, Want: res.want,
+		Strategy: res.consumer.Source.Update.Strategy, File: res.file, Want: res.want, DryRun: in.DryRun,
 	}
 	needsPR := false
 	for _, branch := range branches {

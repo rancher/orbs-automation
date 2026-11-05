@@ -69,7 +69,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	}
 	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Branch: opts.Branch, Prerelease: opts.Prerelease,
-		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade,
+		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun,
 	}, opts.Preview)
 }
 
@@ -170,7 +170,13 @@ func renderText(p domain.Plan, full bool) string {
 	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
 		fmt.Fprintf(&b, "\nWarning (%s): %s\n", strings.Join(g.branches, ", "), g.text)
 	}
-	b.WriteString("\nNothing was written.\n")
+	if p.DryRun {
+		b.WriteString("\nDry run: nothing was written, and no branch or PR was created.\n")
+	} else {
+		// Creating the branches and PRs is not built yet, so nothing is written
+		// without --dry-run either.
+		b.WriteString("\nNothing was written: creating the branches and PRs is not built yet.\n")
+	}
 	return b.String()
 }
 
