@@ -29,6 +29,12 @@ func (w *Workspace) Project(key string) (config.Project, error) {
 	if err != nil {
 		return config.Project{}, err
 	}
+	return w.projectIn(cfg, key)
+}
+
+// projectIn finds the Project named by key in cfg, or the one the working
+// directory is in when key is empty.
+func (w *Workspace) projectIn(cfg config.Config, key string) (config.Project, error) {
 	if key != "" {
 		// A key with a slash is the repository's owner/name slug, any other
 		// is the document's name. Both compare case-insensitively.
