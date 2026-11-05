@@ -87,7 +87,14 @@ func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
 	return templates.Render(text, vars)
 }
 
-func (yamlKey) Write(src []byte, p Params, value string) ([]byte, error) { return src, nil }
+func (yamlKey) Write(src []byte, p Params, value string) ([]byte, error) {
+	key, err := required(p, "key")
+	if err != nil {
+		return nil, err
+	}
+	out, _, err := yamledit.Set(src, key, value)
+	return out, err
+}
 
 func (yamlKey) Describe(p Params, from, to string) string {
 	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["key"], p["file"], from, to)
