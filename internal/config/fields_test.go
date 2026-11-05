@@ -23,12 +23,14 @@ import (
 // caller has read the raw value (docs/specs/WORKSPACE.md, "Raw and effective
 // values").
 var fieldClasses = map[string]string{
-	"Project.Name":         "plain",
-	"Project.Repo":         "plain",
-	"Project.Release":      "plain",
-	"Project.PullRequests": "plain",
-	"Project.Images":       "resolved:Project.EffectiveImages",
-	"Project.Sources":      "plain",
+	"Project.Name":          "plain",
+	"Project.Repo":          "plain",
+	"Project.Release":       "plain",
+	"Project.PullRequests":  "plain",
+	"Project.Images":        "resolved:Project.EffectiveImages",
+	"Project.UpdateMethods": "plain",
+	"Project.Downstream":    "plain",
+	"Project.Sources":       "plain",
 
 	"Repo.Name":          "plain",
 	"Repo.Owned":         "plain",
@@ -42,6 +44,31 @@ var fieldClasses = map[string]string{
 	"ProjectLine.Line":    "plain",
 	"ProjectLine.Version": "resolved:ProjectLine.Series",
 	"ProjectLine.Branch":  "resolved:Project.Branch",
+
+	"UpdateMethod.Name":          "plain",
+	"UpdateMethod.Strategy":      "plain",
+	"UpdateMethod.With":          "plain",
+	"UpdateMethod.AllowedParams": "plain",
+	"UpdateMethod.Accept":        "plain",
+	"UpdateMethod.PreEdit":       "plain",
+	"UpdateMethod.PostEdit":      "plain",
+
+	"AllowedParam.Key":         "plain",
+	"AllowedParam.Description": "plain",
+	"AllowedParam.Default":     "plain",
+	"AllowedParam.Required":    "resolved:AllowedParam.IsRequired",
+
+	"Edge.To":       "plain",
+	"Edge.Method":   "plain",
+	"Edge.Params":   "plain",
+	"Edge.Lines":    "resolved:Edge.AcceptLines",
+	"Edge.PreEdit":  "plain",
+	"Edge.PostEdit": "plain",
+
+	"Step.Run":   "plain",
+	"Step.Since": "resolved:Step.AppliesTo",
+	"Step.Until": "resolved:Step.AppliesTo",
+	"Step.From":  "plain",
 
 	"Image.Name":       "plain",
 	"Image.Registries": "resolved:Project.EffectiveImages",
@@ -87,7 +114,7 @@ var fieldClasses = map[string]string{
 
 func TestEveryConfigFieldIsClassified(t *testing.T) {
 	types := []reflect.Type{
-		reflect.TypeFor[Project](), reflect.TypeFor[Image](), reflect.TypeFor[Repo](), reflect.TypeFor[Release](),
+		reflect.TypeFor[Project](), reflect.TypeFor[Image](), reflect.TypeFor[UpdateMethod](), reflect.TypeFor[AllowedParam](), reflect.TypeFor[Edge](), reflect.TypeFor[Step](), reflect.TypeFor[Repo](), reflect.TypeFor[Release](),
 		reflect.TypeFor[ProjectLine](), reflect.TypeFor[PullRequests](), reflect.TypeFor[Source](),
 		reflect.TypeFor[Accept](), reflect.TypeFor[Update](), reflect.TypeFor[RancherLines](),
 		reflect.TypeFor[Line](), reflect.TypeFor[Dates](), reflect.TypeFor[KubernetesRange](),

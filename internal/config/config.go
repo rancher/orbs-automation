@@ -31,7 +31,11 @@ type Project struct {
 	Release      Release      `yaml:"release"`
 	PullRequests PullRequests `yaml:"pullRequests"`
 	Images       []Image      `yaml:"images"`
-	Sources      []Source     `yaml:"sources"`
+	// UpdateMethods are the ways this project takes an update, which it owns;
+	// Downstream are the projects it ships to, with which of their methods.
+	UpdateMethods []UpdateMethod `yaml:"updateMethods"`
+	Downstream    []Edge         `yaml:"downstream"`
+	Sources       []Source       `yaml:"sources"`
 }
 
 // Repo identifies the project's repository.
@@ -69,6 +73,70 @@ type PullRequests struct {
 	Title        string   `yaml:"title"`
 	BranchPrefix string   `yaml:"branchPrefix"`
 	Labels       []string `yaml:"labels"`
+}
+
+// UpdateMethod is a named way a project takes an update. The consumer owns it:
+// the strategy that reads and writes the value, the values it fixes for it
+// (With), the params a producer may pass (AllowedParams), what it accepts, and
+// the steps it runs around the edit. Many producers can use one method.
+type UpdateMethod struct {
+	Name          string            `yaml:"name"`
+	Strategy      string            `yaml:"strategy"`
+	With          map[string]string `yaml:"with"`
+	AllowedParams []AllowedParam    `yaml:"allowedParams"`
+	Accept        Accept            `yaml:"accept"`
+	PreEdit       []Step            `yaml:"preEdit"`
+	PostEdit      []Step            `yaml:"postEdit"`
+}
+
+// AllowedParam is a param a method offers a producer: its key, what it means,
+// and whether it can be left out.
+type AllowedParam struct {
+	Key         string `yaml:"key"`
+	Description string `yaml:"description"`
+	Default     string `yaml:"default"`
+	Required    *bool  `yaml:"required"` // omitted: required unless there is a default
+}
+
+// Edge is a producer's wiring to one consumer: which project, which of its
+// methods, and the params the method allows. The producer owns it.
+type Edge struct {
+	To       string            `yaml:"to"`     // the consumer, by config name or owner/name
+	Method   string            `yaml:"method"` // one of the consumer's update methods
+	Params   map[string]string `yaml:"params"`
+	Lines    string            `yaml:"lines"` // how releases map to the consumer's branches; omitted is derived
+	PreEdit  []Step            `yaml:"preEdit"`
+	PostEdit []Step            `yaml:"postEdit"`
+}
+
+// Step is a command run around an edit, optionally only for a range of the
+// consumer's lines.
+type Step struct {
+	Run   Command `yaml:"run"`
+	Since string  `yaml:"since"` // a line ID: only from this line on
+	Until string  `yaml:"until"` // a line ID: only up to and including this line
+	From  string  `yaml:"from"`  // an edge's step only: where the program comes from
+}
+
+// Command is a program or script path with its arguments. In YAML it is one
+// string, the program with no arguments, or a list. It is never split like a
+// shell command line.
+type Command []string
+
+// UnmarshalYAML reads a string as a one-element command and a list as it is. It
+// uses the callback form so this package does not import the YAML library.
+func (c *Command) UnmarshalYAML(unmarshal func(any) error) error {
+	var one string
+	if err := unmarshal(&one); err == nil {
+		*c = Command{one}
+		return nil
+	}
+	var list []string
+	if err := unmarshal(&list); err != nil {
+		return err
+	}
+	*c = list
+	return nil
 }
 
 // Source is a project this one takes updates from.
