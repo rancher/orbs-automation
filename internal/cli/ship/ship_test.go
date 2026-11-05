@@ -259,10 +259,26 @@ func TestRenderTextListsEveryTarget(t *testing.T) {
 	out := renderText(previewPlanWithTargets(), false)
 	for _, want := range []string{
 		"BRANCH", "main", "already up to date", "release/v2.15", "ready", "release/v2.14", "blocked", "release/v2.12", "failed",
-		"release/v2.14 blocked: downgrade: older", "release/v2.12 failed: read build.yaml: gone",
+		"blocked (release/v2.14): downgrade: older", "release/v2.12 failed: read build.yaml: gone",
 	} {
 		assert.Contains(t, out, want)
 	}
 	assert.Contains(t, out, "bot/scc-operator-v0.5.3-v2.15", "only the target that needs a PR has a preview")
 	assert.Equal(t, 1, strings.Count(out, "status/auto-created"), "the labels once")
+}
+
+func TestRenderTextGroupsTheSameReasonAcrossBranches(t *testing.T) {
+	p := previewPlanWithTargets()
+	for _, branch := range []string{"main", "release/v2.15"} {
+		p.Targets = append(p.Targets, domain.TargetPlan{
+			Target: domain.Target{Branch: branch + "-2", Commit: "5555555eeeeeee"}, Current: "c", Status: domain.StatusBlocked,
+			Blockers: []string{"downgrade: older"}, Warnings: []string{"this is a downgrade"},
+		})
+	}
+	p.Targets[2].Warnings = []string{"this is a downgrade"}
+	out := renderText(p, false)
+
+	assert.Equal(t, 1, strings.Count(out, "downgrade: older"), "one line for the same reason")
+	assert.Contains(t, out, "release/v2.14, main-2, release/v2.15-2", "naming the branches it applies to")
+	assert.Equal(t, 1, strings.Count(out, "this is a downgrade"))
 }
