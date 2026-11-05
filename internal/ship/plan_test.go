@@ -314,7 +314,8 @@ func TestCheckABlockedDowngrade(t *testing.T) {
 	assert.Contains(t, got.Blockers[0], "0.5.3", "what the consumer holds")
 	assert.Contains(t, got.Blockers[0], "0.5.2", "what was asked for")
 	assert.Contains(t, got.Blockers[0], "--allow-downgrade")
-	assert.NotNil(t, got.Images, "the rest of the check still runs, so one run shows everything in the way")
+	assert.Nil(t, got.Images, "a blocked downgrade stops here, as an up to date consumer does")
+	assert.Nil(t, got.Preview)
 }
 
 func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
@@ -325,6 +326,8 @@ func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
 	assert.Empty(t, got.Blockers)
 	require.NotEmpty(t, got.Warnings)
 	assert.Contains(t, got.Warnings[0], "downgrade")
+	assert.NotNil(t, got.Images, "once it is allowed the rest of the check runs")
+	assert.NotNil(t, got.Preview)
 }
 
 func TestCheckNewerIsNotADowngrade(t *testing.T) {
