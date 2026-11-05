@@ -76,5 +76,10 @@ func parseLine(id string) (n [2]uint64, ok bool) {
 // CompareLines orders two line IDs by their numbers, so v2.16 is after v2.15:
 // -1, 0 or 1. ok is false when either cannot be read as a line.
 func CompareLines(a, b string) (order int, ok bool) {
-	return 0, false
+	x, okA := parseLine(a)
+	y, okB := parseLine(b)
+	if !okA || !okB {
+		return 0, false
+	}
+	return compareLines(x, y), true
 }
