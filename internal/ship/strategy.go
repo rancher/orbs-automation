@@ -5,7 +5,15 @@
 // so tests use fakes (docs/specs/PUSH_TO_REPO.md).
 package ship
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/rancher/orbs-automation/internal/ship/templates"
+	"github.com/rancher/orbs-automation/internal/yamledit"
+)
 
 // Params are the params of a source's update, as written in config.
 type Params map[string]string
@@ -30,12 +38,60 @@ type Strategy interface {
 	Read(src []byte, p Params) (string, error)
 }
 
+var strategies = map[string]Strategy{
+	// buildYamlBump sets an image reference, such as rancher/scc-operator:v0.5.3.
+	"buildYamlBump": yamlKey{defaultValue: "{image}:{tag}"},
+	// yamlKeyBump sets a bare value, by default the tag.
+	"yamlKeyBump": yamlKey{defaultValue: "{tag}"},
+}
+
 // LookupStrategy returns the strategy of a name.
 func LookupStrategy(name string) (Strategy, error) {
-	return nil, nil
+	if s, ok := strategies[name]; ok {
+		return s, nil
+	}
+	return nil, fmt.Errorf("%w %q: gero implements %s", ErrUnknownStrategy, name, strings.Join(StrategyNames(), ", "))
 }
 
 // StrategyNames lists the strategies gero implements, sorted.
 func StrategyNames() []string {
-	return nil
+	names := make([]string, 0, len(strategies))
+	for n := range strategies {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// yamlKey keeps a release's value at one key of a YAML file. The params are
+// file and key (a dotted path), and optionally value, a template over
+// ValueVars that replaces the strategy's default.
+type yamlKey struct{ defaultValue string }
+
+func (yamlKey) File(p Params) (string, error) { return required(p, "file") }
+
+func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
+	text := y.defaultValue
+	if v := p["value"]; v != "" {
+		text = v
+	}
+	if err := templates.Validate(text, ValueVars); err != nil {
+		return "", fmt.Errorf("param value %q: %w", text, err)
+	}
+	return templates.Render(text, vars)
+}
+
+func (yamlKey) Read(src []byte, p Params) (string, error) {
+	key, err := required(p, "key")
+	if err != nil {
+		return "", err
+	}
+	return yamledit.Get(src, key)
+}
+
+func required(p Params, name string) (string, error) {
+	if p[name] == "" {
+		return "", fmt.Errorf("the strategy needs the param %q", name)
+	}
+	return p[name], nil
 }
