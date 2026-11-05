@@ -180,6 +180,10 @@ func upstream(ctx context.Context, ws Workspace, p config.Project, lines *[]Line
 		return &UpstreamInfo{Error: err.Error()}
 	}
 	tags := refs.Tags
+	heads := map[string]string{}
+	for _, b := range refs.Branches {
+		heads[b.Name] = b.Commit
+	}
 	pattern := p.Release.TagPattern
 	latest := git.LatestReleases(tags, pattern)
 	for n := range *lines {
@@ -192,8 +196,13 @@ func upstream(ctx context.Context, ws Workspace, p config.Project, lines *[]Line
 		}
 		perLine := git.LatestReleases(inSeries, pattern)
 		l.LatestStable, l.LatestPrerelease = tagInfo(perLine.Stable), tagInfo(perLine.Prerelease)
+		l.Head = heads[l.Branch]
 	}
-	return &UpstreamInfo{LatestStable: tagInfo(latest.Stable), LatestPrerelease: tagInfo(latest.Prerelease)}
+	u := &UpstreamInfo{LatestStable: tagInfo(latest.Stable), LatestPrerelease: tagInfo(latest.Prerelease)}
+	for _, branch := range p.ReleaseBranches() {
+		u.Heads = append(u.Heads, BranchInfo{Branch: branch, Commit: heads[branch]})
+	}
+	return u
 }
 
 func tagInfo(t *git.Tag) *TagInfo {
@@ -261,7 +270,7 @@ func renderLines(b *strings.Builder, i Info) {
 	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
 	withTags := i.Upstream != nil && i.Upstream.Error == ""
 	if withTags {
-		fmt.Fprintln(w, "  LINE\tBRANCH\tLATEST STABLE\tLATEST PRE-RELEASE")
+		fmt.Fprintln(w, "  LINE\tBRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE")
 	} else {
 		fmt.Fprintln(w, "  LINE\tBRANCH")
 	}
@@ -271,7 +280,8 @@ func renderLines(b *strings.Builder, i Info) {
 			branch += " (default branch)"
 		}
 		if withTags {
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", l.Line, branch, tagText(l.LatestStable), tagText(l.LatestPrerelease))
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", l.Line, branch, headText(l.Head),
+				tagText(l.LatestStable), tagText(l.LatestPrerelease))
 		} else {
 			fmt.Fprintf(w, "  %s\t%s\n", l.Line, branch)
 		}
@@ -290,9 +300,15 @@ func renderUpstream(b *strings.Builder, i Info) {
 			row("tags", "unavailable: "+u.Error)
 		})
 	default:
-		section(b, "Latest releases (upstream)", func(row func(label, value string)) {
-			row("stable", tagText(u.LatestStable))
-			row("pre-release", tagText(u.LatestPrerelease))
+		section(b, "Upstream", func(row func(label, value string)) {
+			if i.Release.Branches != config.BranchesPerLine {
+				// A project with a branch per line has its heads in the table.
+				for _, h := range u.Heads {
+					row("head of "+h.Branch, headText(h.Commit))
+				}
+			}
+			row("latest stable", tagText(u.LatestStable))
+			row("latest pre-release", tagText(u.LatestPrerelease))
 		})
 	}
 }
@@ -312,6 +328,15 @@ func renderLocal(b *strings.Builder, l LocalInfo) {
 			row("state", "unavailable: "+l.Error)
 		}
 	})
+}
+
+// headText renders the commit at a branch head, or says the host has no such
+// branch.
+func headText(commit string) string {
+	if commit == "" {
+		return "(not found)"
+	}
+	return git.Short(commit)
 }
 
 // tagText renders a tag as "v2.15.3 (c4246d8)", or "-" for none.
