@@ -6,6 +6,11 @@ package repoinfo
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
@@ -101,15 +106,219 @@ type LocalInfo struct {
 // contains the working directory cwd, and renders it as s.Output (text or
 // json).
 func Run(ctx context.Context, s clicfg.Settings, cwd string, slugs []string, opts Options) (string, error) {
-	return "", nil
+	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
+		return "", fmt.Errorf("output format %q is not supported by repo info: use text or json", s.Output)
+	}
+	ws := workspace.Open(s, cwd)
+	i, err := gather(ctx, ws, func(dir string) (Clone, error) {
+		r, err := ws.OpenAt(dir)
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
+	}, slugs, opts)
+	if err != nil {
+		return "", err
+	}
+	if s.Output == clicfg.OutputJSON {
+		return renderJSON(i)
+	}
+	return renderText(i), nil
 }
 
 func gather(ctx context.Context, ws Workspace, open Opener, slugs []string, opts Options) (Info, error) {
-	return Info{}, nil
+	var slug string
+	if len(slugs) > 0 {
+		slug = slugs[0]
+	}
+	p, err := ws.Project(slug)
+	if err != nil {
+		return Info{}, err
+	}
+	i := Info{
+		Slug:          p.Repo.Name,
+		Owned:         p.Repo.Owned,
+		DefaultBranch: p.Repo.DefaultBranch,
+		Release: ReleaseInfo{
+			Branches:           p.Release.Branches,
+			TagPattern:         p.Release.TagPattern,
+			RequiresPrerelease: p.Release.RequiresPrerelease,
+		},
+	}
+	for _, l := range p.Release.Lines {
+		branch, isDefault := p.Branch(l)
+		i.Release.Lines = append(i.Release.Lines, LineInfo{
+			Line: l.Line, Series: l.Series(), Branch: branch, IsDefaultBranch: isDefault,
+		})
+	}
+	if !opts.Offline {
+		i.Upstream = upstream(ctx, ws, p, &i.Release.Lines)
+	}
+	i.Local = local(ws, open, p.Repo.Name)
+	return i, nil
 }
 
-func renderText(i Info) string { return "" }
+// upstream reads the tags of the Project's repository from its host, and fills
+// in the latest tags of each line. A failure is recorded and not returned, so
+// the rest of the report is still shown.
+func upstream(ctx context.Context, ws Workspace, p config.Project, lines *[]LineInfo) *UpstreamInfo {
+	tags, err := ws.UpstreamTags(ctx, p.Repo.Name)
+	if err != nil {
+		return &UpstreamInfo{Error: err.Error()}
+	}
+	pattern := p.Release.TagPattern
+	latest := git.LatestReleases(tags, pattern)
+	for n := range *lines {
+		l := &(*lines)[n]
+		var inSeries []git.Tag
+		for _, t := range tags {
+			if git.InSeries(t.Name, l.Series) {
+				inSeries = append(inSeries, t)
+			}
+		}
+		perLine := git.LatestReleases(inSeries, pattern)
+		l.LatestStable, l.LatestPrerelease = tagInfo(perLine.Stable), tagInfo(perLine.Prerelease)
+	}
+	return &UpstreamInfo{LatestStable: tagInfo(latest.Stable), LatestPrerelease: tagInfo(latest.Prerelease)}
+}
 
-func tagText(t *TagInfo) string { return "" }
+func tagInfo(t *git.Tag) *TagInfo {
+	if t == nil {
+		return nil
+	}
+	return &TagInfo{Tag: t.Name, Commit: t.Commit}
+}
 
-func renderJSON(i Info) (string, error) { return "", nil }
+// local reports on the clone of slug. Problems are recorded in Error rather
+// than failing the command, so the rest is still shown.
+func local(ws Workspace, open Opener, slug string) LocalInfo {
+	rp, err := ws.RepoPath(slug)
+	if err != nil {
+		return LocalInfo{Error: err.Error()}
+	}
+	l := LocalInfo{Path: rp.Path, Source: rp.Source}
+	c, err := open(rp.Path)
+	if err != nil {
+		l.Error = err.Error()
+		return l
+	}
+	ref, short, err := c.Head()
+	switch {
+	case errors.Is(err, workspace.ErrDetachedHead):
+		l.Branch = "(detached)"
+	case err != nil:
+		l.Error = err.Error()
+	default:
+		l.Branch, l.Commit = strings.TrimPrefix(ref, "refs/heads/"), short
+	}
+	return l
+}
+
+func renderText(i Info) string {
+	var b strings.Builder
+	section(&b, i.Slug, func(row func(label, value string)) {
+		row("owned", yesNo(i.Owned))
+		row("default branch", i.DefaultBranch)
+		row("release branches", i.Release.Branches)
+		row("tag pattern", i.Release.TagPattern)
+		row("requires prerelease", yesNo(i.Release.RequiresPrerelease))
+	})
+	if len(i.Release.Lines) > 0 {
+		renderLines(&b, i)
+	}
+	renderUpstream(&b, i)
+	renderLocal(&b, i.Local)
+	return b.String()
+}
+
+// section writes a heading and, under it, rows of aligned label and value.
+func section(b *strings.Builder, heading string, rows func(row func(label, value string))) {
+	if b.Len() > 0 {
+		b.WriteString("\n")
+	}
+	b.WriteString(heading + "\n")
+	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
+	rows(func(label, value string) { fmt.Fprintf(w, "  %s\t%s\n", label, value) })
+	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+}
+
+func renderLines(b *strings.Builder, i Info) {
+	b.WriteString("\nRelease lines\n")
+	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
+	withTags := i.Upstream != nil && i.Upstream.Error == ""
+	if withTags {
+		fmt.Fprintln(w, "  LINE\tBRANCH\tLATEST STABLE\tLATEST PRE-RELEASE")
+	} else {
+		fmt.Fprintln(w, "  LINE\tBRANCH")
+	}
+	for _, l := range i.Release.Lines {
+		branch := l.Branch
+		if l.IsDefaultBranch {
+			branch += " (default branch)"
+		}
+		if withTags {
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", l.Line, branch, tagText(l.LatestStable), tagText(l.LatestPrerelease))
+		} else {
+			fmt.Fprintf(w, "  %s\t%s\n", l.Line, branch)
+		}
+	}
+	_ = w.Flush()
+}
+
+func renderUpstream(b *strings.Builder, i Info) {
+	switch u := i.Upstream; {
+	case u == nil:
+		section(b, "Upstream", func(row func(label, value string)) {
+			row("tags", "not read (--offline)")
+		})
+	case u.Error != "":
+		section(b, "Upstream", func(row func(label, value string)) {
+			row("tags", "unavailable: "+u.Error)
+		})
+	default:
+		section(b, "Latest releases (upstream)", func(row func(label, value string)) {
+			row("stable", tagText(u.LatestStable))
+			row("pre-release", tagText(u.LatestPrerelease))
+		})
+	}
+}
+
+func renderLocal(b *strings.Builder, l LocalInfo) {
+	section(b, "Local clone", func(row func(label, value string)) {
+		if l.Path != "" {
+			row("path", fmt.Sprintf("%s (%s)", l.Path, l.Source))
+		}
+		if l.Branch != "" {
+			row("branch", l.Branch)
+		}
+		if l.Commit != "" {
+			row("commit", l.Commit)
+		}
+		if l.Error != "" {
+			row("state", "unavailable: "+l.Error)
+		}
+	})
+}
+
+// tagText renders a tag as "v2.15.3 (c4246d8)", or "-" for none.
+func tagText(t *TagInfo) string {
+	if t == nil {
+		return "-"
+	}
+	return t.Tag + " (" + git.Short(t.Commit) + ")"
+}
+
+func yesNo(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "no"
+}
+
+func renderJSON(i Info) (string, error) {
+	b, err := json.MarshalIndent(i, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b) + "\n", nil
+}
