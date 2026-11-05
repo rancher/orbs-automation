@@ -34,6 +34,15 @@ type Options struct {
 	Preview    bool   // print the commit message and PR body too, not only the branch and title
 }
 
+// ParseArgs reads the positional arguments of gero ship: [project] [tag|line].
+// A single argument is a project unless it looks like a release, a version
+// such as v0.5.3 or a line such as v2.15 (no project is named like that), in
+// which case the project is the one the working directory is in and the
+// argument is the release. No arguments is that project's latest release.
+func ParseArgs(args []string) (project, arg string) {
+	return "", ""
+}
+
 // Run checks the state of shipping what opts names, and renders the plan as
 // s.Output (text or json). The plan is returned even with ErrBlocked.
 func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (string, error) {
