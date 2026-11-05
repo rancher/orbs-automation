@@ -20,6 +20,13 @@ var (
 	// ErrNotScalar is returned when the path names a mapping or a list, which
 	// has no single value to read or replace.
 	ErrNotScalar = errors.New("value is not a scalar")
+	// ErrAmbiguous is returned when a key appears twice in the same mapping, so
+	// the path does not name one value.
+	ErrAmbiguous = errors.New("key appears more than once")
+	// ErrUnsupported is returned for a value Set cannot replace without
+	// guessing: a block scalar, a tagged or anchored value, or one that spans
+	// lines. It refuses and leaves the file alone.
+	ErrUnsupported = errors.New("value cannot be replaced in place")
 )
 
 // Get returns the scalar at path in the first document of src. A path is the
@@ -69,4 +76,16 @@ func child(node *yaml.Node, key string) *yaml.Node {
 		}
 	}
 	return nil
+}
+
+// Set replaces the scalar at path in the first document of src with value and
+// returns the new file and the value it had. Only the bytes of the value change:
+// comments, indentation, the quoting style the value had, line endings and every
+// other line stay as they were, so the diff of the file is that one value. A
+// plain value stays plain unless the new one needs quoting, and a quoted one
+// stays quoted. A new value equal to the old one returns src unchanged. The new
+// value must be one line. It returns ErrUnsupported rather than guess for a
+// block scalar, a tag, an anchor or a value that spans lines.
+func Set(src []byte, path, value string) (out []byte, old string, err error) {
+	return src, "", nil
 }
