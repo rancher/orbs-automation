@@ -84,7 +84,9 @@ func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
 	return templates.Render(text, vars)
 }
 
-func (yamlKey) Describe(p Params, from, to string) string { return "" }
+func (yamlKey) Describe(p Params, from, to string) string {
+	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["key"], p["file"], from, to)
+}
 
 func (yamlKey) Read(src []byte, p Params) (string, error) {
 	key, err := required(p, "key")
