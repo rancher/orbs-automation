@@ -19,7 +19,7 @@ var (
 )
 
 // Project returns the Project of the central config named by key, or, when key
-// is empty, the Project whose repository
+// is empty or ".", the Project whose repository
 // contains the working directory. The working directory's repository is
 // matched by its remote URLs, so a clone with only a fork remote still counts.
 // It returns ErrUnknownProject or ErrNotProject when there is no such Project,
@@ -35,7 +35,7 @@ func (w *Workspace) Project(key string) (config.Project, error) {
 // projectIn finds the Project named by key in cfg, or the one the working
 // directory is in when key is empty.
 func (w *Workspace) projectIn(cfg config.Config, key string) (config.Project, error) {
-	if key != "" {
+	if key != "" && key != "." {
 		// A key with a slash is the repository's owner/name slug, any other
 		// is the document's name. Both compare case-insensitively.
 		isSlug := strings.Contains(key, "/")
