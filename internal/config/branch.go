@@ -41,5 +41,8 @@ func (p Project) ReleaseBranches() []string {
 // itself ("v2.15"), which is how rancher/rancher tags its releases. It is the
 // pattern git.InSeries matches tags against.
 func (l ProjectLine) Series() string {
-	return ""
+	if l.Version != "" {
+		return l.Version
+	}
+	return l.Line
 }
