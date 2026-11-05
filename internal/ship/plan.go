@@ -43,6 +43,9 @@ type Input struct {
 	To         string // the consumer, when there are several
 	Branch     string // the consumer's target branch
 	Prerelease bool   // let prereleases count
+	// AllowDowngrade ships a release older than what the consumer holds, which is
+	// otherwise a blocker.
+	AllowDowngrade bool
 	// BranchPrefix is the user's branchPrefix setting. When set it replaces the
 	// project's whole, and it is empty when the user has none.
 	BranchPrefix string
@@ -69,19 +72,21 @@ type Target struct {
 // whether anything stands in the way. It is read-only, and nothing was written
 // to produce it.
 type Plan struct {
-	Producer string           `json:"producer"` // the repository slug
-	Release  Release          `json:"release"`
-	Consumer string           `json:"consumer"` // the repository slug
-	Strategy string           `json:"strategy"`
-	Target   Target           `json:"target"`
-	File     string           `json:"file"`
-	Current  string           `json:"current"` // what the consumer holds now
-	Want     string           `json:"want"`    // what it should hold for the release
-	Status   Status           `json:"status"`
-	Blockers []string         `json:"blockers,omitempty"`
-	Images   *registry.Report `json:"images,omitempty"`  // not checked when already up to date
-	Preview  *Preview         `json:"preview,omitempty"` // what a run would write; none when already up to date
-	Warnings []string         `json:"warnings,omitempty"`
+	Producer string  `json:"producer"` // the repository slug
+	Release  Release `json:"release"`
+	Consumer string  `json:"consumer"` // the repository slug
+	Strategy string  `json:"strategy"`
+	Target   Target  `json:"target"`
+	File     string  `json:"file"`
+	Current  string  `json:"current"` // what the consumer holds now
+	Want     string  `json:"want"`    // what it should hold for the release
+	Status   Status  `json:"status"`
+	// Downgrade is set when the release is older than what the consumer holds.
+	Downgrade bool             `json:"downgrade,omitempty"`
+	Blockers  []string         `json:"blockers,omitempty"`
+	Images    *registry.Report `json:"images,omitempty"`  // not checked when already up to date
+	Preview   *Preview         `json:"preview,omitempty"` // what a run would write; none when already up to date
+	Warnings  []string         `json:"warnings,omitempty"`
 }
 
 // Check runs the state check for in: it resolves the release, finds the
