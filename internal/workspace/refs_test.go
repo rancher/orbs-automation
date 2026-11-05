@@ -39,3 +39,29 @@ func TestUpstreamRefsReturnsTheReadError(t *testing.T) {
 	_, err := w.UpstreamRefs(context.Background(), "rancher/rancher")
 	assert.ErrorIs(t, err, boom)
 }
+
+func TestUpstreamFile(t *testing.T) {
+	w := Open(settings(t, "", nil, nil), t.TempDir())
+	var gotHost, gotToken, gotSlug, gotRef, gotPath string
+	w.credentials = func() (string, string) { return "github.com", "secret" }
+	w.remoteFile = func(_ context.Context, host, token, slug, ref, path string) ([]byte, error) {
+		gotHost, gotToken, gotSlug, gotRef, gotPath = host, token, slug, ref, path
+		return []byte("key: value\n"), nil
+	}
+
+	got, err := w.UpstreamFile(context.Background(), "rancher/rancher", "abc123", "build.yaml")
+
+	require.NoError(t, err)
+	assert.Equal(t, "key: value\n", string(got))
+	assert.Equal(t, []string{"github.com", "secret", "rancher/rancher", "abc123", "build.yaml"},
+		[]string{gotHost, gotToken, gotSlug, gotRef, gotPath})
+}
+
+func TestUpstreamFileReturnsTheReadError(t *testing.T) {
+	w := Open(settings(t, "", nil, nil), t.TempDir())
+	boom := errors.New("boom")
+	w.credentials = func() (string, string) { return "github.com", "" }
+	w.remoteFile = func(context.Context, string, string, string, string, string) ([]byte, error) { return nil, boom }
+	_, err := w.UpstreamFile(context.Background(), "o/r", "abc", "a")
+	assert.ErrorIs(t, err, boom)
+}
