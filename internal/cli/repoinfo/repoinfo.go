@@ -25,8 +25,9 @@ type Workspace interface {
 	// slug, or the one in the working directory when the key is empty.
 	Project(key string) (config.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
-	// UpstreamTags lists the tags of slug as its host reports them.
-	UpstreamTags(ctx context.Context, slug string) ([]git.Tag, error)
+	// UpstreamRefs lists the tags and branch heads of slug as its host reports
+	// them.
+	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 }
 
 // Clone is what Info reads from a local clone.
@@ -70,7 +71,10 @@ type LineInfo struct {
 	Branch string `json:"branch"`
 	// IsDefaultBranch is set when the config names no branch, so Branch is the
 	// Project's default branch.
-	IsDefaultBranch  bool     `json:"isDefaultBranch,omitempty"`
+	IsDefaultBranch bool `json:"isDefaultBranch,omitempty"`
+	// Head is the commit at the head of Branch on the host. It is empty when
+	// the host has no such branch, or when the host was not read.
+	Head             string   `json:"head,omitempty"`
 	LatestStable     *TagInfo `json:"latestStable,omitempty"`
 	LatestPrerelease *TagInfo `json:"latestPrerelease,omitempty"`
 }
@@ -83,12 +87,21 @@ type TagInfo struct {
 
 // UpstreamInfo is what the host reports. The latest tags are the highest by
 // version among those matching the Project's tag pattern; a prerelease is
-// there only when it is newer than the latest stable tag. Error is set instead
-// when the host could not be read.
+// there only when it is newer than the latest stable tag. Heads is the head of
+// each branch a release touches. Error is set instead when the host could not
+// be read.
 type UpstreamInfo struct {
-	LatestStable     *TagInfo `json:"latestStable,omitempty"`
-	LatestPrerelease *TagInfo `json:"latestPrerelease,omitempty"`
-	Error            string   `json:"error,omitempty"`
+	Heads            []BranchInfo `json:"heads,omitempty"`
+	LatestStable     *TagInfo     `json:"latestStable,omitempty"`
+	LatestPrerelease *TagInfo     `json:"latestPrerelease,omitempty"`
+	Error            string       `json:"error,omitempty"`
+}
+
+// BranchInfo is a branch and the commit at its head on the host, empty when the
+// host has no such branch.
+type BranchInfo struct {
+	Branch string `json:"branch"`
+	Commit string `json:"commit,omitempty"`
 }
 
 // LocalInfo is the local clone and its state. Error is set instead of the
@@ -162,10 +175,11 @@ func gather(ctx context.Context, ws Workspace, open Opener, slugs []string, opts
 // in the latest tags of each line. A failure is recorded and not returned, so
 // the rest of the report is still shown.
 func upstream(ctx context.Context, ws Workspace, p config.Project, lines *[]LineInfo) *UpstreamInfo {
-	tags, err := ws.UpstreamTags(ctx, p.Repo.Name)
+	refs, err := ws.UpstreamRefs(ctx, p.Repo.Name)
 	if err != nil {
 		return &UpstreamInfo{Error: err.Error()}
 	}
+	tags := refs.Tags
 	pattern := p.Release.TagPattern
 	latest := git.LatestReleases(tags, pattern)
 	for n := range *lines {
