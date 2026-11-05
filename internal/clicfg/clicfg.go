@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -225,6 +226,16 @@ func Load(in Inputs) (Settings, error) {
 		s.sources[k.name] = src
 	}
 
+	if s.DryRun, err = loadDryRun(in.Flags, getenv); err != nil {
+		return Settings{}, err
+	}
+	s.sources["dryRun"] = SourceDefault
+	if _, set := flagValue(in.Flags, FlagName("dryRun")); set {
+		s.sources["dryRun"] = SourceFlag
+	} else if getenv(EnvName("dryRun")) != "" {
+		s.sources["dryRun"] = SourceEnv
+	}
+
 	s.Fork, s.GitHubUser, s.BranchPrefix = fc.Fork, fc.GitHubUser, fc.BranchPrefix
 	for key, v := range map[string]string{"fork": fc.Fork, "githubUser": fc.GitHubUser, "branchPrefix": fc.BranchPrefix} {
 		if v != "" {
@@ -235,6 +246,34 @@ func Load(in Inputs) (Settings, error) {
 		return Settings{}, fmt.Errorf("%s: %w", label, err) // the repos keys exist only in the file
 	}
 	return s, nil
+}
+
+// flagValue reads a flag through the lookup, which may be nil.
+func flagValue(flags FlagLookup, name string) (string, bool) {
+	if flags == nil {
+		return "", false
+	}
+	return flags(name)
+}
+
+// loadDryRun reads --dry-run, else GERO_DRY_RUN, else off. It is not a user-file
+// key on purpose: a file that turned it on would silence every write.
+func loadDryRun(flags FlagLookup, getenv func(string) string) (bool, error) {
+	value, src := "", SourceDefault
+	if v := getenv(EnvName("dryRun")); v != "" {
+		value, src = v, SourceEnv
+	}
+	if v, set := flagValue(flags, FlagName("dryRun")); set {
+		value, src = v, SourceFlag
+	}
+	if value == "" {
+		return false, nil
+	}
+	on, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("%s: must be true or false, got %q", where("dryRun", src, ""), value)
+	}
+	return on, nil
 }
 
 // where says what a rejected value came from, so the message sends the developer
