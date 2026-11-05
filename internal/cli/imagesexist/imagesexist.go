@@ -10,14 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
-	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -38,41 +35,15 @@ type Checker interface {
 	Exists(ctx context.Context, host, image, tag string) registry.Result
 }
 
-// Skipped is the status of a registry a release of the tag does not go to.
-const Skipped = "skipped"
+// Skipped, Row and Report are the registry package's: the check itself lives
+// there so the downstream bump can run it too.
+const Skipped = registry.Skipped
 
-// Row is the outcome for one image in one registry. Status is a registry.Status
-// value, or Skipped.
-type Row struct {
-	Image     string `json:"image"`
-	Registry  string `json:"registry"` // the role
-	Label     string `json:"label"`
-	Reference string `json:"reference"`
-	Status    string `json:"status"`
-	Detail    string `json:"detail,omitempty"`
-}
+// Row is the outcome for one image in one registry.
+type Row = registry.Row
 
 // Report is everything the command found.
-type Report struct {
-	Project string `json:"project"` // the repository slug
-	Tag     string `json:"tag"`
-	Stable  bool   `json:"stable"`
-	// Warnings are things that did not stop the check but that the reader
-	// should know, such as a rule that could not be applied.
-	Warnings []string `json:"warnings,omitempty"`
-	Rows     []Row    `json:"results"`
-}
-
-// Failed reports whether any required image was not found or could not be
-// looked for.
-func (r Report) Failed() bool {
-	for _, row := range r.Rows {
-		if row.Status == string(registry.NotFound) || row.Status == string(registry.Unreachable) {
-			return true
-		}
-	}
-	return false
-}
+type Report = registry.Report
 
 // Run checks the images of the Project named by project, or of the one whose
 // repository contains the working directory cwd when project is empty, for a
@@ -105,71 +76,7 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 	if err != nil {
 		return Report{}, err
 	}
-	report := Report{Project: p.Repo.Name, Tag: tag, Stable: !semver.Classify(tag).HasPrerelease}
-	type job struct {
-		row  int
-		host string
-	}
-	var jobs []job
-	images := p.EffectiveImages()
-	line := lineOf(p, tag)
-	if line == "" && anySince(images) {
-		// Nothing to compare since with, so no image is held back: the check
-		// is a plain one, and the report says the rule was not applied.
-		report.Warnings = append(report.Warnings, fmt.Sprintf(
-			"the tag %s is in none of the release lines of %s, so since was not applied and every image was checked",
-			tag, p.Repo.Name))
-	}
-	for _, img := range images {
-		if !img.AppliesTo(line) {
-			continue // not expected for this tag, so it is neither checked nor listed
-		}
-		for _, role := range img.Registries {
-			reg, _ := registry.Lookup(role) // validation has rejected an unknown role
-			row := Row{Image: img.Name, Registry: role, Label: reg.Label, Reference: reg.Reference(img.Name, tag)}
-			switch {
-			case !registry.Applies(role, tag):
-				row.Status, row.Detail = Skipped, "prerelease"
-			default:
-				jobs = append(jobs, job{row: len(report.Rows), host: reg.Host})
-			}
-			report.Rows = append(report.Rows, row)
-		}
-	}
-	// The rows are all in place before any goroutine starts, and each writes
-	// only its own, so the report keeps config order whatever finishes first.
-	var wg sync.WaitGroup
-	for _, j := range jobs {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			row := &report.Rows[j.row]
-			res := c.Exists(ctx, j.host, row.Image, tag)
-			row.Status, row.Detail = string(res.Status), res.Detail
-		}()
-	}
-	wg.Wait()
-	return report, nil
-}
-
-// lineOf returns the Rancher line the tag belongs to in the Project, found by
-// matching the tag against each line's series, or "" when it is in none.
-func lineOf(p config.Project, tag string) string {
-	for _, l := range p.Release.Lines {
-		if git.InSeries(tag, l.Series()) {
-			return l.Line
-		}
-	}
-	return ""
-}
-
-func anySince(images []config.Image) bool {
-	for _, img := range images {
-		if img.Since != "" {
-			return true
-		}
-	}
-	return false
+	return registry.CheckProject(ctx, p, c, tag), nil
 }
 
 func renderText(r Report) string {
