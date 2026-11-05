@@ -115,3 +115,61 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	_, err = Run(context.Background(), clicfg.Settings{Output: clicfg.OutputEnv}, t.TempDir(), Options{Project: "scc-operator"})
 	assert.ErrorContains(t, err, "not supported by ship")
 }
+
+func previewPlan() domain.Plan {
+	return domain.Plan{
+		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Strategy: "buildYamlBump", File: "build.yaml",
+		Release: domain.Release{Tag: "v0.5.3", Stable: true}, Target: domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},
+		Current: "a", Want: "b", Status: domain.StatusReady,
+		Preview: &domain.Preview{
+			Branch: "bot/scc-operator-v0.5.3-v2.15", Title: "[v2.15] Update scc-operator to v0.5.3",
+			Labels:        []string{"status/auto-created", "team/orbs"},
+			CommitMessage: "Update scc-operator to v0.5.3\n\nAutomation: gero ship\n",
+			Body:          "## Summary\nbody text\n",
+		},
+	}
+}
+
+func TestRenderTextShowsTheBranchTitleAndLabels(t *testing.T) {
+	out := renderText(previewPlan(), false)
+	for _, want := range []string{
+		"bot/scc-operator-v0.5.3-v2.15", "[v2.15] Update scc-operator to v0.5.3", "status/auto-created, team/orbs",
+	} {
+		assert.Contains(t, out, want)
+	}
+	assert.NotContains(t, out, "body text", "the body only with the full preview")
+	assert.NotContains(t, out, "Automation: gero ship")
+}
+
+func TestRenderTextFullPreviewShowsTheCommitMessageAndBody(t *testing.T) {
+	out := renderText(previewPlan(), true)
+	assert.Contains(t, out, "Commit message")
+	assert.Contains(t, out, "Automation: gero ship")
+	assert.Contains(t, out, "Body")
+	assert.Contains(t, out, "body text")
+}
+
+func TestRenderTextHasNoPreviewWhenThereIsNone(t *testing.T) {
+	p := previewPlan()
+	p.Preview, p.Status = nil, domain.StatusUpToDate
+	out := renderText(p, true)
+	assert.NotContains(t, out, "branch ")
+	assert.NotContains(t, out, "Commit message")
+}
+
+func TestRunShowsThePreviewFromTheDomain(t *testing.T) {
+	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		clicfg.OutputText, in, false)
+	require.NoError(t, err)
+	assert.Contains(t, out, "bot/scc-operator-v0.5.3-main")
+}
+
+func TestRunJSONHasTheFullPreview(t *testing.T) {
+	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		clicfg.OutputJSON, in, false)
+	require.NoError(t, err)
+	var got domain.Plan
+	require.NoError(t, json.Unmarshal([]byte(out), &got))
+	require.NotNil(t, got.Preview)
+	assert.Contains(t, got.Preview.Body, "gero:ship v1", "JSON always carries the body and message")
+}
