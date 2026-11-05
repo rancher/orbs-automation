@@ -58,3 +58,16 @@ func TestProjectLineSeries(t *testing.T) {
 	assert.Equal(t, "9.x", ProjectLine{Line: "v2.16", Version: "9.x"}.Series(), "a written version is the series")
 	assert.Equal(t, "v2.15", ProjectLine{Line: "v2.15"}.Series(), "else the line is")
 }
+
+func TestProjectLineOf(t *testing.T) {
+	rancher := Project{Release: Release{Lines: []ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}}}}
+	kuberlr := Project{Release: Release{Lines: []ProjectLine{{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"}}}}
+
+	assert.Equal(t, "v2.15", rancher.LineOf("v2.15.3"))
+	assert.Equal(t, "v2.16", rancher.LineOf("v2.16.0-rc.1"), "a prerelease is in its line")
+	assert.Equal(t, "", rancher.LineOf("v2.14.1"), "a line not in config")
+	assert.Equal(t, "", rancher.LineOf("main-abc1234"), "not a version")
+	assert.Equal(t, "v2.15", kuberlr.LineOf("v8.1.2"), "through the series")
+	assert.Equal(t, "v2.16", kuberlr.LineOf("v9.0.0"))
+	assert.Equal(t, "", Project{}.LineOf("v1.0.0"), "no lines")
+}
