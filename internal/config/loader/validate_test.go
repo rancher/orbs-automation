@@ -196,6 +196,18 @@ func TestValidateAcceptsPullRequestTemplates(t *testing.T) {
 	assert.NoError(t, Validate(c))
 }
 
+func TestValidateStrategyVariablesInThePRTitle(t *testing.T) {
+	c := valid()
+	c.Projects[0].PullRequests.Title = "[{branch}] {package} {chartVersion} {action}"
+	c.Projects[0].Sources[0].Update.Strategy = "chartsPackageBump"
+	assert.NoError(t, Validate(c), "the strategy of one of its sources supplies those variables")
+
+	c.Projects[0].Sources[0].Update.Strategy = "buildYamlBump"
+	err := Validate(c)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "package", "no source supplies them")
+}
+
 func TestValidateAcceptsImages(t *testing.T) {
 	c := valid()
 	c.Projects[0].Images = []config.Image{

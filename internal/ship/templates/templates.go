@@ -90,6 +90,13 @@ var TextVars = []string{
 	"consumer", "sourceReleaseURL", "file", "from", "to", "changes", "marker",
 }
 
+// StrategyVars are the extra variables a strategy supplies to the texts of a PR
+// of a project that uses it, by the strategy's name. They are listed here, and
+// not only in the strategy, so config validation can accept them without
+// importing the domain, and so a strategy that is not implemented yet can have
+// its variables written in config.
+var StrategyVars = map[string][]string{}
+
 // Placeholders returns the names used by the text, in order of first use and
 // without repeats. It returns an error for a brace that is not part of a
 // {name} or an escaped {{ or }}.
