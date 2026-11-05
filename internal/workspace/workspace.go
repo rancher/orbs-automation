@@ -47,6 +47,7 @@ type Workspace struct {
 
 	// The network reads, injected so tests need no network or credentials.
 	remoteTags  func(ctx context.Context, url, token string) ([]git.Tag, error)
+	remoteRefs  func(ctx context.Context, url, token string) (git.Refs, error)
 	credentials func() (host, token string)
 }
 
@@ -61,6 +62,7 @@ func open(s clicfg.Settings, cwd string, cwdFS fs.FS) *Workspace {
 	return &Workspace{
 		settings: s, cwd: cwd, cwdFS: cwdFS,
 		remoteTags:  repo.ListRemoteTags,
+		remoteRefs:  repo.ListRemoteRefs,
 		credentials: defaultCredentials,
 	}
 }
