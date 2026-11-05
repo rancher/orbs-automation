@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/yamledit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -145,4 +146,33 @@ func TestWriteErrors(t *testing.T) {
 	assert.ErrorIs(t, err, yamledit.ErrKeyNotFound)
 	_, err = s.Write([]byte("a: |\n  v\n"), Params{"file": "f", "key": "a"}, "x")
 	assert.ErrorIs(t, err, yamledit.ErrUnsupported, "a value it cannot replace in place is refused")
+}
+
+func TestStrategiesFindTheVersionInAValue(t *testing.T) {
+	tests := []struct {
+		value string
+		want  semver.Version
+		ok    bool
+	}{
+		{"v1.2.3", semver.Version{Major: 1, Minor: 2, Patch: 3}, true},
+		{"1.2.3", semver.Version{Major: 1, Minor: 2, Patch: 3}, true},
+		{"rancher/scc-operator:v0.5.3", semver.Version{Minor: 5, Patch: 3}, true},
+		{"registry.example.com:5000/rancher/scc-operator:v0.5.3", semver.Version{Minor: 5, Patch: 3}, true},
+		{"rancher/scc-operator:v0.6.0-rc.1", semver.Version{Minor: 6, Prerelease: "rc.1"}, true},
+		{"v1.2.3+build.5", semver.Version{Major: 1, Minor: 2, Patch: 3}, true},
+		{"rancher/shell:v0.6.2", semver.Version{Minor: 6, Patch: 2}, true},
+		{"latest", semver.Version{}, false},
+		{"", semver.Version{}, false},
+		{"rancher/scc-operator", semver.Version{}, false},
+		{"v1.2", semver.Version{}, false},
+	}
+	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+		s, err := LookupStrategy(name)
+		require.NoError(t, err)
+		for _, tt := range tests {
+			got, ok := s.Version(tt.value)
+			assert.Equal(t, tt.ok, ok, "%s %q", name, tt.value)
+			assert.Equal(t, tt.want, got, "%s %q", name, tt.value)
+		}
+	}
 }
