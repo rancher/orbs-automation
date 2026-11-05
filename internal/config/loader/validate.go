@@ -173,7 +173,9 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 			v.add("%s: from %q is not a Project", at, s.From)
 		}
 		v.oneOf(at, "accept.when", s.Accept.When, config.AcceptStable, config.AcceptAll)
-		v.oneOf(at, "accept.lines", s.Accept.Lines, config.AcceptLinesAll, config.AcceptLinesUniversal)
+		if s.Accept.Lines != "" { // omitted is derived from the producer (Source.AcceptLines)
+			v.oneOf(at, "accept.lines", s.Accept.Lines, config.AcceptLinesAll, config.AcceptLinesUniversal)
+		}
 		if s.Update.Strategy == "" {
 			v.add("%s: update.strategy is required", at)
 		}

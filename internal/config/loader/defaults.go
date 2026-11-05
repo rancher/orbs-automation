@@ -10,7 +10,6 @@ const (
 	DefaultBranches   = config.BranchesSingle
 	DefaultTagPattern = "v*"
 	DefaultAcceptWhen = config.AcceptStable
-	DefaultAcceptLine = config.AcceptLinesAll
 )
 
 // WithDefaults returns a copy of c with every omitted field that has a default
@@ -36,7 +35,6 @@ func externalDefaults(x config.External) config.External {
 
 func sourceDefaults(s config.Source) config.Source {
 	s.Accept.When = orDefault(s.Accept.When, DefaultAcceptWhen)
-	s.Accept.Lines = orDefault(s.Accept.Lines, DefaultAcceptLine)
 	return s
 }
 
