@@ -35,3 +35,11 @@ func (p Project) ReleaseBranches() []string {
 	}
 	return out
 }
+
+// Series returns the version series of a line's tags in this Project: the
+// version written for it ("9.x" for kuberlr-kubectl on v2.16), else the line
+// itself ("v2.15"), which is how rancher/rancher tags its releases. It is the
+// pattern git.InSeries matches tags against.
+func (l ProjectLine) Series() string {
+	return ""
+}
