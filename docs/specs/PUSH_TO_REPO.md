@@ -1,6 +1,6 @@
 # Ship (push to repo)
 
-**Status:** draft. Nothing here is built. It is written ahead of the bump engine ([PHASES](../PHASES.md)) because the design decides what the first Flow A run looks like, and it is revised as that settles.
+**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`; the rest is not built. It is written ahead of the bump engine ([PHASES](../PHASES.md)) because the design decides what the first Flow A run looks like, and it is revised as that settles.
 
 The write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)): take a released version of a producer, edit a consumer repo on each target branch, push a branch and open or reuse a PR. The first user is `scc-operator` into `rancher/rancher`, which is today the bash in [scc-operator](../projects/scc-operator.md). The command runs in both contexts and acts as the engineer locally and as the bot in CI ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). Branch resolution, edit strategies and the config that drives them belong to the bump engine and [APP_CONFIG](APP_CONFIG.md), not here.
 
@@ -81,7 +81,11 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 
 ## Not built yet
 
-* Everything.
+* Everything after the state check: the throwaway clone, the edit, the post-edit commands, the commit, the push, the PR and superseding an older one.
+* The embedded templates and the rendering of the branch, title, commit message and body that `--dry-run` previews.
+* The check for open PRs the new one would supersede, `--dry-run`, `--yes` and the confirmation.
+* `--branch` is always required. Finding it from the tag's line waits for `accept.lines`.
+* A shipped value that is older than what the consumer holds (a downgrade) is not detected: the state check compares the two as text.
 
 ## Open questions
 
