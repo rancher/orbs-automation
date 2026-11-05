@@ -10,8 +10,10 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/git"
@@ -47,6 +49,7 @@ type Workspace struct {
 
 	// The network reads, injected so tests need no network or credentials.
 	remoteRefs  func(ctx context.Context, url, token string) (git.Refs, error)
+	remoteFile  func(ctx context.Context, host, token, slug, ref, path string) ([]byte, error)
 	credentials func() (host, token string)
 }
 
@@ -61,8 +64,15 @@ func open(s clicfg.Settings, cwd string, cwdFS fs.FS) *Workspace {
 	return &Workspace{
 		settings: s, cwd: cwd, cwdFS: cwdFS,
 		remoteRefs:  repo.ListRemoteRefs,
+		remoteFile:  rawFile,
 		credentials: defaultCredentials,
 	}
+}
+
+// rawFile reads a file of a repository from its host with a client that gives
+// up after a while.
+func rawFile(ctx context.Context, host, token, slug, ref, path string) ([]byte, error) {
+	return github.RawFile(ctx, &http.Client{Timeout: 30 * time.Second}, host, token, slug, ref, path)
 }
 
 // defaultCredentials is the host gero talks to and the token for it, empty when
