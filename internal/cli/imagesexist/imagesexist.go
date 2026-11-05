@@ -15,6 +15,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -110,14 +111,26 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 		host string
 	}
 	var jobs []job
-	for _, img := range p.EffectiveImages() {
+	images := p.EffectiveImages()
+	line := lineOf(p, tag)
+	if line == "" && anySince(images) {
+		// Nothing to compare since with, so no image is held back: the check
+		// is a plain one, and the report says the rule was not applied.
+		report.Warnings = append(report.Warnings, fmt.Sprintf(
+			"the tag %s is in none of the release lines of %s, so since was not applied and every image was checked",
+			tag, p.Repo.Name))
+	}
+	for _, img := range images {
 		for _, role := range img.Registries {
 			reg, _ := registry.Lookup(role) // validation has rejected an unknown role
 			row := Row{Image: img.Name, Registry: role, Label: reg.Label, Reference: reg.Reference(img.Name, tag)}
-			if registry.Applies(role, tag) {
-				jobs = append(jobs, job{row: len(report.Rows), host: reg.Host})
-			} else {
+			switch {
+			case !img.AppliesTo(line):
+				row.Status, row.Detail = Skipped, "before "+img.Since
+			case !registry.Applies(role, tag):
 				row.Status, row.Detail = Skipped, "prerelease"
+			default:
+				jobs = append(jobs, job{row: len(report.Rows), host: reg.Host})
 			}
 			report.Rows = append(report.Rows, row)
 		}
@@ -136,6 +149,26 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 	}
 	wg.Wait()
 	return report, nil
+}
+
+// lineOf returns the Rancher line the tag belongs to in the Project, found by
+// matching the tag against each line's series, or "" when it is in none.
+func lineOf(p config.Project, tag string) string {
+	for _, l := range p.Release.Lines {
+		if git.InSeries(tag, l.Series()) {
+			return l.Line
+		}
+	}
+	return ""
+}
+
+func anySince(images []config.Image) bool {
+	for _, img := range images {
+		if img.Since != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func renderText(r Report) string {
@@ -163,6 +196,9 @@ func renderText(r Report) string {
 	}
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 	b.WriteString("\n")
+	for _, w := range r.Warnings {
+		b.WriteString("Warning: " + w + "\n\n")
+	}
 	if notFound+unreachable == 0 {
 		b.WriteString("All required images were found.\n")
 		return b.String()
