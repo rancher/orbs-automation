@@ -208,3 +208,118 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 func TestFailedIsFalseForAnEmptyReport(t *testing.T) {
 	assert.False(t, Report{}.Failed())
 }
+
+func riProject() config.Project {
+	return config.Project{
+		Name: "rancher",
+		Repo: config.Repo{Name: "rancher/rancher"},
+		Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{
+			{Line: "v2.16"}, {Line: "v2.15"},
+		}},
+		Images: []config.Image{
+			{Name: "rancher/rancher", Registries: []string{config.RegistryDockerHub}},
+			{Name: "rancher/rancher-server", Since: "v2.16", Registries: []string{config.RegistryDockerHub}},
+		},
+	}
+}
+
+func rowFor(t *testing.T, r Report, image string) Row {
+	t.Helper()
+	for _, row := range r.Rows {
+		if row.Image == image {
+			return row
+		}
+	}
+	require.Failf(t, "no row", "image %s", image)
+	return Row{}
+}
+
+func TestCheckSkipsAnImageBeforeItsLine(t *testing.T) {
+	c := &fakeChecker{}
+	got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", "v2.15.3")
+	require.NoError(t, err)
+
+	server := rowFor(t, got, "rancher/rancher-server")
+	assert.Equal(t, Skipped, server.Status)
+	assert.Equal(t, "before v2.16", server.Detail)
+	assert.Equal(t, "found", rowFor(t, got, "rancher/rancher").Status)
+	assert.Equal(t, []string{"registry-1.docker.io rancher/rancher:v2.15.3"}, c.asked, "the skipped image is not asked for")
+	assert.False(t, got.Failed())
+	assert.Empty(t, got.Warnings)
+}
+
+func TestCheckChecksAnImageFromItsLineOn(t *testing.T) {
+	for _, tag := range []string{"v2.16.0", "v2.16.0-rc.1"} {
+		c := &fakeChecker{}
+		got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", tag)
+		require.NoError(t, err)
+		assert.Equal(t, "found", rowFor(t, got, "rancher/rancher-server").Status, tag)
+	}
+}
+
+func TestCheckFindsTheLineThroughTheSeries(t *testing.T) {
+	p := config.Project{
+		Name: "kuberlr-kubectl",
+		Repo: config.Repo{Name: "rancher/kuberlr-kubectl"},
+		Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{
+			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
+		}},
+		Images: []config.Image{{Name: "rancher/kuberlr-kubectl-new", Since: "v2.16", Registries: []string{config.RegistryDockerHub}}},
+	}
+	old, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v8.1.2")
+	require.NoError(t, err)
+	assert.Equal(t, Skipped, old.Rows[0].Status, "8.x is v2.15")
+	assert.Equal(t, "before v2.16", old.Rows[0].Detail)
+
+	current, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v9.0.1")
+	require.NoError(t, err)
+	assert.Equal(t, "found", current.Rows[0].Status, "9.x is v2.16")
+}
+
+func TestCheckATagInNoLineIsAPlainCheckWithAWarning(t *testing.T) {
+	c := &fakeChecker{}
+	got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", "v1.0.0")
+	require.NoError(t, err)
+
+	assert.Equal(t, "found", rowFor(t, got, "rancher/rancher-server").Status, "no since rule is applied")
+	assert.Len(t, c.asked, 2, "every image is checked")
+	require.Len(t, got.Warnings, 1)
+	assert.Contains(t, got.Warnings[0], "v1.0.0")
+	assert.Contains(t, got.Warnings[0], "none of the release lines")
+	assert.False(t, got.Failed(), "a warning is not a failure")
+}
+
+func TestCheckNoWarningWhenNoImageHasASince(t *testing.T) {
+	got, err := check(ctx, &fakeWorkspace{project: sccProject()}, &fakeChecker{}, "", "v1.0.0")
+	require.NoError(t, err)
+	assert.Empty(t, got.Warnings, "with nothing to compare, an unknown line does not matter")
+
+	p := riProject()
+	p.Images = p.Images[:1] // no since
+	got, err = check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v1.0.0")
+	require.NoError(t, err)
+	assert.Empty(t, got.Warnings)
+}
+
+func TestRenderTextShowsWarningsAndTheSinceSkip(t *testing.T) {
+	skipped, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v2.15.3")
+	require.NoError(t, err)
+	assert.Contains(t, renderText(skipped), "skipped (before v2.16)")
+
+	warned, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v1.0.0")
+	require.NoError(t, err)
+	out := renderText(warned)
+	assert.Contains(t, out, "Warning: ")
+	assert.Contains(t, out, "none of the release lines")
+}
+
+func TestRenderJSONHasTheWarnings(t *testing.T) {
+	warned, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v1.0.0")
+	require.NoError(t, err)
+	out, err := renderJSON(warned)
+	require.NoError(t, err)
+	assert.Contains(t, out, `"warnings"`)
+	var back Report
+	require.NoError(t, json.Unmarshal([]byte(out), &back))
+	assert.Equal(t, warned, back)
+}
