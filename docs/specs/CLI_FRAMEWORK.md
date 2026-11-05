@@ -51,7 +51,7 @@ Global (persistent) flags:
 | Flag | Meaning |
 |---|---|
 | `--config-dir` | Where the central config is ([CLI_CONFIG](CLI_CONFIG.md)) |
-| `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing. Read-only commands accept and ignore it. Default is off, with `verify` as the explicit check mode **(leaning)**. |
+| `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing: no branch is pushed and no PR is opened. Read-only commands accept and ignore it. Env `GERO_DRY_RUN`; not a user-file key, so a file cannot turn it on for every run. Default is off, with `verify` as the explicit check mode **(leaning)**. |
 | `--non-interactive`, `--yes` | Never prompt (env `GERO_NON_INTERACTIVE`), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing **(leaning)** |
 | `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
@@ -82,7 +82,7 @@ One helper maps errors to codes so commands return errors and never call `os.Exi
 ## Not built yet
 
 * The rest of the command tree beyond the commands in the table that do something today; the others are stubs.
-* `--dry-run`, `--no-color`, context gating and the exit-code helper. Until the helper exists, a usage or validation error exits 1, not 2.
+* `--no-color`, context gating and the exit-code helper. Until the helper exists, a usage or validation error exits 1, not 2.
 * `--json` for `config validate`, and `--output env` for `auth status`.
 
 ## Open questions

@@ -49,7 +49,7 @@ Per target branch, in the order the bump engine resolves them, newest first:
 6. **PR.** Find open PRs with the same key. The same version is **already open**, and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking the new one and is closed.
 7. **Report.** One line: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
 
-`--dry-run` runs steps 1 to 4 and prints what 5 and 6 would do ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). Nothing it created is left behind.
+`--dry-run` runs steps 1 to 4 and prints what 5 and 6 would do ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). It never pushes a branch or opens a PR, on the host or anywhere else; whatever it clones, edits and commits is in a throwaway directory that is removed afterwards, so nothing it created is left behind. The report says it was a dry run. It checks the same things a real run does (the state, the images, the preview), so it shows what a real run would do.
 
 ## Branches and PR identity
 
@@ -83,7 +83,7 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 ## Not built yet
 
 * The write steps: the throwaway clone, the post-edit commands, the commit, the push, the PR and superseding an older one. The state check, the strategies' reader and in-place writer, the embedded templates and the preview they render are built, as is the marker's format.
-* The check for open PRs the new one would supersede, `--dry-run`, `--yes` and the confirmation.
+* The check for open PRs the new one would supersede, `--yes` and the confirmation.
 
 ## Open questions
 
