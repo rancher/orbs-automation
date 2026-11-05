@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship/templates"
 	"github.com/rancher/orbs-automation/internal/yamledit"
 )
@@ -39,6 +40,10 @@ type Strategy interface {
 	// Write returns the file src with the value set to value, changing nothing
 	// else in it. Setting the value it already has returns src unchanged.
 	Write(src []byte, p Params, value string) ([]byte, error)
+	// Version finds the release version a value holds: the version in v1.2.3,
+	// in rancher/scc-operator:v1.2.3 or in an image reference with a registry
+	// and port. ok is false for a value with no version in it, such as latest.
+	Version(value string) (v semver.Version, ok bool)
 	// Describe says what a bump from one value to another changes, in a phrase
 	// for the PR body's list of changes, such as "Updated `key` in `file`".
 	Describe(p Params, from, to string) string
@@ -95,6 +100,8 @@ func (yamlKey) Write(src []byte, p Params, value string) ([]byte, error) {
 	out, _, err := yamledit.Set(src, key, value)
 	return out, err
 }
+
+func (yamlKey) Version(value string) (semver.Version, bool) { return semver.Version{}, false }
 
 func (yamlKey) Describe(p Params, from, to string) string {
 	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["key"], p["file"], from, to)
