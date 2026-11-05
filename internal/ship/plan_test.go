@@ -301,3 +301,68 @@ func TestCheckABadPlaceholderIsAnError(t *testing.T) {
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	assert.ErrorContains(t, err, "nope")
 }
+
+func TestCheckABlockedDowngrade(t *testing.T) {
+	// main holds v0.5.3; shipping the older v0.5.2 is a downgrade.
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Branch: "main"})
+
+	require.NoError(t, err)
+	assert.True(t, got.Downgrade)
+	assert.Equal(t, StatusBlocked, got.Status)
+	require.NotEmpty(t, got.Blockers)
+	assert.Contains(t, got.Blockers[0], "downgrade")
+	assert.Contains(t, got.Blockers[0], "0.5.3", "what the consumer holds")
+	assert.Contains(t, got.Blockers[0], "0.5.2", "what was asked for")
+	assert.Contains(t, got.Blockers[0], "--allow-downgrade")
+	assert.NotNil(t, got.Images, "the rest of the check still runs, so one run shows everything in the way")
+}
+
+func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Branch: "main", AllowDowngrade: true})
+	require.NoError(t, err)
+	assert.True(t, got.Downgrade, "it is still a downgrade")
+	assert.Equal(t, StatusReady, got.Status)
+	assert.Empty(t, got.Blockers)
+	require.NotEmpty(t, got.Warnings)
+	assert.Contains(t, got.Warnings[0], "downgrade")
+}
+
+func TestCheckNewerIsNotADowngrade(t *testing.T) {
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	require.NoError(t, err)
+	assert.False(t, got.Downgrade, "v0.5.2 to v0.5.3")
+}
+
+func TestCheckAlreadyUpToDateIsNotADowngrade(t *testing.T) {
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
+	require.NoError(t, err)
+	assert.False(t, got.Downgrade)
+	assert.Equal(t, StatusUpToDate, got.Status)
+}
+
+func TestCheckAPrereleaseOfTheSameVersionIsADowngrade(t *testing.T) {
+	// main holds v0.5.3; v0.5.3-rc.1 is lower, though it has the same numbers.
+	ws := fixture()
+	ws.refs["rancher/scc-operator"] = git.Refs{Tags: tags("v0.5.3", "v0.5.3-rc.1")}
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.3-rc.1", Branch: "main", Prerelease: true})
+	require.NoError(t, err)
+	assert.True(t, got.Downgrade)
+}
+
+func TestCheckFromAPrereleaseToTheStableReleaseIsNotADowngrade(t *testing.T) {
+	ws := fixture()
+	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3-rc.1\n"
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	require.NoError(t, err)
+	assert.False(t, got.Downgrade)
+	assert.Equal(t, StatusReady, got.Status)
+}
+
+func TestCheckAValueWithNoVersionIsNotJudged(t *testing.T) {
+	ws := fixture()
+	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:latest\n"
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	require.NoError(t, err)
+	assert.False(t, got.Downgrade, "there is nothing to compare")
+	assert.Equal(t, StatusReady, got.Status)
+}
