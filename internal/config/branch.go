@@ -1,6 +1,10 @@
 package config
 
-import "slices"
+import (
+	"slices"
+
+	"github.com/rancher/orbs-automation/internal/git"
+)
 
 // Branch returns the branch a line of the Project lives on, and whether that
 // is the Project's default branch because the config names none. The config
@@ -51,5 +55,10 @@ func (l ProjectLine) Series() string {
 // matching the tag against the series of each of its release lines, or "" when
 // it is in none. A Project with no release lines is in no line.
 func (p Project) LineOf(tag string) string {
+	for _, l := range p.Release.Lines {
+		if git.InSeries(tag, l.Series()) {
+			return l.Line
+		}
+	}
 	return ""
 }
