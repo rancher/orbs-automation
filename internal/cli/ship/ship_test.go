@@ -220,7 +220,7 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 
 	out, err := run(context.Background(), ws, prober, clicfg.OutputText, in, false)
 	assert.ErrorIs(t, err, ErrBlocked)
-	assert.Contains(t, out, "blocked: downgrade")
+	assert.Contains(t, out, "downgrade: the release is older")
 	assert.Contains(t, out, "--allow-downgrade")
 	assert.NotContains(t, out, "Images", "a blocked downgrade shows no preview or image check")
 	assert.NotContains(t, out, "\nPR\n")

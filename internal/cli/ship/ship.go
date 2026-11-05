@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"text/tabwriter"
 
@@ -125,10 +126,10 @@ func renderText(p domain.Plan, full bool) string {
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.Branch, git.Short(t.Commit), t.Current, t.Status)
 	}
 	_ = w.Flush()
+	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Blockers }) {
+		fmt.Fprintf(&b, "  blocked (%s): %s\n", strings.Join(g.branches, ", "), g.text)
+	}
 	for _, t := range p.Targets {
-		for _, blocker := range t.Blockers {
-			fmt.Fprintf(&b, "  %s blocked: %s\n", t.Branch, blocker)
-		}
 		if t.Error != "" {
 			fmt.Fprintf(&b, "  %s failed: %s\n", t.Branch, t.Error)
 		}
@@ -166,13 +167,35 @@ func renderText(p domain.Plan, full bool) string {
 	for _, warning := range p.Warnings {
 		b.WriteString("\nWarning: " + warning + "\n")
 	}
-	for _, t := range p.Targets {
-		for _, warning := range t.Warnings {
-			fmt.Fprintf(&b, "\nWarning: %s: %s\n", t.Branch, warning)
-		}
+	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
+		fmt.Fprintf(&b, "\nWarning (%s): %s\n", strings.Join(g.branches, ", "), g.text)
 	}
 	b.WriteString("\nNothing was written.\n")
 	return b.String()
+}
+
+// group is one text and the branches it applies to.
+type group struct {
+	text     string
+	branches []string
+}
+
+// groupTargets collects the texts of the targets (their blockers or warnings)
+// and the branches each applies to, in order of first appearance, so the same
+// reason for five branches is one line and not five.
+func groupTargets(targets []domain.TargetPlan, texts func(domain.TargetPlan) []string) []group {
+	var groups []group
+	for _, t := range targets {
+		for _, text := range texts(t) {
+			i := slices.IndexFunc(groups, func(g group) bool { return g.text == text })
+			if i < 0 {
+				groups = append(groups, group{text: text})
+				i = len(groups) - 1
+			}
+			groups[i].branches = append(groups[i].branches, t.Branch)
+		}
+	}
+	return groups
 }
 
 // previews returns the targets that have a PR to show.

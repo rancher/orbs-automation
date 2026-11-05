@@ -34,7 +34,7 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 	}
 	if downgrade(r.strategy, current, r.want) {
 		tp.Downgrade = true
-		message := fmt.Sprintf("the release is older than what %s holds: %s, shipping %s", consumerSlug, current, r.want)
+		message := "the release is older than what the branch holds"
 		if !in.AllowDowngrade {
 			// Stop here, as for a branch that is up to date: nothing else is
 			// worth showing for a bump that will not happen.
