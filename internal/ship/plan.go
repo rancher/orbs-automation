@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
+	"github.com/rancher/orbs-automation/internal/semver"
 )
 
 var (
@@ -170,13 +171,36 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		return Plan{}, fmt.Errorf("render the PR: %w", err)
 	}
 	plan.Preview = &preview
+	if downgrade(strategy, current, want) {
+		plan.Downgrade = true
+		message := fmt.Sprintf("the release is older than what %s holds: %s, shipping %s",
+			consumerSlug, current, want)
+		if in.AllowDowngrade {
+			plan.Warnings = append(plan.Warnings, "this is a downgrade: "+message)
+		} else {
+			plan.Blockers = append(plan.Blockers, "downgrade: "+message+"; pass --allow-downgrade to ship it anyway")
+		}
+	}
 	images := registry.CheckProject(ctx, producer, prober, release.Tag)
-	plan.Images, plan.Warnings = &images, images.Warnings
+	plan.Images, plan.Warnings = &images, append(plan.Warnings, images.Warnings...)
 	if images.Failed() {
-		plan.Status = StatusBlocked
 		plan.Blockers = append(plan.Blockers, "images: the release is not fully published")
 	}
+	if len(plan.Blockers) > 0 {
+		plan.Status = StatusBlocked
+	}
 	return plan, nil
+}
+
+// downgrade reports whether want is an older version than current, by what the
+// strategy finds in each. A value with no version in it is not judged.
+func downgrade(s Strategy, current, want string) bool {
+	cv, ok := s.Version(current)
+	if !ok {
+		return false
+	}
+	wv, ok := s.Version(want)
+	return ok && semver.Compare(cv, wv) > 0
 }
 
 // pickConsumer chooses the consumer to ship to: the one named by to, or the
