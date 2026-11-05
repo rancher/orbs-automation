@@ -8,6 +8,7 @@ package ship
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -101,7 +102,17 @@ func (yamlKey) Write(src []byte, p Params, value string) ([]byte, error) {
 	return out, err
 }
 
-func (yamlKey) Version(value string) (semver.Version, bool) { return semver.Version{}, false }
+// versionToken is a version inside a longer value: a tag after a colon, a bare
+// version, or one with a prerelease or build part.
+var versionToken = regexp.MustCompile(`v?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`)
+
+func (yamlKey) Version(value string) (semver.Version, bool) {
+	token := versionToken.FindString(value)
+	if token == "" {
+		return semver.Version{}, false
+	}
+	return semver.Parse(token)
+}
 
 func (yamlKey) Describe(p Params, from, to string) string {
 	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["key"], p["file"], from, to)
