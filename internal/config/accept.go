@@ -8,5 +8,11 @@ package config
 // what to act on; the field stays as written, since an omitted value and an
 // explicit "all" are different once the producer is universal.
 func (s Source) AcceptLines(producer Project) string {
-	return ""
+	switch {
+	case s.Accept.Lines != "":
+		return s.Accept.Lines
+	case producer.IsUniversal():
+		return AcceptLinesUniversal
+	}
+	return AcceptLinesAll
 }
