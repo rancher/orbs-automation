@@ -49,24 +49,24 @@ func TestListTagsResolvesAnnotatedTagsToTheirCommit(t *testing.T) {
 		ref("refs/tags/v1.1.0^{}", hashC), // and the commit it peels to
 	}}}}
 
-	got, err := listTags(context.Background(), f.list, "https://example/o/r.git", "")
+	got, err := listRefs(context.Background(), f.list, "https://example/o/r.git", "")
 
 	require.NoError(t, err)
-	assert.Equal(t, []git.Tag{{Name: "v1.0.0", Commit: hashA}, {Name: "v1.1.0", Commit: hashC}}, got)
+	assert.Equal(t, []git.Tag{{Name: "v1.0.0", Commit: hashA}, {Name: "v1.1.0", Commit: hashC}}, got.Tags)
 }
 
 func TestListTagsIsSortedByName(t *testing.T) {
 	f := &fakeList{results: []fakeResult{{refs: []*plumbing.Reference{
 		ref("refs/tags/v2", hashA), ref("refs/tags/v1", hashB), ref("refs/tags/v10", hashC),
 	}}}}
-	got, err := listTags(context.Background(), f.list, "u", "")
+	got, err := listRefs(context.Background(), f.list, "u", "")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"v1", "v10", "v2"}, []string{got[0].Name, got[1].Name, got[2].Name})
+	assert.Equal(t, []string{"v1", "v10", "v2"}, []string{got.Tags[0].Name, got.Tags[1].Name, got.Tags[2].Name})
 }
 
 func TestListTagsAsksAnonymouslyFirst(t *testing.T) {
 	f := &fakeList{results: []fakeResult{{}}}
-	_, err := listTags(context.Background(), f.list, "u", "secret")
+	_, err := listRefs(context.Background(), f.list, "u", "secret")
 	require.NoError(t, err)
 	require.Len(t, f.auths, 1, "a public repository costs one anonymous request")
 	assert.Nil(t, f.auths[0], "the token is not sent unless it is asked for")
@@ -78,10 +78,10 @@ func TestListTagsRetriesWithTheTokenWhenAuthenticationIsRequired(t *testing.T) {
 		{refs: []*plumbing.Reference{ref("refs/tags/v1", hashA)}},
 	}}
 
-	got, err := listTags(context.Background(), f.list, "u", "secret")
+	got, err := listRefs(context.Background(), f.list, "u", "secret")
 
 	require.NoError(t, err)
-	assert.Equal(t, []git.Tag{{Name: "v1", Commit: hashA}}, got)
+	assert.Equal(t, []git.Tag{{Name: "v1", Commit: hashA}}, got.Tags)
 	require.Len(t, f.auths, 2)
 	basic, ok := f.auths[1].(*http.BasicAuth)
 	require.True(t, ok, "the retry authenticates")
@@ -90,7 +90,7 @@ func TestListTagsRetriesWithTheTokenWhenAuthenticationIsRequired(t *testing.T) {
 
 func TestListTagsWithoutATokenSaysCredentialsAreNeeded(t *testing.T) {
 	f := &fakeList{results: []fakeResult{{err: transport.ErrAuthenticationRequired}}}
-	_, err := listTags(context.Background(), f.list, "u", "")
+	_, err := listRefs(context.Background(), f.list, "u", "")
 	assert.ErrorIs(t, err, transport.ErrAuthenticationRequired)
 	assert.ErrorContains(t, err, "token")
 	assert.Len(t, f.auths, 1)
@@ -99,7 +99,7 @@ func TestListTagsWithoutATokenSaysCredentialsAreNeeded(t *testing.T) {
 func TestListTagsDoesNotRetryOtherErrors(t *testing.T) {
 	boom := errors.New("network down")
 	f := &fakeList{results: []fakeResult{{err: boom}}}
-	_, err := listTags(context.Background(), f.list, "u", "secret")
+	_, err := listRefs(context.Background(), f.list, "u", "secret")
 	assert.ErrorIs(t, err, boom)
 	assert.Len(t, f.auths, 1)
 }
