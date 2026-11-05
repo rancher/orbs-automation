@@ -18,7 +18,7 @@ func (p Project) EffectiveImages() []Image {
 	}
 	out := make([]Image, len(images))
 	for i, img := range images {
-		out[i] = Image{Name: img.Name, Registries: slices.Clone(img.Registries)}
+		out[i] = Image{Name: img.Name, Registries: slices.Clone(img.Registries), Since: img.Since}
 		if len(out[i].Registries) == 0 {
 			out[i].Registries = []string{RegistryDockerHub, RegistryPrimeStaging, RegistryPrimeProduction}
 		}
