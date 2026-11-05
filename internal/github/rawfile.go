@@ -3,7 +3,10 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 )
 
 // ErrFileNotFound is returned when the repository, the ref or the path does not
@@ -23,5 +26,50 @@ const maxRawFile = 1 << 20
 // repository that does not need it. An empty token means none is available.
 // Only github.com is supported; other hosts return ErrUnsupportedHost.
 func RawFile(ctx context.Context, client *http.Client, host, token, slug, ref, path string) ([]byte, error) {
-	return nil, nil
+	if host != "github.com" {
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedHost, host)
+	}
+	u := url.URL{Scheme: "https", Host: "raw.githubusercontent.com", Path: "/" + slug + "/" + ref + "/" + path}
+	body, status, err := rawGet(ctx, client, u.String(), "")
+	if err == nil && status == http.StatusNotFound && token != "" {
+		body, status, err = rawGet(ctx, client, u.String(), token)
+	}
+	switch {
+	case err != nil:
+		return nil, err
+	case status == http.StatusOK:
+		return body, nil
+	case status == http.StatusNotFound:
+		return nil, fmt.Errorf("%w: %s at %s in %s", ErrFileNotFound, path, ref, slug)
+	}
+	return nil, fmt.Errorf("read %s of %s: %d %s", path, slug, status, http.StatusText(status))
+}
+
+// rawGet fetches target, with token when there is one, and returns the body of
+// a 200 and the status of any answer.
+func rawGet(ctx context.Context, client *http.Client, target, token string) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("User-Agent", UserAgent())
+	if token != "" {
+		req.Header.Set("Authorization", "token "+token)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, resp.StatusCode, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxRawFile+1))
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(body) > maxRawFile {
+		return nil, 0, fmt.Errorf("the file is larger than %d bytes", maxRawFile)
+	}
+	return body, resp.StatusCode, nil
 }
