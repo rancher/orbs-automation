@@ -24,6 +24,8 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 | `External` | A third-party project we track (`trackOnly`, `react`) or notify |
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |
 
+A source's `update.strategy` and `update.params` define both directions of one lookup: the strategy writes the new value into the consumer (a bump) and reads the value the consumer has now. The read is what tells a command such as `gero repo info` where a consumer stands, and what makes a bump a no-op when the consumer is already at the target, so no second block of config says where to look. The strategies are named code in `gero`, each implementing a reader and a writer over the same params.
+
 Repo shapes, branch policy, line mapping and the bump model these fields express are product decisions, in [IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps).
 
 ## Placement
