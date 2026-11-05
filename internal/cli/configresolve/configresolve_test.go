@@ -3,6 +3,7 @@ package configresolve
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,32 @@ type fakeWorkspace struct {
 	cfgErr error
 	rows   map[string]workspace.RepoPath
 	asked  [][]string
+	// current is the slug of the Project the working directory is in, "" when it
+	// is in none.
+	current string
+}
+
+// Project is the real lookup: a key with a slash is a slug, any other a name,
+// and "" or "." is the working directory's Project.
+func (f *fakeWorkspace) Project(key string) (config.Project, error) {
+	if f.cfgErr != nil {
+		return config.Project{}, f.cfgErr
+	}
+	if key == "" || key == "." {
+		for _, p := range f.cfg.Projects {
+			if p.Repo.Name == f.current && f.current != "" {
+				return p, nil
+			}
+		}
+		return config.Project{}, workspace.ErrNotProject
+	}
+	for _, p := range f.cfg.Projects {
+		if (strings.Contains(key, "/") && strings.EqualFold(p.Repo.Name, key)) ||
+			(!strings.Contains(key, "/") && strings.EqualFold(p.Name, key)) {
+			return p, nil
+		}
+	}
+	return config.Project{}, fmt.Errorf("%q is %w", key, workspace.ErrUnknownProject)
 }
 
 func (f *fakeWorkspace) Config() (config.Config, error) { return f.cfg, f.cfgErr }
@@ -159,6 +186,31 @@ func TestReposUnknownSlug(t *testing.T) {
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrUnresolved)
 	assert.Contains(t, err.Error(), "rancher/nope")
+	assert.Empty(t, out)
+	assert.Empty(t, ws.asked)
+}
+
+func TestReposByProjectName(t *testing.T) {
+	ws := mixed()
+	out, err := repos(ws, clicfg.OutputText, []string{"scc-operator"})
+	assert.ErrorIs(t, err, ErrUnresolved, "that clone is ambiguous in the fixture")
+	assert.Equal(t, [][]string{{"rancher/scc-operator"}}, ws.asked, "a name is asked for by its slug")
+	assert.Contains(t, out, "ambiguous")
+}
+
+func TestReposDotIsTheProjectTheWorkingDirectoryIsIn(t *testing.T) {
+	ws := mixed()
+	ws.current = "rancher/rancher"
+	out, err := repos(ws, clicfg.OutputText, []string{"."})
+	require.NoError(t, err)
+	assert.Equal(t, [][]string{{"rancher/rancher"}}, ws.asked)
+	assert.Contains(t, out, "/src/rancher")
+}
+
+func TestReposDotOutsideAProject(t *testing.T) {
+	ws := mixed()
+	out, err := repos(ws, clicfg.OutputText, []string{"."})
+	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.Empty(t, out)
 	assert.Empty(t, ws.asked)
 }
