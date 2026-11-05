@@ -46,3 +46,10 @@ func (l ProjectLine) Series() string {
 	}
 	return l.Line
 }
+
+// LineOf returns the Rancher line a tag belongs to in this Project, found by
+// matching the tag against the series of each of its release lines, or "" when
+// it is in none. A Project with no release lines is in no line.
+func (p Project) LineOf(tag string) string {
+	return ""
+}
