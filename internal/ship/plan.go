@@ -3,6 +3,8 @@ package ship
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
@@ -83,5 +85,115 @@ type Plan struct {
 // strategy, and, unless the consumer is already at the release, checks the
 // release's images exist. It writes nothing.
 func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, error) {
-	return Plan{}, nil
+	producer, consumers, err := ws.Consumers(in.Project)
+	if err != nil {
+		return Plan{}, err
+	}
+	consumer, err := pickConsumer(producer, consumers, in.To)
+	if err != nil {
+		return Plan{}, err
+	}
+	strategy, err := LookupStrategy(consumer.Source.Update.Strategy)
+	if err != nil {
+		return Plan{}, err
+	}
+	consumerSlug := consumer.Project.Repo.Name
+	if in.Branch == "" {
+		return Plan{}, fmt.Errorf("%w: the release branches of %s are %s",
+			ErrBranchRequired, consumerSlug, strings.Join(consumer.Project.ReleaseBranches(), ", "))
+	}
+
+	producerRefs, err := ws.UpstreamRefs(ctx, producer.Repo.Name)
+	if err != nil {
+		return Plan{}, fmt.Errorf("read the tags of %s: %w", producer.Repo.Name, err)
+	}
+	release, err := ResolveRelease(producer, producerRefs.Tags, in.Arg, in.Prerelease, consumer.Source.Accept.When)
+	if err != nil {
+		return Plan{}, err
+	}
+
+	consumerRefs, err := ws.UpstreamRefs(ctx, consumerSlug)
+	if err != nil {
+		return Plan{}, fmt.Errorf("read the branches of %s: %w", consumerSlug, err)
+	}
+	target, ok := findBranch(consumerRefs, in.Branch)
+	if !ok {
+		return Plan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, in.Branch)
+	}
+
+	params := Params(consumer.Source.Update.Params)
+	file, err := strategy.File(params)
+	if err != nil {
+		return Plan{}, fmt.Errorf("strategy %s: %w", consumer.Source.Update.Strategy, err)
+	}
+	src, err := ws.UpstreamFile(ctx, consumerSlug, target.Commit, file)
+	if err != nil {
+		return Plan{}, fmt.Errorf("read %s on %s of %s: %w", file, target.Branch, consumerSlug, err)
+	}
+	current, err := strategy.Read(src, params)
+	if err != nil {
+		return Plan{}, fmt.Errorf("read %s on %s of %s: %w", file, target.Branch, consumerSlug, err)
+	}
+	want, err := strategy.Value(params, map[string]string{
+		"image":      producer.EffectiveImages()[0].Name,
+		"tag":        release.Tag,
+		"version":    strings.TrimPrefix(release.Tag, "v"),
+		"sourceRepo": producer.Repo.Name,
+	})
+	if err != nil {
+		return Plan{}, fmt.Errorf("strategy %s: %w", consumer.Source.Update.Strategy, err)
+	}
+
+	plan := Plan{
+		Producer: producer.Repo.Name, Release: release, Consumer: consumerSlug,
+		Strategy: consumer.Source.Update.Strategy, Target: target, File: file,
+		Current: current, Want: want, Status: StatusReady,
+	}
+	if current == want {
+		plan.Status = StatusUpToDate
+		return plan, nil
+	}
+	images := registry.CheckProject(ctx, producer, prober, release.Tag)
+	plan.Images, plan.Warnings = &images, images.Warnings
+	if images.Failed() {
+		plan.Status = StatusBlocked
+		plan.Blockers = append(plan.Blockers, "images: the release is not fully published")
+	}
+	return plan, nil
+}
+
+// pickConsumer chooses the consumer to ship to: the one named by to, or the
+// only one.
+func pickConsumer(producer config.Project, consumers []config.Consumer, to string) (config.Consumer, error) {
+	names := make([]string, len(consumers))
+	for i, c := range consumers {
+		names[i] = c.Project.Name
+	}
+	if to != "" {
+		for _, c := range consumers {
+			if strings.EqualFold(c.Project.Name, to) || strings.EqualFold(c.Project.Repo.Name, to) {
+				return c, nil
+			}
+		}
+		return config.Consumer{}, fmt.Errorf("%w: %q does not take updates from %s (it is taken by: %s)",
+			ErrNoConsumer, to, producer.Name, strings.Join(names, ", "))
+	}
+	switch len(consumers) {
+	case 0:
+		return config.Consumer{}, fmt.Errorf("%w: no project takes updates from %s", ErrNoConsumer, producer.Name)
+	case 1:
+		return consumers[0], nil
+	}
+	return config.Consumer{}, fmt.Errorf("%w take updates from %s: %s; choose one with --to",
+		ErrAmbiguousConsumer, producer.Name, strings.Join(names, ", "))
+}
+
+// findBranch returns the branch of the name and the commit at its head.
+func findBranch(refs git.Refs, name string) (Target, bool) {
+	for _, b := range refs.Branches {
+		if b.Name == name {
+			return Target{Branch: b.Name, Commit: b.Commit}, true
+		}
+	}
+	return Target{}, false
 }

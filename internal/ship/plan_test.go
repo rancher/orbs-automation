@@ -85,7 +85,7 @@ func fixture() *fakeWorkspace {
 			}},
 		},
 		files: map[string]string{
-			"rancher/rancher@sha-215:build.yaml": "defaultSccOperatorImage: rancher/scc-operator:v0.5.2\n",
+			"rancher/rancher@sha-215:build.yaml":  "defaultSccOperatorImage: rancher/scc-operator:v0.5.2\n",
 			"rancher/rancher@sha-main:build.yaml": "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n",
 		},
 	}
