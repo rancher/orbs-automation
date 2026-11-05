@@ -7,5 +7,13 @@ import "github.com/rancher/orbs-automation/internal/config"
 // with the source entry that names it. The consumers may be none. It returns
 // the errors Project does.
 func (w *Workspace) Consumers(key string) (producer config.Project, consumers []config.Consumer, err error) {
-	return config.Project{}, nil, nil
+	cfg, err := w.Config()
+	if err != nil {
+		return config.Project{}, nil, err
+	}
+	producer, err = w.projectIn(cfg, key)
+	if err != nil {
+		return config.Project{}, nil, err
+	}
+	return producer, cfg.Consumers(producer.Name), nil
 }
