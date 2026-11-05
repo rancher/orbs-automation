@@ -126,6 +126,21 @@ func TestValidateProblems(t *testing.T) {
 			},
 			[]string{"images[0]", "since", "release.lines"},
 		},
+		{
+			"unknown placeholder in the title",
+			func(c *config.Config) { c.Projects[0].PullRequests.Title = "[{branch}] Update {sourc} to {tag}" },
+			[]string{"pullRequests.title", "sourc"},
+		},
+		{
+			"malformed title",
+			func(c *config.Config) { c.Projects[0].PullRequests.Title = "[{branch] Update" },
+			[]string{"pullRequests.title"},
+		},
+		{
+			"unknown placeholder in the branch prefix",
+			func(c *config.Config) { c.Projects[0].PullRequests.BranchPrefix = "bot/{nope}-" },
+			[]string{"pullRequests.branchPrefix", "nope"},
+		},
 		{"source from unknown project", func(c *config.Config) { c.Projects[0].Sources[0].From = "nope" }, []string{"sources[0]", `"nope"`}},
 		{"source from itself", func(c *config.Config) { c.Projects[0].Sources[0].From = "a" }, []string{"sources[0]", "itself"}},
 		{"unknown accept.when", func(c *config.Config) { c.Projects[0].Sources[0].Accept.When = "rc" }, []string{"accept.when", `"rc"`}},
@@ -172,6 +187,13 @@ func TestValidateProblems(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateAcceptsPullRequestTemplates(t *testing.T) {
+	c := valid()
+	c.Projects[0].PullRequests.Title = "[{branch}] Update {source} to {version} ({tag}) {{literal}}"
+	c.Projects[0].PullRequests.BranchPrefix = "bot/{source}-"
+	assert.NoError(t, Validate(c))
 }
 
 func TestValidateAcceptsImages(t *testing.T) {
