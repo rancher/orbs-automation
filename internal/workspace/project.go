@@ -2,6 +2,8 @@ package workspace
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
 )
@@ -23,7 +25,42 @@ var (
 // It returns ErrUnknownProject or ErrNotProject when there is no such Project,
 // and Config's errors when the central config is unusable.
 func (w *Workspace) Project(key string) (config.Project, error) {
-	return config.Project{}, nil
+	cfg, err := w.Config()
+	if err != nil {
+		return config.Project{}, err
+	}
+	if key != "" {
+		// A key with a slash is the repository's owner/name slug, any other
+		// is the document's name. Both compare case-insensitively.
+		isSlug := strings.Contains(key, "/")
+		for _, p := range cfg.Projects {
+			if (isSlug && strings.EqualFold(p.Repo.Name, key)) || (!isSlug && strings.EqualFold(p.Name, key)) {
+				return p, nil
+			}
+		}
+		return config.Project{}, fmt.Errorf("%q is %w", key, ErrUnknownProject)
+	}
+	here := w.cwdClone()
+	if here == nil {
+		return config.Project{}, ErrNotProject
+	}
+	var strongs, weaks []config.Project
+	for _, p := range cfg.Projects {
+		switch here.matches(p.Repo.Name) {
+		case strong:
+			strongs = append(strongs, p)
+		case weak:
+			weaks = append(weaks, p)
+		}
+	}
+	found := strongs
+	if len(found) == 0 {
+		found = weaks
+	}
+	if len(found) != 1 {
+		return config.Project{}, ErrNotProject
+	}
+	return found[0], nil
 }
 
 // ErrEmptyConfig is returned when the config directory holds no config

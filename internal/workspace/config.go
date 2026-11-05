@@ -22,6 +22,10 @@ func (w *Workspace) Config() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, fmt.Errorf("config directory %s: %w", dir.Dir, err)
 	}
+	if len(loaded.Projects)+len(loaded.Externals) == 0 && loaded.Lines == nil {
+		return config.Config{}, fmt.Errorf("config directory %s: %w (the files are *.project.yaml, *.external.yaml and *.lines.yaml directly in it, "+
+			"often a config/ subdirectory of the central checkout)", dir.Dir, ErrEmptyConfig)
+	}
 	resolved := loader.WithDefaults(loaded)
 	if err := loader.Validate(resolved); err != nil {
 		return config.Config{}, fmt.Errorf("config directory %s: %w", dir.Dir, err)
