@@ -1,0 +1,55 @@
+package config
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestProjectBranch(t *testing.T) {
+	p := Project{Repo: Repo{Name: "o/a", DefaultBranch: "dev-v2.13"}}
+
+	t.Run("a named branch is used as written", func(t *testing.T) {
+		got, isDefault := p.Branch(ProjectLine{Line: "v2.12", Branch: "release/v2.12"})
+		assert.Equal(t, "release/v2.12", got)
+		assert.False(t, isDefault)
+	})
+	t.Run("no branch means the default branch", func(t *testing.T) {
+		got, isDefault := p.Branch(ProjectLine{Line: "v2.13"})
+		assert.Equal(t, "dev-v2.13", got)
+		assert.True(t, isDefault)
+	})
+	t.Run("the raw value stays empty", func(t *testing.T) {
+		l := ProjectLine{Line: "v2.13"}
+		p.Branch(l)
+		assert.Empty(t, l.Branch)
+	})
+}
+
+func TestProjectIsUniversal(t *testing.T) {
+	assert.True(t, Project{}.IsUniversal(), "no lines is the default")
+	assert.False(t, Project{Release: Release{Lines: []ProjectLine{{Line: "v2.12"}}}}.IsUniversal())
+}
+
+func TestProjectReleaseBranches(t *testing.T) {
+	repo := Repo{Name: "o/a", DefaultBranch: "main"}
+	lines := []ProjectLine{
+		{Line: "v2.16"}, // development: the default branch
+		{Line: "v2.15", Branch: "release/v2.15"},
+		{Line: "v2.14", Branch: "release/v2.14"},
+		{Line: "v2.13", Branch: "main"}, // the same branch as the development line
+	}
+
+	t.Run("single is the default branch, whatever the lines say", func(t *testing.T) {
+		p := Project{Repo: repo, Release: Release{Branches: BranchesSingle, Lines: lines}}
+		assert.Equal(t, []string{"main"}, p.ReleaseBranches())
+	})
+	t.Run("perLine is each line's effective branch, once each", func(t *testing.T) {
+		p := Project{Repo: repo, Release: Release{Branches: BranchesPerLine, Lines: lines}}
+		assert.Equal(t, []string{"main", "release/v2.15", "release/v2.14"}, p.ReleaseBranches())
+	})
+	t.Run("perLine with no lines is empty", func(t *testing.T) {
+		p := Project{Repo: repo, Release: Release{Branches: BranchesPerLine}}
+		assert.Empty(t, p.ReleaseBranches())
+	})
+}

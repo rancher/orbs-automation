@@ -20,7 +20,8 @@ cmd/version/         build info (Version, Commit, Date) set by GoReleaser throug
 internal/cli/<cmd>/  one subpackage per command: its logic as plain functions, no cobra
 internal/cli/logging/ shared, not a command: builds the *slog.Logger, called once by cmd/   (CLI_OUTPUT)
 internal/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
-internal/config/     application config: types, loader, validation, defaults
+internal/config/     application config types, their effective getters and the enum values
+internal/config/loader/  application config loader: YAML decoding, defaults, validation (workspace only)
 internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (WORKSPACE)
 internal/ui/         output and prompt seam, plain-text implementation first   (CLI_OUTPUT)
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
@@ -56,8 +57,8 @@ main.go -> cmd -> internal/cli/<cmd>  ->  domain packages  ->  internal/config, 
 * `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any other `internal/` package, but not another command package. Shared command code goes in a third, smaller package.
 * Domain packages (`semver`, `git`, `config`, ...) never import `internal/cli/...` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
-* `internal/clicfg` and `internal/config` do not import each other. `Settings` is passed down by the command, never read from a global.
-* `internal/workspace` is where the two meet. It imports `clicfg`, `config` and `internal/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
+* `internal/clicfg` and `internal/config` (with its `loader`) do not import each other. `Settings` is passed down by the command, never read from a global.
+* `internal/workspace` is where the two meet. It imports `clicfg`, `config`, `config/loader` and `internal/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
 * Domain packages take their dependencies as arguments (a `*slog.Logger`, a GitHub client interface, a `Settings` value). No package-level logger, client or config singleton.
 * Interfaces are defined where they are consumed, so a domain package can be tested without the real GitHub client.
 * No import cycles, and no cross-domain imports without a reason recorded here. If two domain packages need each other, the shared part is a third, smaller package.
@@ -90,9 +91,10 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 * **The boundaries below are lint-enforced** by depguard rules in [`.golangci.yml`](../../.golangci.yml), each with a comment saying why. The config is the source of truth for the exact lists; this is the intent.
   * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/clicfg` and `internal/errs`. `main.go` imports only `cmd`.
   * cobra is importable only from `cmd/` and `main.go`.
-  * Each outside dependency has one door: go-git only in `internal/git/repo`, `os/exec` only in `internal/execx`, the YAML library only in `internal/clicfg` and `internal/config`, go-gh only in `internal/github/gogh.go`, go-github only in `internal/github`.
+  * Each outside dependency has one door: go-git only in `internal/git/repo`, `os/exec` only in `internal/execx`, the YAML library only in `internal/clicfg` and `internal/config/loader`, go-gh only in `internal/github/gogh.go`, go-github only in `internal/github`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/git/repo` directly. Its pure logic may still take `internal/git` and domain types.
-* **By review, for now:** the rest of dependency direction above, and the other half of the workspace door: loading central config is not denied, because depguard works per package and commands need the `internal/config` types. That can be enforced once the loader and the types can be told apart (for example by splitting the package). A depguard rule per package can be added once there are enough packages to be worth it.
+* **Central config has one door.** `internal/config/loader` is importable only from `internal/workspace` (lint-enforced). A command package cannot load config, apply defaults or skip validation: it gets a `config.Project` or `config.Config` from `Workspace`, already defaulted and validated, and imports `internal/config` only for the types and their getters.
+* **By review, for now:** the rest of dependency direction above. A depguard rule per package can be added once there are enough packages to be worth it.
 
 ## Why `clicfg` is not under `internal/cli/`
 

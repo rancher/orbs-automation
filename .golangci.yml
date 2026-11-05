@@ -87,11 +87,23 @@ linters:
           list-mode: lax
           files:
             - "!**/internal/clicfg/**"
-            - "!**/internal/config/**"
+            - "!**/internal/config/loader/**"
             - "!$test"
           deny:
             - pkg: go.yaml.in/yaml
-              desc: YAML is only allowed in internal/clicfg and internal/config (docs/specs/DEPENDENCY_POLICY.md)
+              desc: YAML is only allowed in internal/clicfg and internal/config/loader (docs/specs/DEPENDENCY_POLICY.md)
+        # Central config is loaded, defaulted and validated only by
+        # internal/workspace, so no command can use config that skipped them
+        # (docs/specs/WORKSPACE.md, docs/specs/PROJECT_LAYOUT.md).
+        oneconfigdoor:
+          list-mode: lax
+          files:
+            - "!**/internal/workspace/**"
+            - "!**/internal/config/loader/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/config/loader
+              desc: the config loader is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
         # go-gh is used for token and host resolution only, through
         # internal/github.GoGh. Its pkg/api is not approved
         # (docs/specs/DEPENDENCY_POLICY.md).

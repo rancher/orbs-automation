@@ -6,13 +6,22 @@
 
 ## One door
 
-A command package may not locate the central config, discover a repo or scan for clones itself. Each rule exists once, in `workspace`, so the same inputs cannot resolve differently in different commands. Lint enforces the repository half of this ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)); the config-loading half is kept by review until the loader and the types can be told apart.
+A command package may not locate the central config, discover a repo or scan for clones itself. Each rule exists once, in `workspace`, so the same inputs cannot resolve differently in different commands. Lint enforces both halves ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)): repositories are opened only through `workspace`, and the config loader (`internal/config/loader`) is importable only from `workspace`, so no command can see config that has skipped defaults or validation.
 
 * Each `internal/cli/<cmd>` calls `workspace.Open(settings, cwd)`. It takes plain values and builds its own real dependencies (file system, go-git opener). A `getenv` joins the parameters when a rule first needs it, such as the CI check for `upstream`. `cmd/` knows nothing about `workspace`.
 * The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake.
 * **Resolution is lazy.** `Open` does no I/O, and a method does only the work its caller needs. A command that needs no remote does not fail because the working directory is not a repo.
 * `internal/clicfg` stays pure (flags, environment, file, defaults; unset stays zero) and does not import git. `workspace` takes `Settings` and does the inference.
 * The repository is offered as `Current()` (found from the working directory upward) and `CurrentAtRoot()` (`.git` must be in the working directory itself, for commands that port a script with that rule). `ErrNotRepository` is re-exported.
+
+## Raw and effective values
+
+A value in the central config can differ from the value an operation should act on. There are two layers, and each has one home:
+
+* **Within the config.** A field omitted in the YAML is either filled at load, when a default is safe and conservative (`repo.defaultBranch`, `release.tagPattern`, and the others in [`config/README.md`](../../config/README.md)), or left empty and resolved by a getter on the type that owns the inputs, such as `Project.Branch(line)` (a development line with no branch lives on the default branch). The struct field is the **raw** value, exactly what was written, and validation reads it. A getter is the **effective** value, and anything that acts on a line reads that.
+* **Config and CLI settings together.** A value that needs both, such as the upstream remote for one repo (a `repos.overrides` entry, else the global `upstream`), is a `Workspace` method. `clicfg` and `config` do not import each other, so only `workspace` can combine them.
+
+`Workspace.Config()` and `Workspace.Project()` return config with defaults applied and validated; the loader is not reachable from anywhere else. A field with a fallback says so in its comment and names its getter, and a test over the config types fails when a field is added without being classed as plain, defaulted at load or resolved by a getter.
 
 ## Inferred defaults
 

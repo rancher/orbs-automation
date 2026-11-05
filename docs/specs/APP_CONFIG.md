@@ -2,7 +2,7 @@
 
 **Status:** implemented for the loader, defaults and the checks listed under Validation. The kind and field names are not final, and everything in `config/` is a mock until the v0.x POC review ([PHASES](../PHASES.md)).
 
-The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The real files, field reference and defaults table are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`config-mock/`](../../config-mock/) and [`mock-repos/`](../../mock-repos/). The code is `internal/config`.
+The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The real files, field reference and defaults table are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`config-mock/`](../../config-mock/) and [`mock-repos/`](../../mock-repos/). The types are `internal/config`, and the loader, defaults and validation are `internal/config/loader`, reachable only through `internal/workspace` ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)).
 
 Informed by [backup-restore-operator](../projects/backup-restore-operator.md) and [rancher-shell](../projects/rancher-shell.md). The backup-restore-operator style (hybrid: reusable workflows, composite actions and rendered templates) is the closer model for what the central repo offers.
 

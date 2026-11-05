@@ -1,4 +1,4 @@
-package config
+package loader
 
 import (
 	"errors"
@@ -6,32 +6,13 @@ import (
 	"slices"
 	"strings"
 	"time"
-)
 
-// The values an enumerated field may take (config/README.md).
-const (
-	BranchesSingle  = "single"
-	BranchesPerLine = "perLine"
-
-	AcceptStable = "stable"
-	AcceptAll    = "all"
-
-	AcceptLinesAll       = "all"
-	AcceptLinesUniversal = "universal"
-
-	ActionTrackOnly = "trackOnly"
-	ActionReact     = "react"
-	ActionNotify    = "notify"
-
-	PhaseDevelopment = "development"
-	PhaseGA          = "ga"
-	PhaseEOM         = "eom"
-	PhaseEOL         = "eol"
+	"github.com/rancher/orbs-automation/internal/config"
 )
 
 // Validate is ValidateAt for the current time.
-func (c Config) Validate() error {
-	return c.ValidateAt(time.Now())
+func Validate(c config.Config) error {
+	return ValidateAt(c, time.Now())
 }
 
 // ValidateAt checks c after WithDefaults, so an omitted field with a default is
@@ -39,7 +20,7 @@ func (c Config) Validate() error {
 // lines are still in development. It reports every problem it finds, each
 // naming the document and field, as one joined error; it returns nil when c is
 // valid.
-func (c Config) ValidateAt(now time.Time) error {
+func ValidateAt(c config.Config, now time.Time) error {
 	var v validator
 	projects := map[string]bool{}
 	for _, p := range c.Projects {
@@ -71,7 +52,7 @@ func (v *validator) oneOf(where, field, got string, allowed ...string) {
 	}
 }
 
-func (v *validator) lines(l *RancherLines, now time.Time, phases map[string]string) {
+func (v *validator) lines(l *config.RancherLines, now time.Time, phases map[string]string) {
 	for i, ln := range l.Lines {
 		at := fmt.Sprintf("RancherLines %q: lines[%d]", l.Name, i)
 		if ln.ID == "" {
@@ -84,15 +65,15 @@ func (v *validator) lines(l *RancherLines, now time.Time, phases map[string]stri
 			phases[ln.ID] = ln.PhaseAt(now)
 		}
 		if ln.Phase != "" {
-			v.oneOf(at, "phase", ln.Phase, PhaseDevelopment, PhaseGA, PhaseEOM, PhaseEOL)
+			v.oneOf(at, "phase", ln.Phase, config.PhaseDevelopment, config.PhaseGA, config.PhaseEOM, config.PhaseEOL)
 		}
-		if err := ln.Dates.validate(); err != nil {
+		if err := ln.Dates.Validate(); err != nil {
 			v.add("%s: %v", at, err)
 		}
 	}
 }
 
-func (v *validator) repo(where string, r Repo) {
+func (v *validator) repo(where string, r config.Repo) {
 	if parts := strings.Split(r.Name, "/"); len(parts) != 2 || parts[0] == "" || parts[1] == "" || strings.ContainsAny(r.Name, " \t") {
 		v.add("%s: repo.name %q must be owner/name", where, r.Name)
 	}
@@ -101,10 +82,10 @@ func (v *validator) repo(where string, r Repo) {
 	}
 }
 
-func (v *validator) project(p Project, projects map[string]bool, phases map[string]string, haveLines bool) {
+func (v *validator) project(p config.Project, projects map[string]bool, phases map[string]string, haveLines bool) {
 	where := fmt.Sprintf("Project %q", p.Name)
 	v.repo(where, p.Repo)
-	v.oneOf(where, "release.branches", p.Release.Branches, BranchesSingle, BranchesPerLine)
+	v.oneOf(where, "release.branches", p.Release.Branches, config.BranchesSingle, config.BranchesPerLine)
 	if p.Release.TagPattern == "" {
 		v.add("%s: release.tagPattern is required", where)
 	}
@@ -126,7 +107,7 @@ func (v *validator) project(p Project, projects map[string]bool, phases map[stri
 			v.add("%s: line %q needs a RancherLines document, and there is none", at, l.Line)
 		case !known:
 			v.add("%s: line %q is not in RancherLines", at, l.Line)
-		case l.Branch == "" && phase != PhaseDevelopment:
+		case l.Branch == "" && phase != config.PhaseDevelopment:
 			v.add("%s: line %q has no branch and is in phase %q; only a development line uses the default branch", at, l.Line, phase)
 		}
 	}
@@ -141,15 +122,15 @@ func (v *validator) project(p Project, projects map[string]bool, phases map[stri
 		case !projects[s.From]:
 			v.add("%s: from %q is not a Project", at, s.From)
 		}
-		v.oneOf(at, "accept.when", s.Accept.When, AcceptStable, AcceptAll)
-		v.oneOf(at, "accept.lines", s.Accept.Lines, AcceptLinesAll, AcceptLinesUniversal)
+		v.oneOf(at, "accept.when", s.Accept.When, config.AcceptStable, config.AcceptAll)
+		v.oneOf(at, "accept.lines", s.Accept.Lines, config.AcceptLinesAll, config.AcceptLinesUniversal)
 		if s.Update.Strategy == "" {
 			v.add("%s: update.strategy is required", at)
 		}
 	}
 }
 
-func (v *validator) external(x External, projects map[string]bool) {
+func (v *validator) external(x config.External, projects map[string]bool) {
 	where := fmt.Sprintf("External %q", x.Name)
 	v.repo(where, x.Repo)
 	seen := map[string]bool{}
@@ -158,7 +139,7 @@ func (v *validator) external(x External, projects map[string]bool) {
 		if !projects[r.Project] {
 			v.add("%s: project %q is not a Project", at, r.Project)
 		}
-		v.oneOf(at, "action", r.Action, ActionTrackOnly, ActionReact, ActionNotify)
+		v.oneOf(at, "action", r.Action, config.ActionTrackOnly, config.ActionReact, config.ActionNotify)
 		if seen[r.Project] {
 			v.add("%s: more than one action for project %q; a pair of projects has one", at, r.Project)
 		}
@@ -168,7 +149,7 @@ func (v *validator) external(x External, projects map[string]bool) {
 
 // repoSlugsAreUnique rejects two documents that claim the same repository,
 // ignoring case as GitHub does, so a slug resolves to one document.
-func (v *validator) repoSlugsAreUnique(c Config) {
+func (v *validator) repoSlugsAreUnique(c config.Config) {
 	owner := map[string]string{} // lower-cased slug to the document that holds it
 	claim := func(where, slug string) {
 		if slug == "" {

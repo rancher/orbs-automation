@@ -1,44 +1,46 @@
-package config
+package loader
+
+import "github.com/rancher/orbs-automation/internal/config"
 
 // Defaults applied when a field is omitted (config/README.md "Defaults"). Only
 // conservative values are defaulted; anything that changes release behavior
 // must be written out.
 const (
 	DefaultBranch     = "main"
-	DefaultBranches   = BranchesSingle
+	DefaultBranches   = config.BranchesSingle
 	DefaultTagPattern = "v*"
-	DefaultAcceptWhen = AcceptStable
-	DefaultAcceptLine = AcceptLinesAll
+	DefaultAcceptWhen = config.AcceptStable
+	DefaultAcceptLine = config.AcceptLinesAll
 )
 
 // WithDefaults returns a copy of c with every omitted field that has a default
 // filled in. c is not modified.
-func (c Config) WithDefaults() Config {
-	c.Projects = mapSlice(c.Projects, Project.withDefaults)
-	c.Externals = mapSlice(c.Externals, External.withDefaults)
+func WithDefaults(c config.Config) config.Config {
+	c.Projects = mapSlice(c.Projects, projectDefaults)
+	c.Externals = mapSlice(c.Externals, externalDefaults)
 	return c
 }
 
-func (p Project) withDefaults() Project {
-	p.Repo = p.Repo.withDefaults()
+func projectDefaults(p config.Project) config.Project {
+	p.Repo = repoDefaults(p.Repo)
 	p.Release.Branches = orDefault(p.Release.Branches, DefaultBranches)
 	p.Release.TagPattern = orDefault(p.Release.TagPattern, DefaultTagPattern)
-	p.Sources = mapSlice(p.Sources, Source.withDefaults)
+	p.Sources = mapSlice(p.Sources, sourceDefaults)
 	return p
 }
 
-func (x External) withDefaults() External {
-	x.Repo = x.Repo.withDefaults()
+func externalDefaults(x config.External) config.External {
+	x.Repo = repoDefaults(x.Repo)
 	return x
 }
 
-func (s Source) withDefaults() Source {
+func sourceDefaults(s config.Source) config.Source {
 	s.Accept.When = orDefault(s.Accept.When, DefaultAcceptWhen)
 	s.Accept.Lines = orDefault(s.Accept.Lines, DefaultAcceptLine)
 	return s
 }
 
-func (r Repo) withDefaults() Repo {
+func repoDefaults(r config.Repo) config.Repo {
 	r.DefaultBranch = orDefault(r.DefaultBranch, DefaultBranch)
 	return r
 }

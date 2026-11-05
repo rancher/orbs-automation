@@ -13,10 +13,10 @@ type Dates struct {
 	EOL time.Time `yaml:"eol"`
 }
 
-// validate checks that the dates are in order (ga <= eom <= eol) and that a
+// Validate checks that the dates are in order (ga <= eom <= eol) and that a
 // later date is not set without the ones before it that it depends on: an eom
 // needs a ga. An eol may stand without an eom.
-func (d Dates) validate() error {
+func (d Dates) Validate() error {
 	if !d.EOM.IsZero() && d.GA.IsZero() {
 		return errors.New("dates.eom is set without dates.ga")
 	}

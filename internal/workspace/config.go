@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/config/loader"
 )
 
 // Config returns the central application config: every document in the config
@@ -17,12 +18,12 @@ func (w *Workspace) Config() (config.Config, error) {
 	if err != nil {
 		return config.Config{}, err
 	}
-	loaded, err := config.Load(os.DirFS(dir.Dir))
+	loaded, err := loader.Load(os.DirFS(dir.Dir))
 	if err != nil {
 		return config.Config{}, fmt.Errorf("config directory %s: %w", dir.Dir, err)
 	}
-	resolved := loaded.WithDefaults()
-	if err := resolved.Validate(); err != nil {
+	resolved := loader.WithDefaults(loaded)
+	if err := loader.Validate(resolved); err != nil {
 		return config.Config{}, fmt.Errorf("config directory %s: %w", dir.Dir, err)
 	}
 	return resolved, nil

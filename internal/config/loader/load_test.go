@@ -1,4 +1,4 @@
-package config
+package loader
 
 import (
 	"os"
@@ -6,6 +6,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,22 +48,22 @@ func TestLoadDecodesProject(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, got.Projects, 1)
-	assert.Equal(t, Project{
+	assert.Equal(t, config.Project{
 		Name: "rancher-charts",
-		Repo: Repo{Name: "rancher/charts", Owned: true},
-		Release: Release{
+		Repo: config.Repo{Name: "rancher/charts", Owned: true},
+		Release: config.Release{
 			Branches:           "perLine",
 			RequiresPrerelease: true,
-			Lines: []ProjectLine{
+			Lines: []config.ProjectLine{
 				{Line: "v2.16", Version: "12.x"},
 				{Line: "v2.15", Branch: "dev-v2.15"},
 			},
 		},
-		PullRequests: PullRequests{Title: "[{branch}] bump", Labels: []string{"status/auto-created"}},
-		Sources: []Source{{
+		PullRequests: config.PullRequests{Title: "[{branch}] bump", Labels: []string{"status/auto-created"}},
+		Sources: []config.Source{{
 			From:   "backup-restore-operator",
-			Accept: Accept{When: "all", Lines: "universal"},
-			Update: Update{
+			Accept: config.Accept{When: "all", Lines: "universal"},
+			Update: config.Update{
 				Strategy: "chartsPackageBump",
 				Params:   map[string]string{"package": "rancher-backup"},
 				PostEdit: []string{"go generate ./..."},
@@ -88,7 +89,7 @@ spec:
 
 	require.NoError(t, err)
 	require.NotNil(t, got.Lines)
-	assert.Equal(t, []Line{{ID: "v2.16", Phase: "development", Kubernetes: KubernetesRange{Min: "1.35", Max: "1.37"}}}, got.Lines.Lines)
+	assert.Equal(t, []config.Line{{ID: "v2.16", Phase: "development", Kubernetes: config.KubernetesRange{Min: "1.35", Max: "1.37"}}}, got.Lines.Lines)
 }
 
 func TestLoadDecodesLineDates(t *testing.T) {
@@ -111,14 +112,14 @@ spec:
 
 	require.NoError(t, err)
 	require.NotNil(t, got.Lines)
-	assert.Equal(t, []Line{{
+	assert.Equal(t, []config.Line{{
 		ID: "v2.15",
-		Dates: Dates{
+		Dates: config.Dates{
 			GA:  time.Date(2026, time.August, 27, 0, 0, 0, 0, time.UTC),
 			EOM: time.Date(2027, time.February, 27, 0, 0, 0, 0, time.UTC),
 			EOL: time.Date(2028, time.February, 27, 0, 0, 0, 0, time.UTC),
 		},
-		Kubernetes: KubernetesRange{Min: "1.34", Max: "1.36"},
+		Kubernetes: config.KubernetesRange{Min: "1.34", Max: "1.36"},
 	}}, got.Lines.Lines)
 }
 
@@ -137,10 +138,10 @@ spec:
 	got, err := Load(fsys)
 
 	require.NoError(t, err)
-	assert.Equal(t, []External{{
+	assert.Equal(t, []config.External{{
 		Name:          "example-sdk",
-		Repo:          Repo{Name: "third-party/example-sdk"},
-		Relationships: []Relationship{{Project: "backup-restore-operator", Action: "trackOnly"}},
+		Repo:          config.Repo{Name: "third-party/example-sdk"},
+		Relationships: []config.Relationship{{Project: "backup-restore-operator", Action: "trackOnly"}},
 	}}, got.Externals)
 }
 
@@ -229,7 +230,7 @@ func TestLoadIgnoresUnrelatedFiles(t *testing.T) {
 
 // The checked-in directories are the contract the shapes were designed against.
 func TestLoadRepoConfigDirs(t *testing.T) {
-	for dir, wantProjects := range map[string]int{"../../config": 2, "../../config-mock": 7} {
+	for dir, wantProjects := range map[string]int{"../../../config": 2, "../../../config-mock": 7} {
 		t.Run(dir, func(t *testing.T) {
 			got, err := Load(os.DirFS(dir))
 

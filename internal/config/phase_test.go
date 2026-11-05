@@ -80,7 +80,7 @@ func TestDatesValidate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.dates.validate()
+			err := tt.dates.Validate()
 			if tt.want == "" {
 				assert.NoError(t, err)
 				return
