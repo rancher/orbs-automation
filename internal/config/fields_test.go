@@ -14,6 +14,8 @@ import (
 //	default           filled at load by loader.WithDefaults when omitted
 //	resolved:<T.M>    left raw, and read through the method T.M, which gives the
 //	                  value to act on; the test checks the method exists
+//	layered:<rule>    a CLI setting can replace it; the rule is applied by a
+//	                  Workspace method, which this package cannot check
 //	open:<question>   not decided yet; the question is where it is recorded
 //
 // Adding a field fails this test until it is classed here, so the decision
@@ -37,11 +39,11 @@ var fieldClasses = map[string]string{
 	"Release.Lines":              "resolved:Project.IsUniversal",
 
 	"ProjectLine.Line":    "plain",
-	"ProjectLine.Version": "open:what does a line with no version mean",
+	"ProjectLine.Version": "resolved:ProjectLine.Series",
 	"ProjectLine.Branch":  "resolved:Project.Branch",
 
 	"PullRequests.Title":        "plain",
-	"PullRequests.BranchPrefix": "open:how it combines with the branchPrefix user setting",
+	"PullRequests.BranchPrefix": "layered:the branchPrefix user setting replaces it whole",
 	"PullRequests.Labels":       "plain",
 
 	"Source.From":   "plain",

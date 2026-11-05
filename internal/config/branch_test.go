@@ -53,3 +53,8 @@ func TestProjectReleaseBranches(t *testing.T) {
 		assert.Empty(t, p.ReleaseBranches())
 	})
 }
+
+func TestProjectLineSeries(t *testing.T) {
+	assert.Equal(t, "9.x", ProjectLine{Line: "v2.16", Version: "9.x"}.Series(), "a written version is the series")
+	assert.Equal(t, "v2.15", ProjectLine{Line: "v2.15"}.Series(), "else the line is")
+}
