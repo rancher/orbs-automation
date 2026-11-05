@@ -18,5 +18,6 @@ func (w *Workspace) UpstreamTags(ctx context.Context, slug string) ([]git.Tag, e
 // UpstreamRefs is UpstreamTags with the branches as well: the tags with their
 // commits and the head commit of each branch, in one request.
 func (w *Workspace) UpstreamRefs(ctx context.Context, slug string) (git.Refs, error) {
-	return git.Refs{}, nil
+	host, token := w.credentials()
+	return w.remoteRefs(ctx, "https://"+host+"/"+slug+".git", token)
 }
