@@ -22,5 +22,6 @@ func (w *Workspace) UpstreamRefs(ctx context.Context, slug string) (git.Refs, er
 // It reads anonymously and sends a token only when the host answers 404, which a
 // private repository does. It is one network call.
 func (w *Workspace) UpstreamFile(ctx context.Context, slug, ref, path string) ([]byte, error) {
-	return nil, nil
+	host, token := w.credentials()
+	return w.remoteFile(ctx, host, token, slug, ref, path)
 }
