@@ -15,7 +15,7 @@ The write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-
 * Inputs of the script map as: the tag is the argument, the source repo comes from the project, the clone is made by `gero` (no `RANCHER_DIR`), the remote is the workspace's upstream, and `DRY_RUN` is `--dry-run`.
 * `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` (`--non-interactive`) skips the one confirmation.
 
-**The state check comes first and writes nothing.** Before any clone or PR: resolve the tag, find the consumer and confirm the target branch exists upstream, read the consumer's current value through the strategy's reader and stop as `already up to date` when it already equals the target, check the images exist ([IMAGES_EXIST](IMAGES_EXIST.md)), and look for open PRs the new one would supersede. `--dry-run` is this check plus a rendering of the branch, title, commit message and body.
+**The state check comes first and writes nothing.** Before any clone or PR: resolve the tag, find the consumer and confirm the target branch exists upstream, read the consumer's current value through the strategy's reader and stop as `already up to date` when it already equals the target, refuse a **downgrade** (the release is older than the version the strategy finds in what the consumer holds, by SemVer precedence, so a release candidate is below its release and a value with no version is not judged) unless `--allow-downgrade`, check the images exist ([IMAGES_EXIST](IMAGES_EXIST.md)), and look for open PRs the new one would supersede. `--dry-run` is this check plus a rendering of the branch, title, commit message and body.
 
 ## What the scripts do today
 
@@ -84,7 +84,6 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 * The write steps: the throwaway clone, the post-edit commands, the commit, the push, the PR and superseding an older one. The state check, the strategies' reader and in-place writer, the embedded templates and the preview they render are built, as is the marker's format.
 * The check for open PRs the new one would supersede, `--dry-run`, `--yes` and the confirmation.
 * `--branch` is always required. Finding it from the tag's line waits for `accept.lines`.
-* A shipped value that is older than what the consumer holds (a downgrade) is not detected: the state check compares the two as text.
 
 ## Open questions
 
