@@ -113,6 +113,19 @@ func TestValidateProblems(t *testing.T) {
 			},
 			[]string{"images[0]", "registries[1]", "listed twice"},
 		},
+		{
+			"since is not a known line",
+			func(c *config.Config) { c.Projects[0].Images = []config.Image{{Name: "o/a", Since: "v9.9"}} },
+			[]string{"images[0]", "since", `"v9.9"`},
+		},
+		{
+			"since on a project with no lines",
+			func(c *config.Config) {
+				c.Projects[0].Release.Lines = nil
+				c.Projects[0].Images = []config.Image{{Name: "o/a", Since: "v2.15"}}
+			},
+			[]string{"images[0]", "since", "release.lines"},
+		},
 		{"source from unknown project", func(c *config.Config) { c.Projects[0].Sources[0].From = "nope" }, []string{"sources[0]", `"nope"`}},
 		{"source from itself", func(c *config.Config) { c.Projects[0].Sources[0].From = "a" }, []string{"sources[0]", "itself"}},
 		{"unknown accept.when", func(c *config.Config) { c.Projects[0].Sources[0].Accept.When = "rc" }, []string{"accept.when", `"rc"`}},
@@ -164,6 +177,7 @@ func TestValidateProblems(t *testing.T) {
 func TestValidateAcceptsImages(t *testing.T) {
 	c := valid()
 	c.Projects[0].Images = []config.Image{
+		{Name: "rancher/rancher-server", Since: "v2.15"},
 		{Name: "rancher/rancher", Registries: []string{config.RegistryDockerHub, config.RegistryPrimeProduction}},
 		{Name: "rancher/rancher-agent"},
 	}
