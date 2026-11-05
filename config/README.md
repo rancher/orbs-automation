@@ -38,6 +38,7 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `release.tagPattern` | `"v*"` |
 | `release.requiresPrerelease` | off (opt-in) |
 | `release.lines` | `universal` |
+| `images` | one image named `repo.name`, in every registry (`dockerhub`, `prime-staging`, `prime-production`) |
 | `sources[].accept.when` | `stable` |
 | `sources[].accept.lines` | `all` |
 | `sources[].update.postEdit` | none |
