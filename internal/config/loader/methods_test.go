@@ -92,7 +92,7 @@ func TestLoadRejectsAnUnknownMethodKey(t *testing.T) {
 	for name, body := range map[string]string{
 		"a typo in a method": "  updateMethods:\n    - name: m\n      strategy: yamlBump\n      acept:\n        when: all\n",
 		"a typo in an edge":  "  downstream:\n    - to: x\n      method: m\n      param:\n        a: b\n",
-		"a typo in a step":   "  updateMethods:\n    - name: m\n      postEdit:\n        - run: x\n          sinse: v2.16\n",
+		"a typo in a step":   "  updateMethods:\n    - name: m\n      postEdit:\n        - run: x\n          sicne: v2.16\n",
 		"a bad run":          "  updateMethods:\n    - name: m\n      postEdit:\n        - run: {a: b}\n",
 	} {
 		_, err := Load(fstest.MapFS{"p.project.yaml": project("p", "  repo:\n    name: o/p\n"+body)})
