@@ -81,3 +81,25 @@ func TestCurrentAtRoot(t *testing.T) {
 		assert.Nil(t, r)
 	})
 }
+
+func TestOpenAt(t *testing.T) {
+	dir := t.TempDir()
+	repotest.NewRepoAt(t, dir, map[string]string{"origin": upstreamURL})
+
+	r, err := Open(settings(t, "", nil, nil), t.TempDir()).OpenAt(dir)
+
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	remotes, err := r.Remotes()
+	require.NoError(t, err)
+	assert.Equal(t, []string{upstreamURL}, remotes["origin"], "it is the repository in dir, not the working directory's")
+}
+
+func TestOpenAtNotARepository(t *testing.T) {
+	_, err := Open(settings(t, "", nil, nil), t.TempDir()).OpenAt(t.TempDir())
+	assert.ErrorIs(t, err, ErrNotRepository)
+}
+
+func TestErrDetachedHeadIsTheRepositorysError(t *testing.T) {
+	assert.ErrorIs(t, ErrDetachedHead, repo.ErrDetachedHead)
+}
