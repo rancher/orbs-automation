@@ -94,3 +94,14 @@ func TestReadErrors(t *testing.T) {
 	_, err = s.Read([]byte(buildYAML), Params{"file": "build.yaml", "key": "global"})
 	assert.True(t, errors.Is(err, yamledit.ErrNotScalar))
 }
+
+func TestStrategiesDescribeTheChange(t *testing.T) {
+	p := Params{"file": "build.yaml", "key": "defaultSccOperatorImage"}
+	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+		s, err := LookupStrategy(name)
+		require.NoError(t, err)
+		assert.Equal(t,
+			"Updated `defaultSccOperatorImage` in `build.yaml` from `rancher/scc-operator:v0.5.2` to `rancher/scc-operator:v0.5.3`",
+			s.Describe(p, "rancher/scc-operator:v0.5.2", "rancher/scc-operator:v0.5.3"), name)
+	}
+}
