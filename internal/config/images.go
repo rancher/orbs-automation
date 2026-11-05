@@ -32,18 +32,33 @@ func (p Project) EffectiveImages() []Image {
 // that cannot be read as a number is treated as applying, so an image is never
 // skipped on a guess.
 func (img Image) AppliesTo(line string) bool {
-	if img.Since == "" {
-		return true
-	}
-	since, ok := parseLine(img.Since)
-	if !ok {
-		return true
-	}
+	return lineInRange(line, img.Since, "")
+}
+
+// lineInRange reports whether a line is at or after since and at or before until,
+// either of which may be empty. Lines compare by their numbers, so v2.16 is
+// newer than v2.15. A line or a bound that cannot be read as a number counts as
+// in range, so nothing is skipped on a guess.
+func lineInRange(line, since, until string) bool {
 	got, ok := parseLine(line)
 	if !ok {
 		return true
 	}
-	return cmp.Or(cmp.Compare(got[0], since[0]), cmp.Compare(got[1], since[1])) >= 0
+	if since != "" {
+		if from, ok := parseLine(since); ok && compareLines(got, from) < 0 {
+			return false
+		}
+	}
+	if until != "" {
+		if to, ok := parseLine(until); ok && compareLines(got, to) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func compareLines(a, b [2]uint64) int {
+	return cmp.Or(cmp.Compare(a[0], b[0]), cmp.Compare(a[1], b[1]))
 }
 
 // parseLine reads a line ID such as v2.16 as its major and minor numbers.
