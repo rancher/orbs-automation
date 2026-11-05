@@ -282,3 +282,27 @@ func TestRenderTextGroupsTheSameReasonAcrossBranches(t *testing.T) {
 	assert.Contains(t, out, "release/v2.14, main-2, release/v2.15-2", "naming the branches it applies to")
 	assert.Equal(t, 1, strings.Count(out, "this is a downgrade"))
 }
+
+func TestRenderTextSaysWhetherItWasADryRun(t *testing.T) {
+	p := previewPlan()
+
+	p.DryRun = true
+	out := renderText(p, false)
+	assert.Contains(t, out, "Dry run: nothing was written, and no branch or PR was created.")
+
+	p.DryRun = false
+	out = renderText(p, false)
+	assert.NotContains(t, out, "Dry run")
+	assert.Contains(t, out, "Nothing was written", "creating them is not built yet")
+}
+
+func TestRunPassesADryRunToThePlan(t *testing.T) {
+	dry := in
+	dry.DryRun = true
+	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		clicfg.OutputJSON, dry, false)
+	require.NoError(t, err)
+	var got domain.Plan
+	require.NoError(t, json.Unmarshal([]byte(out), &got))
+	assert.True(t, got.DryRun)
+}

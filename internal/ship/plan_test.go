@@ -545,3 +545,23 @@ func TestCheckASingleBranchConsumerTakesEveryReleaseOnItsDefaultBranch(t *testin
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main"}, branchesOf(got))
 }
+
+func TestCheckCarriesADryRunIntoThePlan(t *testing.T) {
+	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator", DryRun: true})
+	require.NoError(t, err)
+	assert.True(t, got.DryRun)
+
+	got, err = Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator"})
+	require.NoError(t, err)
+	assert.False(t, got.DryRun)
+}
+
+func TestCheckADryRunChecksTheSameThings(t *testing.T) {
+	// A dry run is the same check: it previews and checks the images, so it shows
+	// what a real run would do.
+	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator", DryRun: true})
+	require.NoError(t, err)
+	assert.Equal(t, StatusReady, got.Status)
+	assert.NotNil(t, got.Images)
+	assert.NotNil(t, got.Targets[0].Preview)
+}
