@@ -42,6 +42,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	}
 	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Branch: opts.Branch, Prerelease: opts.Prerelease,
+		BranchPrefix: s.BranchPrefix,
 	}, opts.Preview)
 }
 
@@ -92,6 +93,19 @@ func renderText(p domain.Plan, full bool) string {
 	for _, blocker := range p.Blockers {
 		b.WriteString("  blocked: " + blocker + "\n")
 	}
+	if p.Preview != nil {
+		b.WriteString("\nPR\n")
+		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "  branch\t%s\n  title\t%s\n", p.Preview.Branch, p.Preview.Title)
+		if len(p.Preview.Labels) > 0 {
+			fmt.Fprintf(w, "  labels\t%s\n", strings.Join(p.Preview.Labels, ", "))
+		}
+		_ = w.Flush()
+		if full {
+			writeBlock(&b, "Commit message", p.Preview.CommitMessage)
+			writeBlock(&b, "Body", p.Preview.Body)
+		}
+	}
 	if p.Images != nil && len(p.Images.Rows) > 0 {
 		b.WriteString("\nImages\n")
 		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
@@ -109,6 +123,18 @@ func renderText(p domain.Plan, full bool) string {
 	}
 	b.WriteString("\nNothing was written.\n")
 	return b.String()
+}
+
+// writeBlock writes a heading and the text under it, indented.
+func writeBlock(b *strings.Builder, heading, text string) {
+	b.WriteString("\n" + heading + "\n")
+	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		if line == "" {
+			b.WriteString("\n")
+			continue
+		}
+		b.WriteString("  " + line + "\n")
+	}
 }
 
 func renderJSON(p domain.Plan) (string, error) {
