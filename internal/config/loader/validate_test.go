@@ -84,6 +84,35 @@ func TestValidateProblems(t *testing.T) {
 			[]string{"release.lines[2]", "listed twice"},
 		},
 		{"lines used without RancherLines", func(c *config.Config) { c.Lines = nil }, []string{"RancherLines"}},
+		{
+			"image without a name",
+			func(c *config.Config) { c.Projects[0].Images = []config.Image{{Name: ""}} },
+			[]string{"images[0]", "name is required"},
+		},
+		{
+			"image name with a space",
+			func(c *config.Config) { c.Projects[0].Images = []config.Image{{Name: "o/my image"}} },
+			[]string{"images[0]", "name"},
+		},
+		{
+			"image listed twice",
+			func(c *config.Config) { c.Projects[0].Images = []config.Image{{Name: "o/a"}, {Name: "o/a"}} },
+			[]string{"images[1]", "listed twice"},
+		},
+		{
+			"unknown registry",
+			func(c *config.Config) {
+				c.Projects[0].Images = []config.Image{{Name: "o/a", Registries: []string{"dockerhub", "ecr"}}}
+			},
+			[]string{"images[0]", "registries[1]", `"ecr"`},
+		},
+		{
+			"registry listed twice",
+			func(c *config.Config) {
+				c.Projects[0].Images = []config.Image{{Name: "o/a", Registries: []string{"dockerhub", "dockerhub"}}}
+			},
+			[]string{"images[0]", "registries[1]", "listed twice"},
+		},
 		{"source from unknown project", func(c *config.Config) { c.Projects[0].Sources[0].From = "nope" }, []string{"sources[0]", `"nope"`}},
 		{"source from itself", func(c *config.Config) { c.Projects[0].Sources[0].From = "a" }, []string{"sources[0]", "itself"}},
 		{"unknown accept.when", func(c *config.Config) { c.Projects[0].Sources[0].Accept.When = "rc" }, []string{"accept.when", `"rc"`}},
@@ -130,6 +159,15 @@ func TestValidateProblems(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateAcceptsImages(t *testing.T) {
+	c := valid()
+	c.Projects[0].Images = []config.Image{
+		{Name: "rancher/rancher", Registries: []string{config.RegistryDockerHub, config.RegistryPrimeProduction}},
+		{Name: "rancher/rancher-agent"},
+	}
+	assert.NoError(t, Validate(c))
 }
 
 func TestValidateReportsEveryProblem(t *testing.T) {
