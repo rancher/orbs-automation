@@ -31,6 +31,7 @@ type Options struct {
 	To         string // the consumer, when several take updates from the producer
 	Branch     string // the consumer's branch to update
 	Prerelease bool   // let prereleases count
+	Preview    bool   // print the commit message and PR body too, not only the branch and title
 }
 
 // Run checks the state of shipping what opts names, and renders the plan as
@@ -39,7 +40,9 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	if err := checkFormat(s.Output); err != nil {
 		return "", err
 	}
-	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input(opts))
+	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
+		Project: opts.Project, Arg: opts.Arg, To: opts.To, Branch: opts.Branch, Prerelease: opts.Prerelease,
+	}, opts.Preview)
 }
 
 func checkFormat(format string) error {
@@ -49,7 +52,7 @@ func checkFormat(format string) error {
 	return nil
 }
 
-func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, format string, in domain.Input) (string, error) {
+func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, format string, in domain.Input, full bool) (string, error) {
 	if err := checkFormat(format); err != nil {
 		return "", err
 	}
@@ -63,7 +66,7 @@ func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, forma
 			return "", err
 		}
 	} else {
-		out = renderText(plan)
+		out = renderText(plan, full)
 	}
 	if plan.Status == domain.StatusBlocked {
 		return out, ErrBlocked
@@ -71,7 +74,7 @@ func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, forma
 	return out, nil
 }
 
-func renderText(p domain.Plan) string {
+func renderText(p domain.Plan, full bool) string {
 	var b strings.Builder
 	kind := "stable"
 	if !p.Release.Stable {
