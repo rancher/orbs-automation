@@ -6,16 +6,17 @@ The write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-
 
 ## The command
 
-`gero ship [project] [tag|line]`, in both contexts, writes, honors `--dry-run`. It makes **one PR** for one consumer and one target branch; doing many is a loop over it later.
+`gero ship [project] [tag|line]`, in both contexts, writes, honors `--dry-run`. It makes one PR for each consumer branch the release goes to; `--branch` makes it one.
 
 * `[project]` is the producer being shipped, found as for every command that takes a project ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)): a config name or owner/name slug, or `.` or nothing for the project the working directory is in. A lone `v0.5.3` or `v2.15` is the release, not the project.
 * The argument is a tag, used as given, or a release line, resolved to the project's latest tag in that line. With no argument, the project's latest stable tag.
 * `--prerelease` lets prereleases count: when resolving a line, and for a prerelease tag the consumer's `accept.when` would refuse. Without it a line resolves to its latest stable tag.
-* The consumers are the projects whose `sources` name the producer (the reverse view the config already implies). `--to <consumer>` picks one when there are several, and `--branch <target>` names the target branch. Finding the target from the tag's line waits for the `accept.lines` decision ([APP_CONFIG](APP_CONFIG.md)), so `--branch` is required for now.
+* The consumers are the projects whose `sources` name the producer (the reverse view the config already implies). `--to <consumer>` picks one when there are several.
+* **Which branches.** Without `--branch`, every branch of the consumer that the release goes to is checked, in config order, newest first. A source's `accept.lines` decides which, and an omitted one is worked out from the producer, not filled in: a **universal** source (the default for a producer that lists no `release.lines`, since its releases belong to no line) goes to every release branch of the consumer, and one that **follows lines** (the default for a producer with lines) goes to the consumer's branch for the line the release is in, found by the series of the producer's lines. A release in none of the producer's lines, or a line the consumer lacks, has no branch to go to, and the error says to name one. `--branch <target>` limits the run to that one branch of the consumer, which may be any branch it has.
 * Inputs of the script map as: the tag is the argument, the source repo comes from the project, the clone is made by `gero` (no `RANCHER_DIR`), the remote is the workspace's upstream, and `DRY_RUN` is `--dry-run`.
 * `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` (`--non-interactive`) skips the one confirmation.
 
-**The state check comes first and writes nothing.** Before any clone or PR: resolve the tag, find the consumer and confirm the target branch exists upstream, read the consumer's current value through the strategy's reader and stop as `already up to date` when it already equals the target, refuse a **downgrade** (the release is older than the version the strategy finds in what the consumer holds, by SemVer precedence, so a release candidate is below its release and a value with no version is not judged) unless `--allow-downgrade`, check the images exist ([IMAGES_EXIST](IMAGES_EXIST.md)), and look for open PRs the new one would supersede. `--dry-run` is this check plus a rendering of the branch, title, commit message and body.
+**The state check comes first and writes nothing, and runs for every target.** The parts that are the same for all of them (who ships to whom, the strategy, the release, the value it should become) are resolved once, each branch is then checked on its own, and the images, which are the release's, are checked once and only when some branch needs a PR. A branch that cannot be read fails alone and the others go on, unless it was the one named with `--branch`. Before any clone or PR: resolve the tag, find the consumer and confirm the target branch exists upstream, read the consumer's current value through the strategy's reader and stop as `already up to date` when it already equals the target, refuse a **downgrade** (the release is older than the version the strategy finds in what the consumer holds, by SemVer precedence, so a release candidate is below its release and a value with no version is not judged) unless `--allow-downgrade`, check the images exist ([IMAGES_EXIST](IMAGES_EXIST.md)), and look for open PRs the new one would supersede. `--dry-run` is this check plus a rendering of the branch, title, commit message and body.
 
 ## What the scripts do today
 
@@ -83,7 +84,6 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 
 * The write steps: the throwaway clone, the post-edit commands, the commit, the push, the PR and superseding an older one. The state check, the strategies' reader and in-place writer, the embedded templates and the preview they render are built, as is the marker's format.
 * The check for open PRs the new one would supersede, `--dry-run`, `--yes` and the confirmation.
-* `--branch` is always required. Finding it from the tag's line waits for `accept.lines`.
 
 ## Open questions
 
@@ -91,4 +91,3 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 * How post-edit commands such as `go generate` get a toolchain that matches the target branch in both contexts. A workstation without it fails with a `gero doctor` hint.
 * Whether the throwaway clone should be shallow in CI when a strategy needs history.
 * The name of `--prerelease`, and whether an explicit prerelease tag needs it when `accept.when` is `stable`.
-* How the target branch is found from the tag's line, which is the `accept.lines` question.
