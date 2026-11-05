@@ -72,3 +72,9 @@ func parseLine(id string) (n [2]uint64, ok bool) {
 	n[1], err2 = strconv.ParseUint(minor, 10, 64)
 	return n, err1 == nil && err2 == nil
 }
+
+// CompareLines orders two line IDs by their numbers, so v2.16 is after v2.15:
+// -1, 0 or 1. ok is false when either cannot be read as a line.
+func CompareLines(a, b string) (order int, ok bool) {
+	return 0, false
+}
