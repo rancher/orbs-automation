@@ -189,6 +189,12 @@ func TestValidateProblems(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsAnOmittedAcceptLines(t *testing.T) {
+	c := valid()
+	c.Projects[0].Sources[0].Accept.Lines = ""
+	assert.NoError(t, Validate(WithDefaults(c)))
+}
+
 func TestValidateAcceptsPullRequestTemplates(t *testing.T) {
 	c := valid()
 	c.Projects[0].PullRequests.Title = "[{branch}] Update {source} to {version} ({tag}) {{literal}}"
