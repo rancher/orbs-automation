@@ -13,3 +13,4 @@ gero
 kubeconfig*.yaml
 .vscode
 /.tmp
+TODO.md
