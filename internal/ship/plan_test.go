@@ -160,13 +160,6 @@ func TestCheckARefusedPrerelease(t *testing.T) {
 	assert.False(t, got.Release.Stable)
 }
 
-func TestCheckABranchIsRequired(t *testing.T) {
-	_, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator"})
-	assert.ErrorIs(t, err, ErrBranchRequired)
-	assert.ErrorContains(t, err, "release/v2.15", "the message names the consumer's release branches")
-	assert.ErrorContains(t, err, "release/v2.14")
-}
-
 func TestCheckABranchTheConsumerDoesNotHave(t *testing.T) {
 	_, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.14"})
 	assert.ErrorIs(t, err, ErrBranchNotFound)
@@ -368,4 +361,190 @@ func TestCheckAValueWithNoVersionIsNotJudged(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, got.Targets[0].Downgrade, "there is nothing to compare")
 	assert.Equal(t, StatusReady, got.Status)
+}
+
+// loopFixture is rancher with two release lines, each with a branch and a file,
+// taking updates from scc-operator, which is universal.
+func loopFixture() *fakeWorkspace {
+	ws := fixture()
+	ws.refs["rancher/rancher"] = git.Refs{Branches: []git.Branch{
+		{Name: "main", Commit: "sha-main"}, {Name: "release/v2.15", Commit: "sha-215"}, {Name: "release/v2.14", Commit: "sha-214"},
+	}}
+	ws.files["rancher/rancher@sha-214:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.1\n"
+	return ws
+}
+
+func branchesOf(p Plan) []string {
+	out := make([]string, len(p.Targets))
+	for i, t := range p.Targets {
+		out[i] = t.Branch
+	}
+	return out
+}
+
+func TestCheckWithNoBranchChecksEveryBranchAUniversalReleaseGoesTo(t *testing.T) {
+	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"release/v2.15", "release/v2.14"}, branchesOf(got), "the consumer's release branches, in config order")
+	assert.Equal(t, "rancher/scc-operator:v0.5.2", got.Targets[0].Current)
+	assert.Equal(t, "rancher/scc-operator:v0.5.1", got.Targets[1].Current)
+	assert.Equal(t, StatusReady, got.Status)
+}
+
+func TestCheckChecksTheImagesOnceForAllTheTargets(t *testing.T) {
+	p := &fakeProber{}
+	_, err := Check(ctx, loopFixture(), p, Input{Project: "scc-operator"})
+	require.NoError(t, err)
+	assert.Equal(t, 3, p.calls, "one check per registry for the release, not one per branch")
+}
+
+func TestCheckNoImagesWhenEveryTargetIsUpToDate(t *testing.T) {
+	ws := loopFixture()
+	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"
+	ws.files["rancher/rancher@sha-214:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"
+	p := &fakeProber{}
+	got, err := Check(ctx, ws, p, Input{Project: "scc-operator"})
+	require.NoError(t, err)
+	assert.Equal(t, StatusUpToDate, got.Status)
+	assert.Nil(t, got.Images)
+	assert.Zero(t, p.calls)
+}
+
+func TestCheckAMixOfUpToDateAndReady(t *testing.T) {
+	ws := loopFixture()
+	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	require.NoError(t, err)
+	assert.Equal(t, StatusUpToDate, got.Targets[0].Status)
+	assert.Equal(t, StatusReady, got.Targets[1].Status)
+	assert.Equal(t, StatusReady, got.Status)
+	assert.NotNil(t, got.Images, "one of them needs a PR")
+	assert.Nil(t, got.Targets[0].Preview)
+	assert.NotNil(t, got.Targets[1].Preview)
+}
+
+func TestCheckABranchThatCannotBeReadFailsOnlyItself(t *testing.T) {
+	ws := loopFixture()
+	delete(ws.files, "rancher/rancher@sha-214:build.yaml")
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+
+	require.NoError(t, err, "one branch does not stop the others")
+	assert.Equal(t, StatusReady, got.Targets[0].Status)
+	assert.Equal(t, StatusFailed, got.Targets[1].Status)
+	assert.Contains(t, got.Targets[1].Error, "build.yaml")
+	assert.Equal(t, "release/v2.14", got.Targets[1].Branch)
+	assert.Equal(t, StatusBlocked, got.Status, "a failed branch blocks the whole")
+}
+
+func TestCheckABranchTheHostLacksFailsOnlyItself(t *testing.T) {
+	ws := loopFixture()
+	ws.refs["rancher/rancher"] = git.Refs{Branches: []git.Branch{{Name: "release/v2.15", Commit: "sha-215"}}}
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	require.NoError(t, err)
+	assert.Equal(t, StatusReady, got.Targets[0].Status)
+	assert.Equal(t, StatusFailed, got.Targets[1].Status)
+	assert.Contains(t, got.Targets[1].Error, "release/v2.14")
+}
+
+func TestCheckABranchFlagChecksOnlyThatBranch(t *testing.T) {
+	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.14"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"release/v2.14"}, branchesOf(got))
+}
+
+func TestCheckABranchFlagOutsideTheReleaseBranchesIsStillAllowed(t *testing.T) {
+	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"main"}, branchesOf(got))
+}
+
+func TestCheckANamedBranchThatCannotBeReadIsAnError(t *testing.T) {
+	ws := loopFixture()
+	delete(ws.files, "rancher/rancher@sha-214:build.yaml")
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.14"})
+	require.Error(t, err, "asked for that one branch, so failing to read it is the answer")
+	assert.ErrorContains(t, err, "build.yaml")
+}
+
+// A producer with lines of its own feeds the consumer's branch for the line of
+// the release.
+func linedLoop(t *testing.T, tag string) (*fakeWorkspace, string) {
+	t.Helper()
+	ws := loopFixture()
+	producer := config.Project{
+		Name: "kuberlr", Repo: config.Repo{Name: "rancher/kuberlr", DefaultBranch: "main"},
+		Release: config.Release{TagPattern: "v*", Lines: []config.ProjectLine{
+			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
+		}},
+	}
+	c := riConsumer("buildYamlBump")
+	c.Source.From = "kuberlr"
+	c.Source.Accept.Lines = "" // omitted: all, since this producer has lines
+	c.Project.Release.Lines = []config.ProjectLine{
+		{Line: "v2.16"}, // development: the default branch
+		{Line: "v2.15", Branch: "release/v2.15"},
+		{Line: "v2.14", Branch: "release/v2.14"},
+	}
+	ws.producer, ws.consumers = producer, []config.Consumer{c}
+	ws.refs["rancher/kuberlr"] = git.Refs{Tags: tags2("v8.1.0", "v9.0.0", "v7.0.0")}
+	ws.files["rancher/rancher@sha-main:build.yaml"] = "defaultSccOperatorImage: rancher/kuberlr:v9.0.0\n"
+	return ws, tag
+}
+
+func tags2(names ...string) []git.Tag { return tags(names...) }
+
+func TestCheckALinedProducerFeedsTheConsumersBranchForTheLine(t *testing.T) {
+	for tag, want := range map[string]string{"v8.1.0": "release/v2.15", "v9.0.0": "main"} {
+		ws, _ := linedLoop(t, tag)
+		got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: tag})
+		require.NoError(t, err, tag)
+		assert.Equal(t, []string{want}, branchesOf(got), tag)
+	}
+}
+
+func TestCheckATagInNoLineOfTheProducerHasNoTarget(t *testing.T) {
+	ws, _ := linedLoop(t, "v7.0.0")
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v7.0.0"})
+	assert.ErrorIs(t, err, ErrNoTargets)
+	assert.ErrorContains(t, err, "--branch")
+}
+
+func TestCheckAConsumerWithoutTheLineHasNoTarget(t *testing.T) {
+	ws, _ := linedLoop(t, "v8.1.0")
+	c := ws.consumers[0]
+	c.Project.Release.Lines = []config.ProjectLine{{Line: "v2.14", Branch: "release/v2.14"}}
+	ws.consumers[0] = c
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0"})
+	assert.ErrorIs(t, err, ErrNoTargets)
+	assert.ErrorContains(t, err, "v2.15")
+}
+
+func TestCheckAnExplicitUniversalAcceptFeedsEveryBranchWhateverTheProducerHas(t *testing.T) {
+	ws, _ := linedLoop(t, "v8.1.0")
+	c := ws.consumers[0]
+	c.Source.Accept.Lines = config.AcceptLinesUniversal
+	ws.consumers[0] = c
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"main", "release/v2.15", "release/v2.14"}, branchesOf(got))
+}
+
+func TestCheckAConsumerWithNoReleaseBranchesHasNoTarget(t *testing.T) {
+	ws := loopFixture()
+	c := ws.consumers[0]
+	c.Project.Release = config.Release{Branches: config.BranchesPerLine}
+	ws.consumers[0] = c
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	assert.ErrorIs(t, err, ErrNoTargets)
+}
+
+func TestCheckASingleBranchConsumerTakesEveryReleaseOnItsDefaultBranch(t *testing.T) {
+	ws := loopFixture()
+	c := ws.consumers[0]
+	c.Project.Release = config.Release{Branches: config.BranchesSingle}
+	ws.consumers[0] = c
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"main"}, branchesOf(got))
 }
