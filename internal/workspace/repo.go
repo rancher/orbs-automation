@@ -29,5 +29,5 @@ func (w *Workspace) CurrentAtRoot() (*repo.Repo, error) {
 // OpenAt returns the repository whose .git directory is in dir, such as a clone
 // found by RepoPath. It returns ErrNotRepository otherwise.
 func (w *Workspace) OpenAt(dir string) (*repo.Repo, error) {
-	return nil, nil
+	return repo.Open(dir)
 }
