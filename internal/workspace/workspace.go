@@ -7,12 +7,16 @@
 package workspace
 
 import (
+	"context"
 	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/git/repo"
+	"github.com/rancher/orbs-automation/internal/github"
 )
 
 // NotFoundHint is the advice for a missing central config directory. It is the
@@ -40,6 +44,10 @@ type Workspace struct {
 	settings clicfg.Settings
 	cwd      string
 	cwdFS    fs.FS
+
+	// The network reads, injected so tests need no network or credentials.
+	remoteTags  func(ctx context.Context, url, token string) ([]git.Tag, error)
+	credentials func() (host, token string)
 }
 
 // Open returns the Workspace for s and the working directory cwd, reading the
@@ -50,7 +58,23 @@ func Open(s clicfg.Settings, cwd string) *Workspace {
 
 // open is Open with the working directory's file system injected.
 func open(s clicfg.Settings, cwd string, cwdFS fs.FS) *Workspace {
-	return &Workspace{settings: s, cwd: cwd, cwdFS: cwdFS}
+	return &Workspace{
+		settings: s, cwd: cwd, cwdFS: cwdFS,
+		remoteTags:  repo.ListRemoteTags,
+		credentials: defaultCredentials,
+	}
+}
+
+// defaultCredentials is the host gero talks to and the token for it, empty when
+// none is found. A missing token is not an error here: reading a public
+// repository needs none.
+func defaultCredentials() (host, token string) {
+	auth := github.GoGh{}
+	host, _ = auth.DefaultHost()
+	if c, err := github.Resolve(auth, host); err == nil {
+		token = c.Token
+	}
+	return host, token
 }
 
 // ConfigDir returns the central config directory: the configDir setting when
