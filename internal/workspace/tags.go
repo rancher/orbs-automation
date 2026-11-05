@@ -11,5 +11,6 @@ import (
 // is as fresh as the remote. It reads anonymously and sends a token only when
 // the host asks for one, which a private repository does. It is a network call.
 func (w *Workspace) UpstreamTags(ctx context.Context, slug string) ([]git.Tag, error) {
-	return nil, nil
+	host, token := w.credentials()
+	return w.remoteTags(ctx, "https://"+host+"/"+slug+".git", token)
 }
