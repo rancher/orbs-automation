@@ -28,10 +28,14 @@ spec:
   images:                       # optional
     - name: rancher/scc-operator
       registries: [dockerhub, prime-staging, prime-production]
+    - name: rancher/rancher-server
+      since: v2.16                # only for tags in this line and newer
 ```
 
 * With no `images`, the Project publishes one image named `repo.name` to every registry. That is the common case and needs no config. The effective list comes from a getter on the Project, and the field stays as written ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)).
 * An entry's `name` overrides the default, and several entries track several images. `registries` narrows an image to some of the registries, and defaults to all of them.
+* `since` is a Rancher line ID, and the image is expected only for a tag in that line or a newer one. The tag's line is found from the Project's `release.lines` and their series ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)), and lines compare by their numbers (`v2.16` is newer than `v2.15`), so only the Project is needed. An image the tag is too old for is reported `skipped (before v2.16)` and does not fail the run. `since` must be a line in `RancherLines`, and it is an error on a Project with no `release.lines`.
+* When the tag is in none of the Project's lines, such as a tag of a line not in config yet, there is nothing to compare, so the check is a plain one: every image is checked in every registry, with no `since` rule applied, and the report carries a warning saying why. It is a warning and not an error because the check is still a useful one-off answer to "does this tag exist".
 * Registries are named by role: `dockerhub`, `prime-staging` and `prime-production`. What a role means is built into `gero`, not config: its host, and that production applies only to stable tags. The hosts are `docker.io` (read through `registry-1.docker.io`), `stgregistry.suse.com` and `registry.rancher.com`. A role is a constant until there is a second registry or an auth need, which is the point to make it a document of its own ([APP_CONFIG](APP_CONFIG.md)). An unknown role is a config error.
 
 ## The registry client
@@ -44,6 +48,8 @@ Tests run the client against an `httptest` registry, including the token challen
 
 ## Not built yet
 
+* `since`, and the warning for a tag in no line.
+* `until`, to stop expecting an image after some line. Nothing needs it yet, so it is not designed; an image that is dropped is the case that would.
 * The downstream bump does not call `internal/registry` as its artifact precondition yet, because the bump engine does not exist ([PUSH_TO_REPO](PUSH_TO_REPO.md)).
 
 ## Open questions

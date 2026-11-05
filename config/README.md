@@ -39,6 +39,8 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `release.requiresPrerelease` | off (opt-in) |
 | `release.lines` | `universal` |
 | `images` | one image named `repo.name`, in every registry (`dockerhub`, `prime-staging`, `prime-production`) |
+| `images[].registries` | every registry |
+| `images[].since` | none: the image is expected for every line |
 | `sources[].accept.when` | `stable` |
 | `sources[].accept.lines` | `all` |
 | `sources[].update.postEdit` | none |
