@@ -95,6 +95,10 @@ type Settings struct {
 	UserFile     string // path of the user file that was loaded; empty when none applied
 	CI           bool   // the process runs in CI rather than on a workstation
 	BotUser      string // GERO_BOT_USER: the bot's login, from the workflow; env only
+	// DryRun is --dry-run or GERO_DRY_RUN: a command that writes computes and
+	// prints what it would do, and changes nothing. There is no user-file key, so
+	// it is never on without being asked for in the invocation.
+	DryRun bool
 	// DefaultToken is true when the token in the environment is the workflow's
 	// default GITHUB_TOKEN: GITHUB_TOKEN is set and GH_TOKEN is unset or equal
 	// to it. Only the fact is kept, never a token.
