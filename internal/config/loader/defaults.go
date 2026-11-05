@@ -25,12 +25,18 @@ func projectDefaults(p config.Project) config.Project {
 	p.Release.Branches = orDefault(p.Release.Branches, DefaultBranches)
 	p.Release.TagPattern = orDefault(p.Release.TagPattern, DefaultTagPattern)
 	p.Sources = mapSlice(p.Sources, sourceDefaults)
+	p.UpdateMethods = mapSlice(p.UpdateMethods, methodDefaults)
 	return p
 }
 
 func externalDefaults(x config.External) config.External {
 	x.Repo = repoDefaults(x.Repo)
 	return x
+}
+
+func methodDefaults(m config.UpdateMethod) config.UpdateMethod {
+	m.Accept.When = orDefault(m.Accept.When, DefaultAcceptWhen)
+	return m
 }
 
 func sourceDefaults(s config.Source) config.Source {

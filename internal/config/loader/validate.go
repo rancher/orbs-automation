@@ -22,7 +22,7 @@ func Validate(c config.Config) error {
 // naming the document and field, as one joined error; it returns nil when c is
 // valid.
 func ValidateAt(c config.Config, now time.Time) error {
-	var v validator
+	v := validator{projects: c.Projects}
 	projects := map[string]bool{}
 	for _, p := range c.Projects {
 		projects[p.Name] = true
@@ -41,7 +41,10 @@ func ValidateAt(c config.Config, now time.Time) error {
 	return errors.Join(v.errs...)
 }
 
-type validator struct{ errs []error }
+type validator struct {
+	errs     []error
+	projects []config.Project // every project, for what an edge names
+}
 
 func (v *validator) add(format string, args ...any) {
 	v.errs = append(v.errs, fmt.Errorf(format, args...))
@@ -128,9 +131,14 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 	}
 
 	v.images(where, p, phases, haveLines)
+	v.methods(where, p, phases, haveLines)
+	v.edges(where, p, phases, haveLines)
 	textVars := slices.Clone(templates.TextVars)
 	for _, s := range p.Sources {
 		textVars = append(textVars, templates.StrategyVars[s.Update.Strategy]...)
+	}
+	for _, m := range p.UpdateMethods {
+		textVars = append(textVars, templates.StrategyVars[m.Strategy]...)
 	}
 	for field, text := range map[string]string{
 		"pullRequests.title": p.PullRequests.Title, "pullRequests.branchPrefix": p.PullRequests.BranchPrefix,
