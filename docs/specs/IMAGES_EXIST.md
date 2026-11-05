@@ -48,7 +48,6 @@ Tests run the client against an `httptest` registry, including the token challen
 
 ## Not built yet
 
-* `since`, and the warning for a tag in no line.
 * `until`, to stop expecting an image after some line. Nothing needs it yet, so it is not designed; an image that is dropped is the case that would.
 * The downstream bump does not call `internal/registry` as its artifact precondition yet, because the bump engine does not exist ([PUSH_TO_REPO](PUSH_TO_REPO.md)).
 
