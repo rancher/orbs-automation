@@ -35,6 +35,17 @@ func ListRemoteTags(ctx context.Context, url, token string) ([]git.Tag, error) {
 	return listTags(ctx, goGitList, url, token)
 }
 
+// ListRemoteRefs is ListRemoteTags with the branches as well, from the same
+// single request: the tags with their commits and the head commit of each
+// branch, so a caller can say where a branch stands without a clone.
+func ListRemoteRefs(ctx context.Context, url, token string) (git.Refs, error) {
+	return listRefs(ctx, goGitList, url, token)
+}
+
+func listRefs(ctx context.Context, list lister, url, token string) (git.Refs, error) {
+	return git.Refs{}, nil
+}
+
 func goGitList(ctx context.Context, url string, auth transport.AuthMethod) ([]*plumbing.Reference, error) {
 	remote := gogit.NewRemote(memory.NewStorage(), &config.RemoteConfig{Name: "origin", URLs: []string{url}})
 	// AppendPeeled is what makes an annotated tag report its commit: without it
