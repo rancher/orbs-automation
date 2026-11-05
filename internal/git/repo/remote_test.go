@@ -103,3 +103,37 @@ func TestListTagsDoesNotRetryOtherErrors(t *testing.T) {
 	assert.ErrorIs(t, err, boom)
 	assert.Len(t, f.auths, 1)
 }
+
+func TestListRefsHasBranchHeadsAndTags(t *testing.T) {
+	f := &fakeList{results: []fakeResult{{refs: []*plumbing.Reference{
+		ref("refs/heads/release/v2.15", hashB),
+		ref("refs/heads/main", hashA),
+		ref("refs/tags/v1.0.0", hashC),
+		ref("refs/pull/7/head", hashD), // neither
+	}}}}
+
+	got, err := listRefs(context.Background(), f.list, "u", "")
+
+	require.NoError(t, err)
+	assert.Equal(t, []git.Branch{{Name: "main", Commit: hashA}, {Name: "release/v2.15", Commit: hashB}}, got.Branches,
+		"branches keep their slashes and are sorted by name")
+	assert.Equal(t, []git.Tag{{Name: "v1.0.0", Commit: hashC}}, got.Tags)
+}
+
+func TestListRefsIsOneRequestForBoth(t *testing.T) {
+	f := &fakeList{results: []fakeResult{{}}}
+	_, err := listRefs(context.Background(), f.list, "u", "")
+	require.NoError(t, err)
+	assert.Len(t, f.auths, 1)
+}
+
+func TestListRefsRetriesWithTheToken(t *testing.T) {
+	f := &fakeList{results: []fakeResult{
+		{err: transport.ErrAuthenticationRequired},
+		{refs: []*plumbing.Reference{ref("refs/heads/main", hashA)}},
+	}}
+	got, err := listRefs(context.Background(), f.list, "u", "secret")
+	require.NoError(t, err)
+	assert.Equal(t, []git.Branch{{Name: "main", Commit: hashA}}, got.Branches)
+	assert.Len(t, f.auths, 2)
+}
