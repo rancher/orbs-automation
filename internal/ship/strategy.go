@@ -36,6 +36,9 @@ type Strategy interface {
 	Value(p Params, vars map[string]string) (string, error)
 	// Read returns the value the file src holds now.
 	Read(src []byte, p Params) (string, error)
+	// Describe says what a bump from one value to another changes, in a phrase
+	// for the PR body's list of changes, such as "Updated `key` in `file`".
+	Describe(p Params, from, to string) string
 }
 
 var strategies = map[string]Strategy{
@@ -80,6 +83,8 @@ func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
 	}
 	return templates.Render(text, vars)
 }
+
+func (yamlKey) Describe(p Params, from, to string) string { return "" }
 
 func (yamlKey) Read(src []byte, p Params) (string, error) {
 	key, err := required(p, "key")
