@@ -56,7 +56,10 @@ type Report struct {
 	Project string `json:"project"` // the repository slug
 	Tag     string `json:"tag"`
 	Stable  bool   `json:"stable"`
-	Rows    []Row  `json:"results"`
+	// Warnings are things that did not stop the check but that the reader
+	// should know, such as a rule that could not be applied.
+	Warnings []string `json:"warnings,omitempty"`
+	Rows     []Row    `json:"results"`
 }
 
 // Failed reports whether any required image was not found or could not be
