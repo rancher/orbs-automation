@@ -27,7 +27,7 @@ func flagged(t *testing.T, args ...string) *cobra.Command {
 }
 
 func TestGlobalFlagsDeclared(t *testing.T) {
-	for _, name := range []string{"config-dir", "upstream", "output", "json"} {
+	for _, name := range []string{"config-dir", "upstream", "output", "json", "dry-run"} {
 		t.Run(name, func(t *testing.T) {
 			cmd := &cobra.Command{Use: "x"}
 			addGlobalFlags(cmd)
@@ -40,7 +40,7 @@ func TestGlobalFlagsDeclared(t *testing.T) {
 }
 
 func TestRootDeclaresGlobalFlagsAndLoadsSettings(t *testing.T) {
-	for _, name := range []string{"config-dir", "upstream", "output", "json", "verbose"} {
+	for _, name := range []string{"config-dir", "upstream", "output", "json", "verbose", "dry-run"} {
 		assert.NotNil(t, rootCmd.PersistentFlags().Lookup(name), "flag --%s", name)
 	}
 	assert.NotNil(t, rootCmd.PersistentPreRunE)
@@ -60,6 +60,9 @@ func TestFlagLookup(t *testing.T) {
 		{"explicitly empty counts as set", []string{"--upstream="}, "upstream", "", true},
 		{"json is output json", []string{"--json"}, "output", "json", true},
 		{"explicit output beats json", []string{"--json", "--output", "env"}, "output", "env", true},
+		{"dry-run is not set unless given", nil, "dry-run", "", false},
+		{"dry-run", []string{"--dry-run"}, "dry-run", "true", true},
+		{"dry-run can be turned off explicitly", []string{"--dry-run=false"}, "dry-run", "false", true},
 		{"unknown name", []string{"--upstream", "x"}, "nope", "", false},
 		{"no -v leaves log unset", nil, "log", "", false},
 		{"-v is info", []string{"-v"}, "log", "info", true},
@@ -126,4 +129,18 @@ func TestLoadSettingsReportsInvalidFlag(t *testing.T) {
 
 func TestSettingsFromWithoutLoad(t *testing.T) {
 	assert.Equal(t, clicfg.Settings{}, settingsFrom(flagged(t)))
+}
+
+func TestLoadSettingsDryRun(t *testing.T) {
+	cmd := flagged(t, "--dry-run")
+	require.NoError(t, loadSettings(env(nil), t.TempDir())(cmd, nil))
+	assert.True(t, settingsFrom(cmd).DryRun)
+
+	cmd = flagged(t)
+	require.NoError(t, loadSettings(env(map[string]string{"GERO_DRY_RUN": "true"}), t.TempDir())(cmd, nil))
+	assert.True(t, settingsFrom(cmd).DryRun, "from the environment")
+
+	cmd = flagged(t)
+	require.NoError(t, loadSettings(env(nil), t.TempDir())(cmd, nil))
+	assert.False(t, settingsFrom(cmd).DryRun, "off unless asked for")
 }
