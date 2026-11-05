@@ -112,6 +112,6 @@ func TestRunJSONWhenBlocked(t *testing.T) {
 func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	_, err := run(context.Background(), readyWorkspace(), fakeProber{}, clicfg.OutputEnv, in)
 	assert.ErrorContains(t, err, "not supported by ship")
-	_, err = Run(context.Background(), clicfg.Settings{Output: clicfg.OutputEnv}, t.TempDir(), in)
+	_, err = Run(context.Background(), clicfg.Settings{Output: clicfg.OutputEnv}, t.TempDir(), Options{Project: "scc-operator"})
 	assert.ErrorContains(t, err, "not supported by ship")
 }

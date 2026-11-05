@@ -23,13 +23,23 @@ import (
 // finds something in the way, such as an image that is not published.
 var ErrBlocked = errors.New("the release cannot be shipped yet")
 
-// Run checks the state of shipping what in names, and renders the plan as
+// Options is what the user asked to ship; the command fills it from its
+// arguments and flags.
+type Options struct {
+	Project    string // the producer, by config name or slug
+	Arg        string // a tag, a release line of the producer, or empty for the latest
+	To         string // the consumer, when several take updates from the producer
+	Branch     string // the consumer's branch to update
+	Prerelease bool   // let prereleases count
+}
+
+// Run checks the state of shipping what opts names, and renders the plan as
 // s.Output (text or json). The plan is returned even with ErrBlocked.
-func Run(ctx context.Context, s clicfg.Settings, cwd string, in domain.Input) (string, error) {
+func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (string, error) {
 	if err := checkFormat(s.Output); err != nil {
 		return "", err
 	}
-	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, in)
+	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input(opts))
 }
 
 func checkFormat(format string) error {

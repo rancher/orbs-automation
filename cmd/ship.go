@@ -6,12 +6,11 @@ import (
 	"os"
 
 	"github.com/rancher/orbs-automation/internal/cli/ship"
-	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	var in domain.Input
+	var in ship.Options
 	shipCmd := &cobra.Command{
 		Use:   "ship <project> [tag|line]",
 		Short: "Ship a release of a project to a project that takes updates from it",
