@@ -2,9 +2,11 @@ package ship
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/semver"
 )
 
 var (
@@ -31,5 +33,62 @@ type Release struct {
 // of any kind. accept is the consumer's accept.when for this source: an explicit
 // prerelease tag needs prerelease unless the consumer accepts all releases.
 func ResolveRelease(producer config.Project, tags []git.Tag, arg string, prerelease bool, accept string) (Release, error) {
-	return Release{}, nil
+	pattern := producer.Release.TagPattern
+	var tag *git.Tag
+	switch _, isVersion := semver.Parse(arg); {
+	case arg == "":
+		tag = latest(tags, pattern, prerelease)
+		if tag == nil {
+			return Release{}, fmt.Errorf("%w: %s has no release tags", ErrNoRelease, producer.Repo.Name)
+		}
+	case isVersion:
+		for i := range tags {
+			if tags[i].Name == arg {
+				tag = &tags[i]
+			}
+		}
+		if tag == nil {
+			return Release{}, fmt.Errorf("%w: %s has no tag %s", ErrNoRelease, producer.Repo.Name, arg)
+		}
+		if semverPre(arg) && !prerelease && accept != config.AcceptAll {
+			return Release{}, fmt.Errorf("%w: %s is a prerelease and the consumer takes stable releases only; pass --prerelease to ship it", ErrPrerelease, arg)
+		}
+	default:
+		series, ok := lineSeries(producer, arg)
+		if !ok {
+			return Release{}, fmt.Errorf("%w: %q is neither a tag nor a release line of %s", ErrNoRelease, arg, producer.Repo.Name)
+		}
+		var inLine []git.Tag
+		for _, t := range tags {
+			if git.InSeries(t.Name, series) {
+				inLine = append(inLine, t)
+			}
+		}
+		if tag = latest(inLine, pattern, prerelease); tag == nil {
+			return Release{}, fmt.Errorf("%w: %s has no tags in line %s", ErrNoRelease, producer.Repo.Name, arg)
+		}
+	}
+	return Release{Tag: tag.Name, Commit: tag.Commit, Line: producer.LineOf(tag.Name), Stable: !semverPre(tag.Name)}, nil
 }
+
+// latest picks the highest stable tag, or with prerelease the highest of any
+// kind, among the tags that match the pattern.
+func latest(tags []git.Tag, pattern string, prerelease bool) *git.Tag {
+	l := git.LatestReleases(tags, pattern)
+	if prerelease && l.Prerelease != nil {
+		return l.Prerelease
+	}
+	return l.Stable
+}
+
+// lineSeries returns the series of the producer's line named line.
+func lineSeries(p config.Project, line string) (string, bool) {
+	for _, l := range p.Release.Lines {
+		if l.Line == line {
+			return l.Series(), true
+		}
+	}
+	return "", false
+}
+
+func semverPre(tag string) bool { return semver.Classify(tag).HasPrerelease }
