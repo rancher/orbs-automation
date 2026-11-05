@@ -30,6 +30,7 @@ type Project struct {
 	Repo         Repo         `yaml:"repo"`
 	Release      Release      `yaml:"release"`
 	PullRequests PullRequests `yaml:"pullRequests"`
+	Images       []Image      `yaml:"images"`
 	Sources      []Source     `yaml:"sources"`
 }
 
@@ -38,6 +39,13 @@ type Repo struct {
 	Name          string `yaml:"name"` // owner/name slug
 	Owned         bool   `yaml:"owned"`
 	DefaultBranch string `yaml:"defaultBranch"`
+}
+
+// Image is a container image the project publishes, and the registries it goes
+// to (the Registry* values; none listed means all of them).
+type Image struct {
+	Name       string   `yaml:"name"` // repository path in a registry, such as rancher/scc-operator
+	Registries []string `yaml:"registries"`
 }
 
 // Release is the project's release policy.

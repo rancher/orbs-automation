@@ -19,4 +19,11 @@ const (
 	PhaseGA          = "ga"
 	PhaseEOM         = "eom"
 	PhaseEOL         = "eol"
+
+	// RegistryDockerHub and the others name where an image is published. What
+	// each means (host, and that production is for stable tags only) is built
+	// into gero (docs/specs/IMAGES_EXIST.md).
+	RegistryDockerHub       = "dockerhub"
+	RegistryPrimeStaging    = "prime-staging"
+	RegistryPrimeProduction = "prime-production"
 )

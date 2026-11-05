@@ -27,6 +27,7 @@ var fieldClasses = map[string]string{
 	"Project.Repo":         "plain",
 	"Project.Release":      "plain",
 	"Project.PullRequests": "plain",
+	"Project.Images":       "resolved:Project.EffectiveImages",
 	"Project.Sources":      "plain",
 
 	"Repo.Name":          "plain",
@@ -41,6 +42,9 @@ var fieldClasses = map[string]string{
 	"ProjectLine.Line":    "plain",
 	"ProjectLine.Version": "resolved:ProjectLine.Series",
 	"ProjectLine.Branch":  "resolved:Project.Branch",
+
+	"Image.Name":       "plain",
+	"Image.Registries": "resolved:Project.EffectiveImages",
 
 	"PullRequests.Title":        "plain",
 	"PullRequests.BranchPrefix": "layered:the branchPrefix user setting replaces it whole",
@@ -82,7 +86,7 @@ var fieldClasses = map[string]string{
 
 func TestEveryConfigFieldIsClassified(t *testing.T) {
 	types := []reflect.Type{
-		reflect.TypeFor[Project](), reflect.TypeFor[Repo](), reflect.TypeFor[Release](),
+		reflect.TypeFor[Project](), reflect.TypeFor[Image](), reflect.TypeFor[Repo](), reflect.TypeFor[Release](),
 		reflect.TypeFor[ProjectLine](), reflect.TypeFor[PullRequests](), reflect.TypeFor[Source](),
 		reflect.TypeFor[Accept](), reflect.TypeFor[Update](), reflect.TypeFor[RancherLines](),
 		reflect.TypeFor[Line](), reflect.TypeFor[Dates](), reflect.TypeFor[KubernetesRange](),
