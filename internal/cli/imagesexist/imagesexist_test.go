@@ -234,16 +234,15 @@ func rowFor(t *testing.T, r Report, image string) Row {
 	return Row{}
 }
 
-func TestCheckSkipsAnImageBeforeItsLine(t *testing.T) {
+func TestCheckLeavesOutAnImageBeforeItsLine(t *testing.T) {
 	c := &fakeChecker{}
 	got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", "v2.15.3")
 	require.NoError(t, err)
 
-	server := rowFor(t, got, "rancher/rancher-server")
-	assert.Equal(t, Skipped, server.Status)
-	assert.Equal(t, "before v2.16", server.Detail)
-	assert.Equal(t, "found", rowFor(t, got, "rancher/rancher").Status)
-	assert.Equal(t, []string{"registry-1.docker.io rancher/rancher:v2.15.3"}, c.asked, "the skipped image is not asked for")
+	require.Len(t, got.Rows, 1, "an image the tag is too old for is not in the report at all")
+	assert.Equal(t, "rancher/rancher", got.Rows[0].Image)
+	assert.Equal(t, "found", got.Rows[0].Status)
+	assert.Equal(t, []string{"registry-1.docker.io rancher/rancher:v2.15.3"}, c.asked, "and it is not asked for")
 	assert.False(t, got.Failed())
 	assert.Empty(t, got.Warnings)
 }
@@ -268,12 +267,12 @@ func TestCheckFindsTheLineThroughTheSeries(t *testing.T) {
 	}
 	old, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v8.1.2")
 	require.NoError(t, err)
-	assert.Equal(t, Skipped, old.Rows[0].Status, "8.x is v2.15")
-	assert.Equal(t, "before v2.16", old.Rows[0].Detail)
+	assert.Empty(t, old.Rows, "8.x is v2.15, before the image's line")
 
 	current, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v9.0.1")
 	require.NoError(t, err)
-	assert.Equal(t, "found", current.Rows[0].Status, "9.x is v2.16")
+	require.Len(t, current.Rows, 1, "9.x is v2.16")
+	assert.Equal(t, "found", current.Rows[0].Status)
 }
 
 func TestCheckATagInNoLineIsAPlainCheckWithAWarning(t *testing.T) {
@@ -301,16 +300,32 @@ func TestCheckNoWarningWhenNoImageHasASince(t *testing.T) {
 	assert.Empty(t, got.Warnings)
 }
 
-func TestRenderTextShowsWarningsAndTheSinceSkip(t *testing.T) {
+func TestRenderTextHasNoRowForAnImageBeforeItsLine(t *testing.T) {
 	skipped, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v2.15.3")
 	require.NoError(t, err)
-	assert.Contains(t, renderText(skipped), "skipped (before v2.16)")
+	out := renderText(skipped)
+	assert.NotContains(t, out, "rancher-server")
+	assert.NotContains(t, out, "before v2.16")
+}
 
+func TestRenderTextShowsWarnings(t *testing.T) {
 	warned, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
 	out := renderText(warned)
 	assert.Contains(t, out, "Warning: ")
 	assert.Contains(t, out, "none of the release lines")
+}
+
+func TestRenderTextWhenNoImageIsExpected(t *testing.T) {
+	p := riProject()
+	p.Images = []config.Image{{Name: "rancher/rancher-server", Since: "v2.16", Registries: []string{config.RegistryDockerHub}}}
+	r, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v2.15.3")
+	require.NoError(t, err)
+	assert.Empty(t, r.Rows)
+	assert.False(t, r.Failed())
+	out := renderText(r)
+	assert.Contains(t, out, "No image is expected for this tag")
+	assert.NotContains(t, out, "All required images were found")
 }
 
 func TestRenderJSONHasTheWarnings(t *testing.T) {
