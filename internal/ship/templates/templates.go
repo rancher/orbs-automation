@@ -69,6 +69,27 @@ func parse(text string) ([]part, error) {
 	return parts, nil
 }
 
+// TextVars are the variables the texts of a PR may use: the pullRequests title
+// and branchPrefix of a project, and the commit message and body that gero
+// embeds. A strategy's value template has its own, smaller set (ship.ValueVars).
+//
+//	project           the producer's config name
+//	source            the same, as the title says it ("Update {source} to ...")
+//	sourceRepo        the producer's owner/name
+//	tag               the release tag as published, such as v0.5.3
+//	version           the tag without a leading v
+//	branch            the consumer's target branch without "release/"
+//	targetBranch      the consumer's target branch as it is named
+//	consumer          the consumer's owner/name
+//	sourceReleaseURL  where the producer's release is published
+//	file, from, to    what the strategy changed: the file, its old and new value
+//	changes           a list of what was changed, generated from the edits
+//	marker            the hidden block that identifies the PR (PR body only)
+var TextVars = []string{
+	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
+	"consumer", "sourceReleaseURL", "file", "from", "to", "changes", "marker",
+}
+
 // Placeholders returns the names used by the text, in order of first use and
 // without repeats. It returns an error for a brace that is not part of a
 // {name} or an escaped {{ or }}.
