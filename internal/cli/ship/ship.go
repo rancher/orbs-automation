@@ -110,29 +110,45 @@ func renderText(p domain.Plan, full bool) string {
 	if !p.Release.Stable {
 		kind = "prerelease"
 	}
-	fmt.Fprintf(&b, "Ship %s %s (%s) to %s %s\n\n", p.Producer, p.Release.Tag, kind, p.Consumer, p.Target.Branch)
+	fmt.Fprintf(&b, "Ship %s %s (%s) to %s\n\n", p.Producer, p.Release.Tag, kind, p.Consumer)
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	row := func(label, value string) { fmt.Fprintf(w, "  %s\t%s\n", label, value) }
-	row("strategy", fmt.Sprintf("%s (%s)", p.Strategy, p.File))
-	row("target", fmt.Sprintf("%s (%s)", p.Target.Branch, git.Short(p.Target.Commit)))
-	row("now", p.Current)
-	row("want", p.Want)
-	row("status", string(p.Status))
+	fmt.Fprintf(w, "  strategy\t%s (%s)\n  want\t%s\n  status\t%s\n", p.Strategy, p.File, p.Want, p.Status)
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 	for _, blocker := range p.Blockers {
 		b.WriteString("  blocked: " + blocker + "\n")
 	}
-	if p.Preview != nil {
+
+	b.WriteString("\nTargets\n")
+	w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "  BRANCH\tHEAD\tNOW\tSTATUS")
+	for _, t := range p.Targets {
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.Branch, git.Short(t.Commit), t.Current, t.Status)
+	}
+	_ = w.Flush()
+	for _, t := range p.Targets {
+		for _, blocker := range t.Blockers {
+			fmt.Fprintf(&b, "  %s blocked: %s\n", t.Branch, blocker)
+		}
+		if t.Error != "" {
+			fmt.Fprintf(&b, "  %s failed: %s\n", t.Branch, t.Error)
+		}
+	}
+
+	if prs := previews(p); len(prs) > 0 {
 		b.WriteString("\nPR\n")
-		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "  branch\t%s\n  title\t%s\n", p.Preview.Branch, p.Preview.Title)
-		if len(p.Preview.Labels) > 0 {
-			fmt.Fprintf(w, "  labels\t%s\n", strings.Join(p.Preview.Labels, ", "))
+		w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		for _, t := range prs {
+			fmt.Fprintf(w, "  %s\t%s\t%s\n", t.Branch, t.Preview.Branch, t.Preview.Title)
 		}
 		_ = w.Flush()
+		if labels := prs[0].Preview.Labels; len(labels) > 0 {
+			b.WriteString("  labels: " + strings.Join(labels, ", ") + "\n")
+		}
 		if full {
-			writeBlock(&b, "Commit message", p.Preview.CommitMessage)
-			writeBlock(&b, "Body", p.Preview.Body)
+			for _, t := range prs {
+				writeBlock(&b, "Commit message ("+t.Branch+")", t.Preview.CommitMessage)
+				writeBlock(&b, "Body ("+t.Branch+")", t.Preview.Body)
+			}
 		}
 	}
 	if p.Images != nil && len(p.Images.Rows) > 0 {
@@ -150,8 +166,24 @@ func renderText(p domain.Plan, full bool) string {
 	for _, warning := range p.Warnings {
 		b.WriteString("\nWarning: " + warning + "\n")
 	}
+	for _, t := range p.Targets {
+		for _, warning := range t.Warnings {
+			fmt.Fprintf(&b, "\nWarning: %s: %s\n", t.Branch, warning)
+		}
+	}
 	b.WriteString("\nNothing was written.\n")
 	return b.String()
+}
+
+// previews returns the targets that have a PR to show.
+func previews(p domain.Plan) []domain.TargetPlan {
+	var out []domain.TargetPlan
+	for _, t := range p.Targets {
+		if t.Preview != nil {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // writeBlock writes a heading and the text under it, indented.

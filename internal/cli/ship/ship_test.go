@@ -101,7 +101,8 @@ func TestRunJSON(t *testing.T) {
 	var got domain.Plan
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
 	assert.Equal(t, domain.StatusReady, got.Status)
-	assert.Equal(t, "2222222bbbbbbbb", got.Target.Commit, "JSON carries the full commit")
+	require.Len(t, got.Targets, 1)
+	assert.Equal(t, "2222222bbbbbbbb", got.Targets[0].Commit, "JSON carries the full commit")
 }
 
 func TestRunJSONWhenBlocked(t *testing.T) {
@@ -120,14 +121,17 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 func previewPlan() domain.Plan {
 	return domain.Plan{
 		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Strategy: "buildYamlBump", File: "build.yaml",
-		Release: domain.Release{Tag: "v0.5.3", Stable: true}, Target: domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},
-		Current: "a", Want: "b", Status: domain.StatusReady,
-		Preview: &domain.Preview{
-			Branch: "bot/scc-operator-v0.5.3-v2.15", Title: "[v2.15] Update scc-operator to v0.5.3",
-			Labels:        []string{"status/auto-created", "team/orbs"},
-			CommitMessage: "Update scc-operator to v0.5.3\n\nAutomation: gero ship\n",
-			Body:          "## Summary\nbody text\n",
-		},
+		Release: domain.Release{Tag: "v0.5.3", Stable: true}, Want: "b", Status: domain.StatusReady,
+		Targets: []domain.TargetPlan{{
+			Target:  domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},
+			Current: "a", Status: domain.StatusReady,
+			Preview: &domain.Preview{
+				Branch: "bot/scc-operator-v0.5.3-v2.15", Title: "[v2.15] Update scc-operator to v0.5.3",
+				Labels:        []string{"status/auto-created", "team/orbs"},
+				CommitMessage: "Update scc-operator to v0.5.3\n\nAutomation: gero ship\n",
+				Body:          "## Summary\nbody text\n",
+			},
+		}},
 	}
 }
 
@@ -152,9 +156,9 @@ func TestRenderTextFullPreviewShowsTheCommitMessageAndBody(t *testing.T) {
 
 func TestRenderTextHasNoPreviewWhenThereIsNone(t *testing.T) {
 	p := previewPlan()
-	p.Preview, p.Status = nil, domain.StatusUpToDate
+	p.Targets[0].Preview, p.Targets[0].Status, p.Status = nil, domain.StatusUpToDate, domain.StatusUpToDate
 	out := renderText(p, true)
-	assert.NotContains(t, out, "branch ")
+	assert.NotContains(t, out, "\nPR\n")
 	assert.NotContains(t, out, "Commit message")
 }
 
@@ -171,8 +175,9 @@ func TestRunJSONHasTheFullPreview(t *testing.T) {
 	require.NoError(t, err)
 	var got domain.Plan
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
-	require.NotNil(t, got.Preview)
-	assert.Contains(t, got.Preview.Body, "gero:ship v1", "JSON always carries the body and message")
+	require.Len(t, got.Targets, 1)
+	require.NotNil(t, got.Targets[0].Preview)
+	assert.Contains(t, got.Targets[0].Preview.Body, "gero:ship v1", "JSON always carries the body and message")
 }
 
 func TestParseArgs(t *testing.T) {
@@ -223,6 +228,6 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 	allowed.AllowDowngrade = true
 	out, err = run(context.Background(), ws, prober, clicfg.OutputText, allowed, false)
 	require.NoError(t, err)
-	assert.Contains(t, out, "Warning: this is a downgrade")
+	assert.Contains(t, out, "this is a downgrade")
 	assert.Contains(t, out, "Images", "allowed, the check goes on")
 }

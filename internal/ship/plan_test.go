@@ -103,9 +103,9 @@ func TestCheckReady(t *testing.T) {
 	assert.Equal(t, Release{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}, got.Release)
 	assert.Equal(t, "rancher/rancher", got.Consumer)
 	assert.Equal(t, "buildYamlBump", got.Strategy)
-	assert.Equal(t, Target{Branch: "release/v2.15", Commit: "sha-215"}, got.Target)
+	assert.Equal(t, Target{Branch: "release/v2.15", Commit: "sha-215"}, got.Targets[0].Target)
 	assert.Equal(t, "build.yaml", got.File)
-	assert.Equal(t, "rancher/scc-operator:v0.5.2", got.Current)
+	assert.Equal(t, "rancher/scc-operator:v0.5.2", got.Targets[0].Current)
 	assert.Equal(t, "rancher/scc-operator:v0.5.3", got.Want)
 	assert.Equal(t, StatusReady, got.Status)
 	assert.Empty(t, got.Blockers)
@@ -126,7 +126,7 @@ func TestCheckAlreadyUpToDate(t *testing.T) {
 	got, err := Check(ctx, fixture(), p, Input{Project: "scc-operator", Branch: "main"})
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, got.Status)
-	assert.Equal(t, got.Current, got.Want)
+	assert.Equal(t, got.Targets[0].Current, got.Want)
 	assert.Nil(t, got.Images, "nothing else runs")
 	assert.Zero(t, p.calls)
 }
@@ -266,23 +266,23 @@ func TestCheckValueVariables(t *testing.T) {
 func TestCheckPreviewsWhatARunWouldWrite(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
-	require.NotNil(t, got.Preview)
-	assert.Equal(t, "bot/scc-operator-v0.5.3-v2.15", got.Preview.Branch)
-	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", got.Preview.Title)
-	assert.Contains(t, got.Preview.Body, "rancher/scc-operator:v0.5.2")
-	assert.Contains(t, got.Preview.CommitMessage, "Automation: gero ship")
+	require.NotNil(t, got.Targets[0].Preview)
+	assert.Equal(t, "bot/scc-operator-v0.5.3-v2.15", got.Targets[0].Preview.Branch)
+	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", got.Targets[0].Preview.Title)
+	assert.Contains(t, got.Targets[0].Preview.Body, "rancher/scc-operator:v0.5.2")
+	assert.Contains(t, got.Targets[0].Preview.CommitMessage, "Automation: gero ship")
 }
 
 func TestCheckPreviewUsesTheUsersBranchPrefix(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15", BranchPrefix: "dan/"})
 	require.NoError(t, err)
-	assert.Equal(t, "dan/v0.5.3-v2.15", got.Preview.Branch)
+	assert.Equal(t, "dan/v0.5.3-v2.15", got.Targets[0].Preview.Branch)
 }
 
 func TestCheckHasNoPreviewWhenAlreadyUpToDate(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
 	require.NoError(t, err)
-	assert.Nil(t, got.Preview)
+	assert.Nil(t, got.Targets[0].Preview)
 }
 
 func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
@@ -290,7 +290,7 @@ func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
 	got, err := Check(ctx, fixture(), p, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, got.Status)
-	assert.NotNil(t, got.Preview, "so the reader sees what would have been written")
+	assert.NotNil(t, got.Targets[0].Preview, "so the reader sees what would have been written")
 }
 
 func TestCheckABadPlaceholderIsAnError(t *testing.T) {
@@ -307,39 +307,39 @@ func TestCheckABlockedDowngrade(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Branch: "main"})
 
 	require.NoError(t, err)
-	assert.True(t, got.Downgrade)
+	assert.True(t, got.Targets[0].Downgrade)
 	assert.Equal(t, StatusBlocked, got.Status)
-	require.NotEmpty(t, got.Blockers)
-	assert.Contains(t, got.Blockers[0], "downgrade")
-	assert.Contains(t, got.Blockers[0], "0.5.3", "what the consumer holds")
-	assert.Contains(t, got.Blockers[0], "0.5.2", "what was asked for")
-	assert.Contains(t, got.Blockers[0], "--allow-downgrade")
+	require.NotEmpty(t, got.Targets[0].Blockers)
+	assert.Contains(t, got.Targets[0].Blockers[0], "downgrade")
+	assert.Contains(t, got.Targets[0].Blockers[0], "0.5.3", "what the consumer holds")
+	assert.Contains(t, got.Targets[0].Blockers[0], "0.5.2", "what was asked for")
+	assert.Contains(t, got.Targets[0].Blockers[0], "--allow-downgrade")
 	assert.Nil(t, got.Images, "a blocked downgrade stops here, as an up to date consumer does")
-	assert.Nil(t, got.Preview)
+	assert.Nil(t, got.Targets[0].Preview)
 }
 
 func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Branch: "main", AllowDowngrade: true})
 	require.NoError(t, err)
-	assert.True(t, got.Downgrade, "it is still a downgrade")
+	assert.True(t, got.Targets[0].Downgrade, "it is still a downgrade")
 	assert.Equal(t, StatusReady, got.Status)
-	assert.Empty(t, got.Blockers)
-	require.NotEmpty(t, got.Warnings)
-	assert.Contains(t, got.Warnings[0], "downgrade")
+	assert.Empty(t, got.Targets[0].Blockers)
+	require.NotEmpty(t, got.Targets[0].Warnings)
+	assert.Contains(t, got.Targets[0].Warnings[0], "downgrade")
 	assert.NotNil(t, got.Images, "once it is allowed the rest of the check runs")
-	assert.NotNil(t, got.Preview)
+	assert.NotNil(t, got.Targets[0].Preview)
 }
 
 func TestCheckNewerIsNotADowngrade(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
-	assert.False(t, got.Downgrade, "v0.5.2 to v0.5.3")
+	assert.False(t, got.Targets[0].Downgrade, "v0.5.2 to v0.5.3")
 }
 
 func TestCheckAlreadyUpToDateIsNotADowngrade(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
 	require.NoError(t, err)
-	assert.False(t, got.Downgrade)
+	assert.False(t, got.Targets[0].Downgrade)
 	assert.Equal(t, StatusUpToDate, got.Status)
 }
 
@@ -349,7 +349,7 @@ func TestCheckAPrereleaseOfTheSameVersionIsADowngrade(t *testing.T) {
 	ws.refs["rancher/scc-operator"] = git.Refs{Tags: tags("v0.5.3", "v0.5.3-rc.1")}
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.3-rc.1", Branch: "main", Prerelease: true})
 	require.NoError(t, err)
-	assert.True(t, got.Downgrade)
+	assert.True(t, got.Targets[0].Downgrade)
 }
 
 func TestCheckFromAPrereleaseToTheStableReleaseIsNotADowngrade(t *testing.T) {
@@ -357,7 +357,7 @@ func TestCheckFromAPrereleaseToTheStableReleaseIsNotADowngrade(t *testing.T) {
 	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3-rc.1\n"
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
-	assert.False(t, got.Downgrade)
+	assert.False(t, got.Targets[0].Downgrade)
 	assert.Equal(t, StatusReady, got.Status)
 }
 
@@ -366,6 +366,6 @@ func TestCheckAValueWithNoVersionIsNotJudged(t *testing.T) {
 	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:latest\n"
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
-	assert.False(t, got.Downgrade, "there is nothing to compare")
+	assert.False(t, got.Targets[0].Downgrade, "there is nothing to compare")
 	assert.Equal(t, StatusReady, got.Status)
 }

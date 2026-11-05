@@ -3,13 +3,10 @@ package ship
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
-	"github.com/rancher/orbs-automation/internal/semver"
 )
 
 var (
@@ -52,7 +49,7 @@ type Input struct {
 	BranchPrefix string
 }
 
-// Status is where the state check leaves a bump.
+// Status is where the state check leaves a bump, and each target of it.
 type Status string
 
 // The states.
@@ -60,6 +57,9 @@ const (
 	StatusReady    Status = "ready"
 	StatusUpToDate Status = "already up to date"
 	StatusBlocked  Status = "blocked"
+	// StatusFailed is a target that could not be checked: its branch or file
+	// could not be read. It is reported and the other targets go on.
+	StatusFailed Status = "failed"
 )
 
 // Target is the consumer branch a bump goes to, and the commit at its head
@@ -69,175 +69,86 @@ type Target struct {
 	Commit string `json:"commit"`
 }
 
-// Plan is the result of the state check: what would be shipped, where, and
-// whether anything stands in the way. It is read-only, and nothing was written
-// to produce it.
-type Plan struct {
-	Producer string  `json:"producer"` // the repository slug
-	Release  Release `json:"release"`
-	Consumer string  `json:"consumer"` // the repository slug
-	Strategy string  `json:"strategy"`
-	Target   Target  `json:"target"`
-	File     string  `json:"file"`
-	Current  string  `json:"current"` // what the consumer holds now
-	Want     string  `json:"want"`    // what it should hold for the release
-	Status   Status  `json:"status"`
-	// Downgrade is set when the release is older than what the consumer holds.
-	Downgrade bool             `json:"downgrade,omitempty"`
-	Blockers  []string         `json:"blockers,omitempty"`
-	Images    *registry.Report `json:"images,omitempty"`  // not checked when already up to date
-	Preview   *Preview         `json:"preview,omitempty"` // what a run would write; none when already up to date
-	Warnings  []string         `json:"warnings,omitempty"`
+// TargetPlan is the state of one consumer branch: what it holds, what it should
+// hold, and whether a PR is needed.
+type TargetPlan struct {
+	Target
+	Current   string   `json:"current"` // what the consumer holds now
+	Status    Status   `json:"status"`
+	Downgrade bool     `json:"downgrade,omitempty"` // the release is older than what the consumer holds
+	Blockers  []string `json:"blockers,omitempty"`
+	Warnings  []string `json:"warnings,omitempty"`
+	Error     string   `json:"error,omitempty"`   // why a failed target could not be checked
+	Preview   *Preview `json:"preview,omitempty"` // what a run would write; none when nothing would be
 }
 
-// Check runs the state check for in: it resolves the release, finds the
-// consumer and its target branch, reads what the consumer holds now through the
-// strategy, and, unless the consumer is already at the release, checks the
-// release's images exist. It writes nothing.
+// Plan is the result of the state check: what would be shipped, to which
+// branches, and whether anything stands in the way. It is read-only, and
+// nothing was written to produce it.
+type Plan struct {
+	Producer string           `json:"producer"` // the repository slug
+	Release  Release          `json:"release"`
+	Consumer string           `json:"consumer"` // the repository slug
+	Strategy string           `json:"strategy"`
+	File     string           `json:"file"`   // the consumer's file the strategy edits
+	Want     string           `json:"want"`   // what the consumer should hold for the release
+	Status   Status           `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
+	Targets  []TargetPlan     `json:"targets"`
+	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
+	Images   *registry.Report `json:"images,omitempty"`   // checked once, and only when some target needs a PR
+	Warnings []string         `json:"warnings,omitempty"`
+}
+
+// Check runs the state check for in. It resolves the release, finds the
+// consumer, and for each target branch reads what the consumer holds through the
+// strategy; if any branch needs a PR it checks the release's images exist, once.
+// It writes nothing.
 func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, error) {
-	producer, consumers, err := ws.Consumers(in.Project)
+	res, err := resolve(ctx, ws, in)
 	if err != nil {
 		return Plan{}, err
 	}
-	consumer, err := pickConsumer(producer, consumers, in.To)
+	branches, err := res.branches(in)
 	if err != nil {
 		return Plan{}, err
 	}
-	strategy, err := LookupStrategy(consumer.Source.Update.Strategy)
-	if err != nil {
-		return Plan{}, err
-	}
-	consumerSlug := consumer.Project.Repo.Name
-	if in.Branch == "" {
-		return Plan{}, fmt.Errorf("%w: the release branches of %s are %s",
-			ErrBranchRequired, consumerSlug, strings.Join(consumer.Project.ReleaseBranches(), ", "))
-	}
-
-	producerRefs, err := ws.UpstreamRefs(ctx, producer.Repo.Name)
-	if err != nil {
-		return Plan{}, fmt.Errorf("read the tags of %s: %w", producer.Repo.Name, err)
-	}
-	release, err := ResolveRelease(producer, producerRefs.Tags, in.Arg, in.Prerelease, consumer.Source.Accept.When)
-	if err != nil {
-		return Plan{}, err
-	}
-
-	consumerRefs, err := ws.UpstreamRefs(ctx, consumerSlug)
-	if err != nil {
-		return Plan{}, fmt.Errorf("read the branches of %s: %w", consumerSlug, err)
-	}
-	target, ok := findBranch(consumerRefs, in.Branch)
-	if !ok {
-		return Plan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, in.Branch)
-	}
-
-	params := Params(consumer.Source.Update.Params)
-	file, err := strategy.File(params)
-	if err != nil {
-		return Plan{}, fmt.Errorf("strategy %s: %w", consumer.Source.Update.Strategy, err)
-	}
-	src, err := ws.UpstreamFile(ctx, consumerSlug, target.Commit, file)
-	if err != nil {
-		return Plan{}, fmt.Errorf("read %s on %s of %s: %w", file, target.Branch, consumerSlug, err)
-	}
-	current, err := strategy.Read(src, params)
-	if err != nil {
-		return Plan{}, fmt.Errorf("read %s on %s of %s: %w", file, target.Branch, consumerSlug, err)
-	}
-	want, err := strategy.Value(params, map[string]string{
-		"image":      producer.EffectiveImages()[0].Name,
-		"tag":        release.Tag,
-		"version":    strings.TrimPrefix(release.Tag, "v"),
-		"sourceRepo": producer.Repo.Name,
-	})
-	if err != nil {
-		return Plan{}, fmt.Errorf("strategy %s: %w", consumer.Source.Update.Strategy, err)
-	}
-
 	plan := Plan{
-		Producer: producer.Repo.Name, Release: release, Consumer: consumerSlug,
-		Strategy: consumer.Source.Update.Strategy, Target: target, File: file,
-		Current: current, Want: want, Status: StatusReady,
+		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.consumer.Project.Repo.Name,
+		Strategy: res.consumer.Source.Update.Strategy, File: res.file, Want: res.want,
 	}
-	if current == want {
-		plan.Status = StatusUpToDate
-		return plan, nil
-	}
-	if downgrade(strategy, current, want) {
-		plan.Downgrade = true
-		message := fmt.Sprintf("the release is older than what %s holds: %s, shipping %s",
-			consumerSlug, current, want)
-		if !in.AllowDowngrade {
-			// Stop here, as for a consumer that is up to date: nothing else is
-			// worth showing for a bump that will not happen.
-			plan.Status = StatusBlocked
-			plan.Blockers = append(plan.Blockers, "downgrade: "+message+"; pass --allow-downgrade to ship it anyway")
-			return plan, nil
+	needsPR := false
+	for _, branch := range branches {
+		tp, err := res.checkTarget(ctx, ws, branch, in)
+		if err != nil {
+			return Plan{}, err
 		}
-		plan.Warnings = append(plan.Warnings, "this is a downgrade: "+message)
+		needsPR = needsPR || tp.Status == StatusReady
+		plan.Targets = append(plan.Targets, tp)
 	}
-	preview, err := renderPreview(previewInput{
-		producer: producer, consumer: consumer, release: release, target: target,
-		strategy: strategy, file: file, current: current, want: want, userPrefix: in.BranchPrefix,
-	})
-	if err != nil {
-		return Plan{}, fmt.Errorf("render the PR: %w", err)
+	if needsPR {
+		images := registry.CheckProject(ctx, res.producer, prober, res.release.Tag)
+		plan.Images, plan.Warnings = &images, images.Warnings
+		if images.Failed() {
+			plan.Blockers = append(plan.Blockers, "images: the release is not fully published")
+		}
 	}
-	plan.Preview = &preview
-	images := registry.CheckProject(ctx, producer, prober, release.Tag)
-	plan.Images, plan.Warnings = &images, append(plan.Warnings, images.Warnings...)
-	if images.Failed() {
-		plan.Blockers = append(plan.Blockers, "images: the release is not fully published")
-	}
-	if len(plan.Blockers) > 0 {
-		plan.Status = StatusBlocked
-	}
+	plan.Status = overall(plan)
 	return plan, nil
 }
 
-// downgrade reports whether want is an older version than current, by what the
-// strategy finds in each. A value with no version in it is not judged.
-func downgrade(s Strategy, current, want string) bool {
-	cv, ok := s.Version(current)
-	if !ok {
-		return false
+// overall is the state of the whole plan.
+func overall(p Plan) Status {
+	if len(p.Blockers) > 0 {
+		return StatusBlocked
 	}
-	wv, ok := s.Version(want)
-	return ok && semver.Compare(cv, wv) > 0
-}
-
-// pickConsumer chooses the consumer to ship to: the one named by to, or the
-// only one.
-func pickConsumer(producer config.Project, consumers []config.Consumer, to string) (config.Consumer, error) {
-	names := make([]string, len(consumers))
-	for i, c := range consumers {
-		names[i] = c.Project.Name
-	}
-	if to != "" {
-		for _, c := range consumers {
-			if strings.EqualFold(c.Project.Name, to) || strings.EqualFold(c.Project.Repo.Name, to) {
-				return c, nil
-			}
-		}
-		return config.Consumer{}, fmt.Errorf("%w: %q does not take updates from %s (it is taken by: %s)",
-			ErrNoConsumer, to, producer.Name, strings.Join(names, ", "))
-	}
-	switch len(consumers) {
-	case 0:
-		return config.Consumer{}, fmt.Errorf("%w: no project takes updates from %s", ErrNoConsumer, producer.Name)
-	case 1:
-		return consumers[0], nil
-	}
-	return config.Consumer{}, fmt.Errorf("%w take updates from %s: %s; choose one with --to",
-		ErrAmbiguousConsumer, producer.Name, strings.Join(names, ", "))
-}
-
-// findBranch returns the branch of the name and the commit at its head.
-func findBranch(refs git.Refs, name string) (Target, bool) {
-	for _, b := range refs.Branches {
-		if b.Name == name {
-			return Target{Branch: b.Name, Commit: b.Commit}, true
+	status := StatusUpToDate
+	for _, t := range p.Targets {
+		switch t.Status {
+		case StatusBlocked, StatusFailed:
+			return StatusBlocked
+		case StatusReady:
+			status = StatusReady
 		}
 	}
-	return Target{}, false
+	return status
 }
