@@ -122,3 +122,22 @@ func TestConfigRejectsADirectoryWithNoDocuments(t *testing.T) {
 	_, err := Open(settings(t, "", nil, map[string]string{"config-dir": dir}), "/elsewhere").Config()
 	assert.ErrorIs(t, err, ErrEmptyConfig)
 }
+
+func TestProjectDotMeansTheWorkingDirectorysProject(t *testing.T) {
+	dir := t.TempDir()
+	repotest.NewRepoAt(t, dir, map[string]string{"upstream": upstreamURL})
+	ws := projectWorkspace(t, dir)
+
+	p, err := ws.Project(".")
+
+	require.NoError(t, err)
+	assert.Equal(t, rancherSlug, p.Repo.Name, "the same as leaving the key out")
+	empty, err := ws.Project("")
+	require.NoError(t, err)
+	assert.Equal(t, empty, p)
+}
+
+func TestProjectDotOutsideAProject(t *testing.T) {
+	_, err := projectWorkspace(t, t.TempDir()).Project(".")
+	assert.ErrorIs(t, err, ErrNotProject)
+}
