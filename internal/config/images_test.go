@@ -59,3 +59,13 @@ func TestImageAppliesTo(t *testing.T) {
 		})
 	}
 }
+
+func TestEffectiveImagesKeepsSince(t *testing.T) {
+	p := Project{Repo: Repo{Name: "rancher/rancher"}, Images: []Image{
+		{Name: "rancher/rancher"},
+		{Name: "rancher/rancher-server", Since: "v2.16"},
+	}}
+	got := p.EffectiveImages()
+	assert.Empty(t, got[0].Since)
+	assert.Equal(t, "v2.16", got[1].Since)
+}
