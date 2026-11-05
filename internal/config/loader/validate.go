@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ship/templates"
 )
 
 // Validate is ValidateAt for the current time.
@@ -127,6 +128,17 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 	}
 
 	v.images(where, p, phases, haveLines)
+	textVars := slices.Clone(templates.TextVars)
+	for _, s := range p.Sources {
+		textVars = append(textVars, templates.StrategyVars[s.Update.Strategy]...)
+	}
+	for field, text := range map[string]string{
+		"pullRequests.title": p.PullRequests.Title, "pullRequests.branchPrefix": p.PullRequests.BranchPrefix,
+	} {
+		if err := templates.Validate(text, textVars); err != nil {
+			v.add("%s: %s %q: %v", where, field, text, err)
+		}
+	}
 
 	seen := map[string]bool{}
 	for i, l := range p.Release.Lines {

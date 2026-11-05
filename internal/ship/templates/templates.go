@@ -95,7 +95,9 @@ var TextVars = []string{
 // not only in the strategy, so config validation can accept them without
 // importing the domain, and so a strategy that is not implemented yet can have
 // its variables written in config.
-var StrategyVars = map[string][]string{}
+var StrategyVars = map[string][]string{
+	"chartsPackageBump": {"package", "chartVersion", "action"},
+}
 
 // Placeholders returns the names used by the text, in order of first use and
 // without repeats. It returns an error for a brace that is not part of a
