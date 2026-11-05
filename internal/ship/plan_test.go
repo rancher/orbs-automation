@@ -262,3 +262,42 @@ func TestCheckValueVariables(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/scc-operator@0.5.3", got.Want)
 }
+
+func TestCheckPreviewsWhatARunWouldWrite(t *testing.T) {
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	require.NoError(t, err)
+	require.NotNil(t, got.Preview)
+	assert.Equal(t, "bot/scc-operator-v0.5.3-v2.15", got.Preview.Branch)
+	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", got.Preview.Title)
+	assert.Contains(t, got.Preview.Body, "rancher/scc-operator:v0.5.2")
+	assert.Contains(t, got.Preview.CommitMessage, "Automation: gero ship")
+}
+
+func TestCheckPreviewUsesTheUsersBranchPrefix(t *testing.T) {
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15", BranchPrefix: "dan/"})
+	require.NoError(t, err)
+	assert.Equal(t, "dan/v0.5.3-v2.15", got.Preview.Branch)
+}
+
+func TestCheckHasNoPreviewWhenAlreadyUpToDate(t *testing.T) {
+	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
+	require.NoError(t, err)
+	assert.Nil(t, got.Preview)
+}
+
+func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
+	p := &fakeProber{results: map[string]registry.Result{"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: registry.NotFound}}}
+	got, err := Check(ctx, fixture(), p, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	require.NoError(t, err)
+	assert.Equal(t, StatusBlocked, got.Status)
+	assert.NotNil(t, got.Preview, "so the reader sees what would have been written")
+}
+
+func TestCheckABadPlaceholderIsAnError(t *testing.T) {
+	ws := fixture()
+	c := riConsumer("buildYamlBump")
+	c.Project.PullRequests.Title = "Update {nope}"
+	ws.consumers = []config.Consumer{c}
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	assert.ErrorContains(t, err, "nope")
+}
