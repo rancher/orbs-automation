@@ -104,3 +104,19 @@ func TestConfigLinks(t *testing.T) {
 func TestConfigLinksOfAProjectThatShipsNowhere(t *testing.T) {
 	assert.Empty(t, Config{Projects: []Project{{Name: "a"}}}.Links(Project{Name: "a"}))
 }
+
+func TestCompareLines(t *testing.T) {
+	order, ok := CompareLines("v2.16", "v2.15")
+	assert.True(t, ok)
+	assert.Equal(t, 1, order)
+	order, _ = CompareLines("v2.15", "v2.16")
+	assert.Equal(t, -1, order)
+	order, _ = CompareLines("v2.15", "v2.15")
+	assert.Equal(t, 0, order)
+	order, _ = CompareLines("v2.9", "v2.10")
+	assert.Equal(t, -1, order, "by number, not text")
+	_, ok = CompareLines("main", "v2.15")
+	assert.False(t, ok)
+	_, ok = CompareLines("v2.15", "")
+	assert.False(t, ok)
+}
