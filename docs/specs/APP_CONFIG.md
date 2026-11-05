@@ -19,7 +19,7 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 
 | Kind | Holds |
 |---|---|
-| `Project` | A repo we model: `repo`, `release` (branch policy, tag pattern, line-to-branch mapping) and `sources` (what it takes updates from, with `accept` and `update`) |
+| `Project` | A repo we model: `repo`, `release` (branch policy, tag pattern, line-to-branch mapping), `images` (what it publishes, and where, [IMAGES_EXIST](IMAGES_EXIST.md)) and `sources` (what it takes updates from, with `accept` and `update`) |
 | `RancherLines` | The Rancher lines with their lifecycle dates and Kubernetes range. The phase is derived from the dates and the current time, with an optional `phase` override. No branches: each project maps its own branches to line IDs |
 | `External` | A third-party project we track (`trackOnly`, `react`) or notify |
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |

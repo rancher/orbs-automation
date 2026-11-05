@@ -27,7 +27,7 @@ CI runs it from a workflow that reads the App credentials from Vault, mints a to
 
 Per target branch, in the order the bump engine resolves them, newest first:
 
-1. **Preconditions.** The artifact exists in every required registry (the set depends on whether the version is stable), and the target branch exists and is not frozen. A failure stops the whole fan-out before any write when it concerns the artifact, and skips only that target when it concerns the branch.
+1. **Preconditions.** The artifact exists in every required registry (the set depends on whether the version is stable, [IMAGES_EXIST](IMAGES_EXIST.md)), and the target branch exists and is not frozen. A failure stops the whole fan-out before any write when it concerns the artifact, and skips only that target when it concerns the branch.
 2. **Clone.** One throwaway clone of the target repo per run, shared across branches. Objects come from a local reference to the engineer's clone where one exists, else a shallow clone. Each branch gets its own worktree.
 3. **Edit.** The named strategy, then the post-edit commands. A strategy that finds nothing to change ends the target as **already up to date**: not an error, no branch, no PR.
 4. **Commit.** Through go-git, or through `git` when the engineer has signing on ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). Commit message, trailers and identity below.
@@ -72,7 +72,6 @@ Table tests with a fake GitHub client and a local bare repository as the "remote
 ## Open questions
 
 * Whether engineers push to a fork or straight to the upstream today (the local script can only do the second). The design supports both through `fork` and `upstream`; which one is the default for a target is a config decision.
-* How the artifact check reads anonymous registries (Docker Hub, Prime staging and production) without `docker`. Likely a small HTTP client, which needs an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) if it is a module.
 * How post-edit commands such as `go generate` get a toolchain that matches the target branch in both contexts. A workstation without it fails with a `gero doctor` hint.
 * Whether the throwaway clone should be shallow in CI when a strategy needs history.
 * Whether a reused PR's branch is force-updated or left alone when the new commit differs.

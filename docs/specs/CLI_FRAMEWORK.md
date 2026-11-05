@@ -34,6 +34,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero lines resolve` | either | Read-only |
 | `gero semver check [tag]` | either | Read-only; port of the shared `check-semver` script. Takes a string (argument or `GITHUB_REF_NAME`) and never opens a repository. Emits env-style output |
 | `gero repo info [name|owner/name]` | either | Read-only; a Project's config entry, its latest stable and pre-release tags and their commits read from the host (per line for a project with a branch per line), and its local clone and the clone's state. Defaults to the repository you are in. `--offline` skips the host, and a failed read or a missing clone leaves the rest of the report. `--json` supported |
+| `gero repo images exist [name|owner/name] <tag>` | either | Read-only, needs the network; port of `validate_image_exists`. Checks that each image a Project publishes exists in the required registries ([IMAGES_EXIST](IMAGES_EXIST.md)). Prints its rows before exiting 1 when an image is missing or unreachable. `--json` supported |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
