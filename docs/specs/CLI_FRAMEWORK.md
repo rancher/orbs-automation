@@ -27,7 +27,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 |---|---|---|
 | `gero config validate` | either | Runs without credentials |
 | `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
-| `gero config resolve repos [slug]` | either | Read-only; local path of each central-config repo and how it was found ([WORKSPACE](WORKSPACE.md)); `--json` supported. Prints its table before exiting 1 when a repo is unresolved or ambiguous |
+| `gero config resolve repos [name|owner/name|.]` | either | Read-only; local path of each central-config repo and how it was found ([WORKSPACE](WORKSPACE.md)); `--json` supported. Prints its table before exiting 1 when a repo is unresolved or ambiguous |
 | `gero auth status [--hostname host]` | either | Read-only; the host and token source gero would use (`GH_TOKEN`, `GITHUB_TOKEN`, gh config, gh keyring) and the login GitHub reports for the token; the token is never printed. Prints its result before exiting 1 when GitHub rejects the token. `--json` supported |
 | `gero doctor [check...]` | either (built for workstations) | Read-only; checks the workstation setup and says how to fix what is not. Offline unless `--online`; `--json`, `--list-checks` and `--strict` ([DOCTOR](DOCTOR.md)) |
 | `gero version` | either | Read-only; prints the build version, commit and date, the same text as `--version`. `--json` supported |
@@ -36,13 +36,15 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero repo info [name|owner/name]` | either | Read-only; a Project's config entry, its latest stable and pre-release tags and their commits read from the host (per line for a project with a branch per line), and its local clone and the clone's state. Defaults to the repository you are in. `--offline` skips the host, and a failed read or a missing clone leaves the rest of the report. `--json` supported |
 | `gero repo images exist [name|owner/name] <tag>` | either | Read-only, needs the network; port of `validate_image_exists`. Checks that each image a Project publishes exists in the required registries ([IMAGES_EXIST](IMAGES_EXIST.md)). Prints its rows before exiting 1 when an image is missing or unreachable. `--json` supported |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
-| `gero ship <project> [tag|line]` | either | Writes; honors `--dry-run`. One downstream PR: resolves the tag, checks the state of the target and consumer, then edits, commits, pushes and opens the PR, superseding an older one ([PUSH_TO_REPO](PUSH_TO_REPO.md)). Today it stops after the state check and writes nothing. `--json` supported |
+| `gero ship [project] [tag|line]` | either | Writes; honors `--dry-run`. One downstream PR: resolves the tag, checks the state of the target and consumer, then edits, commits, pushes and opens the PR, superseding an older one ([PUSH_TO_REPO](PUSH_TO_REPO.md)). Today it stops after the state check and writes nothing. `--json` supported |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
 | `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |
 | `gero dashboard` | either | Moonshot; the name may become `triage` |
 
 A noun names the thing a command operates on. `gero repo` is for commands that read a repository (its refs, HEAD, tags), so repo selection (`--repo`, the inferred upstream and path in [CLI_CONFIG](CLI_CONFIG.md)) applies to everything under it. `gero semver` works on version strings and never opens a repository. The noun names the domain, not the implementation: `semver check` is the lenient script port (any text, one leading `v` stripped). Later verbs such as `compare` or `bump` may use a strict SemVer parser, which needs its own entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md); they get their own verbs and must not change what `check` accepts.
+
+**Project arguments.** Wherever a command takes a project, it takes the config `name` or the repository's `owner/name` slug, case-insensitive, and `.` for the project whose repository the working directory is in. Where the project is optional, leaving it out means the same as `.`; the one exception is a command where leaving it out already means all projects (`gero config resolve repos`), which takes `.` explicitly. A command that takes a project and a release reads a lone argument as the release, with the project from the working directory: always for `gero repo images exist`, which needs a tag, and for `gero ship` when the argument looks like a version or a release line (`v0.5.3`, `v2.15`), since no project is named like that. One lookup does all of this for every command (`Workspace.Project`, [WORKSPACE](WORKSPACE.md)), so no command spells its own; outside a project the error says the working directory is not one.
 
 Global (persistent) flags:
 

@@ -6,9 +6,9 @@ The write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-
 
 ## The command
 
-`gero ship <project> [tag|line]`, in both contexts, writes, honors `--dry-run`. It makes **one PR** for one consumer and one target branch; doing many is a loop over it later.
+`gero ship [project] [tag|line]`, in both contexts, writes, honors `--dry-run`. It makes **one PR** for one consumer and one target branch; doing many is a loop over it later.
 
-* `<project>` is the producer being shipped, found as for `gero repo info` (config name or owner/name slug).
+* `[project]` is the producer being shipped, found as for every command that takes a project ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)): a config name or owner/name slug, or `.` or nothing for the project the working directory is in. A lone `v0.5.3` or `v2.15` is the release, not the project.
 * The argument is a tag, used as given, or a release line, resolved to the project's latest tag in that line. With no argument, the project's latest stable tag.
 * `--prerelease` lets prereleases count: when resolving a line, and for a prerelease tag the consumer's `accept.when` would refuse. Without it a line resolves to its latest stable tag.
 * The consumers are the projects whose `sources` name the producer (the reverse view the config already implies). `--to <consumer>` picks one when there are several, and `--branch <target>` names the target branch. Finding the target from the tag's line waits for the `accept.lines` decision ([APP_CONFIG](APP_CONFIG.md)), so `--branch` is required for now.

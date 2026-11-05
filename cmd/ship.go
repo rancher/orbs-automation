@@ -12,12 +12,16 @@ import (
 func init() {
 	var in ship.Options
 	shipCmd := &cobra.Command{
-		Use:   "ship <project> [tag|line]",
+		Use:   "ship [project] [tag|line]",
 		Short: "Ship a release of a project to a project that takes updates from it",
 		Long: `Check what shipping a release of <project> to one of its consumers would do.
 
-<project> is the project being shipped, by its config name or owner/name slug.
-The argument is a tag, used as given, or a release line of the project, which
+<project> is the project being shipped, by its config name or owner/name slug;
+leave it out to ship the project whose repository you are in. A lone argument
+that looks like a version or a release line (v0.5.3, v2.15) is the release,
+and any other lone argument is the project.
+
+The release is a tag, used as given, or a release line of the project, which
 resolves to the line's latest stable tag; with neither, the project's latest
 stable tag. --prerelease lets prereleases count. The consumers are the
 projects whose config takes updates from <project>; name one with --to when
@@ -32,7 +36,7 @@ is reported as already up to date.
 It shows the branch, title and labels the PR would have; --preview adds the
 commit message and body. This only checks for now: it writes nothing and
 creates no PR yet.`,
-		Args: cobra.RangeArgs(1, 2),
+		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -42,11 +46,7 @@ creates no PR yet.`,
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			in.Project = args[0]
-			in.Arg = ""
-			if len(args) == 2 {
-				in.Arg = args[1]
-			}
+			in.Project, in.Arg = ship.ParseArgs(args)
 			out, err := ship.Run(ctx, settingsFrom(cmd), cwd, in)
 			if out != "" {
 				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)

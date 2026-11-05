@@ -20,7 +20,7 @@ func init() {
 		Short: "Show what the CLI config resolves to on this machine",
 	}
 	resolveCmd.AddCommand(&cobra.Command{
-		Use:   "repos [owner/name]",
+		Use:   "repos [name|owner/name|.]",
 		Short: "Show where each project's repository is cloned and how that was found",
 		Long: `For each Project in the central config, print the local clone of its
 repository and how it was found: the repository you are in (cwd), a
@@ -28,7 +28,8 @@ repos.paths entry, a scan of the repos.search directories matched by remote
 URL (repos.search scan), or a sibling directory of the repository you are in.
 
 A project with no clone, or with several equally good ones, is listed and the
-command exits non-zero. Name one project to look at only that.`,
+command exits non-zero. Name one project (its config name or owner/name
+slug, or . for the project whose repository you are in) to look at only that.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
