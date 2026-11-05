@@ -30,8 +30,9 @@ there are several, and the branch of the consumer to update with --branch.
 Before anything is written the state is checked, from the host and not from
 any clone: the release and the target branch must exist, the consumer's
 current value is read and compared with what the release needs, and the
-release's images must be published. A consumer that already has the release
-is reported as already up to date.
+release's images must be published, and the release must not be older than what
+the consumer holds (--allow-downgrade ships it anyway). A consumer that already
+has the release is reported as already up to date.
 
 It shows the branch, title and labels the PR would have; --preview adds the
 commit message and body. This only checks for now: it writes nothing and
@@ -57,6 +58,7 @@ creates no PR yet.`,
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when several take updates from the project")
 	shipCmd.Flags().StringVar(&in.Branch, "branch", "", "the consumer's branch to update")
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
+	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")
 	rootCmd.AddCommand(shipCmd)
 }

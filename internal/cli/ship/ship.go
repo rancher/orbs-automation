@@ -33,6 +33,8 @@ type Options struct {
 	Branch     string // the consumer's branch to update
 	Prerelease bool   // let prereleases count
 	Preview    bool   // print the commit message and PR body too, not only the branch and title
+	// AllowDowngrade ships a release older than what the consumer holds.
+	AllowDowngrade bool
 }
 
 // ParseArgs reads the positional arguments of gero ship: [project] [tag|line].
@@ -66,7 +68,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	}
 	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Branch: opts.Branch, Prerelease: opts.Prerelease,
-		BranchPrefix: s.BranchPrefix,
+		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade,
 	}, opts.Preview)
 }
 

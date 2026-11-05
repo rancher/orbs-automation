@@ -207,3 +207,19 @@ func TestRunNotInAProjectSaysToNameOne(t *testing.T) {
 	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.ErrorContains(t, err, "name the project")
 }
+
+func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
+	ws := &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.9.0\n"}}
+	prober := fakeProber{result: registry.Result{Status: registry.Found}}
+
+	out, err := run(context.Background(), ws, prober, clicfg.OutputText, in, false)
+	assert.ErrorIs(t, err, ErrBlocked)
+	assert.Contains(t, out, "blocked: downgrade")
+	assert.Contains(t, out, "--allow-downgrade")
+
+	allowed := in
+	allowed.AllowDowngrade = true
+	out, err = run(context.Background(), ws, prober, clicfg.OutputText, allowed, false)
+	require.NoError(t, err)
+	assert.Contains(t, out, "Warning: this is a downgrade")
+}
