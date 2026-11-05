@@ -81,17 +81,18 @@ linters:
           deny:
             - pkg: os/exec
               desc: os/exec is only allowed in internal/execx; run programs through it (docs/specs/DEPENDENCY_POLICY.md)
-        # YAML stays in the two loaders, so moving to a new YAML major version
-        # touches known files only (docs/specs/DEPENDENCY_POLICY.md).
+        # YAML stays in the two loaders and yamledit, so moving to a new YAML major
+        # version touches known files only (docs/specs/DEPENDENCY_POLICY.md).
         noyaml:
           list-mode: lax
           files:
             - "!**/internal/clicfg/**"
             - "!**/internal/config/loader/**"
+            - "!**/internal/yamledit/**"
             - "!$test"
           deny:
             - pkg: go.yaml.in/yaml
-              desc: YAML is only allowed in internal/clicfg and internal/config/loader (docs/specs/DEPENDENCY_POLICY.md)
+              desc: YAML is only allowed in internal/clicfg, internal/config/loader and internal/yamledit (docs/specs/DEPENDENCY_POLICY.md)
         # Central config is loaded, defaulted and validated only by
         # internal/workspace, so no command can use config that skipped them
         # (docs/specs/WORKSPACE.md, docs/specs/PROJECT_LAYOUT.md).
