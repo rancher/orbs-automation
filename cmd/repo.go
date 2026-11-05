@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/rancher/orbs-automation/internal/cli/branchtags"
+	"github.com/rancher/orbs-automation/internal/cli/imagesexist"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/spf13/cobra"
 )
@@ -50,6 +51,44 @@ the rest of the report is still shown, as it is when no clone is found.`,
 		},
 	}
 	infoCmd.Flags().BoolVar(&offline, "offline", false, "do not read tags from the host")
+	imagesCmd := &cobra.Command{
+		Use:   "images",
+		Short: "Check the images a repository publishes",
+	}
+	imagesCmd.AddCommand(&cobra.Command{
+		Use:   "exist [name|owner/name] <tag>",
+		Short: "Check that the images of a release are published where they must be",
+		Long: `Check that each image a Project publishes exists in the registries a release
+of the tag must be in: Docker Hub and Prime staging always, and Prime
+production only for a stable tag. A port of validate_image_exists.
+
+The images are the Project's images config, or the one named for its
+repository. Name a Project (its config name or its owner/name slug) before the
+tag, else the repository you are in is used. The registries are read
+anonymously. The report is printed before the command exits 1 when an image
+is not found or a registry could not be reached.`,
+		Args: cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			project, tag := "", args[0]
+			if len(args) == 2 {
+				project, tag = args[0], args[1]
+			}
+			out, err := imagesexist.Run(ctx, settingsFrom(cmd), cwd, project, tag)
+			if out != "" {
+				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
+			}
+			return err
+		},
+	})
+	repoCmd.AddCommand(imagesCmd)
 	repoCmd.AddCommand(
 		infoCmd,
 		&cobra.Command{
