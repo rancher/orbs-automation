@@ -62,6 +62,13 @@ type Git interface {
 	CommitsSince(ctx context.Context, dir, base, tip string) ([]BranchCommit, error)
 	// Config is what git uses for key in the clone: user.email is the actor's.
 	Config(ctx context.Context, dir, key string) (string, error)
+	// ChangeFingerprint identifies the change tip makes to base, apart from where
+	// it sits, so two branches can be compared by what they do.
+	ChangeFingerprint(ctx context.Context, dir, base, tip string) (string, error)
+	// ForceBranch points a branch at a commit, creating or moving it.
+	ForceBranch(ctx context.Context, dir, name, commit string) error
+	// PushReplacing pushes over a branch that is at expected on the remote.
+	PushReplacing(ctx context.Context, dir, remote, branch, expected string) error
 }
 
 // GitCLI is Git through the git binary (internal/git/gitcli).
@@ -123,6 +130,18 @@ func (GitCLI) CommitsSince(ctx context.Context, dir, base, tip string) ([]Branch
 		out[i] = BranchCommit{Hash: f.Hash, AuthorEmail: f.AuthorEmail, Message: f.Message}
 	}
 	return out, err
+}
+
+func (GitCLI) ChangeFingerprint(ctx context.Context, dir, base, tip string) (string, error) {
+	return gitcli.ChangeFingerprint(ctx, dir, base, tip)
+}
+
+func (GitCLI) ForceBranch(ctx context.Context, dir, name, commit string) error {
+	return gitcli.ForceBranch(ctx, dir, name, commit)
+}
+
+func (GitCLI) PushReplacing(ctx context.Context, dir, remote, branch, expected string) error {
+	return gitcli.PushReplacing(ctx, dir, remote, branch, expected)
 }
 
 func (GitCLI) Config(ctx context.Context, dir, key string) (string, error) {

@@ -61,6 +61,33 @@ type fakeRemote struct {
 	openBy    map[string]pulls.Open // what it finds for a base, when that is set
 	openErr   error
 	meErr     error
+
+	behind      int
+	behindErr   error
+	updateErr   error
+	comments    []pulls.Comment
+	commentsErr error
+	editErr     error
+}
+
+func (f *fakeRemote) BehindBy(_ context.Context, _, base, head string) (int, error) {
+	f.log.add("behind %s %s", base, head)
+	return f.behind, f.behindErr
+}
+
+func (f *fakeRemote) UpdateBody(_ context.Context, _ string, n int, title, body string) error {
+	f.log.add("update #%d title=%q body=%q", n, title, body)
+	return f.updateErr
+}
+
+func (f *fakeRemote) Comments(_ context.Context, _ string, n, _ int) ([]pulls.Comment, error) {
+	f.log.add("comments #%d", n)
+	return f.comments, f.commentsErr
+}
+
+func (f *fakeRemote) EditComment(_ context.Context, _ string, id int64, body string) error {
+	f.log.add("edit comment %d %s", id, body)
+	return f.editErr
 }
 
 func (f *fakeRemote) Me(context.Context) (string, error) {

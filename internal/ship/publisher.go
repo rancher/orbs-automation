@@ -21,6 +21,14 @@ type Remote interface {
 	Close(ctx context.Context, slug string, number int) error
 	RepoLabels(ctx context.Context, slug string) ([]string, error)
 	AddLabels(ctx context.Context, slug string, number int, labels []string) error
+	// BehindBy is how many commits the base has that the head does not.
+	BehindBy(ctx context.Context, slug, base, head string) (int, error)
+	// UpdateBody replaces a PR's title and body.
+	UpdateBody(ctx context.Context, slug string, number int, title, body string) error
+	// Comments lists a PR's comments, oldest first, up to limit.
+	Comments(ctx context.Context, slug string, number, limit int) ([]pulls.Comment, error)
+	// EditComment replaces the body of a comment.
+	EditComment(ctx context.Context, slug string, id int64, body string) error
 }
 
 // Publisher pushes a committed branch, opens its PR and closes the PRs it
