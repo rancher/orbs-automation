@@ -69,6 +69,7 @@ type Input struct {
 	To         string // the consumer, when the producer ships to several
 	Method     string // the consumer's update method, when the producer uses several of one consumer
 	Branch     string // the consumer's target branch
+	Line       string // the consumer's Rancher line to ship to, such as v2.15, in place of every branch the release goes to
 	Prerelease bool   // let prereleases count
 	// DryRun is the invocation's --dry-run: compute and report, and create no
 	// branch or PR. It is carried into the plan so the report says which it is.
