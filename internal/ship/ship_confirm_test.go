@@ -189,7 +189,7 @@ func TestShipTheQuestionSaysWhenARefreshMayReplaceABranchOnTheRemote(t *testing.
 
 	require.ErrorIs(t, err, ErrDeclined)
 	require.Len(t, q.got, 1)
-	assert.Equal(t, []string{"release/v2.15"}, q.got[0].Opens)
+	assert.Equal(t, []string{"v2.15"}, q.got[0].Opens)
 	assert.True(t, q.got[0].MayReplace)
 }
 

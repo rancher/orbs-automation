@@ -95,10 +95,10 @@ type Confirmation struct {
 	Consumer string     // the repository the PRs are in
 	Release  string     // the tag being shipped
 	Push     PushTarget // where the branches are pushed
-	Opens    []string   // the target branches that will get a new PR
+	Opens    []string   // the targets that will get a new PR, by line (TargetPlan.Key)
 	Closes   []PRRef    // the older PRs that will be closed, for every target
-	Already  []string   // the target branches whose PR is already open
-	Blocked  []string   // the target branches a newer PR of the actor's blocks
+	Already  []string   // the targets whose PR is already open
+	Blocked  []string   // the targets a newer PR of the actor's blocks
 	// Refreshes are the target branches whose open PR will be rebuilt, and its
 	// branch replaced if it differs: a force push, with a lease.
 	Refreshes []string
@@ -274,16 +274,16 @@ func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, 
 		}
 		switch st.dec.Action {
 		case PublishBlocked:
-			c.Blocked = append(c.Blocked, st.tp.Branch)
+			c.Blocked = append(c.Blocked, st.tp.Key())
 		case PublishAlreadyOpen:
 			if refresh {
-				c.Refreshes = append(c.Refreshes, st.tp.Branch)
+				c.Refreshes = append(c.Refreshes, st.tp.Key())
 			} else {
-				c.Already = append(c.Already, st.tp.Branch)
+				c.Already = append(c.Already, st.tp.Key())
 			}
 			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
 		default:
-			c.Opens = append(c.Opens, st.tp.Branch)
+			c.Opens = append(c.Opens, st.tp.Key())
 			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
 		}
 	}

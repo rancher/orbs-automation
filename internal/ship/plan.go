@@ -134,6 +134,15 @@ type TargetPlan struct {
 	Result *TargetResult `json:"result,omitempty"`
 }
 
+// Key is what a report calls the target: its Rancher line, which means the same
+// in every project, or its branch when it is in no line.
+func (t TargetPlan) Key() string {
+	if t.Line != "" {
+		return t.Line
+	}
+	return t.Branch
+}
+
 // Plan is the result of the state check: what would be shipped, to which
 // branches, and whether anything stands in the way. It is read-only, and
 // nothing was written to produce it.
