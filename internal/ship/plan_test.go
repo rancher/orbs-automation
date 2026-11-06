@@ -629,3 +629,40 @@ func TestCheckNamesEachTargetByItsRancherLine(t *testing.T) {
 	assert.Equal(t, "v2.15", onALine.Targets[0].Line, "a line means the same in every project, which a branch does not")
 	assert.Empty(t, inNoLine.Targets[0].Line, "a branch that is in no line has none, and is named by its branch")
 }
+
+func TestCheckALineIsTheBranchTheConsumerKeepsItOn(t *testing.T) {
+	for _, line := range []string{"v2.15", "2.15"} {
+		got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Line: line})
+		require.NoError(t, err, line)
+		assert.Equal(t, []string{"release/v2.15"}, branchesOf(got), line)
+	}
+}
+
+func TestCheckALineWithNoBranchOfItsOwnIsTheDefaultBranch(t *testing.T) {
+	ws := fixture()
+	ws.links[0].Consumer.Release.Lines = append(ws.links[0].Consumer.Release.Lines, config.ProjectLine{Line: "v2.16"})
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Line: "v2.16"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"main"}, branchesOf(got))
+	assert.Equal(t, "v2.16", got.Targets[0].Line)
+}
+
+func TestCheckALineTheConsumerDoesNotHaveSaysWhichItDoes(t *testing.T) {
+	_, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Line: "v2.99"})
+
+	require.ErrorIs(t, err, ErrNoTargets)
+	assert.ErrorContains(t, err, "v2.99")
+	assert.ErrorContains(t, err, "v2.15, v2.14")
+}
+
+func TestCheckALineOfAConsumerWithoutLinesIsAnError(t *testing.T) {
+	ws := fixture()
+	ws.links[0].Consumer.Release.Lines = nil
+
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Line: "v2.15"})
+
+	require.ErrorIs(t, err, ErrNoTargets)
+	assert.ErrorContains(t, err, "no release lines")
+}
