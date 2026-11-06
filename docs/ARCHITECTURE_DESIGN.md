@@ -62,7 +62,7 @@ Data goes to stdout and diagnostics to stderr, with `--json` on data commands an
 The central automation repo is the source of truth for the project list, how projects relate (what each takes updates from), the Rancher release lines, and the configs of projects we do not own. Config is a set of YAML documents with `apiVersion`, `kind`, `name` and `spec`, inspired by Kubernetes resources but not compatible with them.
 
 Kinds so far (names are not final):
-* `Project`: a repo we model. Its `spec` has `repo`, `release` (branch policy, tag pattern, line-to-branch mapping) and `sources` (what it takes updates from, with `accept` and `update`). Edges are declared once, on the consuming side, and the reverse view is derived. A project can be a consumer on one edge and a producer on another.
+* `Project`: a repo we model. Its `spec` has `repo`, `release` (branch policy, tag pattern, line-to-branch mapping), `updateMethods` (how it takes an update: a strategy configured by the consumer) and `downstream` (the projects it ships to, and with which of their methods). Edges are declared once, on the producing side, and the reverse view is derived. A project can be a producer on one edge and a consumer on another.
 * `RancherLines`: the set of Rancher lines with their lifecycle dates (GA, EOM, EOL) and Kubernetes range. The phase is derived from the dates and the current UTC time. It has no branches; each project maps its own branches to line IDs.
 * `External`: a third-party project we track (`trackOnly`, `react`) or notify.
 * `WorkflowsConfig`: how workflows are rendered into a repo's branches. This lives in the target repo's `gero.yaml`, not centrally, and is the only kind allowed there for now.
@@ -123,5 +123,5 @@ What a QA run proves it tested (Rancher version, chart version or image) must be
 
 An optional `gero dashboard` or `gero triage` subcommand runs a lightweight embedded HTTP server (`net/http` with embedded static assets) on the developer's machine:
 * Displays real-time status of multi-repo release trains by querying the central tracking issues.
-* visualizes the project graph defined by the `sources` in the central config.
+* visualizes the project graph defined by the `downstream` edges in the central config.
 * Inspired by Google's `triage-party`, allowing local custom views into multi-repo issue and release states.

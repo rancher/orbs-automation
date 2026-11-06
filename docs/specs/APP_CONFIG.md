@@ -1,8 +1,8 @@
 # Application Config
 
-**Status:** implemented for the loader, defaults and the checks listed under Validation. The kind and field names are not final, and everything in `config/` is a mock until the v0.x POC review ([PHASES](../PHASES.md)).
+**Status:** implemented for the loader, defaults, the update dispatcher's checks and the checks listed under Validation. The kind and field names are not final, and everything in `config/` is a mock until the v0.x POC review ([PHASES](../PHASES.md)).
 
-The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The real files, field reference and defaults table are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`config-mock/`](../../config-mock/) and [`mock-repos/`](../../mock-repos/). The types are `internal/config`, and the loader, defaults and validation are `internal/config/loader`, reachable only through `internal/workspace` ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)).
+The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The real files, field reference and defaults table are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`config-mock/`](../../config-mock/) and [`mock-repos/`](../../mock-repos/). The types are `internal/config`, and the loader, defaults and structural validation are `internal/config/loader`, reachable only through `internal/workspace` ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)). What depends on a strategy is checked by `internal/updatedispatcher`.
 
 Informed by [backup-restore-operator](../projects/backup-restore-operator.md) and [rancher-shell](../projects/rancher-shell.md). The backup-restore-operator style (hybrid: reusable workflows, composite actions and rendered templates) is the closer model for what the central repo offers.
 
@@ -19,31 +19,31 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 
 | Kind | Holds |
 |---|---|
-| `Project` | A repo we model: `repo`, `release` (branch policy, tag pattern, line-to-branch mapping), `images` (what it publishes, and where, [IMAGES_EXIST](IMAGES_EXIST.md)), `updateMethods` (how it takes an update: what it edits and runs, and what a producer may pass) and `downstream` (the projects it ships to, and with which of their methods) |
+| `Project` | A repo we model: `repo`, `release` (branch policy, tag pattern, line-to-branch mapping), `images` (what it publishes, and where, [IMAGES_EXIST](IMAGES_EXIST.md)), `updateMethods` (how it takes an update) and `downstream` (the projects it ships to, and with which of their methods) |
 | `RancherLines` | The Rancher lines with their lifecycle dates and Kubernetes range. The phase is derived from the dates and the current time, with an optional `phase` override. No branches: each project maps its own branches to line IDs |
 | `External` | A third-party project we track (`trackOnly`, `react`) or notify |
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |
 
 ### Update methods and downstream edges
 
-A bump has two halves, and each is configured by the project that knows it.
+A bump has two halves, and each is configured by the project that knows it. The consumer knows its own layout, so it owns the **method**. The producer knows what it ships and where, so it owns the **edge**.
 
-**The consumer owns the mechanics, as `updateMethods`.** A method is a named way the project takes an update, so a project with several ways has several methods, and any number of producers can use one. An entry has a fixed set of keys, the same for every strategy:
+**A method is a strategy configured for one consumer.** A project lists `updateMethods`, each a named way it takes an update, and any number of producers can use one. An entry has the same keys whatever its strategy:
 
 | Key | Meaning |
 |---|---|
 | `name` | What a producer's edge refers to |
-| `strategy` | Named code in `gero` that reads and writes the value (`yamlBump`); it is how a method's value is found, compared and changed, so it is the same code for reading what the consumer holds now and for writing the new value |
-| `with` | Values the consumer fixes for the strategy, such as `file: build.yaml`. A producer cannot pass these |
-| `allowedParams` | The interface the method offers a producer: a list of `key`, `description`, `required` and `default`. An entry with a default, or with `required: false`, is optional. The strategy declares the params it consumes, and the method may refine them or add its own, which reach the steps as `GERO_PARAM_<KEY>`. A param that selects what is edited, such as the file, is consumer-only by the strategy's own declaration and cannot be listed here |
-| `accept` | What the consumer takes: `when: stable` (the default) or `all` |
+| `strategy` | The name of a strategy, which is Go code that claims it (`yamlBump`). The name is defined in the code and nowhere else |
+| `with` | Values the consumer fixes for the strategy, such as `file: build.yaml`. The strategy checks them once, when the config loads. A producer cannot pass these |
+| `allowedParams` | What a producer's edge may pass: a list of `key`, `description`, `default` and `required`. **This is the only declaration of a param.** A param is required unless it has a `default` or says `required: false`. A strategy reads its inputs by name and has no declaration of them |
+| `accept` | Which releases the consumer takes: `when: stable` (the default) or `all`. A consumer that wants both has two methods |
 | `preEdit`, `postEdit` | Steps the consumer runs around the edit |
 
-**The producer owns the wiring, as `downstream`.** An edge names a consumer (`to`, a project name or slug) and one of its methods, and passes the params the method allows. An edge may also set `lines` (how its releases map to the consumer's branches) and add its own `preEdit` and `postEdit` steps, which may come `from: producer` or `from: central`. The reverse view, "who consumes X" and "what does Y take", is derived from the edges, and it can be compiled into the bundle's generated section ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
+**An edge is a producer's call into a method.** A project lists `downstream` edges. Each names a consumer (`to`, by project name or slug) and one of its methods, and passes the params the method allows. An edge may set `lines` (how its releases map to the consumer's branches; omitted, it is worked out from the producer) and add its own `preEdit` and `postEdit` steps, which may come from the consumer's clone, from the producer's repo (for an owned project) or from the central bundle (`from`). The reverse view, "who consumes X" and "what does Y take", is derived from the edges and can be compiled into the bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
 
-**Validation at `config validate`.** An edge's `to` is a project and its `method` is one of that project's methods. The params it passes are a subset of the method's `allowedParams`, and every required one without a default is there. `with` and `allowedParams` use only names the strategy knows or the method adds, and they do not overlap. A step's `since` and `until` are lines in `RancherLines`, with `since` not after `until`.
+**Three stages, three inputs.** A strategy is code. A method **configures** it once with `with`, and that gives an updater that is checked early, by `config validate` and `gero doctor`. An edge **invokes** it with params, which become the inputs of each call. The strategy never sees how a param was declared, only the values, with defaults filled in. The updater has a read side that never writes (used by the state check) and a write side ([PUSH_TO_REPO](PUSH_TO_REPO.md#applying-a-bump)).
 
-**Steps.** A step is `run` (a program or script path, or an argument list; never a shell string) with optional `since` and `until`, a range of the consumer's lines for the target branch. Every step whose range holds the branch's line runs, in order, and one with no range always does. The order is a chain, outermost last: the method's `preEdit`, then the edge's `preEdit`, the edit, the edge's `postEdit`, then the method's `postEdit`. The consumer's steps surround the producer's, so the consumer's `postEdit`, which regenerates derived files, sees everything the producer's steps did. `from` is only on the edge's steps and says where the program comes from: the consumer's clone (the default and the only choice for a method's steps), the producer's repo at the release being shipped (for an owned project), or the central repo's bundle.
+**Steps.** A step is `run` (a program or script path, or an argument list; never a shell string) with optional `since` and `until`, a range of the consumer's lines for the target branch. Only steps whose range holds the branch's line run, and one with no range always does. The order is a chain with the consumer outermost: the method's `preEdit`, then the edge's, the edit, the edge's `postEdit`, then the method's. The consumer's `postEdit`, which regenerates derived files, sees everything a producer's steps did.
 
 Repo shapes, branch policy, line mapping and the bump model these fields express are product decisions, in [IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps).
 
@@ -60,16 +60,24 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 ## Validation
 
-`gero config validate` runs without credentials and reports every problem at once, each naming the document and field. It checks:
+`gero config validate` runs without credentials and reports every problem at once, each naming the document and field. Validation has two parts, and a config is valid when both pass.
+
+**Structure, in the config loader.**
 
 * dangling project references, and that each `release.lines` entry names a known Rancher line
-* each project-to-project edge is declared once, under the producing project's `downstream`, and names one of the consuming project's `updateMethods`
+* each project-to-project edge is declared once, under the producing project's `downstream`, and names a consumer that exists and one of its `updateMethods`
+* a method has a name and a strategy, its params have unique keys, and a key is not both fixed under `with` and offered under `allowedParams`
+* a step has a command, its `since` and `until` are lines in `RancherLines` with `since` not after `until`, and `from` is only on an edge's step (the producer's own files only for an owned project)
+* an edge's `lines` is `all` or `universal` when set
 * each line's `dates` are in order (`ga <= eom <= eol`, and an `eom` needs a `ga`), and a `phase` override, when set, is one of `development`, `ga`, `eom`, `eol`. A project's `release.lines` entry with no `branch` is accepted only while the line's derived phase is `development`, so this check depends on the date it runs
+* a `gero.yaml` in a repo contains only allowed kinds
+* repo slugs are unique
+
+**What depends on a strategy, in the update dispatcher.** Building its engine from the loaded config finds a method whose strategy does not exist, `with` values the strategy rejects (a typo, a missing file), a method that does not offer an input its strategy requires, and an edge whose params do not fit the method (an unknown param, or a required one left out). It is the same construction a run uses, so `config validate`, `gero doctor` and `gero ship` agree.
+
 * **Roles belong to relationships, not projects.** A project can be a producer on one edge and a consumer on another (for example a chart repo that consumes an operator and feeds Rancher). Project config has no `role` field; producer and consumer are derived from the edges.
 * **One action per pair of projects:** `notify` (outbound) is mutually exclusive with `trackOnly` and `react` (inbound) between the same two projects, since both would imply a circular dependency. This applies to a pair, not to a project as a whole.
 * **Edge kinds are explicit.** A `downstream` entry is a bump edge, an `External` `relationships[].action` names `trackOnly`, `react` or `notify`, and a QA test edge is added later, because the QA repo is related to others by something other than a bump.
-* a `gero.yaml` in a repo contains only allowed kinds
-* repo slugs are unique
 
 **No hard limit on graph shape beyond the pair rule.** Real workflows are complex, and artificial limits (such as banning every cycle through three or more projects) could block legitimate setups. Cycles across several projects are warnings at most. Graph traversal must be cycle-safe regardless (track visited projects).
 
@@ -78,8 +86,11 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 * Validation of a repo's `gero.yaml` (the allowed-kinds check) and of `WorkflowsConfig`.
 * Cycle warnings across several projects.
 * `gero config show --resolved`.
+* `gero doctor` checking the dispatcher's findings as `config validate` does.
+* The `chartsPackageBump` strategy, which the mock configs name.
 
 ## Open questions
 
 * Final kind and field names.
 * Whether any config other than `WorkflowsConfig` ever moves into target repos.
+* How a `yamlBump` call forms an image reference rather than a bare tag. It reads an optional `value` input, which a method offers under `allowedParams` (default `{tag}`) and an edge sets, for example `{image}:{tag}`; whether rancher's method should offer it is decided with the real config.

@@ -1,93 +1,104 @@
 # Ship (push to repo)
 
-**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`; the rest is not built. It is written ahead of the bump engine ([PHASES](../PHASES.md)) because the design decides what the first Flow A run looks like, and it is revised as that settles.
+**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`, and so is the update dispatcher it uses. The throwaway clone, the commit, the push and the PR are not built.
 
-The write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)): take a released version of a producer, edit a consumer repo on each target branch, push a branch and open or reuse a PR. The first user is `scc-operator` into `rancher/rancher`, which is today the bash in [scc-operator](../projects/scc-operator.md). The command runs in both contexts and acts as the engineer locally and as the bot in CI ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). Branch resolution, edit strategies and the config that drives them belong to the bump engine and [APP_CONFIG](APP_CONFIG.md), not here.
+`gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md). It runs in both contexts and acts as the engineer locally and as the bot in CI ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)).
+
+What a consumer edits, and how, is the consumer's update methods and the producer's downstream edges ([APP_CONFIG](APP_CONFIG.md#update-methods-and-downstream-edges)); the code that applies them is the update dispatcher (`internal/updatedispatcher`). This spec is the command around them.
 
 ## The command
 
-`gero ship [project] [tag|line]`, in both contexts, writes, honors `--dry-run`. It makes one PR for each consumer branch the release goes to; `--branch` makes it one.
+`gero ship [project] [tag|line]` makes one PR for each consumer branch the release goes to. It honors `--dry-run`.
 
-* `[project]` is the producer being shipped, found as for every command that takes a project ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)): a config name or owner/name slug, or `.` or nothing for the project the working directory is in. A lone `v0.5.3` or `v2.15` is the release, not the project.
-* The argument is a tag, used as given, or a release line, resolved to the project's latest tag in that line. With no argument, the project's latest stable tag.
-* `--prerelease` lets prereleases count: when resolving a line, and for a prerelease tag the consumer's method would refuse (`accept.when`). Without it a line resolves to its latest stable tag.
-* The consumers are the edges in the producer's `downstream`, each with the consumer's update method it names ([APP_CONFIG](APP_CONFIG.md#update-methods-and-downstream-edges)). `--to <consumer>` picks one when there are several.
-* **Which branches.** Without `--branch`, every branch of the consumer that the release goes to is checked, in config order, newest first. An edge's `lines` decides which, and an omitted one is worked out from the producer, not filled in: a **universal** source (the default for a producer that lists no `release.lines`, since its releases belong to no line) goes to every release branch of the consumer, and one that **follows lines** (the default for a producer with lines) goes to the consumer's branch for the line the release is in, found by the series of the producer's lines. A release in none of the producer's lines, or a line the consumer lacks, has no branch to go to, and the error says to name one. `--branch <target>` limits the run to that one branch of the consumer, which may be any branch it has.
-* Inputs of the script map as: the tag is the argument, the source repo comes from the project, the clone is made by `gero` (no `RANCHER_DIR`), the remote is the workspace's upstream, and `DRY_RUN` is `--dry-run`.
-* `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` (`--non-interactive`) skips the one confirmation.
+* `[project]` is the producer, found as for every command that takes a project ([CLI_FRAMEWORK](CLI_FRAMEWORK.md#2-command-tree-and-global-flags)): a config name or owner/name slug, or `.` or nothing for the project the working directory is in. A lone `v0.5.3` or `v2.15` is the release, not the project.
+* The argument is a tag, used as given, or a release line, resolved to the producer's latest tag in that line. With none, the latest stable tag. A tag is found by version, not by date.
+* `--prerelease` lets prereleases count: when resolving a line, and for a prerelease tag that the consumer's method would refuse (`accept.when` is `stable`).
+* The routes out of the producer are its `downstream` edges. `--to <consumer>` picks one consumer when there are several, and `--method` one method when it uses several of the same consumer's.
+* **Which branches.** Without `--branch`, every branch of the consumer that the release goes to is checked, in config order, newest first. The edge's `lines` decides which, and an omitted one is worked out from the producer: a **universal** edge (the default for a producer that lists no `release.lines`, since its releases belong to no line) goes to every release branch of the consumer, and one that **follows lines** (the default for a producer with lines) goes to the consumer's branch for the line the release is in. A release in no line of the producer, or a line the consumer lacks, has no branch to go to, and the error says to name one. `--branch <target>` limits the run to that one branch, which may be any branch the consumer has.
+* `--allow-downgrade` ships a release older than what a branch holds. `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` (`--non-interactive`) skips the one confirmation.
 
-**The state check comes first and writes nothing, and runs for every target.** The parts that are the same for all of them (who ships to whom, the strategy, the release, the value it should become) are resolved once, each branch is then checked on its own, and the images, which are the release's, are checked once and only when some branch needs a PR. A branch that cannot be read fails alone and the others go on, unless it was the one named with `--branch`. Before any clone or PR: resolve the tag, find the consumer and confirm the target branch exists upstream, read the consumer's current value through the strategy's reader and stop as `already up to date` when it already equals the target, refuse a **downgrade** (the release is older than the version the strategy finds in what the consumer holds, by SemVer precedence, so a release candidate is below its release and a value with no version is not judged) unless `--allow-downgrade`, check the images exist ([IMAGES_EXIST](IMAGES_EXIST.md)), and look for open PRs the new one would supersede. `--dry-run` is this check plus a rendering of the branch, title, commit message and body.
+## The state check
+
+It runs first, reads from the host and not from any clone, and writes nothing. The parts that are the same for every branch (who ships to whom, the method, the release, the images) are resolved once, and each branch is then checked on its own. A branch that cannot be read fails alone and the others go on, unless it is the one named with `--branch`.
+
+1. Resolve the release and the route, and bind the edge's params to the consumer's method.
+2. For each branch, confirm it exists and read what it holds through the method's strategy (`Check`, the read side, at the branch's head commit).
+3. Stop as **already up to date** when it already holds the value the release wants.
+4. Stop as **blocked** on a **downgrade**: the release is older than the version the strategy finds in what the branch holds, by SemVer precedence, so a release candidate is below its release and a value with no version is not judged. `--allow-downgrade` lifts it. A blocked downgrade shows only the state and the reason, as an up to date branch does, and the same reason for several branches is one line naming them.
+5. Preview what a run would write: the branch, title, labels, commit message and body.
+6. Once, if any branch needs a PR, check the release's images exist ([IMAGES_EXIST](IMAGES_EXIST.md)).
+7. Look for open PRs the new one would supersede.
+
+`--dry-run` is this check, and for the write steps it runs the same path and stops short of the first write.
+
+## Applying a bump
+
+The update dispatcher owns the lifecycle of one branch. A **strategy** is Go code that claims a name (`yamlBump`) and is listed in an explicit registry. A method configures it once with its `with` values, which the strategy checks when the config loads, and that gives an **updater**. The edge's params, checked against the method's `allowedParams` and with their defaults filled in, are the **inputs** of each call. The updater has a read side (`Check`, never writes) and a write side (`Apply`, which returns what it changed).
+
+The lifecycle around the edit is a chain with the consumer outermost: the method's `preEdit` steps, then the edge's, the edit, the edge's `postEdit` steps, then the method's. The consumer's `postEdit` regenerates derived files, so it sees everything a producer's step did. Only steps whose `since` and `until` range holds the branch's line run, and a branch in no line gets every step with no range. A step failure stops the run as an error naming the phase and position, and a failed post-edit step still reports what the edit changed.
+
+The dispatcher decides which steps run and in what order, and builds each step's environment (`GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH`, `GERO_SOURCE_REPO`, and `GERO_PARAM_<KEY>` for each input). A **step runner**, which `ship` supplies, runs the command: the process, its scrubbed environment through `execx`, and where the program comes from (`from`: the consumer's clone, the producer's repo at the release for an owned project, or the central bundle). The dispatcher starts no process, so its lifecycle is tested with a runner that records calls.
 
 ## What the scripts do today
 
-A faithful account of `push-to-rancher`, so the differences below are visible. For each target branch: fetch and check out the base, create `bot/scc-operator-<tag>-<branch>-<epoch>`, set `defaultSccOperatorImage` in `build.yaml`, run the first `//go:generate` line of `generate.go`, commit with `Automation:` and `Created-by:` trailers, push, and `gh pr create` with the label `status/auto-created`. A target whose `build.yaml` already matches is skipped. A failing target is skipped and listed at the end. Before anything, the image must exist in Docker Hub, Prime staging and, for stable tags, Prime production.
-
-CI runs it from a workflow that reads the App credentials from Vault, mints a token scoped to `rancher`, clones the target with persisted credentials and passes `GH_TOKEN` and `APP_USER`. A local run (`run-local.sh`) uses `gh auth token`, the engineer's own clone and git config, and `--remote` to name one remote.
-
-## What changes
+A faithful account of `push-to-rancher`, so the differences below are visible. For each target branch: fetch and check out the base, create `bot/scc-operator-<tag>-<branch>-<epoch>`, set `defaultSccOperatorImage` in `build.yaml`, run the first `//go:generate` line of `generate.go`, commit with `Automation:` and `Created-by:` trailers, push, and `gh pr create` with the label `status/auto-created`. A target whose `build.yaml` already matches is skipped. A failing target is skipped and listed at the end. Before anything, the image must exist in Docker Hub, Prime staging and, for stable tags, Prime production. CI runs it from a workflow that mints a token scoped to `rancher` and clones the target with persisted credentials; a local run uses `gh auth token`, the engineer's own clone and `--remote`.
 
 | Today | Here | Why |
 |---|---|---|
 | One remote fetches the base and receives the push | Fetch from `upstream`, push to the push target | A fork as the only remote means a stale base, or pushing to the upstream by necessity |
 | `gh pr create --head <branch>` | Head is `<githubUser>:<branch>` for a fork, the bare branch for the upstream | A head without an owner cannot resolve to a fork |
-| Edits in the engineer's clone (`checkout -B` resets their local branches, `checkout -f` discards uncommitted work, a dry run leaves branches behind) | A throwaway clone | A tool must not destroy local work |
+| Edits in the engineer's clone (`checkout -B` resets their branches, `checkout -f` discards uncommitted work, a dry run leaves branches behind) | A throwaway clone | A tool must not destroy local work |
 | The workflow pre-clones the target and persists credentials | `gero` clones with the token | One credential path in both contexts |
 | `bot/` prefix and an epoch suffix everywhere | Prefix follows the actor, deterministic suffix | Ownership is visible, and a rerun finds its own branch |
-| `eval` of a line read from the target's `generate.go` | A post-edit command declared in config | Nothing executable is read from a downstream repo |
+| `eval` of a line read from the target's `generate.go` | Steps declared in config, run as an argument list | Nothing executable is read from a downstream repo or run through a shell |
+| `yq`, with the key and image written in the script | A strategy that edits the value in place, configured by the consumer | The script's file, key and wording become config |
 | `docker manifest inspect` | An anonymous registry check inside `gero` | No `docker` needed on a runner or a laptop |
-| A fork guard on every step (`github.repository == ...`) | One guard, checked once | Scattered guards drift |
+| A PR per run, never reused | A marker identifies the bump, and a newer version supersedes the older PR | A rerun does not pile up PRs |
 
 ## The sequence
 
-Per target branch, in the order the bump engine resolves them, newest first:
+Per target branch, newest first:
 
-1. **Preconditions.** The artifact exists in every required registry (the set depends on whether the version is stable, [IMAGES_EXIST](IMAGES_EXIST.md)), and the target branch exists and is not frozen. A failure stops the whole fan-out before any write when it concerns the artifact, and skips only that target when it concerns the branch.
-2. **Clone.** One throwaway clone of the target repo per run, shared across branches. Objects come from a local reference to the engineer's clone where one exists, else a shallow clone. Each branch gets its own worktree.
-3. **Edit.** The named strategy (a reader and a writer over the same params. YAML keys are edited in place by `internal/yamledit`; a patch layer for other file types, and a strategy that runs a config-defined script with inputs, come when a second kind is needed), then the post-edit commands. A strategy that finds nothing to change ends the target as **already up to date**: not an error, no branch, no PR.
-4. **Commit.** Through go-git, or through `git` when the engineer has signing on ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). Commit message, trailers and identity below.
-5. **Push.** To the push target, over the credentials in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md). Fetching is from `upstream`.
-6. **PR.** Find open PRs with the same key. The same version is **already open**, and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking the new one and is closed.
-7. **Report.** One line: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
+1. **Preconditions.** The state check above. A missing artifact stops the whole fan-out before any write, and a branch problem skips only that branch.
+2. **Clone.** One throwaway clone of the consumer per run, shared by the branches, with a worktree each. Objects come from a local reference to the engineer's clone where there is one, else a shallow clone.
+3. **Edit.** The lifecycle above. Nothing to change ends the branch as **already up to date**: no branch, no PR.
+4. **Commit.** Through go-git, or through `git` when the engineer has signing on ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)).
+5. **Push.** To the push target, never forced. Fetching is from `upstream`.
+6. **PR.** Find open PRs with the same key. The same version is **already open** and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking it and is closed.
+7. **Report.** One line per branch: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
 
-`--dry-run` runs steps 1 to 4 and prints what 5 and 6 would do ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). It never pushes a branch or opens a PR, on the host or anywhere else; whatever it clones, edits and commits is in a throwaway directory that is removed afterwards, so nothing it created is left behind. The report says it was a dry run. It checks the same things a real run does (the state, the images, the preview), so it shows what a real run would do.
+`--dry-run` runs steps 1 to 4 and prints what 5 and 6 would do. It never pushes a branch or opens a PR; whatever it clones, edits and commits is in a throwaway directory that is removed afterwards. The report says it was a dry run.
 
 ## Branches and PR identity
 
-* **Name.** `<prefix><tag>-<target>`, for example `bot/scc-operator-v0.5.3-v2.15`. `<target>` is the branch with `release/` stripped, as today. No timestamp. The prefix is a template: the user's `branchPrefix` replaces the project's `pullRequests.branchPrefix` whole, which replaces the default `bot/{source}-`. The tag and target are always appended, so the name stays unique for the bump whatever prefix is chosen.
-* **Prefix follows the actor.** The engineer's `branchPrefix` ([CLI_CONFIG](CLI_CONFIG.md)) locally, `bot/` in CI, so a branch's owner shows in its name.
-* **Finding an existing PR does not use the name.** The prefix differs by actor, so a name match would miss the other actor's PR. Every PR body carries a hidden, versioned marker (additive-only fields, like the tracking issue's state block) naming `source`, `consumer`, `target` and `version`. The **overlap key** is source, consumer and target: two PRs with the same key are the same bump at two versions. The lookup lists the consumer's open PRs filtered by base branch, which keeps it small, and reads the markers. Labels are the configured ones and are not used for lookup; a label can become a search index if the list ever gets large.
-* **A newer version supersedes.** The branch is never updated or force-pushed: a new version is a new branch and a new PR, and the old open PR gets a comment linking the new one and is closed. A local run then a CI run, or the reverse, finds the same marker and does not open a second PR.
-* **Closed PRs.** A closed, unmerged PR for the same marker is not reopened and does not block a new one, since closing it was a decision. A merged one ends the target as already up to date.
+* **Name.** `<prefix><tag>-<target>`, for example `bot/scc-operator-v0.5.3-v2.15`, with `release/` stripped from the target and no timestamp. The prefix is a template: the user's `branchPrefix` replaces the consumer's `pullRequests.branchPrefix` whole, which replaces the default `bot/{source}-`. The tag and target are always appended, so the name is unique for the bump whatever the prefix.
+* **Finding a PR does not use the name**, because the prefix differs by actor. Every PR body carries a hidden, versioned marker (additive fields) naming `source`, `consumer`, `target` and `version`. The **overlap key** is source, consumer and target: two PRs with the same key are one bump at two versions. The lookup lists the consumer's open PRs for the base branch and reads the markers. Labels are the configured ones and are not used for lookup.
+* **A newer version supersedes.** A new version is a new branch and a new PR, and the old one is commented and closed. The branch is never updated or force-pushed. A closed, unmerged PR for the same marker is not reopened and does not block a new one, and a merged one ends the branch as up to date.
 
 ## Commits and the audit trail
 
-* **Templates are compiled in.** The commit message, PR body and trailers are generic templates embedded in `gero` (under `internal/ship/templates`), written with `{name}` placeholders from a closed set (`templates.TextVars`: project, source, sourceRepo, tag, version without its `v`, branch, targetBranch, consumer, sourceReleaseURL, file, from, to, marker), a strategy's own extra names where it has them, and `{changes}`, a list generated from the edits and post-edit commands that were actually made, so a body never claims a step that did not run. An unknown placeholder is a config error. Project-specific templates, and runtime templates shipped in the central bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), are not designed until a project needs one.
-* **The run record** is one line in the PR body: the engineer's login locally, or the workflow run URL in CI (`GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`). Reading the PR is enough to see which path made it.
-* **Labels, title and branch prefix** come from the consumer's `pullRequests` block (the title and prefix use the same placeholders), not from code. A label the repository lacks is a warning on the report, and the PR is still created.
+* **Templates are compiled in.** The commit message, body and trailers are generic templates in `internal/ship/templates`, written with `{name}` placeholders from a closed set (`templates.TextVars`). The body's `{changes}` is generated from what the strategy and the steps did, so it never claims a step that did not run. An unknown placeholder is a config error. Project-specific and bundle-shipped templates ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) are not designed until a project needs one.
+* **The run record** is one line in the body: the engineer's login locally, or the workflow run URL in CI.
+* **Labels, title and branch prefix** come from the consumer's `pullRequests` block. A label the repository lacks is a warning, and the PR is still created.
 * **Identity and signing** are the actor rules in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## Errors and exit codes
 
-Outcomes are typed (a closed status and reason with the step it happened in), not templated text, so wording is generic and carries config values and no project's own phrasing. The command exits 0 when the target is `updated`, `already up to date`, `already open` or `superseded`, and 1 when any target `failed` or the preconditions stopped the run. A skipped target (frozen or missing branch) is not a failure unless the consumer config marks the branch required **(leaning)**. A usage or config error is 2 ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
+Outcomes are typed, with a closed status and the step they happened in, so wording is generic and carries config values and no project's own phrasing. The command exits 0 when every branch is `updated`, `already up to date`, `already open` or `superseded`, and 1 when any branch is blocked, failed, or the preconditions stopped the run. A usage or config error is 2.
 
 ## Testing
 
-Table tests with a fake GitHub client and a local bare repository as the "remote" ([TESTING](TESTING.md), [GITHUB_ACCESS](GITHUB_ACCESS.md)). The cases that matter:
-
-* Each outcome in the report, including partial failure that leaves the other targets done.
-* The same scenario as the workstation actor and as the bot: commit identity, push target, PR head and author in the fake.
-* A local run then a CI run, and the reverse: the second finds the first's PR and does not open another.
-* A dry run changes nothing in the remote and leaves the engineer's clone's refs, index and working tree byte-for-byte as found.
-* The engineer's local `main` and uncommitted files survive a run.
+Table tests with a fake GitHub client, a local bare repository as the remote, and a step runner that records calls ([TESTING](TESTING.md)). The cases that matter: each outcome including partial failure; the same scenario as the workstation actor and as the bot; a local run then a CI run finding the first run's PR; a dry run changing nothing remote and leaving the engineer's clone byte for byte as found; and the engineer's local `main` and uncommitted files surviving a run.
 
 ## Not built yet
 
-* The write steps: the throwaway clone, the post-edit commands, the commit, the push, the PR and superseding an older one. The state check, the strategies' reader and in-place writer, the embedded templates and the preview they render are built, as is the marker's format.
-* The check for open PRs the new one would supersede, `--yes` and the confirmation.
+* The throwaway clone, the real step runner, the commit, the push, the PR and superseding an older one, with `--yes` and the confirmation.
+* The check for open PRs the new one would supersede.
+* `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
 ## Open questions
 
-* Whether engineers push to a fork or straight to the upstream today (the local script can only do the second). The design supports both through `fork` and `upstream`; which one is the default for a target is a config decision.
-* How post-edit commands such as `go generate` get a toolchain that matches the target branch in both contexts. A workstation without it fails with a `gero doctor` hint.
+* Whether engineers push to a fork or straight to the upstream today. The design supports both through `fork` and `upstream`; the default for a target is a config decision.
+* How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
 * Whether the throwaway clone should be shallow in CI when a strategy needs history.
-* The name of `--prerelease`, and whether an explicit prerelease tag needs it when `accept.when` is `stable`.
+* How a strategy that is not `yamlBump` reads its value for the downgrade check. Each defines it, and `chartsPackageBump` is not built.

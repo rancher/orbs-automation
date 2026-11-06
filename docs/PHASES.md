@@ -33,19 +33,19 @@ Until v1.0.0 the tool is not announced. From v1.0.0 only stable tags are release
 **Owner:** the author, building a foundation others can build on, plus two real flows end to end. Not announced outside the team. v1.0.0 is about **automation and tracking**, not file generation.
 
 Two flows, in order:
-* **Flow A, `scc-operator` into `rancher/rancher` (the POC).** One release line fanning out to every active Rancher branch. It exercises the bump engine, `buildYamlBump`, per-target status, the tracker and the reconciler with the fewest moving parts. Today it is a bash script triggered by a stable tag. Its job is to prove to the team that the approach is good.
-* **Flow B, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: `yamlKeyBump`, `chartsPackageBump` (the most complex strategy), `buildYamlBump`, multi-hop tracking and the tag step between hops.
+* **Flow A, `scc-operator` into `rancher/rancher` (the POC).** One release line fanning out to every active Rancher branch. It exercises the update dispatcher, `yamlBump`, per-target status, the tracker and the reconciler with the fewest moving parts. Today it is a bash script triggered by a stable tag. Its job is to prove to the team that the approach is good.
+* **Flow B, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: `yamlBump`, `chartsPackageBump` (the most complex strategy), multi-hop tracking and the tag step between hops.
 
 | Label | Work | Depends on |
 |---|---|---|
 | v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show --resolved`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for **all** repos, written and corrected up front even before each is needed | none |
 | v0.2 | **Read-only insight:** tag classification library, line resolution (`gero lines resolve`), read-only state queries with pagination and a prerelease policy, graph views | v0.1 |
-| v0.3 | **Bump engine and `buildYamlBump`:** target, branch resolution from the line map, named strategy, post-edit commands, per-consumer `pullRequests` conventions, deterministic branches, reuse of open PRs, preconditions, fan-out with per-target status. Run in dry-run beside the existing script | v0.2 |
+| v0.3 | **Update dispatcher and `yamlBump`:** target, branch resolution from the line map, named strategy, post-edit commands, per-consumer `pullRequests` conventions, deterministic branches, reuse of open PRs, preconditions, fan-out with per-target status. Run in dry-run beside the existing script | v0.2 |
 | v0.4 | **Tracking issue format:** versioned state block, read-only rendered view, labels including stale; fixture-driven tests | v0.2 |
 | v0.5 | **Reconciler:** `gero ci:reconcile` on cron, per-operation locks, backoff; observe human-pushed tags first | v0.3, v0.4 |
 | v0.6 | **Flow A runs for real** through `gero`, beside and then replacing today's script | v0.5 |
 | | **POC review with the team:** show Flow A, review the config shapes and the direction, and fold feedback in before going further | v0.6 |
-| v0.7 | **More strategies:** `yamlKeyBump` and `chartsPackageBump`, each run in dry-run beside today's scripts | POC review |
+| v0.7 | **More strategies:** `chartsPackageBump`, run in dry-run beside today's scripts | POC review |
 | v0.8 | **Multi-hop chains:** chain views and the tag step between hops, tracked in one issue | v0.7 |
 | v0.9 | **Flow B runs for real** through `gero`, plus hardening ahead of v1.0.0 | v0.8 |
 

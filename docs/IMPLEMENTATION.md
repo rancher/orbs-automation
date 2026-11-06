@@ -73,8 +73,8 @@ Evidence: [scc-operator](projects/scc-operator.md), [rancher-charts](projects/ra
 * **A downstream bump has four parts:**
   1. **Target:** repo, token reference, optional fork.
   2. **Branch resolution:** (producer version, producer line) to downstream branch, from the line map.
-  3. **Edit:** a named, idempotent strategy with parameters (file, key, package name). Semantic strategies (chart version arithmetic, `go get` plus `go generate`, index lookups) are code in the CLI. Names, keys, labels and title templates are config. One implementation per strategy, replacing the divergent per-repo copies.
-  4. **Post-edit commands:** an ordered list, with the toolchain and any required refs declared.
+  3. **Edit:** a named, idempotent strategy, configured once by the consumer as an update method (`with`: file, package name) and called by the producer's edge with params the method allows. Semantic strategies (chart version arithmetic, index lookups) are code in the CLI, claimed by name in one registry. Names, keys, labels and title templates are config. One implementation per strategy, replacing the divergent per-repo copies.
+  4. **Steps around the edit:** ordered `preEdit` and `postEdit` lists, from the consumer's method and from the edge, run as argument lists (never a shell string), each limited to the lines it applies to.
 * **PR conventions** come from a per-consumer `pullRequests` block (title, branch prefix, labels) plus a stable key for reusing an open PR. Use deterministic branch names, not epoch suffixes. Producers are standardized on the consumer's own conventions (for example the `rancher/charts` PR title format).
 * `rancher/charts`' own `auto-bump` workflows do not fit most of our use cases and are out of scope.
 * **Preconditions and fan-out.** Check that the image or release asset exists and that the target branch is not frozen before opening a PR. A fan-out to several branches reports per-target state and tolerates partial failure.
