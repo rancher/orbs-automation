@@ -115,7 +115,12 @@ Until the push is built, a run with neither flag stops after the state check and
 
 * **Name.** `<prefix><tag>-<target>`, for example `bot/scc-operator-v0.5.3-v2.15`, with `release/` stripped from the target and no timestamp. The prefix is a template: the user's `branchPrefix` replaces the consumer's `pullRequests.branchPrefix` whole, which replaces the default `bot/{source}-`. The tag and target are always appended, so the name is unique for the bump whatever the prefix.
 * **Finding a PR does not use the name**, because the prefix differs by actor. Every PR body carries a hidden, versioned marker (additive fields) naming `source`, `consumer`, `target` and `version`. The **overlap key** is source, consumer and target: two PRs with the same key are one bump at two versions. The lookup lists the consumer's open PRs for the base branch and reads the markers. Labels are the configured ones and are not used for lookup.
-* **A newer version supersedes.** A new version is a new branch and a new PR, and the old one is commented and closed. The branch is never updated or force-pushed. A closed, unmerged PR for the same marker is not reopened and does not block a new one, and a merged one ends the branch as up to date.
+* **Only your own work is touched.** A PR is *eligible* to be superseded when it has this bump's overlap key **and** was opened by the same login that is running (the engineer, or the bot in CI). A PR with the key from anyone else, a person or the CI bot, is not eligible: it is never closed, commented on or reused, and does not block a new PR. If it is the same version or newer, the report warns that it exists (`also open: #99 by rancher-bot`), since two PRs for one bump is worth knowing about.
+* **One open at a time, per actor.** A new version is a new branch and a new PR, and every eligible older PR is commented and closed, not only the latest: if several of the actor's own PRs overlap they are all stale. The branch is never updated or force-pushed. A closed, unmerged PR for the same marker is not reopened and does not block a new one, and a merged one ends the branch as up to date.
+* **The decision** for one target, from the open PRs found for its base branch:
+  * An eligible PR at the same version: **already open**. No push, no PR. Eligible PRs at older versions are still closed, each with a comment naming the open one.
+  * An eligible PR at a newer version: **blocked** for that target, naming it, since this release is the older one. Other targets go on.
+  * Eligible PRs at older versions only: **superseded**. The PR is created first, then each older PR gets a comment linking it, then is closed. The comment is made only when the new PR was created, so a failure leaves the old PRs as they were.
 
 ## Where the branch is pushed
 
@@ -166,6 +171,8 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Open questions
 
+* Whether a PR that is open at the same version but out of date (its base has moved on) should be refreshed: rebuilt from the latest head of the target and pushed with `--force-with-lease`. That is an exception to never forcing, so it would be explicit (a flag), limited to the actor's own branch and to a branch that has only our commits. Not designed.
+* Whether the default PR title should carry something that identifies the tooling. Identity is the marker, the author and, in shared repositories, a label such as `origin/bot`; a title is a project's own convention, and matching on it is fragile.
 * The names of the push-target settings (`pushTo`, `repos.overrides.<slug>.pushTo`, `pullRequests.pushTo`) and of the flag are proposals until they are built.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
 * The shape of `gero ci:ship` (above).
