@@ -56,14 +56,6 @@ func TestRepoBranchWiring(t *testing.T) {
 		assert.Contains(t, err.Error(), "2 and 3")
 	})
 
-	t.Run("the help says what it does and has --switch", func(t *testing.T) {
-		stdout, _, err := execRoot(t, "repo", "branch", "--help")
-
-		require.NoError(t, err)
-		assert.Contains(t, stdout, "--switch")
-		assert.Contains(t, stdout, "release line")
-	})
-
 	t.Run("outside any project it is the project that is missing, and nothing is printed", func(t *testing.T) {
 		t.Chdir(t.TempDir())
 
@@ -72,5 +64,14 @@ func TestRepoBranchWiring(t *testing.T) {
 		require.Error(t, err)
 		assert.NotContains(t, err.Error(), "unknown command")
 		assert.Empty(t, stdout)
+	})
+
+	// Last: cobra keeps the help flag set on the command between runs.
+	t.Run("the help says what it does and has --switch", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "branch", "--help")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "--switch")
+		assert.Contains(t, stdout, "release line")
 	})
 }

@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** implemented, except the prompt side of `internal/ui`, the standalone commands for the tasks, and a task for closing superseded PRs, and `test/integration/` (see Not built yet).
+**Status:** implemented, except the prompt side of `internal/ui`, three of the standalone commands for the tasks, a task for closing superseded PRs, and `test/integration/` (see Not built yet).
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -53,7 +53,7 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ### Tasks: single actions that compose
 
-**Status: `pushbranch`, `createpr`, `createbranch` and `bumpcommit` are built and `ship` uses them. No command runs one alone yet, and closing superseded PRs is not a task.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
+**Status: `pushbranch`, `createpr`, `createbranch` and `bumpcommit` are built and `ship` uses them. Only `createbranch` has a command that runs it alone, and closing superseded PRs is not a task.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
 
 * `createbranch`: a new branch for a project and release line, based on the upstream branch, made in the engineer's clone or in a temporary worktree of it, or an earlier branch of ours reused when it is current.
 * `bumpcommit`: apply one change set and make its commits. The change and its commits are never separated.
@@ -135,7 +135,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 ## Not built yet
 
 * The prompt side of `internal/ui` ([CLI_OUTPUT](CLI_OUTPUT.md)). `Output` and `Stream` are built.
-* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and the standalone commands that run a task alone. `pushbranch`, `createpr`, `createbranch` and `bumpcommit` are built, and have no command of their own yet.
+* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and the standalone commands for `pushbranch`, `createpr` and `bumpcommit` ([TASK_COMMANDS](TASK_COMMANDS.md)). `gero repo branch` runs `createbranch` alone.
 * Narrowing `ship.Git` and `ship.Remote` now that the tasks define what they call: both still carry every method any task needs.
 * `test/integration/` ([TESTING](TESTING.md)).
 

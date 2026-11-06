@@ -5,10 +5,17 @@ package repobranch
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"os"
+	"slices"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -45,16 +52,119 @@ type Workspace interface {
 
 // ParseArgs reads the positional arguments of gero repo branch: [project]
 // <line> <name>. With two they are the line and the name.
-func ParseArgs(_ []string) (project, line, name string) {
-	return "", "", ""
+func ParseArgs(args []string) (project, line, name string) {
+	if len(args) == 2 {
+		return "", args[0], args[1]
+	}
+	return args[0], args[1], args[2]
 }
 
 // Run makes the branch opts names, in the engineer's clone, and writes the
 // report to w in the format the settings ask for.
-func Run(_ context.Context, _ io.Writer, _ clicfg.Settings, _ string, _ Options) error {
-	return nil
+func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
+	tmp, err := os.MkdirTemp("", "gero-branch-")
+	if err != nil {
+		return fmt.Errorf("make a directory for a worktree: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, tmp, s.Output, s.DryRun, opts)
 }
 
-func run(_ context.Context, _ io.Writer, _ Workspace, _ createbranch.Git, _, _ string, _ bool, _ Options) error {
-	return nil
+func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp, format string, dryRun bool, opts Options) error {
+	if format != clicfg.OutputText && format != clicfg.OutputJSON {
+		return fmt.Errorf("output format %q is not supported by repo branch: use text or json", format)
+	}
+	project, err := ws.Project(opts.Project)
+	if err != nil {
+		return err
+	}
+	slug := project.Repo.Name
+	remote := ws.UpstreamFor(slug)
+	if remote == "" {
+		return fmt.Errorf("no upstream remote is set for %s: set upstream in the user file, or repos.overrides.%s.upstream", slug, slug)
+	}
+	target, err := lineBranch(project, opts.Line)
+	if err != nil {
+		return err
+	}
+	clone, err := ws.RepoPath(slug)
+	if err != nil {
+		return fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
+	}
+	base, err := g.Fetch(ctx, clone.Path, remote, target)
+	if err != nil {
+		return err
+	}
+	out, err := createbranch.Run(ctx, g, createbranch.Input{
+		CloneDir: clone.Path, Remote: remote, Target: target, Base: base, Branch: opts.Name, DryRun: dryRun, TempDir: tmp,
+	})
+	if errors.Is(err, createbranch.ErrBranchCheckedOut) {
+		return fmt.Errorf("%w: choose another name", err)
+	}
+	if err != nil {
+		return err
+	}
+	work := out.Work
+	// The branch stays, unless this was only to say what would be done. The
+	// checkout goes back to where it was, which is why the engineer's own work is
+	// never in the way.
+	if err := work.Finish(ctx, !dryRun); err != nil {
+		return err
+	}
+	res := Result{Project: slug, Branch: opts.Name, From: remote + "/" + target, Base: base, Existing: work.Reused, DryRun: dryRun}
+	if opts.Switch && !dryRun {
+		if err := g.Checkout(ctx, clone.Path, opts.Name); err != nil {
+			return fmt.Errorf("the branch %s is made, but switching to it failed: %w", opts.Name, err)
+		}
+		res.Switched = true
+	}
+	if format == clicfg.OutputJSON {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(res)
+	}
+	_, err = fmt.Fprint(w, render(res, len(work.Existing)))
+	return err
+}
+
+// lineBranch is the branch of the project that a release line lives on: the
+// line's own branch, or the default branch for a line that has none. A branch of
+// the project's, such as release/v2.15 or main, is taken as it is.
+func lineBranch(p config.Project, line string) (string, error) {
+	for _, l := range p.Release.Lines {
+		if strings.EqualFold(l.Line, line) {
+			branch, _ := p.Branch(l)
+			return branch, nil
+		}
+	}
+	branches := p.ReleaseBranches()
+	if slices.Contains(branches, line) {
+		return line, nil
+	}
+	var lines []string
+	for _, l := range p.Release.Lines {
+		lines = append(lines, l.Line)
+	}
+	if len(lines) == 0 {
+		lines = branches
+	}
+	return "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Repo.Name, line, strings.Join(lines, ", "))
+}
+
+// render is the report in text.
+func render(r Result, existing int) string {
+	short := r.Base[:min(len(r.Base), 8)]
+	switch {
+	case r.Existing:
+		noun := "commits"
+		if existing == 1 {
+			noun = "commit"
+		}
+		return fmt.Sprintf("%s already exists in %s with %d %s of ours on %s: nothing to do\n", r.Branch, r.Project, existing, noun, r.From)
+	case r.DryRun:
+		return fmt.Sprintf("Would create %s at %s (%s) in %s\n", r.Branch, r.From, short, r.Project)
+	case r.Switched:
+		return fmt.Sprintf("Created %s at %s (%s) in %s, and switched to it\n", r.Branch, r.From, short, r.Project)
+	}
+	return fmt.Sprintf("Created %s at %s (%s) in %s\n  git switch %s\n", r.Branch, r.From, short, r.Project, r.Branch)
 }

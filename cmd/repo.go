@@ -7,6 +7,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/branchtags"
 	"github.com/rancher/orbs-automation/internal/cli/imagesexist"
+	"github.com/rancher/orbs-automation/internal/cli/repobranch"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
 	"github.com/spf13/cobra"
@@ -79,6 +80,39 @@ read. For config and the clone alone, with no network, use repo info.`,
 			return err
 		},
 	}
+	var switchTo bool
+	branchCmd := &cobra.Command{
+		Use:   "branch [project] <line> <name>",
+		Short: "Make a branch off the upstream branch of a release line",
+		Long: `Make the branch <name> at the head of the upstream branch of a release
+line, after fetching it, in your clone of the project. The line is one of the
+Project's release lines (v2.15), or a branch of it (release/v2.15, main).
+
+Your checkout stays where it is, as git branch does, and the command says how
+to switch to the new branch. --switch moves you onto it, with git's own rules
+for uncommitted changes. A branch of the name that already holds commits of
+ours on the current head is kept as it is; one with commits that are not ours
+is never touched. With --dry-run nothing is left behind.
+
+Name a Project (its config name or its owner/name slug) before the line, else
+the repository you are in is used.`,
+		Args: cobra.RangeArgs(2, 3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			project, line, name := repobranch.ParseArgs(args)
+			return repobranch.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, repobranch.Options{
+				Project: project, Line: line, Name: name, Switch: switchTo,
+			})
+		},
+	}
+	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
 	imagesCmd := &cobra.Command{
 		Use:   "images",
 		Short: "Check the images a repository publishes",
@@ -121,6 +155,7 @@ is not found or a registry could not be reached.`,
 	repoCmd.AddCommand(
 		infoCmd,
 		statusCmd,
+		branchCmd,
 		&cobra.Command{
 			Use:   "current-tags",
 			Short: "Resolve branch and previous tags from the repository state",

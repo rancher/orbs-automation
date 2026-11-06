@@ -1,6 +1,6 @@
 # Task commands
 
-**Status:** draft. Nothing here is built. The tasks they run are ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+**Status:** draft. `gero repo branch` is built; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 
 The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an engineer who wants one part of the process and not the whole. Each runs one task and `ship` chains the same tasks, so a step behaves the same alone and inside `ship`. They are workstation commands: they act as the engineer, in the engineer's own clone, and read the same settings as `ship`.
 
@@ -15,7 +15,7 @@ The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an eng
 
 * **Project arguments** are as everywhere ([CLI_FRAMEWORK](CLI_FRAMEWORK.md#2-command-tree-and-global-flags)): the config name or `owner/name`, `.` for the project the working directory is in, and the working directory's project when none is named. In `gero repl` that is the project last changed into.
 * **The branch is never a silent guess.** Where a command acts on a branch of the engineer's, it takes the checked-out branch unless one is named (`--head` for `pr create`, `--branch` for `repo push`), and says which in the question, the dry run and the report. A detached HEAD with none named is an error that says to name one.
-* **Writes ask once, and honor `--dry-run`, `--yes` and `--json`**, as `ship` does ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). A dry run says what would be done and sends nothing. `--json` prints the task's output.
+* **A command that sends something off the machine asks once, and honors `--dry-run`, `--yes` and `--json`**, as `ship` does ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). A dry run says what would be done and sends nothing. `--json` prints the task's result. A command that changes only the local clone, `repo branch`, asks nothing, as `ship --no-push` asks nothing, and still honors `--dry-run` and `--json`.
 * **Where a branch is pushed** is `--push-to fork|upstream`, decided as in `ship`: the flag, then the settings, then the fork when one is set. It sets the `owner:branch` head of a PR and the remote of a push.
 * **Never forced.** The one replacement is of an earlier attempt's branch whose every commit is ours, and only with `--refresh`, as in `ship`.
 
@@ -23,7 +23,7 @@ The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an eng
 
 Makes the branch `<name>` at the head of the upstream branch of the release line `<line>` (`v2.15` is `release/v2.15`, found as `gero repo info` finds it), after fetching it. With two arguments they are the line and the name, with three the project comes first.
 
-By default it **leaves your checkout where it is**, as `git branch <name> <upstream>/<branch>` does, and ends by saying `git switch <name>`. `--switch` moves the checkout onto the new branch, and only when the clone is clean; otherwise it fails and says why, since a temporary worktree is no use to someone who wants to work in the branch. A branch of the name that is ours and already on the current head is kept as it is. One with commits that are not ours is an error, and one of ours that the line has moved on from is made again, as `createbranch` does for `ship`.
+By default it **leaves your checkout where it is**, as `git branch <name> <upstream>/<branch>` does, and ends by saying `git switch <name>`. `--switch` moves the checkout onto the new branch afterwards, with git's own rules for uncommitted changes, so it fails as `git switch` would. A clone with changes in it is never disturbed otherwise: the branch is made in a temporary worktree and the worktree is removed. A branch of the name that holds commits of ours on the current head is kept as it is and the report says so. One with commits that are not ours is an error that says whose, and one of ours that the line has moved on from is made again, as `createbranch` does for `ship`. With `--dry-run` the report says `Would create` and no branch is left behind. `--json` prints the project, the branch, where it was cut from and the commit.
 
 ```
 $ gero repo branch v2.15 my-fix
@@ -32,6 +32,9 @@ Created my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
 
 $ gero repo branch scc-operator main bump-deps --switch
 Created bump-deps at upstream/main (a41f02cc) in rancher/scc-operator, and switched to it
+
+$ gero repo branch v2.15 my-fix --dry-run
+Would create my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
 ```
 
 An optional `--from <ref>` for cutting the branch off something other than the head of the line, a branch or a tag, is **(leaning)** and not decided.
@@ -70,11 +73,11 @@ What it needs is not decided: which branch it commits onto (the checked-out one,
 
 ## Where the code goes
 
-Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds the dependencies, calls the task and renders its output, as for every command ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#2-layout)); none imports another command's package. The name is the task's: `repobranch`, `repopush`, `prcreate`, `shipbump`.
+Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds the dependencies, calls the task and renders its output, as for every command ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#2-layout)); none imports another command's package. The name is the command's: `repobranch`, `repopush`, `prcreate`, `shipbump`.
 
 ## Not built yet
 
-Everything.
+* `gero repo push`, `gero pr create` and `gero ship bump`.
 
 ## Open questions
 
