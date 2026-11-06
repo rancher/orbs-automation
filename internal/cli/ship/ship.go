@@ -175,6 +175,24 @@ func renderText(p domain.Plan, full bool) string {
 		}
 	}
 
+	for _, warning := range p.Warnings {
+		b.WriteString("\nWarning: " + warning + "\n")
+	}
+	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
+		fmt.Fprintf(&b, "\nWarning (%s): %s\n", strings.Join(g.branches, ", "), g.text)
+	}
+	if p.Images != nil && len(p.Images.Rows) > 0 {
+		b.WriteString("\nImages\n")
+		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		for _, r := range p.Images.Rows {
+			status := r.Status
+			if r.Detail != "" {
+				status += " (" + r.Detail + ")"
+			}
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", r.Image, r.Label, status, r.Reference)
+		}
+		_ = w.Flush()
+	}
 	if prs := previews(p); len(prs) > 0 {
 		b.WriteString("\nPR\n")
 		w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
@@ -193,24 +211,6 @@ func renderText(p domain.Plan, full bool) string {
 		}
 	}
 	writeCommits(&b, p)
-	if p.Images != nil && len(p.Images.Rows) > 0 {
-		b.WriteString("\nImages\n")
-		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-		for _, r := range p.Images.Rows {
-			status := r.Status
-			if r.Detail != "" {
-				status += " (" + r.Detail + ")"
-			}
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", r.Image, r.Label, status, r.Reference)
-		}
-		_ = w.Flush()
-	}
-	for _, warning := range p.Warnings {
-		b.WriteString("\nWarning: " + warning + "\n")
-	}
-	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
-		fmt.Fprintf(&b, "\nWarning (%s): %s\n", strings.Join(g.branches, ", "), g.text)
-	}
 	switch {
 	case p.DryRun && hasResults(p):
 		b.WriteString("\nDry run: the commits were made in temporary worktrees and removed. Nothing was pushed, and no branch or PR was created.\n")
@@ -274,7 +274,7 @@ func writeCommits(b *strings.Builder, p domain.Plan) {
 		}
 	}
 	if len(review) > 0 {
-		b.WriteString("Review:\n" + strings.Join(review, ""))
+		b.WriteString("\nReview:\n" + strings.Join(review, ""))
 	}
 }
 
