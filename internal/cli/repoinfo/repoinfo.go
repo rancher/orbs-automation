@@ -240,6 +240,13 @@ func local(ws Workspace, open Opener, slug string) LocalInfo {
 	default:
 		l.Branch, l.Commit = strings.TrimPrefix(ref, "refs/heads/"), short
 	}
+	if l.Error == "" {
+		clean, err := c.Clean()
+		l.Dirty = !clean
+		if err != nil {
+			l.Dirty, l.Error = false, err.Error()
+		}
+	}
 	return l
 }
 
@@ -329,6 +336,9 @@ func renderLocal(b *strings.Builder, l LocalInfo) {
 		}
 		if l.Commit != "" {
 			row("commit", l.Commit)
+		}
+		if l.Branch != "" && l.Error == "" {
+			row("work tree", map[bool]string{true: "changes or an operation in progress", false: "clean"}[l.Dirty])
 		}
 		if l.Error != "" {
 			row("state", "unavailable: "+l.Error)
