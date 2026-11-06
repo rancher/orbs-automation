@@ -26,10 +26,10 @@ func (p Project) IsUniversal() bool {
 }
 
 // ReleaseBranches returns the branches a release of the Project touches, once
-// each, in config order: the default branch for release.branches "single", and
+// each, in config order: the default branch for release.branching "single", and
 // the effective branch of each line (see Branch) for "perLine".
 func (p Project) ReleaseBranches() []string {
-	if p.Release.Branches != BranchesPerLine {
+	if p.Release.Branching != BranchingPerLine {
 		return []string{p.Repo.DefaultBranch}
 	}
 	var out []string
@@ -77,7 +77,7 @@ func (p Project) BranchOfLine(line string) (branch string, ok bool) {
 		if !strings.EqualFold(l.Line, line) {
 			continue
 		}
-		if p.Release.Branches == BranchesSingle {
+		if p.Release.Branching == BranchingSingle {
 			return p.Repo.DefaultBranch, true
 		}
 		b, _ := p.Branch(l)

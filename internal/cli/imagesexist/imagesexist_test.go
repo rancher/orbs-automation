@@ -213,7 +213,7 @@ func riProject() config.Project {
 	return config.Project{
 		Name: "rancher",
 		Repo: config.Repo{Name: "rancher/rancher"},
-		Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{
+		Release: config.Release{Branching: "perLine", Lines: []config.ProjectLine{
 			{Line: "v2.16"}, {Line: "v2.15"},
 		}},
 		Images: []config.Image{
@@ -260,7 +260,7 @@ func TestCheckFindsTheLineThroughTheSeries(t *testing.T) {
 	p := config.Project{
 		Name: "kuberlr-kubectl",
 		Repo: config.Repo{Name: "rancher/kuberlr-kubectl"},
-		Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{
+		Release: config.Release{Branching: "perLine", Lines: []config.ProjectLine{
 			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
 		}},
 		Images: []config.Image{{Name: "rancher/kuberlr-kubectl-new", Since: "v2.16", Registries: []string{config.RegistryDockerHub}}},

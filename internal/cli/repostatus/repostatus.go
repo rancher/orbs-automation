@@ -159,7 +159,7 @@ func gather(ctx context.Context, ws Workspace, open Opener, slugs []string) (Sta
 
 // targets lists the release branches of p, before anything is read.
 func targets(p config.Project) []Target {
-	if p.Release.Branches != config.BranchesPerLine {
+	if p.Release.Branching != config.BranchingPerLine {
 		return []Target{{Branch: p.Repo.DefaultBranch, IsDefaultBranch: true}}
 	}
 	var ts []Target

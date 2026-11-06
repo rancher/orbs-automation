@@ -8,7 +8,7 @@ spec:
     name: rancher/shell
     owned: true
   release:
-    branches: perLine
+    branching: perLine
     lines:
       - line: v2.16             # illustrative series; no branch while "development"
         version: "0.9.x"

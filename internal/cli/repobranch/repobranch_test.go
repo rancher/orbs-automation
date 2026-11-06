@@ -49,7 +49,7 @@ func newWorkspace() *fakeWorkspace {
 		project: config.Project{
 			Name: "rancher",
 			Repo: config.Repo{Name: slug, DefaultBranch: "main"},
-			Release: config.Release{Branches: config.BranchesPerLine, Lines: []config.ProjectLine{
+			Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
 				{Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}, {Line: "v2.16"},
 			}},
 		},

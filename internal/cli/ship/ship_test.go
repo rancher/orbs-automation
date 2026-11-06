@@ -49,7 +49,7 @@ func (f *fakeWorkspace) Project(string) (config.Project, error) {
 func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
 	rancher := config.Project{
 		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-		Release: config.Release{Branches: config.BranchesPerLine, Lines: []config.ProjectLine{{Line: "v2.16"}}},
+		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{{Line: "v2.16"}}},
 		UpdateMethods: []config.UpdateMethod{{
 			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
 			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},

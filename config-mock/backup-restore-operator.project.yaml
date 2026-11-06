@@ -10,7 +10,7 @@ spec:
     name: rancher/backup-restore-operator
     owned: true
   release:
-    branches: perLine
+    branching: perLine
     requiresPrerelease: true    # stable must come from a commit that already has an RC (overridable per release)
     lines:
       - line: v2.16             # illustrative series; no branch while "development"

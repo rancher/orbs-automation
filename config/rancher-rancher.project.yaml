@@ -6,7 +6,7 @@ spec:
   repo:
     name: rancher/rancher
   release:
-    branches: perLine
+    branching: perLine
     lines:
       - line: v2.16             # no branch: default branch while "development"
       - line: v2.15

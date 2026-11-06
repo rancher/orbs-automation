@@ -48,7 +48,7 @@ type Info struct {
 
 // ReleaseInfo is the Project's release policy with defaults applied.
 type ReleaseInfo struct {
-	Branches           string     `json:"branches"`
+	Branching          string     `json:"branching"`
 	TagPattern         string     `json:"tagPattern"`
 	RequiresPrerelease bool       `json:"requiresPrerelease"`
 	Lines              []LineInfo `json:"lines,omitempty"`
@@ -116,7 +116,7 @@ func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
 		Owned:         p.Repo.Owned,
 		DefaultBranch: p.Repo.DefaultBranch,
 		Release: ReleaseInfo{
-			Branches:           p.Release.Branches,
+			Branching:          p.Release.Branching,
 			TagPattern:         p.Release.TagPattern,
 			RequiresPrerelease: p.Release.RequiresPrerelease,
 		},
@@ -168,7 +168,7 @@ func renderText(i Info) string {
 	section(&b, i.Slug, func(row func(label, value string)) {
 		row("owned", yesNo(i.Owned))
 		row("default branch", i.DefaultBranch)
-		row("release branches", i.Release.Branches)
+		row("release branching", i.Release.Branching)
 		row("tag pattern", i.Release.TagPattern)
 		row("requires prerelease", yesNo(i.Release.RequiresPrerelease))
 	})

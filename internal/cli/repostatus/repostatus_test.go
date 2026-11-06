@@ -74,7 +74,7 @@ func rancherProject() config.Project {
 		Name: "rancher",
 		Repo: config.Repo{Name: "rancher/rancher", Owned: true, DefaultBranch: "main"},
 		Release: config.Release{
-			Branches: "perLine", TagPattern: "v*", RequiresPrerelease: true,
+			Branching: "perLine", TagPattern: "v*", RequiresPrerelease: true,
 			Lines: []config.ProjectLine{
 				{Line: "v2.13"}, // a development line has no branch of its own
 				{Line: "v2.12", Version: "v2.12", Branch: "release/v2.12"},
@@ -260,7 +260,7 @@ func TestStatusTagsFollowTheTagPattern(t *testing.T) {
 func TestStatusSingleBranchProject(t *testing.T) {
 	ws := fixture()
 	p := ws.projects["rancher/rancher"]
-	p.Release.Branches, p.Release.Lines = "single", nil
+	p.Release.Branching, p.Release.Lines = "single", nil
 	ws.projects["rancher/rancher"] = p
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)

@@ -34,7 +34,7 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 |---|---|
 | `repo.owned` | `false` |
 | `repo.defaultBranch` | `main` |
-| `release.branches` | `single` |
+| `release.branching` | `single` |
 | `release.tagPattern` | `"v*"` |
 | `release.requiresPrerelease` | off (opt-in) |
 | `release.lines` | `universal` |
@@ -49,7 +49,9 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `pullRequests.pushTo` | none: `fork` or `upstream`, for a repository that is only ever pushed to one way; the flag and the user's settings come first |
 | `pullRequests.botLabels` | none: applied only to a PR the bot opens, such as `origin/bot` |
 
-`release.requiresPrerelease` is off unless a project opts in. Stricter release verification is opt-in, which also leaves room for more checks later.
+`release.requiresPrerelease` is off unless a project opts in. Stricter release verification is opt-in, which also leaves room for more checks later. Nothing reads it yet: it is reserved for picking the next tag of each line once workflows produce tags, and `gero ship` does not use it.
+
+`release.branching` is the layout of the project's own release branches, not a list of them: `single` keeps every release on the default branch, whatever lines it lists, and `perLine` keeps each Rancher line on the branch its `release.lines` entry names (the default branch for a line with none). It is separate from `release.lines`, which says which version series goes with which Rancher line.
 
 Documents use `apiVersion: gero/v1alpha1` until v1.0.0 of `gero`, when the shapes are agreed and become `gero/v1`. A change to a default after that is a breaking change and bumps `apiVersion`. A future `gero config show --resolved` would print every project with defaults filled in.
 

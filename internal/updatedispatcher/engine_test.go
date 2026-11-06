@@ -11,7 +11,7 @@ import (
 func rancherProject() config.Project {
 	return config.Project{
 		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-		Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{
+		Release: config.Release{Branching: "perLine", Lines: []config.ProjectLine{
 			{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"},
 		}},
 		UpdateMethods: []config.UpdateMethod{{

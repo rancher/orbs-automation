@@ -61,7 +61,7 @@ func rancherProject() config.Project {
 		Name: "rancher",
 		Repo: config.Repo{Name: "rancher/rancher", Owned: true, DefaultBranch: "main"},
 		Release: config.Release{
-			Branches: "perLine", TagPattern: "v*", RequiresPrerelease: true,
+			Branching: "perLine", TagPattern: "v*", RequiresPrerelease: true,
 			Lines: []config.ProjectLine{
 				{Line: "v2.13"}, // a development line has no branch of its own
 				{Line: "v2.12", Version: "v2.12", Branch: "release/v2.12"},
@@ -87,7 +87,7 @@ func TestInfoConfigAndLocalState(t *testing.T) {
 	assert.Equal(t, "rancher/rancher", ws.asked)
 	assert.Equal(t, "rancher/rancher", got.Slug)
 	assert.True(t, got.Owned)
-	assert.Equal(t, "perLine", got.Release.Branches)
+	assert.Equal(t, "perLine", got.Release.Branching)
 	assert.True(t, got.Release.RequiresPrerelease)
 	assert.Equal(t, []LineInfo{
 		{Line: "v2.13", Series: "v2.13", Branch: "main", IsDefaultBranch: true},
@@ -198,7 +198,7 @@ func TestRenderTextShowsLocalError(t *testing.T) {
 func TestRenderTextSingleProjectHasNoLinesTable(t *testing.T) {
 	ws := fixture()
 	p := ws.projects["rancher/rancher"]
-	p.Release.Branches, p.Release.Lines = "single", nil
+	p.Release.Branching, p.Release.Lines = "single", nil
 	ws.projects["rancher/rancher"] = p
 	got, err := gather(ws, opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)

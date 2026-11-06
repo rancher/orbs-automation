@@ -13,7 +13,7 @@ func consumer() config.Project {
 	return config.Project{
 		Name: "rancher",
 		Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-		Release: config.Release{Branches: config.BranchesPerLine, Lines: []config.ProjectLine{
+		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
 			{Line: "v2.16"},
 			{Line: "v2.15", Branch: "release/v2.15"},
 			{Line: "v2.14", Branch: "release/v2.14"},
@@ -78,7 +78,7 @@ func TestBranchesForALineTheConsumerLacksIsAnError(t *testing.T) {
 
 func TestBranchesForAUniversalEdgeToAConsumerWithNoReleaseBranchesIsAnError(t *testing.T) {
 	r := route("")
-	r.Consumer.Release = config.Release{Branches: config.BranchesPerLine}
+	r.Consumer.Release = config.Release{Branching: config.BranchingPerLine}
 
 	_, err := r.BranchesFor(producerWithout, "")
 

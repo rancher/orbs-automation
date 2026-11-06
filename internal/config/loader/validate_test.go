@@ -18,7 +18,7 @@ func valid() config.Config {
 				Name: "a",
 				Repo: config.Repo{Name: "o/a", DefaultBranch: "main"},
 				Release: config.Release{
-					Branches:   "perLine",
+					Branching:  "perLine",
 					TagPattern: "v*",
 					Lines: []config.ProjectLine{
 						{Line: "v2.16"},
@@ -29,7 +29,7 @@ func valid() config.Config {
 			{
 				Name:    "b",
 				Repo:    config.Repo{Name: "o/b", DefaultBranch: "main"},
-				Release: config.Release{Branches: "single", TagPattern: "v*"},
+				Release: config.Release{Branching: "single", TagPattern: "v*"},
 			},
 		},
 		Externals: []config.External{{
@@ -62,7 +62,7 @@ func TestValidateProblems(t *testing.T) {
 		{"repo name with trailing slash", func(c *config.Config) { c.Projects[0].Repo.Name = "o/" }, []string{"repo.name"}},
 		{"repo name with extra path", func(c *config.Config) { c.Projects[0].Repo.Name = "a/b/c" }, []string{"repo.name"}},
 		{"empty default branch", func(c *config.Config) { c.Projects[0].Repo.DefaultBranch = "" }, []string{"repo.defaultBranch"}},
-		{"unknown release.branches", func(c *config.Config) { c.Projects[0].Release.Branches = "weekly" }, []string{"release.branches", `"weekly"`}},
+		{"unknown release.branching", func(c *config.Config) { c.Projects[0].Release.Branching = "weekly" }, []string{"release.branching", `"weekly"`}},
 		{"empty tag pattern", func(c *config.Config) { c.Projects[0].Release.TagPattern = "" }, []string{"release.tagPattern"}},
 		{"line not in RancherLines", func(c *config.Config) { c.Projects[0].Release.Lines[1].Line = "v9.9" }, []string{"release.lines[1]", "v9.9"}},
 		{"empty line", func(c *config.Config) { c.Projects[0].Release.Lines[1].Line = "" }, []string{"release.lines[1]", "line is required"}},
@@ -233,13 +233,13 @@ func TestValidateAcceptsImages(t *testing.T) {
 func TestValidateReportsEveryProblem(t *testing.T) {
 	c := valid()
 	c.Projects[0].Repo.Name = "a"
-	c.Projects[0].Release.Branches = "weekly"
+	c.Projects[0].Release.Branching = "weekly"
 	c.Externals[0].Relationships[0].Action = "watch"
 
 	err := Validate(c)
 
 	require.Error(t, err)
-	for _, w := range []string{"repo.name", "release.branches", "action"} {
+	for _, w := range []string{"repo.name", "release.branching", "action"} {
 		assert.Contains(t, err.Error(), w)
 	}
 }

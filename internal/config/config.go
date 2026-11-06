@@ -54,7 +54,7 @@ type Image struct {
 
 // Release is the project's release policy.
 type Release struct {
-	Branches           string        `yaml:"branches"` // single or perLine
+	Branching          string        `yaml:"branching"` // how its release branches are laid out: single (one branch) or perLine (one for each Rancher line)
 	TagPattern         string        `yaml:"tagPattern"`
 	RequiresPrerelease bool          `yaml:"requiresPrerelease"`
 	Lines              []ProjectLine `yaml:"lines"`

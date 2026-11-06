@@ -125,7 +125,7 @@ func (v *validator) images(where string, p config.Project, phases map[string]str
 func (v *validator) project(p config.Project, phases map[string]string, haveLines bool) {
 	where := fmt.Sprintf("Project %q", p.Name)
 	v.repo(where, p.Repo)
-	v.oneOf(where, "release.branches", p.Release.Branches, config.BranchesSingle, config.BranchesPerLine)
+	v.oneOf(where, "release.branching", p.Release.Branching, config.BranchingSingle, config.BranchingPerLine)
 	if p.Release.TagPattern == "" {
 		v.add("%s: release.tagPattern is required", where)
 	}

@@ -23,7 +23,7 @@ func TestWithDefaultsFillsOmittedFields(t *testing.T) {
 		Projects: []config.Project{{
 			Name:          "a",
 			Repo:          config.Repo{Name: "o/a", DefaultBranch: "main"},
-			Release:       config.Release{Branches: "single", TagPattern: "v*"},
+			Release:       config.Release{Branching: "single", TagPattern: "v*"},
 			UpdateMethods: []config.UpdateMethod{{Name: "m", Accept: config.Accept{When: "stable"}}},
 		}},
 		Externals: []config.External{{Name: "x", Repo: config.Repo{Name: "t/x", DefaultBranch: "main"}}},
@@ -34,7 +34,7 @@ func TestWithDefaultsKeepsExplicitValues(t *testing.T) {
 	c := config.Config{Projects: []config.Project{{
 		Name:          "a",
 		Repo:          config.Repo{Name: "o/a", Owned: true, DefaultBranch: "dev"},
-		Release:       config.Release{Branches: "perLine", TagPattern: "v2.*", RequiresPrerelease: true},
+		Release:       config.Release{Branching: "perLine", TagPattern: "v2.*", RequiresPrerelease: true},
 		UpdateMethods: []config.UpdateMethod{{Name: "m", Accept: config.Accept{When: "all"}}},
 	}}}
 

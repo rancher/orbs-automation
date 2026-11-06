@@ -37,7 +37,7 @@ func TestConfigLoadsAndAppliesDefaults(t *testing.T) {
 	require.Len(t, got.Projects, 1)
 	assert.Equal(t, "a", got.Projects[0].Name)
 	assert.Equal(t, "main", got.Projects[0].Repo.DefaultBranch, "defaults are applied")
-	assert.Equal(t, "single", got.Projects[0].Release.Branches)
+	assert.Equal(t, "single", got.Projects[0].Release.Branching)
 }
 
 func TestConfigFindsTheCentralCheckoutInTheWorkingDirectory(t *testing.T) {

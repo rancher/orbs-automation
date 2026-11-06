@@ -113,7 +113,7 @@ func riLink(strategy string) link {
 	return link{
 		Consumer: config.Project{
 			Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-			Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{{Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}},
+			Release: config.Release{Branching: "perLine", Lines: []config.ProjectLine{{Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}},
 		},
 		Method: config.UpdateMethod{
 			Name: "build-yaml-bump", Strategy: strategy,
@@ -589,7 +589,7 @@ func TestCheckAnExplicitUniversalAcceptFeedsEveryBranchWhateverTheProducerHas(t 
 func TestCheckAConsumerWithNoReleaseBranchesHasNoTarget(t *testing.T) {
 	ws := loopFixture()
 	c := ws.links[0]
-	c.Consumer.Release = config.Release{Branches: config.BranchesPerLine}
+	c.Consumer.Release = config.Release{Branching: config.BranchingPerLine}
 	ws.links[0] = c
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
 	assert.ErrorIs(t, err, ErrNoTargets)
@@ -598,7 +598,7 @@ func TestCheckAConsumerWithNoReleaseBranchesHasNoTarget(t *testing.T) {
 func TestCheckASingleBranchConsumerTakesEveryReleaseOnItsDefaultBranch(t *testing.T) {
 	ws := loopFixture()
 	c := ws.links[0]
-	c.Consumer.Release = config.Release{Branches: config.BranchesSingle}
+	c.Consumer.Release = config.Release{Branching: config.BranchingSingle}
 	ws.links[0] = c
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
 	require.NoError(t, err)
@@ -631,7 +631,7 @@ func TestCheckNamesEachTargetByItsRancherLine(t *testing.T) {
 	onALine, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	single := fixture()
-	single.links[0].Consumer.Release = config.Release{Branches: config.BranchesSingle}
+	single.links[0].Consumer.Release = config.Release{Branching: config.BranchingSingle}
 	inNoLine, err := Check(ctx, single, &fakeProber{}, Input{Project: "scc-operator"})
 	require.NoError(t, err)
 	require.Len(t, inNoLine.Targets, 1)

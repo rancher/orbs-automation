@@ -10,7 +10,7 @@ spec:
     name: rancher/kuberlr-kubectl
     owned: true
   release:
-    branches: perLine
+    branching: perLine
     lines:
       - line: v2.16             # no branch: default branch while v2.16 is "development"
         version: "9.x"

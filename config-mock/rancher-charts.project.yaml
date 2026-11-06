@@ -7,7 +7,7 @@ spec:
   repo:
     name: rancher/charts
   release:
-    branches: perLine
+    branching: perLine
     lines:
       - line: v2.16
         branch: dev-v2.16

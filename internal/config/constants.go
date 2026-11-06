@@ -2,8 +2,8 @@ package config
 
 // The values an enumerated field may take (config/README.md).
 const (
-	BranchesSingle  = "single"
-	BranchesPerLine = "perLine"
+	BranchingSingle  = "single"
+	BranchingPerLine = "perLine"
 
 	AcceptStable = "stable"
 	AcceptAll    = "all"

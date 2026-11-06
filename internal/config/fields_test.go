@@ -35,7 +35,7 @@ var fieldClasses = map[string]string{
 	"Repo.Owned":         "plain",
 	"Repo.DefaultBranch": "default",
 
-	"Release.Branches":           "default",
+	"Release.Branching":          "default",
 	"Release.TagPattern":         "default",
 	"Release.RequiresPrerelease": "plain",
 	"Release.Lines":              "resolved:Project.IsUniversal",

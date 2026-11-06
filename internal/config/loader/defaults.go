@@ -7,7 +7,7 @@ import "github.com/rancher/orbs-automation/internal/config"
 // must be written out.
 const (
 	DefaultBranch     = "main"
-	DefaultBranches   = config.BranchesSingle
+	DefaultBranching  = config.BranchingSingle
 	DefaultTagPattern = "v*"
 	DefaultAcceptWhen = config.AcceptStable
 )
@@ -22,7 +22,7 @@ func WithDefaults(c config.Config) config.Config {
 
 func projectDefaults(p config.Project) config.Project {
 	p.Repo = repoDefaults(p.Repo)
-	p.Release.Branches = orDefault(p.Release.Branches, DefaultBranches)
+	p.Release.Branching = orDefault(p.Release.Branching, DefaultBranching)
 	p.Release.TagPattern = orDefault(p.Release.TagPattern, DefaultTagPattern)
 	p.UpdateMethods = mapSlice(p.UpdateMethods, methodDefaults)
 	return p

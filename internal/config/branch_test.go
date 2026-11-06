@@ -41,15 +41,15 @@ func TestProjectReleaseBranches(t *testing.T) {
 	}
 
 	t.Run("single is the default branch, whatever the lines say", func(t *testing.T) {
-		p := Project{Repo: repo, Release: Release{Branches: BranchesSingle, Lines: lines}}
+		p := Project{Repo: repo, Release: Release{Branching: BranchingSingle, Lines: lines}}
 		assert.Equal(t, []string{"main"}, p.ReleaseBranches())
 	})
 	t.Run("perLine is each line's effective branch, once each", func(t *testing.T) {
-		p := Project{Repo: repo, Release: Release{Branches: BranchesPerLine, Lines: lines}}
+		p := Project{Repo: repo, Release: Release{Branching: BranchingPerLine, Lines: lines}}
 		assert.Equal(t, []string{"main", "release/v2.15", "release/v2.14"}, p.ReleaseBranches())
 	})
 	t.Run("perLine with no lines is empty", func(t *testing.T) {
-		p := Project{Repo: repo, Release: Release{Branches: BranchesPerLine}}
+		p := Project{Repo: repo, Release: Release{Branching: BranchingPerLine}}
 		assert.Empty(t, p.ReleaseBranches())
 	})
 }
@@ -75,8 +75,8 @@ func TestProjectLineOf(t *testing.T) {
 func TestProjectBranchOfLine(t *testing.T) {
 	repo := Repo{Name: "o/a", DefaultBranch: "main"}
 	lines := []ProjectLine{{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"}}
-	perLine := Project{Repo: repo, Release: Release{Branches: BranchesPerLine, Lines: lines}}
-	single := Project{Repo: repo, Release: Release{Branches: BranchesSingle, Lines: lines}}
+	perLine := Project{Repo: repo, Release: Release{Branching: BranchingPerLine, Lines: lines}}
+	single := Project{Repo: repo, Release: Release{Branching: BranchingSingle, Lines: lines}}
 
 	for line, want := range map[string]string{"v2.15": "release/v2.15", "2.15": "release/v2.15", "v2.16": "main"} {
 		got, ok := perLine.BranchOfLine(line)
