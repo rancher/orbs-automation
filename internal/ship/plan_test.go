@@ -617,3 +617,15 @@ func TestCheckADryRunChecksTheSameThings(t *testing.T) {
 	assert.NotNil(t, got.Images)
 	assert.NotNil(t, got.Targets[0].Preview)
 }
+
+func TestCheckNamesEachTargetByItsRancherLine(t *testing.T) {
+	ws := fixture()
+
+	onALine, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
+	require.NoError(t, err)
+	inNoLine, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
+	require.NoError(t, err)
+
+	assert.Equal(t, "v2.15", onALine.Targets[0].Line, "a line means the same in every project, which a branch does not")
+	assert.Empty(t, inNoLine.Targets[0].Line, "a branch that is in no line has none, and is named by its branch")
+}

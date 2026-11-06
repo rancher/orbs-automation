@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -175,4 +176,41 @@ func TestShipTargetsThatCouldNotBeReadAreStillReported(t *testing.T) {
 	require.Len(t, checked, 2, "a failed target is an event too")
 	require.NotNil(t, checked[1].Target)
 	assert.Equal(t, StatusFailed, checked[1].Target.Status)
+}
+
+func TestShipEveryEventAboutATargetNamesItsLineAndAPushNamesTheBranch(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
+	rec := &recording{}
+
+	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, rec)
+
+	require.NoError(t, err)
+	about := map[EventKind]bool{
+		EventTargetChecked: true, EventDecided: true, EventTargetStarted: true, EventCommit: true,
+		EventPushed: true, EventPROpened: true, EventSuperseded: true, EventTargetDone: true,
+	}
+	seen := map[EventKind]bool{}
+	for _, e := range rec.events {
+		if about[e.Kind] {
+			seen[e.Kind] = true
+			assert.Equal(t, "v2.15", e.Line, "%s names the line of release/v2.15", e.Kind)
+			assert.Equal(t, "release/v2.15", e.Branch, "and still the branch")
+		}
+	}
+	assert.Len(t, seen, len(about), "every kind was emitted: %v", rec.kinds())
+	assert.Equal(t, botV215, rec.first(t, EventPushed).NewBranch, "which branch was pushed")
+}
+
+func TestShipARefreshEventsNameTheLineToo(t *testing.T) {
+	ws, _, ex, _, _, in := refreshing(t)
+	withGenerate(ws)
+	rec := &recording{}
+
+	_, err := Ship(bg, ws, &fakeProber{}, in, ex, rec)
+
+	require.NoError(t, err)
+	refreshed := rec.first(t, EventRefreshed)
+	assert.Equal(t, "v2.15", refreshed.Line)
+	assert.Equal(t, botV215, rec.first(t, EventPushed).NewBranch)
 }
