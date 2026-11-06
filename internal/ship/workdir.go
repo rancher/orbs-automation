@@ -2,13 +2,10 @@ package ship
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"path/filepath"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/task/createbranch"
 	"github.com/rancher/orbs-automation/internal/workdir"
 )
 
@@ -33,18 +30,11 @@ const (
 // BranchCommit is a commit on a branch, as far as telling whose it is.
 type BranchCommit = git.BranchCommit
 
+// What went wrong in making a branch, as the createbranch task says it.
 var (
-	// ErrBaseMoved is returned by Prepare when the branch fetched from the
-	// remote is not at the commit the state check read: the check has to be read
-	// again before anything is written.
-	ErrBaseMoved = errors.New("the target branch moved since it was checked")
-	// ErrBranchExists is returned by Prepare when the new branch's name is taken
-	// by a branch that holds commits of its own, which are the engineer's to keep.
-	ErrBranchExists = errors.New("the branch already exists with commits of its own")
-	// ErrBranchCheckedOut is returned by Prepare when the new branch's name is
-	// the branch the clone has checked out, so it can be neither replaced nor
-	// moved away from.
-	ErrBranchCheckedOut = errors.New("the branch is checked out in the clone")
+	ErrBaseMoved        = createbranch.ErrBaseMoved
+	ErrBranchExists     = createbranch.ErrBranchExists
+	ErrBranchCheckedOut = createbranch.ErrBranchCheckedOut
 )
 
 // Git is what preparing, committing in and cleaning up a work directory needs
@@ -163,108 +153,13 @@ func (GitCLI) Discard(ctx context.Context, dir string, created []string) error {
 }
 
 // PrepareRequest says which branch to prepare, and from what.
-type PrepareRequest struct {
-	CloneDir string // the engineer's clone of the consumer
-	Remote   string // the remote the target branch is fetched from
-	Target   string // the consumer branch the bump goes to, such as release/v2.15
-	Base     string // the commit of Target the state check read
-	Branch   string // the new branch to create
-	DryRun   bool   // never move the checkout
-	TempDir  string // where a worktree goes
-	// Rebuild builds the branch again even when one of ours is there and current.
-	Rebuild bool
-}
+type PrepareRequest = createbranch.Input
 
-// Prepare fetches the target branch and creates the new branch at the commit
-// the state check read, in place or in a worktree as ChoosePlace says. It
-// creates nothing when it fails.
+// Prepare makes the new branch with the createbranch task, in place or in a
+// worktree. It creates nothing when it fails.
 func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
-	st, err := g.State(ctx, req.CloneDir)
-	if err != nil {
-		return nil, fmt.Errorf("read the state of %s: %w", req.CloneDir, err)
-	}
-	head, err := g.Fetch(ctx, req.CloneDir, req.Remote, req.Target)
-	if err != nil {
-		return nil, err
-	}
-	if head != req.Base {
-		return nil, fmt.Errorf("%w: %s is at %s, and it was checked at %s", ErrBaseMoved, req.Target, short(head), short(req.Base))
-	}
-	if st.Branch == req.Branch {
-		return nil, fmt.Errorf("%w: %s", ErrBranchCheckedOut, req.Branch)
-	}
-	if commit, found, err := g.BranchCommit(ctx, req.CloneDir, req.Branch); err != nil {
-		return nil, err
-	} else if found {
-		reused, err := settleExisting(ctx, g, req, commit)
-		if err != nil {
-			return nil, err
-		}
-		if reused != nil {
-			return reused, nil
-		}
-	}
-	collisions, err := g.Collisions(ctx, req.CloneDir, req.Base, st.Untracked)
-	if err != nil {
-		return nil, err
-	}
-	choice := workdir.ChoosePlace(workdir.CloneState{Branch: st.Branch, InProgress: st.InProgress, Tracked: st.Tracked, Collisions: collisions}, req.DryRun)
-	var w *Work
-	switch choice.Place {
-	case InPlace:
-		if err := g.StartBranch(ctx, req.CloneDir, req.Branch, req.Base); err != nil {
-			return nil, err
-		}
-		w = workdir.NewInPlace(g, req.CloneDir, req.Branch, st.Branch, st.Untracked)
-	default:
-		dir := filepath.Join(req.TempDir, strings.ReplaceAll(req.Branch, "/", "-"))
-		if err := g.AddWorktree(ctx, req.CloneDir, dir, req.Branch, req.Base); err != nil {
-			return nil, err
-		}
-		w = workdir.NewInWorktree(g, req.CloneDir, dir, req.Branch, choice.Reason)
-	}
-	return w, nil
-}
-
-// settleExisting decides what to do about a branch of the name that is already
-// there, at commit. One that is at the base itself holds nothing, and goes. One
-// whose commits are all ours (see git.CommitsAreOurs) is the actor's own earlier work:
-// when it is based on the current head of the target it is reused as it is, which
-// is also how a run whose push failed is resumed, and otherwise, or when a rebuild
-// was asked for, it goes and is built again. One with a commit that is not ours is
-// an error, since those commits are somebody's to keep. A nil Work with no error
-// says to go on and build.
-func settleExisting(ctx context.Context, g Git, req PrepareRequest, commit string) (*Work, error) {
-	if commit != req.Base {
-		mergeBase, err := g.MergeBase(ctx, req.CloneDir, req.Base, commit)
-		if err != nil {
-			return nil, fmt.Errorf("compare the branch %s with %s: %w", req.Branch, req.Target, err)
-		}
-		facts, err := g.CommitsSince(ctx, req.CloneDir, mergeBase, commit)
-		if err != nil {
-			return nil, err
-		}
-		email, err := g.Config(ctx, req.CloneDir, "user.email")
-		if err != nil {
-			return nil, err
-		}
-		if ours, why := git.CommitsAreOurs(facts, email); !ours {
-			return nil, fmt.Errorf("%w: %s is at %s, and %s: delete it or keep it, it is not ours to change", ErrBranchExists, req.Branch, short(commit), why)
-		}
-		if mergeBase == req.Base && !req.Rebuild {
-			existing := make([]CommitInfo, len(facts))
-			for i, f := range facts {
-				subject, _, _ := strings.Cut(f.Message, "\n")
-				existing[i] = CommitInfo{Hash: f.Hash, Subject: subject}
-			}
-			return workdir.NewExisting(g, req.CloneDir, req.Branch, existing), nil
-		}
-	}
-	// At the base, or ours and out of date, or to be rebuilt: nothing is lost.
-	if err := g.DeleteBranch(ctx, req.CloneDir, req.Branch); err != nil {
-		return nil, err
-	}
-	return nil, nil
+	out, err := createbranch.Run(ctx, g, req)
+	return out.Work, err
 }
 
 // short abbreviates a commit for a message.

@@ -7,6 +7,9 @@ package createbranch
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/workdir"
@@ -60,7 +63,100 @@ type Git interface {
 	Config(ctx context.Context, dir, key string) (string, error)
 }
 
-// Run makes the branch. TODO: the stub does nothing yet.
-func Run(_ context.Context, _ Git, _ Input) (Output, error) {
-	return Output{}, nil
+// Run fetches the target branch and makes the new branch at the commit the
+// caller read, in place or in a worktree as workdir.ChoosePlace says. A branch of
+// the name that is already there is settled first (see settleExisting). It makes
+// nothing when it fails.
+func Run(ctx context.Context, g Git, in Input) (Output, error) {
+	st, err := g.State(ctx, in.CloneDir)
+	if err != nil {
+		return Output{}, fmt.Errorf("read the state of %s: %w", in.CloneDir, err)
+	}
+	head, err := g.Fetch(ctx, in.CloneDir, in.Remote, in.Target)
+	if err != nil {
+		return Output{}, err
+	}
+	if head != in.Base {
+		return Output{}, fmt.Errorf("%w: %s is at %s, and it was checked at %s", ErrBaseMoved, in.Target, shortHash(head), shortHash(in.Base))
+	}
+	if st.Branch == in.Branch {
+		return Output{}, fmt.Errorf("%w: %s", ErrBranchCheckedOut, in.Branch)
+	}
+	if commit, found, err := g.BranchCommit(ctx, in.CloneDir, in.Branch); err != nil {
+		return Output{}, err
+	} else if found {
+		reused, err := settleExisting(ctx, g, in, commit)
+		if err != nil {
+			return Output{}, err
+		}
+		if reused != nil {
+			return Output{Work: reused}, nil
+		}
+	}
+	collisions, err := g.Collisions(ctx, in.CloneDir, in.Base, st.Untracked)
+	if err != nil {
+		return Output{}, err
+	}
+	choice := workdir.ChoosePlace(workdir.CloneState{Branch: st.Branch, InProgress: st.InProgress, Tracked: st.Tracked, Collisions: collisions}, in.DryRun)
+	var w *workdir.Work
+	switch choice.Place {
+	case workdir.InPlace:
+		if err := g.StartBranch(ctx, in.CloneDir, in.Branch, in.Base); err != nil {
+			return Output{}, err
+		}
+		w = workdir.NewInPlace(g, in.CloneDir, in.Branch, st.Branch, st.Untracked)
+	default:
+		dir := filepath.Join(in.TempDir, strings.ReplaceAll(in.Branch, "/", "-"))
+		if err := g.AddWorktree(ctx, in.CloneDir, dir, in.Branch, in.Base); err != nil {
+			return Output{}, err
+		}
+		w = workdir.NewInWorktree(g, in.CloneDir, dir, in.Branch, choice.Reason)
+	}
+	return Output{Work: w}, nil
+}
+
+// settleExisting decides what to do about a branch of the name that is already
+// there, at commit. One that is at the base itself holds nothing, and goes. One
+// whose commits are all ours (see git.CommitsAreOurs) is the actor's own earlier work:
+// when it is based on the current head of the target it is reused as it is, which
+// is also how a run whose push failed is resumed, and otherwise, or when a rebuild
+// was asked for, it goes and is built again. One with a commit that is not ours is
+// an error, since those commits are somebody's to keep. A nil Work with no error
+// says to go on and build.
+func settleExisting(ctx context.Context, g Git, in Input, commit string) (*workdir.Work, error) {
+	if commit != in.Base {
+		mergeBase, err := g.MergeBase(ctx, in.CloneDir, in.Base, commit)
+		if err != nil {
+			return nil, fmt.Errorf("compare the branch %s with %s: %w", in.Branch, in.Target, err)
+		}
+		facts, err := g.CommitsSince(ctx, in.CloneDir, mergeBase, commit)
+		if err != nil {
+			return nil, err
+		}
+		email, err := g.Config(ctx, in.CloneDir, "user.email")
+		if err != nil {
+			return nil, err
+		}
+		if ours, why := git.CommitsAreOurs(facts, email); !ours {
+			return nil, fmt.Errorf("%w: %s is at %s, and %s: delete it or keep it, it is not ours to change", ErrBranchExists, in.Branch, shortHash(commit), why)
+		}
+		if mergeBase == in.Base && !in.Rebuild {
+			existing := make([]workdir.CommitInfo, len(facts))
+			for i, f := range facts {
+				subject, _, _ := strings.Cut(f.Message, "\n")
+				existing[i] = workdir.CommitInfo{Hash: f.Hash, Subject: subject}
+			}
+			return workdir.NewExisting(g, in.CloneDir, in.Branch, existing), nil
+		}
+	}
+	// At the base, or ours and out of date, or to be rebuilt: nothing is lost.
+	if err := g.DeleteBranch(ctx, in.CloneDir, in.Branch); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+// shortHash abbreviates a commit for a message.
+func shortHash(commit string) string {
+	return commit[:min(len(commit), 8)]
 }
