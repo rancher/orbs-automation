@@ -459,13 +459,6 @@ func TestRunPassesNoPushToThePlanExceptInADryRun(t *testing.T) {
 	}
 }
 
-func TestWantsCommitsOnlyForNoPushAndDryRun(t *testing.T) {
-	assert.False(t, wantsCommits(false, Options{}), "a plain run only checks until the push is built")
-	assert.True(t, wantsCommits(false, Options{NoPush: true}))
-	assert.True(t, wantsCommits(true, Options{}))
-	assert.True(t, wantsCommits(true, Options{NoPush: true}))
-}
-
 func TestRunWithAnExecutorAndNoCloneReportsThePlanAndTheError(t *testing.T) {
 	ws := readyWorkspace()
 	ws.cloneErr = errors.New("rancher/rancher: clone it under a repos.search directory")

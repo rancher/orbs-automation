@@ -40,13 +40,20 @@ has the release is reported as already up to date.
 It shows the branch, title and labels the PR would have; --preview adds the
 commit message and body.
 
-A plain run only checks for now: pushing and opening the PR are not built.
---no-push and --dry-run go further and make the commit for each branch that
-needs one, in your own clone of the consumer (found as gero cd finds it): on a
-new branch when the clone is clean and on a branch, else in a temporary
-worktree that leaves your checkout alone. --no-push keeps the branch for you to
-review. --dry-run always uses a worktree and removes it and the branch
-afterwards; with both flags it is a dry run.`,
+For each branch that needs a PR it works in your own clone of the consumer
+(found as gero cd finds it): on a new branch when the clone is clean and on a
+branch, else in a temporary worktree that leaves your checkout alone. It
+commits the edit and then each step that changed files. Before it writes
+anything it looks at the open PRs of each branch and asks once: it pushes the
+branch to the fork or the upstream (--push-to, else your settings, else the fork
+when you have one) and opens the PR, and closes your own older PRs for the same
+bump, with a comment. PRs by anyone else are never touched. --yes goes on
+without asking, and is needed where there is no terminal.
+
+--no-push stops after the commits and keeps the branches in your clone for
+review, without contacting GitHub. --dry-run does everything but write: it uses a
+worktree, removes it and the branch, and says what it would push, open and close;
+with both flags it is a dry run.`,
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -60,6 +67,7 @@ afterwards; with both flags it is a dry run.`,
 			in.Project, in.Arg = ship.ParseArgs(args)
 			s := settingsFrom(cmd)
 			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
+			in.In, in.Interactive = cmd.InOrStdin(), isTerminal(os.Stdin)
 			return ship.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
 		},
 	}
@@ -70,6 +78,8 @@ afterwards; with both flags it is a dry run.`,
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")
 	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
+	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
 	rootCmd.AddCommand(shipCmd)
 }

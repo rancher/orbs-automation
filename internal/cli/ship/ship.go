@@ -17,6 +17,7 @@ import (
 	"slices"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/github"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/steprun"
@@ -44,6 +45,12 @@ type Options struct {
 	NoPush bool
 	// PushTo is --push-to: fork or upstream, to override the settings.
 	PushTo string
+	// Yes is --yes: go on without asking. Interactive says In is a terminal that
+	// the question can be asked on; without it and without Yes a run that writes
+	// is an error.
+	Yes         bool
+	Interactive bool
+	In          io.Reader
 }
 
 // ParseArgs reads the positional arguments of gero ship: [project] [tag|line].
@@ -69,22 +76,40 @@ var release = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){1,2}([-+].*)?$`)
 
 func looksLikeARelease(s string) bool { return release.MatchString(s) }
 
-// Run checks the state of shipping what opts names and, for --no-push and
-// --dry-run, makes the commits, writing the report to w as it goes in text and as
-// one document at the end in json. The report is written even when the error
-// returned is ErrBlocked or ErrFailed.
+// Run ships what opts names: it checks the state, makes the commits and, unless
+// --no-push or --dry-run, pushes them and opens the PRs after asking once. The
+// report is written to w as it goes in text and as one document at the end in
+// json, and it is written even when the error returned is ErrBlocked, ErrFailed
+// or ErrDeclined.
 func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, cwd string, opts Options) error {
 	if err := checkFormat(s.Output); err != nil {
 		return err
 	}
-	var ex *domain.Executor
-	if wantsCommits(s.DryRun, opts) {
-		tmp, err := os.MkdirTemp("", "gero-ship-")
-		if err != nil {
-			return fmt.Errorf("make a directory for worktrees: %w", err)
+	tmp, err := os.MkdirTemp("", "gero-ship-")
+	if err != nil {
+		return fmt.Errorf("make a directory for worktrees: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(tmp) }()
+	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp}
+	if !opts.NoPush {
+		creds, err := github.Resolve(github.GoGh{}, "")
+		switch {
+		case err == nil:
+			remote, err := newRemote(creds, s)
+			if err != nil {
+				return err
+			}
+			ex.Publish = &domain.Publisher{Git: domain.GitCLI{}, Remote: remote}
+			ex.Confirm = confirmer(opts.In, w, opts.Interactive, opts.Yes)
+		case s.DryRun && errors.Is(err, github.ErrNoToken):
+			// A dry run can still say what it would commit; it just cannot look at
+			// the open PRs without a token.
+			if log != nil {
+				log.Warn("no GitHub token, so the open PRs were not looked at", "error", err)
+			}
+		default:
+			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
 		}
-		defer func() { _ = os.RemoveAll(tmp) }()
-		ex = &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp}
 	}
 	return runTo(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, inputFrom(s, opts), opts.Preview)
 }
@@ -105,11 +130,6 @@ func checkFormat(format string) error {
 	}
 	return nil
 }
-
-// wantsCommits reports whether the run is to make commits: it does with
-// --no-push, and with --dry-run, which makes them in a worktree and removes
-// them. A plain run only checks until the push is built.
-func wantsCommits(dryRun bool, opts Options) bool { return dryRun || opts.NoPush }
 
 // runWith is runTo, with the report returned as a string.
 func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input) (string, error) {
