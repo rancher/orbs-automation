@@ -73,15 +73,15 @@ func split(slug string) (owner, name string, err error) {
 }
 
 // OpenForBase lists the open pull requests that target base, newest first, up to
-// max of them (DefaultMax when it is 0). It does not read them all: more than max
-// is Truncated.
-func (s *Service) OpenForBase(ctx context.Context, slug, base string, max int) (Open, error) {
+// limit of them (DefaultMax when it is 0). It does not read them all: more than
+// limit is Truncated.
+func (s *Service) OpenForBase(ctx context.Context, slug, base string, limit int) (Open, error) {
 	owner, name, err := split(slug)
 	if err != nil {
 		return Open{}, err
 	}
-	if max <= 0 {
-		max = DefaultMax
+	if limit <= 0 {
+		limit = DefaultMax
 	}
 	opts := &gogithub.PullRequestListOptions{
 		State: "open", Base: base, Sort: "created", Direction: "desc",
@@ -96,9 +96,9 @@ func (s *Service) OpenForBase(ctx context.Context, slug, base string, max int) (
 		for _, p := range page {
 			out.PRs = append(out.PRs, convert(p))
 		}
-		if len(out.PRs) >= max {
-			out.Truncated = len(out.PRs) > max || resp.NextPage != 0
-			out.PRs = out.PRs[:max]
+		if len(out.PRs) >= limit {
+			out.Truncated = len(out.PRs) > limit || resp.NextPage != 0
+			out.PRs = out.PRs[:limit]
 			return out, nil
 		}
 		if resp.NextPage == 0 {
@@ -134,9 +134,9 @@ func (s *Service) Create(ctx context.Context, slug string, in NewPR) (PR, error)
 	if err != nil {
 		return PR{}, err
 	}
+	title, body, draft := in.Title, in.Body, in.Draft
 	created, _, err := s.client.PullRequests.Create(ctx, owner, name, gogithub.CreatePullRequest{
-		Title: gogithub.Ptr(in.Title), Body: gogithub.Ptr(in.Body), Head: in.Head,
-		Base: in.Base, Draft: gogithub.Ptr(in.Draft),
+		Title: &title, Body: &body, Head: in.Head, Base: in.Base, Draft: &draft,
 	})
 	if err != nil {
 		return PR{}, fmt.Errorf("open a pull request in %s from %s to %s: %w", slug, in.Head, in.Base, err)
@@ -163,7 +163,8 @@ func (s *Service) Close(ctx context.Context, slug string, number int) error {
 	if err != nil {
 		return err
 	}
-	if _, _, err := s.client.Issues.Update(ctx, owner, name, number, gogithub.UpdateIssueRequest{State: gogithub.Ptr("closed")}); err != nil {
+	closed := "closed"
+	if _, _, err := s.client.Issues.Update(ctx, owner, name, number, gogithub.UpdateIssueRequest{State: &closed}); err != nil {
 		return fmt.Errorf("close %s#%d: %w", slug, number, err)
 	}
 	return nil
