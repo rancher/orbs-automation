@@ -781,6 +781,8 @@ func (quietRemote) OpenForBase(context.Context, string, string, int) (pulls.Open
 	return pulls.Open{}, nil
 }
 
+func (quietRemote) OpenForHead(context.Context, string, string) ([]pulls.PR, error) { return nil, nil }
+
 func declining() *domain.Executor {
 	return &domain.Executor{
 		Publish: &domain.Publisher{Remote: quietRemote{}},
