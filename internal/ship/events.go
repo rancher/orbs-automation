@@ -43,6 +43,14 @@ const (
 type Event struct {
 	Kind   EventKind
 	Branch string // the consumer branch, for the events about one
+	// Line is the Rancher line of that branch, when it is in one.
+	//
+	// STUB: never set until a later commit.
+	Line string
+	// NewBranch is the branch that was made, for Pushed.
+	//
+	// STUB: never set until a later commit.
+	NewBranch string
 
 	Plan     *Plan            // Resolved: the header. Done: everything
 	Target   *TargetPlan      // TargetChecked

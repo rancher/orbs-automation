@@ -116,6 +116,12 @@ type Target struct {
 // hold, and whether a PR is needed.
 type TargetPlan struct {
 	Target
+	// Line is the Rancher line the consumer's branch is the branch of, such as
+	// v2.15, or "" for a branch that is in no line. It is how a report names a
+	// target, since a line means the same in every project and a branch does not.
+	//
+	// STUB: never set until a later commit.
+	Line      string   `json:"line,omitempty"`
 	Current   string   `json:"current"` // what the consumer holds now
 	File      string   `json:"-"`       // the file the method edits; the plan carries it once
 	Want      string   `json:"-"`       // what it should hold; the same for every branch
