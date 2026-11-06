@@ -152,3 +152,80 @@ func TestPushSpikeToARealRemote(t *testing.T) {
 	assert.Contains(t, remote, "refs/heads/"+branch, "the branch is on the real remote")
 	assert.Contains(t, remote, run(t, dir, "rev-parse", "HEAD"))
 }
+
+// pushedFork is forkOf with the branch bot/x already pushed, and the commit that
+// the remote has for it.
+func pushedFork(t *testing.T) (dir, bare, old string) {
+	t.Helper()
+	dir, bare = forkOf(t)
+	require.NoError(t, Push(ctx, dir, "fork", "bot/x"))
+	return dir, bare, run(t, bare, "rev-parse", "refs/heads/bot/x")
+}
+
+// rebuilt replaces the branch's commit with one that has the same parent and a
+// different change, as a rebuild does.
+func rebuilt(t *testing.T, dir string) string {
+	t.Helper()
+	run(t, dir, "reset", "--quiet", "--hard", "HEAD~1")
+	write(t, dir, "build.yaml", "image: rebuilt\n")
+	run(t, dir, "commit", "--quiet", "-am", "bump again")
+	return run(t, dir, "rev-parse", "HEAD")
+}
+
+func TestPushReplacingReplacesTheBranchWhenItIsWhereItWasSeen(t *testing.T) {
+	dir, bare, old := pushedFork(t)
+	fresh := rebuilt(t, dir)
+	require.Error(t, Push(ctx, dir, "fork", "bot/x"), "a plain push is rejected: the history changed")
+
+	err := PushReplacing(ctx, dir, "fork", "bot/x", old)
+
+	require.NoError(t, err)
+	assert.Equal(t, fresh, run(t, bare, "rev-parse", "refs/heads/bot/x"))
+}
+
+func TestPushReplacingIsRejectedWhenTheRemoteMovedSinceItWasSeen(t *testing.T) {
+	dir, bare, old := pushedFork(t)
+	// Someone else pushes to the branch after it was seen.
+	other := clone(t, upstream(t))
+	run(t, other, "fetch", "--quiet", bare, "bot/x")
+	run(t, other, "checkout", "--quiet", "-b", "bot/x", "FETCH_HEAD")
+	write(t, other, "theirs.txt", "x")
+	run(t, other, "add", ".")
+	run(t, other, "commit", "--quiet", "-m", "theirs")
+	run(t, other, "push", "--quiet", bare, "bot/x")
+	theirs := run(t, bare, "rev-parse", "refs/heads/bot/x")
+	require.NotEqual(t, old, theirs)
+	rebuilt(t, dir)
+
+	err := PushReplacing(ctx, dir, "fork", "bot/x", old)
+
+	require.ErrorIs(t, err, ErrPushRejected)
+	assert.Equal(t, theirs, run(t, bare, "rev-parse", "refs/heads/bot/x"), "their commit is still there")
+}
+
+func TestPushReplacingABranchThatIsNotThereIsRejectedNotCreated(t *testing.T) {
+	dir, bare := forkOf(t)
+
+	err := PushReplacing(ctx, dir, "fork", "bot/x", strings.Repeat("a", 40))
+
+	require.Error(t, err, "there is nothing at the commit that was seen")
+	assert.Empty(t, run(t, bare, "branch", "--list", "bot/x"))
+}
+
+func TestPushReplacingUsesTheSameEnvironmentAsPush(t *testing.T) {
+	dir, _ := forkOf(t)
+	run(t, dir, "remote", "add", "origin2", "ssh://git@example.invalid/x.git")
+	command, envFile := ssh(t)
+	t.Setenv("GIT_SSH_COMMAND", command)
+	t.Setenv("SSH_AUTH_SOCK", "/tmp/the-agent.sock")
+	t.Setenv("GH_TOKEN", "secret-token")
+
+	err := PushReplacing(ctx, dir, "origin2", "bot/x", strings.Repeat("a", 40))
+
+	require.Error(t, err)
+	data, readErr := os.ReadFile(envFile)
+	require.NoError(t, readErr)
+	assert.Contains(t, string(data), "SSH_AUTH_SOCK=/tmp/the-agent.sock")
+	assert.NotContains(t, string(data), "secret-token")
+	assert.Contains(t, string(data), "GIT_TERMINAL_PROMPT=0")
+}
