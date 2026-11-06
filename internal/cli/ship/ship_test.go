@@ -63,6 +63,10 @@ func (f *fakeWorkspace) UpstreamFile(context.Context, string, string, string) ([
 	return []byte(f.files["build.yaml"]), nil
 }
 
+func (f *fakeWorkspace) CloneDir(string) (string, error) { return "/clone", nil }
+
+func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
+
 type fakeProber struct{ result registry.Result }
 
 func (f fakeProber) Exists(context.Context, string, string, string) registry.Result { return f.result }

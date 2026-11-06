@@ -70,7 +70,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	if err := checkFormat(s.Output); err != nil {
 		return "", err
 	}
-	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
+	return run(ctx, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
 	}, opts.Preview)

@@ -41,6 +41,12 @@ type Workspace interface {
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// UpstreamFile reads a file of a repository at a commit from its host.
 	UpstreamFile(ctx context.Context, slug, ref, path string) ([]byte, error)
+	// CloneDir is the directory of the engineer's clone of a repository, or an
+	// error saying how to get one.
+	CloneDir(slug string) (string, error)
+	// Remote is the name of the remote of a repository's clone that is its
+	// upstream.
+	Remote(slug string) (string, error)
 }
 
 // Input is what the user asked to ship.
@@ -98,6 +104,9 @@ type TargetPlan struct {
 	Warnings  []string `json:"warnings,omitempty"`
 	Error     string   `json:"error,omitempty"`   // why a failed target could not be checked
 	Preview   *Preview `json:"preview,omitempty"` // what a run would write; none when nothing would be
+	// Result is what a run did for this target: set only by Ship, and only for a
+	// target that was ready.
+	Result *TargetResult `json:"result,omitempty"`
 }
 
 // Plan is the result of the state check: what would be shipped, to which
@@ -125,13 +134,19 @@ type Plan struct {
 // strategy; if any branch needs a PR it checks the release's images exist, once.
 // It writes nothing.
 func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, error) {
+	plan, _, err := check(ctx, ws, prober, in)
+	return plan, err
+}
+
+// check is Check, and the resolution it was made from, which a run goes on to use.
+func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, resolution, error) {
 	res, err := resolve(ctx, ws, in)
 	if err != nil {
-		return Plan{}, err
+		return Plan{}, resolution{}, err
 	}
 	branches, named, err := res.branches(in)
 	if err != nil {
-		return Plan{}, err
+		return Plan{}, resolution{}, err
 	}
 	plan := Plan{
 		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.route.Consumer.Repo.Name,
@@ -142,7 +157,7 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		tp, err := res.checkTarget(ctx, ws, branch, in)
 		if err != nil {
 			if named {
-				return Plan{}, err // asked for this branch, so not being able to read it is the answer
+				return Plan{}, resolution{}, err // asked for this branch, so not being able to read it is the answer
 			}
 			// One branch of several that could not be read does not stop the
 			// others: it is reported as failed.
@@ -162,7 +177,7 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		}
 	}
 	plan.Status = overall(plan)
-	return plan, nil
+	return plan, res, nil
 }
 
 // overall is the state of the whole plan.

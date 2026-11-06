@@ -33,6 +33,8 @@ type fakeWorkspace struct {
 	refsErr    map[string]error
 	files      map[string]string // "slug@ref:path"
 	asked      []string
+	cloneDir   string // the engineer's clone, for Ship
+	cloneErr   error
 }
 
 // Project returns the producer with the edges of the links, as the loaded config
@@ -62,6 +64,11 @@ func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
 	projects[0] = producer
 	return updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: projects})
 }
+
+// CloneDir and Remote answer from the fields, for the tests that make commits.
+func (f *fakeWorkspace) CloneDir(string) (string, error) { return f.cloneDir, f.cloneErr }
+
+func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
 	f.asked = append(f.asked, "refs "+slug)
