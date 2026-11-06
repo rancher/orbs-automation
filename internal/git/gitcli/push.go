@@ -3,6 +3,11 @@ package gitcli
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/rancher/orbs-automation/internal/execx"
 )
 
 // ErrPushRejected is returned by Push when the remote refused the branch, such
@@ -29,6 +34,54 @@ var authEnv = []string{
 //
 // Why not go-git: it does not use the engineer's SSH agent and ~/.ssh/config the
 // way git does, nor their credential helpers or the hooks of the repository.
-//
-// STUB: pushes nothing until a later commit.
-func Push(ctx context.Context, dir, remote, branch string) error { return nil }
+func Push(ctx context.Context, dir, remote, branch string) error {
+	env := execx.DefaultEnv()
+	for _, k := range authEnv {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	env = append(env, "GIT_TERMINAL_PROMPT=0")
+	res, err := execx.New("git").Run(ctx, execx.Cmd{
+		Name: "git", Args: []string{"-C", dir, "push", "--set-upstream", remote, branch}, Env: env,
+	})
+	if err == nil {
+		return nil
+	}
+	var exit *execx.ExitError
+	if !errors.As(err, &exit) {
+		return wrap(err, "git push")
+	}
+	stderr := string(res.Stderr)
+	said := tail(withoutHints(stderr), 4)
+	if strings.Contains(stderr, "[rejected]") || strings.Contains(stderr, "non-fast-forward") {
+		return fmt.Errorf("%w: %s", ErrPushRejected, said)
+	}
+	return fmt.Errorf("git push %s %s: %w: %s", remote, branch, err, said)
+}
+
+// withoutHints drops git's advice lines, so what is left is what happened and
+// not how to fix it for someone typing the command.
+func withoutHints(s string) string {
+	var lines []string
+	for _, l := range strings.Split(s, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(l), "hint:") {
+			lines = append(lines, l)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// tail returns the last n non-empty lines of git's output, joined by "; ".
+func tail(s string, n int) string {
+	var lines []string
+	for _, l := range strings.Split(s, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "; ")
+}
