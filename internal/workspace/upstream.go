@@ -28,6 +28,17 @@ type PushSettings struct {
 }
 
 // PushSettings returns the settings that decide where a branch for slug is pushed.
-//
-// STUB: empty until a later commit.
-func (w *Workspace) PushSettings(slug string) PushSettings { return PushSettings{} }
+// The repository is matched without regard to case, as every slug is.
+func (w *Workspace) PushSettings(slug string) PushSettings {
+	var userRepo string
+	for key, o := range w.settings.Repos.Overrides {
+		if strings.EqualFold(key, slug) {
+			userRepo = o.PushTo
+			break
+		}
+	}
+	return PushSettings{
+		UserRepo: userRepo, UserDefault: w.settings.PushTo,
+		Fork: w.settings.Fork, Upstream: w.UpstreamFor(slug), GitHubUser: w.settings.GitHubUser,
+	}
+}
