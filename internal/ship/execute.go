@@ -24,6 +24,11 @@ const (
 	ResultFailed ResultStatus = "failed"
 	// ResultOpened: the branch was pushed and the PR opened.
 	ResultOpened ResultStatus = "opened"
+	// ResultAlreadyOpen: the actor's own PR at this version is open, so nothing
+	// was made.
+	ResultAlreadyOpen ResultStatus = "already open"
+	// ResultBlocked: the actor's own PR at a newer version is open.
+	ResultBlocked ResultStatus = "blocked"
 )
 
 // TargetResult is what a run did for one target that needed a PR.
@@ -41,6 +46,8 @@ type TargetResult struct {
 	PR         *PRRef   `json:"pr,omitempty"`         // the PR that was opened
 	Superseded []PRRef  `json:"superseded,omitempty"` // the older PRs that were closed
 	Warnings   []string `json:"warnings,omitempty"`   // what went wrong that did not fail the target
+	// WouldSupersede is what a dry run would have closed.
+	WouldSupersede []PRRef `json:"wouldSupersede,omitempty"`
 }
 
 // PRRef is a PR, by number and where to see it.
@@ -54,6 +61,12 @@ type Executor struct {
 	Git     Git
 	Runner  updatedispatcher.StepRunner
 	TempDir string // where worktrees go
+	// Publish, when set, finds the open PRs of each target before making anything,
+	// and with it a run that is not --no-push or --dry-run pushes and opens the
+	// PRs. Without it a run stops at the commits.
+	//
+	// STUB: not used until a later commit.
+	Publish *Publisher
 }
 
 // Tip is the newest commit of the result, or "" when there is none.
