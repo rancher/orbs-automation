@@ -302,3 +302,22 @@ func TestShipRecordsNoCloneWhenItMadeNoCommits(t *testing.T) {
 	assert.Empty(t, plan.Clone)
 	assert.Empty(t, plan.Remote)
 }
+
+func TestShipCommitsTheEditAndEachStepSeparatelyWithTheirOwnMessages(t *testing.T) {
+	ws, clone, ex := newShip(t)
+	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	require.Equal(t, ResultCommitted, res.Status)
+	require.Len(t, res.Commits, 2)
+	assert.Equal(t, "Update scc-operator to v0.5.3", res.Commits[0].Subject, "the preview's commit message")
+	assert.Equal(t, "Run `./scripts/gen.sh`", res.Commits[1].Subject)
+	assert.Equal(t, res.Tip(), runGit(t, clone, "rev-parse", botV215))
+	step := runGit(t, clone, "log", "-1", "--format=%B", botV215)
+	assert.Contains(t, step, "Part of updating scc-operator to v0.5.3: the method postEdit step.")
+	assert.Contains(t, step, "Automation: gero ship")
+	assert.Equal(t, "2", runGit(t, clone, "rev-list", "--count", "upstream/release/v2.15.."+botV215), "two commits on the base")
+}
