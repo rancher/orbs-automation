@@ -6,7 +6,12 @@ package repostatus
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
@@ -91,16 +96,224 @@ type TagInfo struct {
 // json). When the host could not be read it returns the report together with
 // ErrIncomplete.
 func Run(ctx context.Context, s clicfg.Settings, cwd string, slugs []string) (string, error) {
-	return "", nil
+	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
+		return "", fmt.Errorf("output format %q is not supported by repo status: use text or json", s.Output)
+	}
+	ws := workspace.Open(s, cwd)
+	st, err := gather(ctx, ws, func(dir string) (Clone, error) {
+		r, err := ws.OpenAt(dir)
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
+	}, slugs)
+	if err != nil {
+		return "", err
+	}
+	out := renderText(st)
+	if s.Output == clicfg.OutputJSON {
+		if out, err = renderJSON(st); err != nil {
+			return "", err
+		}
+	}
+	if st.Error != "" {
+		return out, ErrIncomplete
+	}
+	return out, nil
 }
 
 func gather(ctx context.Context, ws Workspace, open Opener, slugs []string) (Status, error) {
-	return Status{}, nil
+	var key string
+	if len(slugs) > 0 {
+		key = slugs[0]
+	}
+	p, err := ws.Project(key)
+	if err != nil {
+		return Status{}, err
+	}
+	st := Status{Slug: p.Repo.Name, DefaultBranch: p.Repo.DefaultBranch, Targets: targets(p)}
+	refs, err := ws.UpstreamRefs(ctx, p.Repo.Name)
+	if err != nil {
+		st.Error = err.Error()
+		return st, nil
+	}
+	clone, why := openClone(ws, open, p.Repo.Name)
+	st.Clone = why
+	for n := range st.Targets {
+		fill(&st.Targets[n], p, refs, clone)
+	}
+	return st, nil
 }
 
-func renderText(st Status) string { return "" }
+// targets lists the release branches of p, before anything is read.
+func targets(p config.Project) []Target {
+	if p.Release.Branches != config.BranchesPerLine {
+		return []Target{{Branch: p.Repo.DefaultBranch, IsDefaultBranch: true}}
+	}
+	var ts []Target
+	for _, l := range p.Release.Lines {
+		branch, isDefault := p.Branch(l)
+		ts = append(ts, Target{Line: l.Line, Series: l.Series(), Branch: branch, IsDefaultBranch: isDefault})
+	}
+	return ts
+}
 
-func renderJSON(st Status) (string, error) { return "", nil }
+// fill reads the latest tags and the head of t from refs, and compares them
+// with the clone, which may be nil.
+func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
+	tags := refs.Tags
+	if t.Series != "" {
+		tags = nil
+		for _, tag := range refs.Tags {
+			if git.InSeries(tag.Name, t.Series) {
+				tags = append(tags, tag)
+			}
+		}
+	}
+	latest := git.LatestReleases(tags, p.Release.TagPattern)
+	t.LatestStable, t.LatestPrerelease = tagInfo(latest.Stable), tagInfo(latest.Prerelease)
+	for _, b := range refs.Branches {
+		if b.Name == t.Branch {
+			t.Head = b.Commit
+		}
+	}
+	if clone == nil || t.Head == "" {
+		return
+	}
+	if base := newest(t); base != nil {
+		if n, known, err := clone.Count(base.Commit, t.Head); err == nil && known {
+			t.Unreleased = &n
+		}
+	}
+	t.Local = compare(clone, t.Branch, t.Head)
+}
+
+// newest is the tag releases are counted from: a pre-release is only there when
+// it is newer than the latest stable tag.
+func newest(t *Target) *TagInfo {
+	if t.LatestPrerelease != nil {
+		return t.LatestPrerelease
+	}
+	return t.LatestStable
+}
+
+// compare says how the clone's branch stands against the host's head.
+func compare(c Clone, branch, head string) string {
+	local, found, err := c.BranchCommit(branch)
+	switch {
+	case err != nil:
+		return "unreadable: " + err.Error()
+	case !found:
+		return "no local branch"
+	case local == head:
+		return "in sync"
+	}
+	behind, okBehind, err1 := c.Count(local, head)
+	ahead, _, err2 := c.Count(head, local)
+	switch {
+	case err1 != nil || err2 != nil || !okBehind:
+		// The host's head is not in the clone: it has not been fetched, so how
+		// far behind is unknown, and the clone cannot tell if it is ahead.
+		return "behind (fetch to see by how much)"
+	case ahead == 0:
+		return fmt.Sprintf("behind %d", behind)
+	case behind == 0:
+		return fmt.Sprintf("ahead %d", ahead)
+	default:
+		return fmt.Sprintf("diverged (ahead %d, behind %d)", ahead, behind)
+	}
+}
+
+// openClone opens the clone of slug. The reason is set instead when there is
+// none to compare with.
+func openClone(ws Workspace, open Opener, slug string) (Clone, string) {
+	rp, err := ws.RepoPath(slug)
+	if err != nil {
+		return nil, err.Error()
+	}
+	c, err := open(rp.Path)
+	if err != nil {
+		return nil, err.Error()
+	}
+	return c, ""
+}
+
+func tagInfo(t *git.Tag) *TagInfo {
+	if t == nil {
+		return nil
+	}
+	return &TagInfo{Tag: t.Name, Commit: t.Commit}
+}
+
+func renderText(st Status) string {
+	var b strings.Builder
+	b.WriteString(st.Slug + "\n")
+	if st.Error != "" {
+		fmt.Fprintf(&b, "  host: unavailable: %s\n", st.Error)
+		return b.String()
+	}
+	b.WriteString("\n")
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	perLine := len(st.Targets) > 0 && st.Targets[0].Line != ""
+	if perLine {
+		fmt.Fprintln(w, "  LINE\tBRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE\tUNRELEASED\tLOCAL")
+	} else {
+		fmt.Fprintln(w, "  BRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE\tUNRELEASED\tLOCAL")
+	}
+	for _, t := range st.Targets {
+		branch := t.Branch
+		if perLine && t.IsDefaultBranch {
+			branch += " (default branch)"
+		}
+		cells := []string{branch, headText(t.Head), tagText(t.LatestStable), tagText(t.LatestPrerelease),
+			countText(t.Unreleased), localText(t.Local)}
+		if perLine {
+			cells = append([]string{t.Line}, cells...)
+		}
+		fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
+	}
+	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	if st.Clone != "" {
+		fmt.Fprintf(&b, "\nLocal clone: unavailable: %s\n", st.Clone)
+	}
+	return b.String()
+}
+
+// headText renders the commit at a branch head, or says the host has no such
+// branch.
+func headText(commit string) string {
+	if commit == "" {
+		return "(not found)"
+	}
+	return git.Short(commit)
+}
 
 // tagText renders a tag as "v2.15.3 (c4246d8)", or "-" for none.
-func tagText(t *TagInfo) string { return "" }
+func tagText(t *TagInfo) string {
+	if t == nil {
+		return "-"
+	}
+	return t.Tag + " (" + git.Short(t.Commit) + ")"
+}
+
+func countText(n *int) string {
+	if n == nil {
+		return "-"
+	}
+	return strconv.Itoa(*n)
+}
+
+func localText(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
+}
+
+func renderJSON(st Status) (string, error) {
+	b, err := json.MarshalIndent(st, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b) + "\n", nil
+}
