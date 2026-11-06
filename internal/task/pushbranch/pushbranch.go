@@ -6,6 +6,7 @@ package pushbranch
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/git"
 )
@@ -66,7 +67,57 @@ type Git interface {
 	PushReplacing(ctx context.Context, dir, remote, branch, expected string) error
 }
 
-// Run pushes the branch. TODO: the stub does nothing yet.
-func Run(_ context.Context, _ Git, _ Input) (Output, error) {
-	return Output{}, nil
+// Run puts the branch on the remote, looking first at what is already there,
+// because a plain push of a branch that was pushed before is refused and says
+// little. Nothing there is the ordinary push. The same commit needs no push, and
+// one the local branch has grown from is an ordinary push too. A branch that has
+// gone another way is an earlier attempt's: it is replaced, with a lease on the
+// commit that was seen, only when every commit on it is ours and Replace is set.
+// Otherwise the error is ErrNotOurs or ErrNeedsReplace, with what is wrong.
+func Run(ctx context.Context, g Git, in Input) (Output, error) {
+	out := Output{Remote: in.Remote, Branch: in.Branch, Action: ActionPushed}
+	plain := func() (Output, error) {
+		if err := g.Push(ctx, in.Dir, in.Remote, in.Branch); err != nil {
+			return Output{}, fmt.Errorf("push %s to %s: %w", in.Branch, in.Remote, err)
+		}
+		return out, nil
+	}
+	tip, err := g.Fetch(ctx, in.Dir, in.Remote, in.Branch)
+	if err != nil {
+		return plain() // not there, or unreachable, which the push will say
+	}
+	local, found, err := g.BranchCommit(ctx, in.Dir, in.Branch)
+	if err != nil || !found {
+		return plain()
+	}
+	if local == tip {
+		out.Action = ActionUpToDate
+		return out, nil
+	}
+	if mergeBase, err := g.MergeBase(ctx, in.Dir, local, tip); err == nil && mergeBase == tip {
+		return plain() // the local branch grew from what is there: a fast forward
+	}
+	base, err := g.MergeBase(ctx, in.Dir, in.Base, tip)
+	if err != nil {
+		return plain()
+	}
+	facts, err := g.CommitsSince(ctx, in.Dir, base, tip)
+	if err != nil {
+		return plain()
+	}
+	email, err := g.Config(ctx, in.Dir, "user.email")
+	if err != nil {
+		return plain()
+	}
+	if ours, why := git.CommitsAreOurs(facts, email); !ours {
+		return Output{}, fmt.Errorf("%s on %s: %w: %s", in.Branch, in.Remote, ErrNotOurs, why)
+	}
+	if !in.Replace {
+		return Output{}, fmt.Errorf("%s on %s: %w", in.Branch, in.Remote, ErrNeedsReplace)
+	}
+	if err := g.PushReplacing(ctx, in.Dir, in.Remote, in.Branch, tip); err != nil {
+		return Output{}, fmt.Errorf("replace %s on %s: %w", in.Branch, in.Remote, err)
+	}
+	out.Action = ActionReplaced
+	return out, nil
 }

@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** implemented, except the prompt side of `internal/ui`, `internal/task/` and `test/integration/` (see Not built yet).
+**Status:** implemented, except the prompt side of `internal/ui`, all but one task in `internal/task/`, and `test/integration/` (see Not built yet).
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -24,14 +24,14 @@ internal/config/     application config types, their effective getters and the e
 internal/config/loader/  application config loader: YAML decoding, defaults, validation (workspace only)
 internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (WORKSPACE)
 internal/ui/         output and prompt seam, plain-text implementation first: Output and Stream exist, prompts do not yet   (CLI_OUTPUT)
-internal/task/<name>/  planned: one package per single action (create a branch, bump and commit, push a branch, open a PR), run by a command alone or chained by a higher-order one such as ship   (see Tasks below)
+internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); only pushbranch is built
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/repo/   local repository access with go-git; the only importer of go-git
 internal/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
 internal/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
 internal/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
-internal/ship/      one downstream PR: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). Today it holds the actions too; they move to internal/task/ and ship keeps the decisions and the order
+internal/ship/      one downstream PR: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It still holds most of the actions; they move to internal/task/ and ship keeps the decisions and the order
 internal/ship/templates/  the embedded commit, body and title templates and their placeholder renderer
 internal/updatedispatcher/  applies a bump: strategies claimed by name, the engine built from config, and the step lifecycle around the edit; starts no process   (PUSH_TO_REPO)
 internal/yamledit/  changes one YAML value in place without reflowing the file; the third importer of the YAML library
@@ -52,7 +52,7 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ### Tasks: single actions that compose
 
-**Status: planned, not built.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
+**Status: `pushbranch` is built and `ship` uses it. The other tasks are planned.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
 
 * `createbranch`: a new branch for a project and release line, based on the upstream branch.
 * `bumpcommit`: apply one change set and make its commits. The change and its commits are never separated.
@@ -84,7 +84,7 @@ main.go -> cmd -> internal/cli/<cmd>  ->  domain packages  ->  internal/config, 
 
 * `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any other `internal/` package, but not another command package. Shared command code goes in a third, smaller package.
-* `internal/task/<name>/` (planned) imports the standard library and domain packages, never `internal/cli/...`, cobra, `internal/ui` or another task. Tasks are composed only by `internal/cli/<cmd>/` and by a conveyor's domain package such as `internal/ship`. This is by review until the lint rule below is added.
+* `internal/task/<name>/` imports the standard library and domain packages, never `internal/cli/...`, cobra, `internal/ui` or another task (lint-enforced). Tasks are composed only by `internal/cli/<cmd>/` and by a conveyor's domain package such as `internal/ship`, which is by review.
 * Domain packages (`semver`, `git`, `config`, ...) never import `internal/cli/...` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
 * `internal/clicfg` and `internal/config` (with its `loader`) do not import each other. `Settings` is passed down by the command, never read from a global.
 * `internal/workspace` is where the two meet. It imports `clicfg`, `config`, `config/loader` and `internal/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
@@ -100,7 +100,7 @@ main.go -> cmd -> internal/cli/<cmd>  ->  domain packages  ->  internal/config, 
 | Command tree, `Use` and help text, flag declarations, gating, the `RunE` glue (args, flags and env to plain values, then output) | `cmd/` |
 | What a command does with those values (resolving inputs, rendering output), as plain functions | `internal/cli/<cmd>/` |
 | Anything with a branch worth testing beyond input handling and rendering | a domain package in `internal/`, never in `cmd/` |
-| One action that a command may run alone or a higher-order command may chain (planned) | `internal/task/<name>/` |
+| One action that a command may run alone or a higher-order command may chain | `internal/task/<name>/` |
 | Test helpers | `_test.go` files, or a `internal/<pkg>/<pkg>test` package if several packages share them |
 | Golden files and fixtures | `testdata/` beside the package that uses them |
 
@@ -123,8 +123,9 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
   * cobra is importable only from `cmd/` and `main.go`.
   * Each outside dependency has one door: go-git only in `internal/git/repo`, `os/exec` only in `internal/execx`, the YAML library only in `internal/clicfg` and `internal/config/loader`, go-gh only in `internal/github/gogh.go`, go-github only in `internal/github`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/git/repo` directly. Its pure logic may still take `internal/git` and domain types.
+  * `internal/task/**` imports neither `internal/cli`, `internal/ui` nor another task.
 * **Central config has one door.** `internal/config/loader` is importable only from `internal/workspace` (lint-enforced). A command package cannot load config, apply defaults or skip validation: it gets a `config.Project` or `config.Config` from `Workspace`, already defaulted and validated, and imports `internal/config` only for the types and their getters.
-* **By review, for now:** the rest of dependency direction above, including that no command package imports another. A depguard rule per package can be added once there are enough packages to be worth it. The first to be added is for `internal/task/**` (no `internal/cli`, cobra, `internal/ui` or other task), together with the first task, so that the rule and the code it guards arrive in the same change.
+* **By review, for now:** the rest of dependency direction above, including that no command package imports another. A depguard rule per package can be added once there are enough packages to be worth it.
 
 ## Why `clicfg` is not under `internal/cli/`
 
@@ -133,7 +134,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 ## Not built yet
 
 * The prompt side of `internal/ui` ([CLI_OUTPUT](CLI_OUTPUT.md)). `Output` and `Stream` are built.
-* `internal/task/` and the standalone commands that run a task alone, extracted from `internal/ship` one action at a time, starting with `pushbranch`.
+* The other tasks, `createbranch`, `bumpcommit` and `createpr`, extracted from `internal/ship` one action at a time, and the standalone commands that run a task alone. `pushbranch` is built, and has no command of its own yet.
 * `test/integration/` ([TESTING](TESTING.md)).
 
 ## Open questions

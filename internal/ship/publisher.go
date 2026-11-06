@@ -2,13 +2,14 @@ package ship
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/task/pushbranch"
 )
 
 // Remote is the GitHub side of publishing, as ship needs it. It is defined here,
@@ -84,57 +85,17 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 	p.supersede(ctx, consumer, created.Number, m, tp.Branch, dec.Supersede, res, sink)
 }
 
-// pushBranch puts the branch on the remote, looking first at what is already
-// there, because a plain push of a branch that was pushed before is refused and
-// says little. Nothing there is the ordinary push. The same commit needs no push,
-// and one the local branch has grown from is an ordinary push too. A branch that
-// has gone another way is an earlier attempt's: it is replaced, with a lease on
-// the commit that was seen, only when every commit on it is ours and a refresh
-// was asked for, and otherwise the error says why not, and how to go on.
+// pushBranch puts the branch on the remote with the pushbranch task, and says
+// how to go on when the remote has an earlier attempt's commits that were not
+// replaced.
 func (p Publisher) pushBranch(ctx context.Context, tp TargetPlan) error {
-	branch, remote := tp.Preview.Branch, p.Push.Remote
-	plain := func() error {
-		if err := p.Git.Push(ctx, p.Clone, remote, branch); err != nil {
-			return fmt.Errorf("push %s to %s: %w", branch, remote, err)
-		}
-		return nil
+	_, err := pushbranch.Run(ctx, p.Git, pushbranch.Input{
+		Dir: p.Clone, Remote: p.Push.Remote, Branch: tp.Preview.Branch, Base: tp.Commit, Replace: p.Refresh,
+	})
+	if errors.Is(err, pushbranch.ErrNeedsReplace) {
+		return fmt.Errorf("%w: run with --refresh to replace them", err)
 	}
-	tip, err := p.Git.Fetch(ctx, p.Clone, remote, branch)
-	if err != nil {
-		return plain() // not there, or unreachable, which the push will say
-	}
-	local, found, err := p.Git.BranchCommit(ctx, p.Clone, branch)
-	if err != nil || !found {
-		return plain()
-	}
-	if local == tip {
-		return nil // already there
-	}
-	if mergeBase, err := p.Git.MergeBase(ctx, p.Clone, local, tip); err == nil && mergeBase == tip {
-		return plain() // the local branch grew from what is there: a fast forward
-	}
-	base, err := p.Git.MergeBase(ctx, p.Clone, tp.Commit, tip)
-	if err != nil {
-		return plain()
-	}
-	facts, err := p.Git.CommitsSince(ctx, p.Clone, base, tip)
-	if err != nil {
-		return plain()
-	}
-	email, err := p.Git.Config(ctx, p.Clone, "user.email")
-	if err != nil {
-		return plain()
-	}
-	if ours, why := git.CommitsAreOurs(facts, email); !ours {
-		return fmt.Errorf("%s on %s has commits that are not ours, so it is not replaced: %s", branch, remote, why)
-	}
-	if !p.Refresh {
-		return fmt.Errorf("%s on %s already has different commits of ours, from an earlier attempt: run with --refresh to replace them", branch, remote)
-	}
-	if err := p.Git.PushReplacing(ctx, p.Clone, remote, branch, tip); err != nil {
-		return fmt.Errorf("replace %s on %s: %w", branch, remote, err)
-	}
-	return nil
+	return err
 }
 
 // supersede tells each older PR that the one numbered by is its replacement, and
