@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -604,4 +605,38 @@ func TestRunToReturnsTheErrorAfterTheReport(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out.String(), "status  blocked", "the report was written first")
+}
+
+func TestRunToLogsTheEventsBesideTheTextReport(t *testing.T) {
+	var out, logs bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	err := runTo(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "Targets", "the report is still written")
+	assert.Contains(t, logs.String(), `"msg":"ship resolved"`)
+	assert.Contains(t, logs.String(), `"msg":"target checked"`)
+	assert.Contains(t, logs.String(), `"msg":"ship done"`)
+}
+
+func TestRunToLogsTheEventsAndKeepsJSONOnStdoutAsOneDocument(t *testing.T) {
+	var out, logs bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
+
+	err := runTo(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in, false)
+
+	require.NoError(t, err)
+	var plan domain.Plan
+	require.NoError(t, json.Unmarshal(out.Bytes(), &plan), "stdout is the document and nothing else: %s", out.String())
+	assert.Contains(t, logs.String(), `"msg":"target checked"`, "the progress is in the log, which is stderr")
+	assert.NotContains(t, out.String(), "target checked")
+}
+
+func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
+	var out bytes.Buffer
+
+	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false)
+
+	require.NoError(t, err)
 }
