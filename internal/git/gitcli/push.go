@@ -35,6 +35,12 @@ var authEnv = []string{
 // Why not go-git: it does not use the engineer's SSH agent and ~/.ssh/config the
 // way git does, nor their credential helpers or the hooks of the repository.
 func Push(ctx context.Context, dir, remote, branch string) error {
+	return push(ctx, dir, remote, branch, "push", "--set-upstream", remote, branch)
+}
+
+// push runs git push with the arguments and the engineer's credentials, and turns
+// what git says into an error: ErrPushRejected when the remote refused the branch.
+func push(ctx context.Context, dir, remote, branch string, args ...string) error {
 	env := execx.DefaultEnv()
 	for _, k := range authEnv {
 		if v, ok := os.LookupEnv(k); ok {
@@ -43,7 +49,7 @@ func Push(ctx context.Context, dir, remote, branch string) error {
 	}
 	env = append(env, "GIT_TERMINAL_PROMPT=0")
 	res, err := execx.New("git").Run(ctx, execx.Cmd{
-		Name: "git", Args: []string{"-C", dir, "push", "--set-upstream", remote, branch}, Env: env,
+		Name: "git", Args: append([]string{"-C", dir}, args...), Env: env,
 	})
 	if err == nil {
 		return nil
@@ -92,6 +98,7 @@ func tail(s string, n int) string {
 // lease naming the commit, so a push made since is never overwritten, which a
 // plain force would do. If the remote's branch has moved the push is rejected
 // (ErrPushRejected). The credentials and the environment are those of Push.
-//
-// STUB: pushes nothing until a later commit.
-func PushReplacing(ctx context.Context, dir, remote, branch, expected string) error { return nil }
+func PushReplacing(ctx context.Context, dir, remote, branch, expected string) error {
+	return push(ctx, dir, remote, branch,
+		"push", "--set-upstream", "--force-with-lease="+branch+":"+expected, remote, branch)
+}
