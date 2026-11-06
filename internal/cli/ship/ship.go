@@ -66,22 +66,24 @@ var release = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+){1,2}([-+].*)?$`)
 
 func looksLikeARelease(s string) bool { return release.MatchString(s) }
 
-// Run checks the state of shipping what opts names, and renders the plan as
-// s.Output (text or json). The plan is returned even with ErrBlocked.
-func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (string, error) {
+// Run checks the state of shipping what opts names and, for --no-push and
+// --dry-run, makes the commits, writing the report to w as it goes in text and as
+// one document at the end in json. The report is written even when the error
+// returned is ErrBlocked or ErrFailed.
+func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
 	if err := checkFormat(s.Output); err != nil {
-		return "", err
+		return err
 	}
 	var ex *domain.Executor
 	if wantsCommits(s.DryRun, opts) {
 		tmp, err := os.MkdirTemp("", "gero-ship-")
 		if err != nil {
-			return "", fmt.Errorf("make a directory for worktrees: %w", err)
+			return fmt.Errorf("make a directory for worktrees: %w", err)
 		}
 		defer func() { _ = os.RemoveAll(tmp) }()
 		ex = &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp}
 	}
-	return runWith(ctx, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, domain.Input{
+	return runTo(ctx, w, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
 	}, opts.Preview)
@@ -99,48 +101,58 @@ func checkFormat(format string) error {
 // them. A plain run only checks until the push is built.
 func wantsCommits(dryRun bool, opts Options) bool { return dryRun || opts.NoPush }
 
-// runWith checks the state and, with an executor, makes the commits; nil is a
-// check only. The report is returned with the errors that come after the check (no clone,
-// a failed target, a blocked release), so it can be shown first.
-func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) (string, error) {
+// runWith is runTo, with the report returned as a string.
+func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input) (string, error) {
+	var buf bytes.Buffer
+	err := runTo(ctx, &buf, ws, prober, ex, format, in, false)
+	return buf.String(), err
+}
+
+// runTo checks the state and, with an executor, makes the commits; nil is a
+// check only. The report is written to w as the run goes in text, and as one
+// document at the end in json. Errors that come after the check (no clone, a
+// failed target, a blocked release) are returned after the report is written.
+func runTo(ctx context.Context, w io.Writer, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) error {
 	if err := checkFormat(format); err != nil {
-		return "", err
+		return err
 	}
-	plan, err := domain.Ship(ctx, ws, prober, in, ex, nil)
+	var (
+		stream *ui.Stream
+		sink   domain.Sink
+	)
+	if format == clicfg.OutputText {
+		stream = ui.NewStream(w)
+		sink = newHumanSink(stream, full)
+	}
+	plan, err := domain.Ship(ctx, ws, prober, in, ex, sink)
+	if stream != nil {
+		stream.Flush()
+	}
 	if errors.Is(err, workspace.ErrNotProject) {
-		return "", fmt.Errorf("%w: name the project to ship as the first argument", err)
+		return fmt.Errorf("%w: name the project to ship as the first argument", err)
 	}
 	afterCheck := errors.Is(err, domain.ErrNoClone) // the plan was made, and is shown
 	if err != nil && !afterCheck {
-		return "", err
+		return err
 	}
-	var out string
 	if format == clicfg.OutputJSON {
-		if out, err = renderJSON(plan); err != nil {
-			return "", err
+		out, err := renderJSON(plan)
+		if err != nil {
+			return err
 		}
-	} else {
-		out = renderText(plan, full)
+		if _, err := io.WriteString(w, out); err != nil {
+			return err
+		}
+	} else if err := stream.Err(); err != nil {
+		return err
 	}
 	switch {
 	case afterCheck:
-		return out, err
+		return err
 	case plan.Status == domain.StatusBlocked:
-		return out, ErrBlocked
+		return ErrBlocked
 	}
-	return out, failedErr(plan)
-}
-
-// runTo is runWith, writing the report to w as the run goes: each stage when it
-// is done, and not all of it at the end.
-//
-// STUB: writes the whole report at the end until a later commit.
-func runTo(ctx context.Context, w io.Writer, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) error {
-	out, err := runWith(ctx, ws, prober, ex, format, in, full)
-	if _, werr := io.WriteString(w, out); werr != nil && err == nil {
-		err = werr
-	}
-	return err
+	return failedErr(plan)
 }
 
 // ErrFailed is returned, with the report still written, when a commit for a

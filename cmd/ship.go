@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"os"
 
 	"github.com/rancher/orbs-automation/internal/cli/ship"
@@ -58,11 +57,7 @@ afterwards; with both flags it is a dry run.`,
 				ctx = context.Background()
 			}
 			in.Project, in.Arg = ship.ParseArgs(args)
-			out, err := ship.Run(ctx, settingsFrom(cmd), cwd, in)
-			if out != "" {
-				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
-			}
-			return err
+			return ship.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, in)
 		},
 	}
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
