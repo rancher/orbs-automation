@@ -10,6 +10,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -237,15 +238,130 @@ func TestRunAProjectWithNoLinesTagsABranchOfItsOwnWithNoSeries(t *testing.T) {
 	assert.Equal(t, []string{"rancher/scc-operator v0.5.4-rc.1 " + headMain}, g.remote.made)
 }
 
-func TestRunWithNoTagSaysChoosingOneIsNotBuilt(t *testing.T) {
+func TestRunWithNoTagChoosesThePrereleaseThatFollowsTheNewestOfTheLine(t *testing.T) {
 	var g tagging
 	opts := answering("y\n")
 	opts.Tag = ""
 
 	err := g.run(shell(), "text", false, opts)
 
-	require.ErrorIs(t, err, ErrNoTag)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rancher/shell v0.8.4-rc.1 " + head215}, g.remote.made)
+	assert.Contains(t, g.out.String(), "Tag v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell?")
+}
+
+func TestRunStablePromotesThePrereleaseOnTheHeadAndSaysSo(t *testing.T) {
+	var g tagging
+	ws := shell()
+	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: head215})
+	opts := answering("y\n")
+	opts.Tag, opts.Stable = "", true
+
+	err := g.run(ws, "text", false, opts)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rancher/shell v0.8.4 " + head215}, g.remote.made)
+	assert.Contains(t, g.out.String(), "Tag v0.8.4 on release/v2.15 at 8c61398, which is v0.8.4-rc.2 with no commits since, in rancher/shell?")
+}
+
+func TestRunStableThatPromotesSaysWhichPrereleaseInJSONAndInADryRun(t *testing.T) {
+	ws := shell()
+	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: head215})
+	opts := Options{Line: "v2.15", Stable: true, Yes: true}
+
+	var j tagging
+	require.NoError(t, j.run(ws, "json", false, opts))
+	var res Result
+	require.NoError(t, json.Unmarshal(j.out.Bytes(), &res), j.out.String())
+	assert.Equal(t, "v0.8.4", res.Tag)
+	assert.Equal(t, "v0.8.4-rc.2", res.Promotes)
+
+	var d tagging
+	require.NoError(t, d.run(ws, "text", true, opts))
+	assert.Contains(t, d.out.String(), "Would tag v0.8.4 on release/v2.15 at 8c61398, which is v0.8.4-rc.2 with no commits since, in rancher/shell")
+	assert.Empty(t, d.remote.made)
+}
+
+func TestRunStableRefusesToPromoteWhenTheBranchHasMovedOn(t *testing.T) {
+	var g tagging
+	ws := shell()
+	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: "ccccccccdddd"})
+	opts := answering("y\n")
+	opts.Tag, opts.Stable = "", true
+
+	err := g.run(ws, "text", false, opts)
+
+	require.ErrorIs(t, err, createtag.ErrMovedSincePrerelease)
 	assert.Empty(t, g.remote.made)
+	assert.NotContains(t, g.out.String(), "[y/N]")
+}
+
+func TestRunAProjectThatRequiresAPrereleaseHasNoStableAfterAStable(t *testing.T) {
+	var g tagging
+	ws := shell()
+	ws.project.Release.RequiresPrerelease = true
+	opts := answering("y\n")
+	opts.Tag, opts.Stable = "", true
+
+	err := g.run(ws, "text", false, opts)
+
+	require.ErrorIs(t, err, createtag.ErrNeedsPrerelease)
+	assert.Empty(t, g.remote.made)
+}
+
+func TestRunANamedStableTagOfAProjectThatRequiresAPrereleaseNeedsOneOnTheHead(t *testing.T) {
+	var g tagging
+	ws := shell()
+	ws.project.Release.RequiresPrerelease = true
+	opts := answering("y\n")
+	opts.Tag = "v0.8.4"
+
+	err := g.run(ws, "text", false, opts)
+
+	require.ErrorIs(t, err, createtag.ErrNeedsPrerelease)
+	assert.Empty(t, g.remote.made)
+}
+
+func TestRunMinorAndMajorRaiseTheVersionAfterAStableTag(t *testing.T) {
+	for bump, want := range map[semver.Bump]string{semver.Minor: "v0.6.0-rc.1", semver.Major: "v1.0.0-rc.1"} {
+		var g tagging
+		ws := shell()
+		ws.project.Release = config.Release{Branching: config.BranchingSingle, TagPattern: "v*"}
+		ws.refs.Tags = []git.Tag{{Name: "v0.5.3", Commit: "1111"}}
+		opts := Options{Line: "main", Bump: bump, Yes: true}
+
+		err := g.run(ws, "text", false, opts)
+
+		require.NoError(t, err)
+		assert.Equal(t, []string{"rancher/shell " + want + " " + headMain}, g.remote.made)
+	}
+}
+
+func TestRunWithNothingNewOnTheHeadChoosesNothing(t *testing.T) {
+	var g tagging
+	ws := shell()
+	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4", Commit: head215})
+	opts := answering("y\n")
+	opts.Tag = ""
+
+	err := g.run(ws, "text", false, opts)
+
+	require.ErrorIs(t, err, createtag.ErrNothingNew)
+	assert.Empty(t, g.remote.made)
+}
+
+func TestRunATagAndAWayToChooseOneAreNotBothAllowed(t *testing.T) {
+	for _, opts := range []Options{
+		{Line: "v2.15", Tag: "v0.8.4", Stable: true, Yes: true},
+		{Line: "v2.15", Tag: "v0.8.4", Bump: semver.Minor, Yes: true},
+	} {
+		var g tagging
+
+		err := g.run(shell(), "text", false, opts)
+
+		require.ErrorIs(t, err, ErrTagAndChoice)
+		assert.Empty(t, g.remote.made)
+	}
 }
 
 func TestRunABranchTheHostDoesNotHaveIsAnError(t *testing.T) {

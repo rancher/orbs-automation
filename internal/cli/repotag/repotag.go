@@ -47,7 +47,7 @@ type Options struct {
 	// not used with a tag.
 	Stable bool
 	Bump   semver.Bump
-	Yes     bool   // go on without asking
+	Yes    bool // go on without asking
 	// Interactive says In is a terminal that the question can be asked on.
 	Interactive bool
 	In          io.Reader
@@ -61,6 +61,8 @@ type Result struct {
 	Tag     string `json:"tag"`
 	// Newest is the tag of the line that this one follows, when there is one.
 	Newest string `json:"newest,omitempty"`
+	// Promotes is the prerelease that a stable tag is the promotion of.
+	Promotes string `json:"promotes,omitempty"`
 	// Action is "tagged", "already tagged" (it was on the commit), or "would tag"
 	// for a dry run.
 	Action string `json:"action"`
