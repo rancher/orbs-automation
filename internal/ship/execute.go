@@ -49,6 +49,11 @@ type TargetResult struct {
 	Warnings   []string `json:"warnings,omitempty"`   // what went wrong that did not fail the target
 	// WouldSupersede is what a dry run would have closed.
 	WouldSupersede []PRRef `json:"wouldSupersede,omitempty"`
+	// BehindBy is how many commits the target has that an already open PR's branch
+	// does not, when it is behind.
+	//
+	// STUB: never set until a later commit.
+	BehindBy int `json:"behindBy,omitempty"`
 }
 
 // PRRef is a PR, by number and where to see it.
