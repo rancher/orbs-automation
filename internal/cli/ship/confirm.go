@@ -25,8 +25,12 @@ func question(c domain.Confirmation) string {
 		if len(c.Opens) > 1 {
 			noun, prs = "branches", "PRs"
 		}
-		parts = append(parts, fmt.Sprintf("Push the %s for %s to %s (%s) and open %d %s in %s",
-			noun, strings.Join(c.Opens, ", "), c.Push.Remote, c.Push.Role, len(c.Opens), prs, c.Consumer))
+		replacing := ""
+		if c.MayReplace {
+			replacing = fmt.Sprintf(", replacing the branch on %s if an earlier attempt left one of ours", c.Push.Remote)
+		}
+		parts = append(parts, fmt.Sprintf("Push the %s for %s to %s (%s)%s and open %d %s in %s",
+			noun, strings.Join(c.Opens, ", "), c.Push.Remote, c.Push.Role, replacing, len(c.Opens), prs, c.Consumer))
 	}
 	if len(c.Refreshes) > 0 {
 		verb := "rebuild"

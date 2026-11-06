@@ -103,8 +103,6 @@ type Confirmation struct {
 	Refreshes []string
 	// MayReplace says a branch an earlier attempt left on the remote, if it is
 	// ours, will be replaced to open the new PRs: --refresh was given.
-	//
-	// STUB: never set until a later commit.
 	MayReplace bool
 }
 
@@ -288,6 +286,7 @@ func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, 
 			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
 		}
 	}
+	c.MayReplace = refresh && len(c.Opens) > 0
 	return c, len(c.Opens)+len(c.Closes)+len(c.Refreshes) > 0
 }
 
