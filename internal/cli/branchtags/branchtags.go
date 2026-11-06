@@ -1,4 +1,4 @@
-// Package branchtags holds the logic of gero repo current-tags, a port of the
+// Package branchtags holds the logic of gero repo build-tags, a port of the
 // branch-tags.sh script. It is framework-free: cmd/ owns the cobra wiring.
 package branchtags
 

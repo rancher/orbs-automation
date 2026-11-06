@@ -2,7 +2,7 @@
 
 **Status:** implemented for the faithful port (sections 1 to 4). Not built yet: the opt-in improvements in section 6 and the optional parity test. Section 5 has open questions.
 
-Port of the `.github/scripts/branch-tags.sh` bash script that many ORBS repos carry. The command is `gero repo current-tags`, named for what it prints, and the script keeps its name. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same inputs, same output keys, case and order, same results. Every approved improvement is listed in section 6 and is opt-in. Git access uses go-git behind an interface ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md), [GITHUB_ACCESS](GITHUB_ACCESS.md)).
+Port of the `.github/scripts/branch-tags.sh` bash script that many ORBS repos carry. The command is `gero repo build-tags`: it names the tags of a build of the head of a branch (the rolling tag, the fixed tag for the commit, and the previous fixed tag, which a release tool such as goreleaser can use as the start of its changelog). Its first name was `current-tags`, which still works as an alias, and the script keeps its name. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same inputs, same output keys, case and order, same results. Every approved improvement is listed in section 6 and is opt-in. Git access uses go-git behind an interface ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md), [GITHUB_ACCESS](GITHUB_ACCESS.md)).
 
 ## 1. What the script does today
 
@@ -46,10 +46,10 @@ prev_static_tag=<value or empty>
 
 ## 2. Faithful port (the default)
 
-What makes `gero repo current-tags` a faithful port. Each point matches the script:
+What makes `gero repo build-tags` a faithful port. Each point matches the script:
 
 ```
-gero repo current-tags
+gero repo build-tags
 ```
 
 1. **Inputs.** When both `GITHUB_REF` and `GITHUB_SHA` are non-empty, the ref is `GITHUB_REF` and the commit is the first 7 characters of `GITHUB_SHA`. Otherwise the repository in the current directory is read, which must have a `.git` directory there. The command reads the environment and passes values down. The library never reads it.

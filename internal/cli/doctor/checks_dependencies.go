@@ -129,7 +129,7 @@ func (c gitCheck) Run(ctx context.Context) Result {
 			Status:  StatusFail,
 			Message: err.Error(),
 			Remediation: "gero runs git for a few operations, such as abbreviating a commit hash in " +
-				"gero repo current-tags: install it from https://git-scm.com",
+				"gero repo build-tags: install it from https://git-scm.com",
 		}
 	case err != nil:
 		return Result{
