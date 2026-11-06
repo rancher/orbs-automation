@@ -174,12 +174,24 @@ func runTo(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspa
 // target failed.
 var ErrFailed = errors.New("some targets failed")
 
-// failedErr is ErrFailed when any target's result is a failure.
+// failedErr is ErrFailed when any target's result is a failure, else ErrBlocked
+// when one is blocked by a newer PR, so the exit code says the run did not do
+// everything it was asked.
 func failedErr(p domain.Plan) error {
+	blocked := false
 	for _, t := range p.Targets {
-		if t.Result != nil && t.Result.Status == domain.ResultFailed {
-			return ErrFailed
+		if t.Result == nil {
+			continue
 		}
+		switch t.Result.Status {
+		case domain.ResultFailed:
+			return ErrFailed
+		case domain.ResultBlocked:
+			blocked = true
+		}
+	}
+	if blocked {
+		return ErrBlocked
 	}
 	return nil
 }
