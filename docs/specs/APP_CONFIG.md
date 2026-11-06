@@ -35,7 +35,7 @@ A bump has two halves, and each is configured by the project that knows it. The 
 | `name` | What a producer's edge refers to |
 | `strategy` | The name of a strategy, which is Go code that claims it (`yamlBump`). The name is defined in the code and nowhere else |
 | `with` | Values the consumer fixes for the strategy, such as `file: build.yaml`. The strategy checks them once, when the config loads. A producer cannot pass these |
-| `allowedParams` | What a producer's edge may pass: a list of `key`, `description`, `default` and `required`. **This is the only declaration of a param.** A param is required unless it has a `default` or says `required: false`. A strategy reads its inputs by name and has no declaration of them |
+| `allowedParams` | What a producer's edge may pass: a list of `key`, `description`, `default` and `required`. **This is the only declaration of a param.** A param is required unless it has a `default` or says `required: false`. A strategy reads its inputs by name and has no declaration of them. For `yamlBump` these are `updateKey` and an optional `value`, a template over `{image}`, `{tag}`, `{version}` and `{sourceRepo}` (default `{tag}`), so an edge can write `{image}:{tag}` where a file holds an image reference |
 | `accept` | Which releases the consumer takes: `when: stable` (the default) or `all`. A consumer that wants both has two methods |
 | `preEdit`, `postEdit` | Steps the consumer runs around the edit |
 
@@ -93,4 +93,4 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 * Final kind and field names.
 * Whether any config other than `WorkflowsConfig` ever moves into target repos.
-* How a `yamlBump` call forms an image reference rather than a bare tag. It reads an optional `value` input, which a method offers under `allowedParams` (default `{tag}`) and an edge sets, for example `{image}:{tag}`; whether rancher's method should offer it is decided with the real config.
+* How `yamlBump` finds its key: today the fixed input name `updateKey`.

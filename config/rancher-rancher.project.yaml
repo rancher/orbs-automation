@@ -31,6 +31,9 @@ spec:
       allowedParams:
         - key: updateKey
           description: "The name of the key to update/read in build.yaml file"
+        - key: value
+          description: "What to write at the key, over {image}, {tag}, {version} and {sourceRepo}"
+          default: "{tag}"
       postEdit:
         - run: scripts/generate-buildconfig
           since: v2.16

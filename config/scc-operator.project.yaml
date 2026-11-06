@@ -13,3 +13,4 @@ spec:
       method: build-yaml-bump
       params:
         updateKey: defaultSccOperatorImage
+        value: "{image}:{tag}"
