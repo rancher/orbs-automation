@@ -234,19 +234,20 @@ func hasResults(p domain.Plan) bool {
 }
 
 // writeCommits lists what a run did for each target that needed a PR: the result,
-// where the commit was made, the commit and the new branch; then why a worktree
-// was used and what failed, each grouped over the branches it applies to; then
-// how to review the commits that are on branches.
+// where the commits were made and the new branch; then why a worktree was used
+// and what failed, each grouped over the branches it applies to; then the
+// commits of each target, oldest first; then how to review the ones that are on
+// branches.
 func writeCommits(b *strings.Builder, p domain.Plan) {
 	if !hasResults(p) {
 		return
 	}
 	b.WriteString("\nCommits\n")
 	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  BRANCH\tRESULT\tWHERE\tCOMMIT\tNEW BRANCH")
+	fmt.Fprintln(w, "  BRANCH\tRESULT\tWHERE\tNEW BRANCH")
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil {
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", t.Branch, r.Status, r.Place, git.Short(r.Tip()), r.Branch)
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.Branch, r.Status, r.Place, r.Branch)
 		}
 	}
 	_ = w.Flush()
@@ -264,13 +265,24 @@ func writeCommits(b *strings.Builder, p domain.Plan) {
 	for _, g := range groupTargets(p.Targets, result(func(r *domain.TargetResult) string { return r.Error })) {
 		fmt.Fprintf(b, "  failed (%s): %s\n", strings.Join(g.branches, ", "), g.text)
 	}
+	for _, t := range p.Targets {
+		if r := t.Result; r != nil && len(r.Commits) > 0 {
+			fmt.Fprintf(b, "\n  %s\n", t.Branch)
+			for _, c := range r.Commits {
+				fmt.Fprintf(b, "    %s  %s\n", git.Short(c.Hash), c.Subject)
+			}
+		}
+	}
 	if p.DryRun {
 		return // the branches were removed, so there is nothing to review
 	}
 	var review []string
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil && r.Status == domain.ResultCommitted {
-			review = append(review, fmt.Sprintf("  git -C %s diff %s/%s...%s\n", p.Clone, p.Remote, t.Branch, r.Branch))
+			rng := fmt.Sprintf("%s/%s", p.Remote, t.Branch)
+			review = append(review,
+				fmt.Sprintf("  git -C %s log --oneline %s..%s\n", p.Clone, rng, r.Branch),
+				fmt.Sprintf("  git -C %s diff %s...%s\n", p.Clone, rng, r.Branch))
 		}
 	}
 	if len(review) > 0 {
