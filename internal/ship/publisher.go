@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/task/createpr"
 	"github.com/rancher/orbs-automation/internal/task/pushbranch"
 )
 
@@ -71,18 +72,19 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 	if p.Push.Role == RoleFork {
 		head = p.HeadOwner + ":" + branch
 	}
-	created, err := p.Remote.Create(ctx, consumer, pulls.NewPR{
-		Title: tp.Preview.Title, Body: tp.Preview.Body, Head: head, Base: tp.Branch,
+	pr, err := createpr.Run(ctx, p.Remote, createpr.Input{
+		Repo: consumer, Title: tp.Preview.Title, Body: tp.Preview.Body, Head: head, Base: tp.Branch,
+		Labels: p.labels(tp.Preview.Labels),
 	})
 	if err != nil {
 		res.Status, res.Error = ResultFailed, fmt.Sprintf("the branch is pushed to %s, but opening the PR failed: %v", p.Push.Remote, err)
 		return
 	}
-	res.Status, res.PR = ResultOpened, &PRRef{Number: created.Number, URL: created.URL}
+	res.Status, res.PR = ResultOpened, &PRRef{Number: pr.Number, URL: pr.URL}
+	res.Warnings = append(res.Warnings, pr.Warnings...)
 	emit(sink, Event{Kind: EventPROpened, Branch: tp.Branch, PR: res.PR})
 
-	p.label(ctx, consumer, created.Number, tp.Preview.Labels, res)
-	p.supersede(ctx, consumer, created.Number, m, tp.Branch, dec.Supersede, res, sink)
+	p.supersede(ctx, consumer, pr.Number, m, tp.Branch, dec.Supersede, res, sink)
 }
 
 // pushBranch puts the branch on the remote with the pushbranch task, and says
@@ -166,39 +168,11 @@ func (p Publisher) recordRefresh(ctx context.Context, consumer string, tp Target
 	}
 }
 
-// label applies the configured labels, and the bot's when the bot is the actor,
-// that the repository has, after the PR exists. A label it lacks is a warning, and
-// so is any failure: a label never fails the PR. The repository's labels are read
-// only when there are labels to apply.
-func (p Publisher) label(ctx context.Context, consumer string, number int, configured []string, res *TargetResult) {
+// labels is the configured labels, and the bot's when the bot is the actor.
+func (p Publisher) labels(configured []string) []string {
 	wanted := slices.Clone(configured)
 	if p.IsBot {
 		wanted = append(wanted, p.BotLabels...)
 	}
-	if len(wanted) == 0 {
-		return
-	}
-	have, err := p.Remote.RepoLabels(ctx, consumer)
-	if err != nil {
-		res.Warnings = append(res.Warnings, fmt.Sprintf("could not read the labels of %s, so none were applied: %v", consumer, err))
-		return
-	}
-	spelling := make(map[string]string, len(have))
-	for _, l := range have {
-		spelling[strings.ToLower(l)] = l
-	}
-	var apply []string
-	for _, l := range wanted {
-		actual, ok := spelling[strings.ToLower(l)]
-		if !ok {
-			res.Warnings = append(res.Warnings, fmt.Sprintf("label %s is not in %s, so it was not applied", l, consumer))
-			continue
-		}
-		if !slices.Contains(apply, actual) {
-			apply = append(apply, actual)
-		}
-	}
-	if err := p.Remote.AddLabels(ctx, consumer, number, apply); err != nil {
-		res.Warnings = append(res.Warnings, fmt.Sprintf("could not apply the labels: %v", err))
-	}
+	return wanted
 }

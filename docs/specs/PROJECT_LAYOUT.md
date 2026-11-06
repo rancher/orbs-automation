@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** implemented, except the prompt side of `internal/ui`, all but one task in `internal/task/`, and `test/integration/` (see Not built yet).
+**Status:** implemented, except the prompt side of `internal/ui`, all but two tasks in `internal/task/`, and `test/integration/` (see Not built yet).
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -24,7 +24,7 @@ internal/config/     application config types, their effective getters and the e
 internal/config/loader/  application config loader: YAML decoding, defaults, validation (workspace only)
 internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (WORKSPACE)
 internal/ui/         output and prompt seam, plain-text implementation first: Output and Stream exist, prompts do not yet   (CLI_OUTPUT)
-internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); only pushbranch is built
+internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); only pushbranch and createpr are built
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/repo/   local repository access with go-git; the only importer of go-git
 internal/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
@@ -52,12 +52,12 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ### Tasks: single actions that compose
 
-**Status: `pushbranch` is built and `ship` uses it. The other tasks are planned.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
+**Status: `pushbranch` and `createpr` are built and `ship` uses them. The other tasks are planned.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
 
 * `createbranch`: a new branch for a project and release line, based on the upstream branch.
 * `bumpcommit`: apply one change set and make its commits. The change and its commits are never separated.
 * `pushbranch`: push a branch.
-* `createpr`: open the PR for a branch, with its labels and the closing of what it supersedes.
+* `createpr`: open the PR for a branch that is pushed, with the labels the repository has. Closing the PRs it supersedes is not part of it: `ship` also does that when a PR is already open and nothing is created, so it is a step of its own, not built as a task yet.
 * More are added when a second caller needs them, not before.
 
 **Shape.** Every task has the same three parts, and nothing else is exported that a caller must know about:
@@ -134,7 +134,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 ## Not built yet
 
 * The prompt side of `internal/ui` ([CLI_OUTPUT](CLI_OUTPUT.md)). `Output` and `Stream` are built.
-* The other tasks, `createbranch`, `bumpcommit` and `createpr`, extracted from `internal/ship` one action at a time, and the standalone commands that run a task alone. `pushbranch` is built, and has no command of its own yet.
+* The other tasks, `createbranch` and `bumpcommit`, and a task for closing superseded PRs, extracted from `internal/ship` one action at a time, and the standalone commands that run a task alone. `pushbranch` and `createpr` are built, and have no command of their own yet.
 * `test/integration/` ([TESTING](TESTING.md)).
 
 ## Open questions
