@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -24,6 +25,7 @@ type humanSink struct {
 	wantShown bool                // the value the consumer should hold has been shown
 	prShown   bool
 	working   bool // the section for the work on branches has been started
+	deciding  bool // the section for the open PRs of each branch has been started
 }
 
 var _ domain.Sink = (*humanSink)(nil)
@@ -43,12 +45,22 @@ func (h *humanSink) Event(e domain.Event) {
 		h.endTargets()
 		h.images(e.Images)
 		h.pr()
+	case domain.EventDecided:
+		h.endTargets()
+		h.pr()
+		h.decided(e)
 	case domain.EventTargetStarted:
 		h.endTargets()
 		h.pr()
 		h.started(e)
 	case domain.EventCommit:
 		h.out.Line(fmt.Sprintf("    %s  %s", git.Short(e.Commit.Hash), e.Commit.Subject))
+	case domain.EventPushed:
+		h.out.Line(fmt.Sprintf("  %s: pushed to %s", e.Branch, e.Remote))
+	case domain.EventPROpened:
+		h.out.Line(fmt.Sprintf("  %s: opened #%d %s", e.Branch, e.PR.Number, e.PR.URL))
+	case domain.EventSuperseded:
+		h.out.Line(fmt.Sprintf("  %s: closed #%d", e.Branch, e.PR.Number))
 	case domain.EventTargetDone:
 		h.done(e)
 	case domain.EventDone:
@@ -176,6 +188,41 @@ func (h *humanSink) block(heading, text string) {
 	}
 }
 
+// decided says what will be done about the PR of a branch, and which older ones
+// will be closed.
+func (h *humanSink) decided(e domain.Event) {
+	if !h.deciding {
+		h.deciding = true
+		h.out.Line("")
+		h.out.Line("Open PRs")
+	}
+	d := e.Decision
+	closing := ""
+	if len(d.Supersede) > 0 {
+		closing = " " + numbers(d.Supersede) + " will be closed"
+	}
+	switch d.Action {
+	case domain.PublishBlocked:
+		h.out.Line(fmt.Sprintf("  %s: blocked by #%d, which is newer", e.Branch, d.Newer.Number))
+	case domain.PublishAlreadyOpen:
+		h.out.Line(fmt.Sprintf("  %s: already open as #%d%s", e.Branch, d.Open.Number, strings.Replace(closing, " #", ", and #", 1)))
+	default:
+		if closing != "" {
+			closing = ", and" + closing
+		}
+		h.out.Line(fmt.Sprintf("  %s: a new PR%s", e.Branch, closing))
+	}
+}
+
+// numbers lists PRs by number: #101, #90.
+func numbers(prs []pulls.PR) string {
+	out := make([]string, len(prs))
+	for i, p := range prs {
+		out[i] = fmt.Sprintf("#%d", p.Number)
+	}
+	return strings.Join(out, ", ")
+}
+
 func (h *humanSink) startWork() {
 	if !h.working {
 		h.working = true
@@ -197,11 +244,17 @@ func (h *humanSink) started(e domain.Event) {
 
 func (h *humanSink) done(e domain.Event) {
 	h.startWork()
-	if e.Result.Status == domain.ResultFailed {
-		h.out.Line(fmt.Sprintf("  %s: failed: %s", e.Branch, e.Result.Error))
-		return
+	r := e.Result
+	switch r.Status {
+	case domain.ResultFailed:
+		h.out.Line(fmt.Sprintf("  %s: failed: %s", e.Branch, r.Error))
+	case domain.ResultBlocked:
+		h.out.Line(fmt.Sprintf("  %s: blocked: %s", e.Branch, r.Error))
+	case domain.ResultAlreadyOpen:
+		h.out.Line(fmt.Sprintf("  %s: already open #%d %s", e.Branch, r.PR.Number, r.PR.URL))
+	default:
+		h.out.Line(fmt.Sprintf("  %s: %s", e.Branch, r.Status))
 	}
-	h.out.Line(fmt.Sprintf("  %s: %s", e.Branch, e.Result.Status))
 }
 
 // summary is the end of the report: what was done for each branch and where it
@@ -213,6 +266,9 @@ func (h *humanSink) summary(p *domain.Plan) {
 	h.out.Line("")
 	if !h.wantShown && p.Want != "" {
 		h.out.Line("  want    " + p.Want)
+	}
+	if p.Push != nil {
+		h.out.Line(fmt.Sprintf("  push to  %s (%s), as %s", p.Push.Role, p.Push.Remote, p.Push.Source))
 	}
 	h.out.Line("  status  " + string(p.Status))
 	for _, blocker := range p.Blockers {
@@ -246,8 +302,29 @@ func (h *humanSink) commits(p *domain.Plan) {
 	for _, g := range groupTargets(p.Targets, text(func(r *domain.TargetResult) string { return r.Reason })) {
 		h.out.Line(fmt.Sprintf("  worktree (%s): %s", strings.Join(g.branches, ", "), g.text))
 	}
-	for _, g := range groupTargets(p.Targets, text(func(r *domain.TargetResult) string { return r.Error })) {
-		h.out.Line(fmt.Sprintf("  failed (%s): %s", strings.Join(g.branches, ", "), g.text))
+	for _, status := range []domain.ResultStatus{domain.ResultFailed, domain.ResultBlocked} {
+		only := func(r *domain.TargetResult) string {
+			if r.Status != status {
+				return ""
+			}
+			return r.Error
+		}
+		for _, g := range groupTargets(p.Targets, text(only)) {
+			h.out.Line(fmt.Sprintf("  %s (%s): %s", status, strings.Join(g.branches, ", "), g.text))
+		}
+	}
+	for _, t := range p.Targets {
+		if r := t.Result; r != nil && len(r.WouldSupersede) > 0 {
+			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Branch, refNumbers(r.WouldSupersede)))
+		}
+	}
+	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string {
+		if t.Result == nil {
+			return nil
+		}
+		return t.Result.Warnings
+	}) {
+		h.out.Line(fmt.Sprintf("  warning (%s): %s", strings.Join(g.branches, ", "), g.text))
 	}
 	if p.DryRun {
 		return // the branches were removed, so there is nothing to review
@@ -270,6 +347,15 @@ func (h *humanSink) commits(p *domain.Plan) {
 	}
 }
 
+// refNumbers lists PR references by number: #101, #90.
+func refNumbers(refs []domain.PRRef) string {
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = fmt.Sprintf("#%d", r.Number)
+	}
+	return strings.Join(out, ", ")
+}
+
 // trailer says what the run did and did not do.
 func trailer(p *domain.Plan) string {
 	switch {
@@ -282,7 +368,19 @@ func trailer(p *domain.Plan) string {
 	case p.NoPush:
 		return "No push: no commit was made."
 	}
-	// Pushing and opening the PR are not built yet, so nothing is written
-	// without --dry-run or --no-push either.
-	return "Nothing was written: creating the branches and PRs is not built yet."
+	opened := 0
+	for _, t := range p.Targets {
+		if t.Result != nil && t.Result.Status == domain.ResultOpened {
+			opened++
+		}
+	}
+	switch {
+	case opened == 1:
+		return "Opened 1 PR."
+	case opened > 1:
+		return fmt.Sprintf("Opened %d PRs.", opened)
+	case hasResults(*p):
+		return "No PR was opened."
+	}
+	return "Nothing was written."
 }

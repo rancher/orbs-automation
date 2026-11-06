@@ -28,6 +28,15 @@ func replay(plan domain.Plan) []domain.Event {
 		for i := range r.Commits {
 			events = append(events, domain.Event{Kind: domain.EventCommit, Branch: t.Branch, Commit: &r.Commits[i]})
 		}
+		if r.Pushed != "" {
+			events = append(events, domain.Event{Kind: domain.EventPushed, Branch: t.Branch, Remote: r.Pushed})
+		}
+		if r.Status == domain.ResultOpened && r.PR != nil {
+			events = append(events, domain.Event{Kind: domain.EventPROpened, Branch: t.Branch, PR: r.PR})
+		}
+		for i := range r.Superseded {
+			events = append(events, domain.Event{Kind: domain.EventSuperseded, Branch: t.Branch, PR: &r.Superseded[i]})
+		}
 		events = append(events, domain.Event{Kind: domain.EventTargetDone, Branch: t.Branch, Result: r})
 	}
 	return append(events, domain.Event{Kind: domain.EventDone, Plan: &plan})
