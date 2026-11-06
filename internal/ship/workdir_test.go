@@ -368,7 +368,8 @@ func mustPrepare(t *testing.T, req PrepareRequest) *Work {
 
 // ours makes a branch of the engineer's clone that gero made: from base, with
 // commits that have the trailer and the author the clone is set to commit as.
-func ours(t *testing.T, clone, name, base string, subjects ...string) string {
+func ours(t *testing.T, clone, base string, subjects ...string) string {
+	const name = "bot/x-v1"
 	t.Helper()
 	runGit(t, clone, "checkout", "--quiet", "-b", name, base)
 	for i, subject := range subjects {
@@ -386,7 +387,7 @@ func TestPrepareReusesABranchOfOursThatIsCurrent(t *testing.T) {
 	clone := engineer(t, up)
 	req := request(t, up, clone)
 	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
-	tip := ours(t, clone, "bot/x-v1", req.Base, "Update scc-operator", "Run generate")
+	tip := ours(t, clone, req.Base, "Update scc-operator", "Run generate")
 
 	w, err := Prepare(bg, GitCLI{}, req)
 
@@ -409,7 +410,7 @@ func TestPrepareRebuildsABranchOfOursWhenTheTargetHasMovedOn(t *testing.T) {
 	clone := engineer(t, up)
 	old := request(t, up, clone)
 	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
-	oldTip := ours(t, clone, "bot/x-v1", old.Base, "Update scc-operator")
+	oldTip := ours(t, clone, old.Base, "Update scc-operator")
 	runGit(t, up, "checkout", "--quiet", "release/v1")
 	put(t, up, "later.txt", "x")
 	runGit(t, up, "add", ".")
@@ -449,7 +450,7 @@ func TestPrepareRebuildsWhenAskedEvenIfTheBranchIsCurrent(t *testing.T) {
 	req := request(t, up, clone)
 	req.Rebuild = true
 	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
-	oldTip := ours(t, clone, "bot/x-v1", req.Base, "Update scc-operator")
+	oldTip := ours(t, clone, req.Base, "Update scc-operator")
 
 	w, err := Prepare(bg, GitCLI{}, req)
 
@@ -465,7 +466,7 @@ func TestPrepareReusingNeedsNoWorktreeEvenInADryRunAndNeverDeletesTheBranch(t *t
 	req := request(t, up, clone)
 	req.DryRun = true
 	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
-	tip := ours(t, clone, "bot/x-v1", req.Base, "Update scc-operator")
+	tip := ours(t, clone, req.Base, "Update scc-operator")
 
 	w, err := Prepare(bg, GitCLI{}, req)
 	require.NoError(t, err)
