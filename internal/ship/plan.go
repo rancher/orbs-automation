@@ -13,8 +13,8 @@ var (
 	// ErrNoConsumer is returned when no project takes updates from the producer,
 	// or the one named by To is not among them.
 	ErrNoConsumer = errors.New("no such consumer")
-	// ErrAmbiguousConsumer is returned when several projects take updates from
-	// the producer and none was chosen.
+	// ErrAmbiguousConsumer is returned when the producer has several routes and
+	// none was chosen.
 	ErrAmbiguousConsumer = errors.New("several consumers")
 	// ErrBranchRequired is returned when no target branch was named.
 	ErrBranchRequired = errors.New("a target branch is required")
@@ -29,8 +29,9 @@ var (
 // Workspace is what the state check needs from the invocation's workspace. It
 // is defined here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	// Consumers returns the producer and the projects that take updates from it.
-	Consumers(key string) (config.Project, []config.Consumer, error)
+	// Links returns the producer and the routes out of it: each downstream edge
+	// with the consumer project and the update method it names.
+	Links(key string) (config.Project, []config.Link, error)
 	// UpstreamRefs lists the tags and branch heads of a repository on its host.
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// UpstreamFile reads a file of a repository at a commit from its host.
@@ -41,7 +42,8 @@ type Workspace interface {
 type Input struct {
 	Project    string // the producer, by config name or slug
 	Arg        string // a tag, a release line of the producer, or empty for the latest
-	To         string // the consumer, when there are several
+	To         string // the consumer, when the producer ships to several
+	Method     string // the consumer's update method, when the producer uses several of one consumer
 	Branch     string // the consumer's target branch
 	Prerelease bool   // let prereleases count
 	// DryRun is the invocation's --dry-run: compute and report, and create no
@@ -95,11 +97,12 @@ type Plan struct {
 	Producer string           `json:"producer"` // the repository slug
 	Release  Release          `json:"release"`
 	Consumer string           `json:"consumer"` // the repository slug
-	Strategy string           `json:"strategy"`
-	File     string           `json:"file"`   // the consumer's file the strategy edits
-	Want     string           `json:"want"`   // what the consumer should hold for the release
-	DryRun   bool             `json:"dryRun"` // the run was a dry run: no branch or PR is created
-	Status   Status           `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
+	Method   string           `json:"method"`   // the consumer's update method
+	Strategy string           `json:"strategy"` // what the method uses to read and write the value
+	File     string           `json:"file"`     // the consumer's file the strategy edits
+	Want     string           `json:"want"`     // what the consumer should hold for the release
+	DryRun   bool             `json:"dryRun"`   // the run was a dry run: no branch or PR is created
+	Status   Status           `json:"status"`   // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
 	Targets  []TargetPlan     `json:"targets"`
 	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
 	Images   *registry.Report `json:"images,omitempty"`   // checked once, and only when some target needs a PR
@@ -120,8 +123,8 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		return Plan{}, err
 	}
 	plan := Plan{
-		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.consumer.Project.Repo.Name,
-		Strategy: res.consumer.Source.Update.Strategy, File: res.file, Want: res.want, DryRun: in.DryRun,
+		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.link.Consumer.Repo.Name,
+		Method: res.link.Method.Name, Strategy: res.link.Method.Strategy, File: res.file, Want: res.want, DryRun: in.DryRun,
 	}
 	needsPR := false
 	for _, branch := range branches {

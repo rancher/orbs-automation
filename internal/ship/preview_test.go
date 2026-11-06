@@ -9,11 +9,12 @@ import (
 )
 
 func previewFixture() previewInput {
-	strategy, _ := LookupStrategy("buildYamlBump")
-	c := riConsumer("buildYamlBump")
+	strategy, _ := LookupStrategy("yamlBump")
+	c := riLink("yamlBump")
 	return previewInput{
 		producer: config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}},
-		consumer: c,
+		link:     c,
+		params:   bindParams(c),
 		release:  Release{Tag: "v0.5.3", Commit: "sha", Stable: true},
 		target:   Target{Branch: "release/v2.15", Commit: "sha-215"},
 		strategy: strategy,
@@ -56,7 +57,7 @@ func TestRenderPreviewTheDevelopmentBranch(t *testing.T) {
 
 func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
 	in := previewFixture()
-	in.consumer.Project.PullRequests = config.PullRequests{
+	in.link.Consumer.PullRequests = config.PullRequests{
 		Title:        "Bump {source} ({version}) on {targetBranch}",
 		BranchPrefix: "auto/{project}/",
 		Labels:       []string{"status/auto-created", "team/orbs"},
@@ -70,7 +71,7 @@ func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
 
 func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 	in := previewFixture()
-	in.consumer.Project.PullRequests.BranchPrefix = "bot/{source}-"
+	in.link.Consumer.PullRequests.BranchPrefix = "bot/{source}-"
 	in.userPrefix = "dan/"
 	got, err := renderPreview(in)
 	require.NoError(t, err)
@@ -79,7 +80,7 @@ func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 
 func TestRenderPreviewListsThePostEditCommands(t *testing.T) {
 	in := previewFixture()
-	in.consumer.Source.Update.PostEdit = []string{"scripts/generate-buildconfig", "go generate ./..."}
+	in.steps = []config.Step{{Run: config.Command{"scripts/generate-buildconfig"}}, {Run: config.Command{"go", "generate", "./..."}}}
 	got, err := renderPreview(in)
 	require.NoError(t, err)
 	assert.Contains(t, got.Body, "- Ran `scripts/generate-buildconfig`")
@@ -97,12 +98,12 @@ func TestRenderPreviewAPrereleaseKeepsItsTag(t *testing.T) {
 
 func TestRenderPreviewRejectsAnUnknownPlaceholder(t *testing.T) {
 	in := previewFixture()
-	in.consumer.Project.PullRequests.Title = "Update {nope}"
+	in.link.Consumer.PullRequests.Title = "Update {nope}"
 	_, err := renderPreview(in)
 	assert.ErrorContains(t, err, "nope")
 
 	in = previewFixture()
-	in.consumer.Project.PullRequests.BranchPrefix = "{nope}/"
+	in.link.Consumer.PullRequests.BranchPrefix = "{nope}/"
 	_, err = renderPreview(in)
 	assert.ErrorContains(t, err, "nope")
 }

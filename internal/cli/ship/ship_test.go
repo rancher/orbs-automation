@@ -22,21 +22,23 @@ type fakeWorkspace struct {
 	files map[string]string
 }
 
-func (f *fakeWorkspace) Consumers(string) (config.Project, []config.Consumer, error) {
+func (f *fakeWorkspace) Links(string) (config.Project, []config.Link, error) {
 	if f.err != nil {
 		return config.Project{}, nil, f.err
 	}
 	producer := config.Project{
 		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}, Release: config.Release{TagPattern: "v*"},
 	}
-	consumer := config.Consumer{
-		Project: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}},
-		Source: config.Source{
-			From: "scc-operator", Accept: config.Accept{When: config.AcceptStable},
-			Update: config.Update{Strategy: "buildYamlBump", Params: map[string]string{"file": "build.yaml", "key": "image"}},
+	link := config.Link{
+		Consumer: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}},
+		Method: config.UpdateMethod{
+			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
+			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
+			Accept:        config.Accept{When: config.AcceptStable},
 		},
+		Edge: config.Edge{To: "rancher", Method: "build-yaml-bump", Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"}},
 	}
-	return producer, []config.Consumer{consumer}, nil
+	return producer, []config.Link{link}, nil
 }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
@@ -66,7 +68,7 @@ func TestRunReady(t *testing.T) {
 	require.NoError(t, err)
 	for _, want := range []string{
 		"rancher/scc-operator", "v0.5.3", "stable", "rancher/rancher", "main", "2222222",
-		"buildYamlBump", "build.yaml", "rancher/scc-operator:v0.5.2", "rancher/scc-operator:v0.5.3",
+		"build-yaml-bump", "yamlBump", "build.yaml", "rancher/scc-operator:v0.5.2", "rancher/scc-operator:v0.5.3",
 		"ready", "Nothing was written",
 	} {
 		assert.Contains(t, out, want)
@@ -121,7 +123,7 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 
 func previewPlan() domain.Plan {
 	return domain.Plan{
-		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Strategy: "buildYamlBump", File: "build.yaml",
+		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Method: "build-yaml-bump", Strategy: "yamlBump", File: "build.yaml",
 		Release: domain.Release{Tag: "v0.5.3", Stable: true}, Want: "b", Status: domain.StatusReady,
 		Targets: []domain.TargetPlan{{
 			Target:  domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},

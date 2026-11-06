@@ -23,7 +23,9 @@ type Preview struct {
 // previewInput is everything the texts are made from.
 type previewInput struct {
 	producer   config.Project
-	consumer   config.Consumer
+	link       config.Link // the consumer project and the method it uses
+	params     Params
+	steps      []config.Step // the commands that run around the edit for this branch, in order
 	release    Release
 	target     Target
 	strategy   Strategy
@@ -39,11 +41,11 @@ type previewInput struct {
 // the project's pullRequests.title, else the default. An unknown placeholder in
 // either is an error, though config validation rejects it sooner.
 func renderPreview(in previewInput) (Preview, error) {
-	prs := in.consumer.Project.PullRequests
+	prs := in.link.Consumer.PullRequests
 	tag := in.release.Tag
 	branchLabel := strings.TrimPrefix(in.target.Branch, "release/")
 	marker := Marker{
-		Source: in.producer.Repo.Name, Consumer: in.consumer.Project.Repo.Name,
+		Source: in.producer.Repo.Name, Consumer: in.link.Consumer.Repo.Name,
 		Target: in.target.Branch, Version: tag,
 	}
 	vars := map[string]string{
@@ -54,7 +56,7 @@ func renderPreview(in previewInput) (Preview, error) {
 		"version":          strings.TrimPrefix(tag, "v"),
 		"branch":           branchLabel,
 		"targetBranch":     in.target.Branch,
-		"consumer":         in.consumer.Project.Repo.Name,
+		"consumer":         in.link.Consumer.Repo.Name,
 		"sourceReleaseURL": "https://github.com/" + in.producer.Repo.Name + "/releases/tag/" + tag,
 		"file":             in.file,
 		"from":             in.current,
@@ -90,9 +92,9 @@ func renderPreview(in previewInput) (Preview, error) {
 // changes lists what a bump changes, from what the strategy did and the
 // post-edit commands that run, one bullet each.
 func changes(in previewInput) string {
-	lines := []string{"- " + in.strategy.Describe(Params(in.consumer.Source.Update.Params), in.current, in.want)}
-	for _, cmd := range in.consumer.Source.Update.PostEdit {
-		lines = append(lines, "- Ran `"+cmd+"`")
+	lines := []string{"- " + in.strategy.Describe(in.params, in.current, in.want)}
+	for _, step := range in.steps {
+		lines = append(lines, "- Ran `"+strings.Join(step.Run, " ")+"`")
 	}
 	return strings.Join(lines, "\n")
 }

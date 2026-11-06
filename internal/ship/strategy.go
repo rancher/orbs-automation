@@ -14,6 +14,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship/templates"
+	"github.com/rancher/orbs-automation/internal/strategyspec"
 	"github.com/rancher/orbs-automation/internal/yamledit"
 )
 
@@ -51,10 +52,10 @@ type Strategy interface {
 }
 
 var strategies = map[string]Strategy{
-	// buildYamlBump sets an image reference, such as rancher/scc-operator:v0.5.3.
-	"buildYamlBump": yamlKey{defaultValue: "{image}:{tag}"},
-	// yamlKeyBump sets a bare value, by default the tag.
-	"yamlKeyBump": yamlKey{defaultValue: "{tag}"},
+	// yamlBump keeps the release's value at one key of a YAML file: a bare tag by
+	// default, or an image reference such as rancher/scc-operator:v0.5.3 when the
+	// producer's value template says so.
+	"yamlBump": yamlKey{},
 }
 
 // LookupStrategy returns the strategy of a name.
@@ -76,16 +77,16 @@ func StrategyNames() []string {
 }
 
 // yamlKey keeps a release's value at one key of a YAML file. The params are
-// file and key (a dotted path), and optionally value, a template over
-// ValueVars that replaces the strategy's default.
-type yamlKey struct{ defaultValue string }
+// file, updateKey (a dotted path), and optionally value, a template over
+// ValueVars. Their declarations, defaults included, are in strategyspec.
+type yamlKey struct{}
 
 func (yamlKey) File(p Params) (string, error) { return required(p, "file") }
 
-func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
-	text := y.defaultValue
-	if v := p["value"]; v != "" {
-		text = v
+func (yamlKey) Value(p Params, vars map[string]string) (string, error) {
+	text := p["value"]
+	if text == "" {
+		text = paramDefault("yamlBump", "value")
 	}
 	if err := templates.Validate(text, ValueVars); err != nil {
 		return "", fmt.Errorf("param value %q: %w", text, err)
@@ -94,7 +95,7 @@ func (y yamlKey) Value(p Params, vars map[string]string) (string, error) {
 }
 
 func (yamlKey) Write(src []byte, p Params, value string) ([]byte, error) {
-	key, err := required(p, "key")
+	key, err := required(p, "updateKey")
 	if err != nil {
 		return nil, err
 	}
@@ -115,15 +116,22 @@ func (yamlKey) Version(value string) (semver.Version, bool) {
 }
 
 func (yamlKey) Describe(p Params, from, to string) string {
-	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["key"], p["file"], from, to)
+	return fmt.Sprintf("Updated `%s` in `%s` from `%s` to `%s`", p["updateKey"], p["file"], from, to)
 }
 
 func (yamlKey) Read(src []byte, p Params) (string, error) {
-	key, err := required(p, "key")
+	key, err := required(p, "updateKey")
 	if err != nil {
 		return "", err
 	}
 	return yamledit.Get(src, key)
+}
+
+// paramDefault is a param's default from the strategy's declaration.
+func paramDefault(strategy, key string) string {
+	spec, _ := strategyspec.Lookup(strategy)
+	param, _ := spec.Param(key)
+	return param.Default
 }
 
 func required(p Params, name string) (string, error) {

@@ -30,7 +30,8 @@ var ErrBlocked = errors.New("the release cannot be shipped yet")
 type Options struct {
 	Project    string // the producer, by config name or slug
 	Arg        string // a tag, a release line of the producer, or empty for the latest
-	To         string // the consumer, when several take updates from the producer
+	To         string // the consumer, when the producer ships to several
+	Method     string // the consumer's update method, when the producer uses several of one consumer
 	Branch     string // the consumer's branch to update
 	Prerelease bool   // let prereleases count
 	Preview    bool   // print the commit message and PR body too, not only the branch and title
@@ -68,7 +69,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 		return "", err
 	}
 	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
-		Project: opts.Project, Arg: opts.Arg, To: opts.To, Branch: opts.Branch, Prerelease: opts.Prerelease,
+		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun,
 	}, opts.Preview)
 }
@@ -113,7 +114,7 @@ func renderText(p domain.Plan, full bool) string {
 	}
 	fmt.Fprintf(&b, "Ship %s %s (%s) to %s\n\n", p.Producer, p.Release.Tag, kind, p.Consumer)
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "  strategy\t%s (%s)\n  want\t%s\n  status\t%s\n", p.Strategy, p.File, p.Want, p.Status)
+	fmt.Fprintf(w, "  method\t%s (%s, %s)\n  want\t%s\n  status\t%s\n", p.Method, p.Strategy, p.File, p.Want, p.Status)
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 	for _, blocker := range p.Blockers {
 		b.WriteString("  blocked: " + blocker + "\n")

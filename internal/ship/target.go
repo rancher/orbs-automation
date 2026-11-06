@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/semver"
 )
@@ -13,7 +14,7 @@ import (
 // release's and are checked once by the caller. It returns an error when the
 // branch or its file cannot be read.
 func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string, in Input) (TargetPlan, error) {
-	consumerSlug := r.consumer.Project.Repo.Name
+	consumerSlug := r.link.Consumer.Repo.Name
 	target, ok := findBranch(r.consumerRefs, branch)
 	if !ok {
 		return TargetPlan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, branch)
@@ -45,8 +46,9 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 		tp.Warnings = append(tp.Warnings, "this is a downgrade: "+message)
 	}
 	preview, err := renderPreview(previewInput{
-		producer: r.producer, consumer: r.consumer, release: r.release, target: target,
-		strategy: r.strategy, file: r.file, current: current, want: r.want, userPrefix: in.BranchPrefix,
+		producer: r.producer, link: r.link, release: r.release, target: target,
+		strategy: r.strategy, params: r.params, steps: r.steps(target.Branch),
+		file: r.file, current: current, want: r.want, userPrefix: in.BranchPrefix,
 	})
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("render the PR: %w", err)
@@ -74,4 +76,24 @@ func findBranch(refs git.Refs, name string) (Target, bool) {
 		}
 	}
 	return Target{}, false
+}
+
+// steps returns the commands that run around the edit of a branch, in the order
+// they run: the method's pre-edit steps, the edge's pre-edit steps, then (after
+// the edit) the edge's post-edit steps and, last, the method's. The consumer's
+// steps surround the producer's, so its post-edit regenerates what the
+// producer's steps touched. Only steps whose range holds the branch's line run.
+func (r resolution) steps(branch string) []config.Step {
+	line := r.link.Consumer.LineOfBranch(branch)
+	var out []config.Step
+	for _, group := range [][]config.Step{
+		r.link.Method.PreEdit, r.link.Edge.PreEdit, r.link.Edge.PostEdit, r.link.Method.PostEdit,
+	} {
+		for _, s := range group {
+			if s.AppliesTo(line) {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
 }

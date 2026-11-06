@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/strategyspec"
 	"github.com/rancher/orbs-automation/internal/yamledit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,7 @@ var valueVars = map[string]string{
 const buildYAML = "# build.yaml\ndefaultSccOperatorImage: \"rancher/scc-operator:v0.5.2\"\nwebhookVersion: v0.9.0\nglobal:\n  kubectl:\n    tag: v1.2.3\n"
 
 func TestLookupStrategy(t *testing.T) {
-	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+	for _, name := range []string{"yamlBump"} {
 		s, err := LookupStrategy(name)
 		require.NoError(t, err, name)
 		assert.NotNil(t, s)
@@ -25,17 +26,17 @@ func TestLookupStrategy(t *testing.T) {
 	_, err := LookupStrategy("chartsPackageBump")
 	assert.ErrorIs(t, err, ErrUnknownStrategy)
 	assert.ErrorContains(t, err, "chartsPackageBump")
-	assert.ErrorContains(t, err, "buildYamlBump", "the message lists what exists")
+	assert.ErrorContains(t, err, "yamlBump", "the message lists what exists")
 }
 
 func TestStrategyNames(t *testing.T) {
-	assert.Equal(t, []string{"buildYamlBump", "yamlKeyBump"}, StrategyNames())
+	assert.Equal(t, []string{"yamlBump"}, StrategyNames())
 }
 
 func TestBuildYamlBump(t *testing.T) {
-	s, err := LookupStrategy("buildYamlBump")
+	s, err := LookupStrategy("yamlBump")
 	require.NoError(t, err)
-	p := Params{"file": "build.yaml", "key": "defaultSccOperatorImage"}
+	p := Params{"file": "build.yaml", "updateKey": "defaultSccOperatorImage", "value": "{image}:{tag}"}
 
 	file, err := s.File(p)
 	require.NoError(t, err)
@@ -43,7 +44,7 @@ func TestBuildYamlBump(t *testing.T) {
 
 	want, err := s.Value(p, valueVars)
 	require.NoError(t, err)
-	assert.Equal(t, "rancher/scc-operator:v0.5.3", want, "an image and its tag, as the script wrote it")
+	assert.Equal(t, "rancher/scc-operator:v0.5.3", want, "an image and its tag, as the script wrote it, when the producer says so")
 
 	current, err := s.Read([]byte(buildYAML), p)
 	require.NoError(t, err)
@@ -51,9 +52,9 @@ func TestBuildYamlBump(t *testing.T) {
 }
 
 func TestYamlKeyBumpDefaultsToTheTagAndTakesADottedKey(t *testing.T) {
-	s, err := LookupStrategy("yamlKeyBump")
+	s, err := LookupStrategy("yamlBump")
 	require.NoError(t, err)
-	p := Params{"file": "charts/values.yaml", "key": "global.kubectl.tag"}
+	p := Params{"file": "charts/values.yaml", "updateKey": "global.kubectl.tag"}
 
 	want, err := s.Value(p, valueVars)
 	require.NoError(t, err)
@@ -65,40 +66,40 @@ func TestYamlKeyBumpDefaultsToTheTagAndTakesADottedKey(t *testing.T) {
 }
 
 func TestValueTemplateParamOverridesTheDefault(t *testing.T) {
-	s, _ := LookupStrategy("buildYamlBump")
-	p := Params{"file": "build.yaml", "key": "webhookVersion", "value": "{version}"}
+	s, _ := LookupStrategy("yamlBump")
+	p := Params{"file": "build.yaml", "updateKey": "webhookVersion", "value": "{version}"}
 	want, err := s.Value(p, valueVars)
 	require.NoError(t, err)
 	assert.Equal(t, "0.5.3", want)
 }
 
 func TestValueRejectsAnUnknownPlaceholder(t *testing.T) {
-	s, _ := LookupStrategy("buildYamlBump")
-	_, err := s.Value(Params{"file": "f", "key": "k", "value": "{nope}"}, valueVars)
+	s, _ := LookupStrategy("yamlBump")
+	_, err := s.Value(Params{"file": "f", "updateKey": "k", "value": "{nope}"}, valueVars)
 	assert.ErrorContains(t, err, "nope")
 }
 
 func TestStrategyParamsAreRequired(t *testing.T) {
-	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+	for _, name := range []string{"yamlBump"} {
 		s, _ := LookupStrategy(name)
-		_, err := s.File(Params{"key": "k"})
+		_, err := s.File(Params{"updateKey": "k"})
 		assert.ErrorContains(t, err, "file", name)
 		_, err = s.Read([]byte(buildYAML), Params{"file": "f"})
-		assert.ErrorContains(t, err, "key", name)
+		assert.ErrorContains(t, err, "updateKey", name)
 	}
 }
 
 func TestReadErrors(t *testing.T) {
-	s, _ := LookupStrategy("buildYamlBump")
-	_, err := s.Read([]byte(buildYAML), Params{"file": "build.yaml", "key": "nope"})
+	s, _ := LookupStrategy("yamlBump")
+	_, err := s.Read([]byte(buildYAML), Params{"file": "build.yaml", "updateKey": "nope"})
 	assert.True(t, errors.Is(err, yamledit.ErrKeyNotFound))
-	_, err = s.Read([]byte(buildYAML), Params{"file": "build.yaml", "key": "global"})
+	_, err = s.Read([]byte(buildYAML), Params{"file": "build.yaml", "updateKey": "global"})
 	assert.True(t, errors.Is(err, yamledit.ErrNotScalar))
 }
 
 func TestStrategiesDescribeTheChange(t *testing.T) {
-	p := Params{"file": "build.yaml", "key": "defaultSccOperatorImage"}
-	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+	p := Params{"file": "build.yaml", "updateKey": "defaultSccOperatorImage"}
+	for _, name := range []string{"yamlBump"} {
 		s, err := LookupStrategy(name)
 		require.NoError(t, err)
 		assert.Equal(t,
@@ -108,10 +109,10 @@ func TestStrategiesDescribeTheChange(t *testing.T) {
 }
 
 func TestStrategiesWriteTheValueAndNothingElse(t *testing.T) {
-	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+	for _, name := range []string{"yamlBump"} {
 		s, err := LookupStrategy(name)
 		require.NoError(t, err)
-		p := Params{"file": "build.yaml", "key": "defaultSccOperatorImage"}
+		p := Params{"file": "build.yaml", "updateKey": "defaultSccOperatorImage"}
 
 		out, err := s.Write([]byte(buildYAML), p, "rancher/scc-operator:v0.5.3")
 		require.NoError(t, err, name)
@@ -125,26 +126,26 @@ func TestStrategiesWriteTheValueAndNothingElse(t *testing.T) {
 }
 
 func TestWriteANestedKey(t *testing.T) {
-	s, _ := LookupStrategy("yamlKeyBump")
-	out, err := s.Write([]byte(buildYAML), Params{"file": "f", "key": "global.kubectl.tag"}, "v1.2.4")
+	s, _ := LookupStrategy("yamlBump")
+	out, err := s.Write([]byte(buildYAML), Params{"file": "f", "updateKey": "global.kubectl.tag"}, "v1.2.4")
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "    tag: v1.2.4\n")
 }
 
 func TestWriteTheSameValueChangesNothing(t *testing.T) {
-	s, _ := LookupStrategy("buildYamlBump")
-	out, err := s.Write([]byte(buildYAML), Params{"file": "f", "key": "webhookVersion"}, "v0.9.0")
+	s, _ := LookupStrategy("yamlBump")
+	out, err := s.Write([]byte(buildYAML), Params{"file": "f", "updateKey": "webhookVersion"}, "v0.9.0")
 	require.NoError(t, err)
 	assert.Equal(t, buildYAML, string(out))
 }
 
 func TestWriteErrors(t *testing.T) {
-	s, _ := LookupStrategy("buildYamlBump")
+	s, _ := LookupStrategy("yamlBump")
 	_, err := s.Write([]byte(buildYAML), Params{"file": "f"}, "x")
-	assert.ErrorContains(t, err, "key")
-	_, err = s.Write([]byte(buildYAML), Params{"file": "f", "key": "nope"}, "x")
+	assert.ErrorContains(t, err, "updateKey")
+	_, err = s.Write([]byte(buildYAML), Params{"file": "f", "updateKey": "nope"}, "x")
 	assert.ErrorIs(t, err, yamledit.ErrKeyNotFound)
-	_, err = s.Write([]byte("a: |\n  v\n"), Params{"file": "f", "key": "a"}, "x")
+	_, err = s.Write([]byte("a: |\n  v\n"), Params{"file": "f", "updateKey": "a"}, "x")
 	assert.ErrorIs(t, err, yamledit.ErrUnsupported, "a value it cannot replace in place is refused")
 }
 
@@ -166,7 +167,7 @@ func TestStrategiesFindTheVersionInAValue(t *testing.T) {
 		{"rancher/scc-operator", semver.Version{}, false},
 		{"v1.2", semver.Version{}, false},
 	}
-	for _, name := range []string{"buildYamlBump", "yamlKeyBump"} {
+	for _, name := range []string{"yamlBump"} {
 		s, err := LookupStrategy(name)
 		require.NoError(t, err)
 		for _, tt := range tests {
@@ -174,5 +175,19 @@ func TestStrategiesFindTheVersionInAValue(t *testing.T) {
 			assert.Equal(t, tt.ok, ok, "%s %q", name, tt.value)
 			assert.Equal(t, tt.want, got, "%s %q", name, tt.value)
 		}
+	}
+}
+
+func TestYamlBumpValueDefaultsToTheTag(t *testing.T) {
+	s, _ := LookupStrategy("yamlBump")
+	want, err := s.Value(Params{"file": "build.yaml", "updateKey": "webhookVersion"}, valueVars)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.3", want, "the strategy's own default, a bare tag")
+}
+
+func TestEveryImplementedStrategyIsDeclared(t *testing.T) {
+	for _, name := range StrategyNames() {
+		_, ok := strategyspec.Lookup(name)
+		assert.True(t, ok, "%s has a declaration of its params", name)
 	}
 }

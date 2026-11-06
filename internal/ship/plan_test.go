@@ -16,18 +16,18 @@ import (
 )
 
 type fakeWorkspace struct {
-	producer     config.Project
-	consumers    []config.Consumer
-	consumersErr error
-	refs         map[string]git.Refs // by repository slug
-	refsErr      map[string]error
-	files        map[string]string // "slug@ref:path"
-	asked        []string
+	producer config.Project
+	links    []config.Link
+	linksErr error
+	refs     map[string]git.Refs // by repository slug
+	refsErr  map[string]error
+	files    map[string]string // "slug@ref:path"
+	asked    []string
 }
 
-func (f *fakeWorkspace) Consumers(key string) (config.Project, []config.Consumer, error) {
-	f.asked = append(f.asked, "consumers "+key)
-	return f.producer, f.consumers, f.consumersErr
+func (f *fakeWorkspace) Links(key string) (config.Project, []config.Link, error) {
+	f.asked = append(f.asked, "links "+key)
+	return f.producer, f.links, f.linksErr
 }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
@@ -60,24 +60,32 @@ func (f *fakeProber) Exists(_ context.Context, host, image, tag string) registry
 	return registry.Result{Status: registry.Found}
 }
 
-func riConsumer(strategy string) config.Consumer {
-	return config.Consumer{
-		Project: config.Project{
+// riLink is the route from scc-operator to rancher's build-yaml-bump method, as
+// the config writes it: the consumer fixes the file, offers updateKey and value,
+// and the producer says which key and that the value is an image reference.
+func riLink(strategy string) config.Link {
+	return config.Link{
+		Consumer: config.Project{
 			Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
 			Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{{Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}},
 		},
-		Source: config.Source{
-			From:   "scc-operator",
-			Accept: config.Accept{When: config.AcceptStable}, // accept.lines omitted: derived from the producer
-			Update: config.Update{Strategy: strategy, Params: map[string]string{"file": "build.yaml", "key": "defaultSccOperatorImage"}},
+		Method: config.UpdateMethod{
+			Name: "build-yaml-bump", Strategy: strategy,
+			With:          map[string]string{"file": "build.yaml"},
+			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
+			Accept:        config.Accept{When: config.AcceptStable},
+		},
+		Edge: config.Edge{
+			To: "rancher", Method: "build-yaml-bump", // lines omitted: derived from the producer
+			Params: map[string]string{"updateKey": "defaultSccOperatorImage", "value": "{image}:{tag}"},
 		},
 	}
 }
 
 func fixture() *fakeWorkspace {
 	return &fakeWorkspace{
-		producer:  universal(),
-		consumers: []config.Consumer{riConsumer("buildYamlBump")},
+		producer: universal(),
+		links:    []config.Link{riLink("yamlBump")},
 		refs: map[string]git.Refs{
 			"rancher/scc-operator": {Tags: tags("v0.5.2", "v0.5.3", "v0.6.0-rc.1")},
 			"rancher/rancher": {Branches: []git.Branch{
@@ -102,7 +110,8 @@ func TestCheckReady(t *testing.T) {
 	assert.Equal(t, "rancher/scc-operator", got.Producer)
 	assert.Equal(t, Release{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}, got.Release)
 	assert.Equal(t, "rancher/rancher", got.Consumer)
-	assert.Equal(t, "buildYamlBump", got.Strategy)
+	assert.Equal(t, "build-yaml-bump", got.Method)
+	assert.Equal(t, "yamlBump", got.Strategy)
 	assert.Equal(t, Target{Branch: "release/v2.15", Commit: "sha-215"}, got.Targets[0].Target)
 	assert.Equal(t, "build.yaml", got.File)
 	assert.Equal(t, "rancher/scc-operator:v0.5.2", got.Targets[0].Current)
@@ -111,7 +120,7 @@ func TestCheckReady(t *testing.T) {
 	assert.Empty(t, got.Blockers)
 	require.NotNil(t, got.Images)
 	assert.False(t, got.Images.Failed())
-	assert.Equal(t, "scc-operator", ws.asked[0][len("consumers "):])
+	assert.Equal(t, "scc-operator", ws.asked[0][len("links "):])
 }
 
 func TestCheckReadsTheFileAtTheCommitItListed(t *testing.T) {
@@ -169,15 +178,15 @@ func TestCheckABranchTheConsumerDoesNotHave(t *testing.T) {
 func TestCheckConsumers(t *testing.T) {
 	t.Run("none", func(t *testing.T) {
 		ws := fixture()
-		ws.consumers = nil
+		ws.links = nil
 		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
 		assert.ErrorIs(t, err, ErrNoConsumer)
 	})
 	t.Run("several and none chosen", func(t *testing.T) {
 		ws := fixture()
-		other := riConsumer("buildYamlBump")
-		other.Project.Name, other.Project.Repo.Name = "charts", "rancher/charts"
-		ws.consumers = append(ws.consumers, other)
+		other := riLink("yamlBump")
+		other.Consumer.Name, other.Consumer.Repo.Name = "charts", "rancher/charts"
+		ws.links = append(ws.links, other)
 		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
 		assert.ErrorIs(t, err, ErrAmbiguousConsumer)
 		assert.ErrorContains(t, err, "charts")
@@ -186,9 +195,9 @@ func TestCheckConsumers(t *testing.T) {
 	t.Run("chosen by name or slug", func(t *testing.T) {
 		for _, to := range []string{"charts", "rancher/charts", "Rancher/Charts"} {
 			ws := fixture()
-			other := riConsumer("buildYamlBump")
-			other.Project.Name, other.Project.Repo.Name = "charts", "rancher/charts"
-			ws.consumers = append(ws.consumers, other)
+			other := riLink("yamlBump")
+			other.Consumer.Name, other.Consumer.Repo.Name = "charts", "rancher/charts"
+			ws.links = append(ws.links, other)
 			ws.refs["rancher/charts"] = ws.refs["rancher/rancher"]
 			ws.files["rancher/charts@sha-main:build.yaml"] = "defaultSccOperatorImage: x\n"
 			got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", To: to, Branch: "main"})
@@ -204,7 +213,7 @@ func TestCheckConsumers(t *testing.T) {
 
 func TestCheckUnknownStrategy(t *testing.T) {
 	ws := fixture()
-	ws.consumers = []config.Consumer{riConsumer("chartsPackageBump")}
+	ws.links = []config.Link{riLink("chartsPackageBump")}
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
 	assert.ErrorIs(t, err, ErrUnknownStrategy)
 }
@@ -239,18 +248,18 @@ func TestCheckHostErrors(t *testing.T) {
 
 func TestCheckProducerErrors(t *testing.T) {
 	ws := fixture()
-	ws.consumersErr = workspace.ErrUnknownProject
+	ws.linksErr = workspace.ErrUnknownProject
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "nope", Branch: "main"})
 	assert.ErrorIs(t, err, workspace.ErrUnknownProject)
 }
 
 func TestCheckValueVariables(t *testing.T) {
 	ws := fixture()
-	c := riConsumer("buildYamlBump")
-	c.Source.Update.Params = map[string]string{
-		"file": "build.yaml", "key": "defaultSccOperatorImage", "value": "{sourceRepo}@{version}",
+	c := riLink("yamlBump")
+	c.Edge.Params = map[string]string{
+		"updateKey": "defaultSccOperatorImage", "value": "{sourceRepo}@{version}",
 	}
-	ws.consumers = []config.Consumer{c}
+	ws.links = []config.Link{c}
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/scc-operator@0.5.3", got.Want)
@@ -288,9 +297,9 @@ func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
 
 func TestCheckABadPlaceholderIsAnError(t *testing.T) {
 	ws := fixture()
-	c := riConsumer("buildYamlBump")
-	c.Project.PullRequests.Title = "Update {nope}"
-	ws.consumers = []config.Consumer{c}
+	c := riLink("yamlBump")
+	c.Consumer.PullRequests.Title = "Update {nope}"
+	ws.links = []config.Link{c}
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	assert.ErrorContains(t, err, "nope")
 }
@@ -477,15 +486,13 @@ func linedLoop(t *testing.T) *fakeWorkspace {
 			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
 		}},
 	}
-	c := riConsumer("buildYamlBump")
-	c.Source.From = "kuberlr"
-	c.Source.Accept.Lines = "" // omitted: all, since this producer has lines
-	c.Project.Release.Lines = []config.ProjectLine{
+	c := riLink("yamlBump")
+	c.Consumer.Release.Lines = []config.ProjectLine{
 		{Line: "v2.16"}, // development: the default branch
 		{Line: "v2.15", Branch: "release/v2.15"},
 		{Line: "v2.14", Branch: "release/v2.14"},
 	}
-	ws.producer, ws.consumers = producer, []config.Consumer{c}
+	ws.producer, ws.links = producer, []config.Link{c}
 	ws.refs["rancher/kuberlr"] = git.Refs{Tags: tags("v8.1.0", "v9.0.0", "v7.0.0")}
 	ws.files["rancher/rancher@sha-main:build.yaml"] = "defaultSccOperatorImage: rancher/kuberlr:v9.0.0\n"
 	return ws
@@ -509,9 +516,9 @@ func TestCheckATagInNoLineOfTheProducerHasNoTarget(t *testing.T) {
 
 func TestCheckAConsumerWithoutTheLineHasNoTarget(t *testing.T) {
 	ws := linedLoop(t)
-	c := ws.consumers[0]
-	c.Project.Release.Lines = []config.ProjectLine{{Line: "v2.14", Branch: "release/v2.14"}}
-	ws.consumers[0] = c
+	c := ws.links[0]
+	c.Consumer.Release.Lines = []config.ProjectLine{{Line: "v2.14", Branch: "release/v2.14"}}
+	ws.links[0] = c
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0"})
 	assert.ErrorIs(t, err, ErrNoTargets)
 	assert.ErrorContains(t, err, "v2.15")
@@ -519,9 +526,9 @@ func TestCheckAConsumerWithoutTheLineHasNoTarget(t *testing.T) {
 
 func TestCheckAnExplicitUniversalAcceptFeedsEveryBranchWhateverTheProducerHas(t *testing.T) {
 	ws := linedLoop(t)
-	c := ws.consumers[0]
-	c.Source.Accept.Lines = config.AcceptLinesUniversal
-	ws.consumers[0] = c
+	c := ws.links[0]
+	c.Edge.Lines = config.AcceptLinesUniversal
+	ws.links[0] = c
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main", "release/v2.15", "release/v2.14"}, branchesOf(got))
@@ -529,18 +536,18 @@ func TestCheckAnExplicitUniversalAcceptFeedsEveryBranchWhateverTheProducerHas(t 
 
 func TestCheckAConsumerWithNoReleaseBranchesHasNoTarget(t *testing.T) {
 	ws := loopFixture()
-	c := ws.consumers[0]
-	c.Project.Release = config.Release{Branches: config.BranchesPerLine}
-	ws.consumers[0] = c
+	c := ws.links[0]
+	c.Consumer.Release = config.Release{Branches: config.BranchesPerLine}
+	ws.links[0] = c
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
 	assert.ErrorIs(t, err, ErrNoTargets)
 }
 
 func TestCheckASingleBranchConsumerTakesEveryReleaseOnItsDefaultBranch(t *testing.T) {
 	ws := loopFixture()
-	c := ws.consumers[0]
-	c.Project.Release = config.Release{Branches: config.BranchesSingle}
-	ws.consumers[0] = c
+	c := ws.links[0]
+	c.Consumer.Release = config.Release{Branches: config.BranchesSingle}
+	ws.links[0] = c
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main"}, branchesOf(got))
