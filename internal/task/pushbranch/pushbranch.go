@@ -5,6 +5,7 @@ package pushbranch
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rancher/orbs-automation/internal/git"
 )
@@ -21,6 +22,15 @@ const (
 	// ActionReplaced: the remote had commits of ours from an earlier attempt, and
 	// they were replaced.
 	ActionReplaced Action = "replaced"
+)
+
+var (
+	// ErrNeedsReplace is returned when the remote has different commits of ours
+	// from an earlier attempt and Replace was not set.
+	ErrNeedsReplace = errors.New("the branch on the remote already has different commits of ours, from an earlier attempt")
+	// ErrNotOurs is returned when the remote's copy has a commit that is not
+	// ours, which is never replaced.
+	ErrNotOurs = errors.New("the branch on the remote has commits that are not ours, so it is not replaced")
 )
 
 // Input is what to push, and where.
