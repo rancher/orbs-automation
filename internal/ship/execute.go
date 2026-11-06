@@ -522,16 +522,17 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		result.Status = ResultWouldRefresh
 		return
 	}
-	if err := g.ForceBranch(ctx, clone, branch, built.Tip()); err != nil {
-		fail("move %s to the rebuilt commit: %v", branch, err)
+	// The commit is pushed as it is and not by the name of the local branch, which
+	// may be checked out in the engineer's clone and so cannot be moved.
+	if err := g.PushCommitReplacing(ctx, clone, pub.Push.Remote, branch, built.Tip(), tip); err != nil {
+		fail("replace %s on %s: %v", branch, pub.Push.Remote, err)
 		return
+	}
+	if err := g.ForceBranch(ctx, clone, branch, built.Tip()); err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("left %s in your clone as it was, since it is checked out or could not be moved: %v", branch, err))
 	}
 	if err := g.DeleteBranch(ctx, clone, scratchName); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove the scratch branch %s: %v", scratchName, err))
-	}
-	if err := g.PushReplacing(ctx, clone, pub.Push.Remote, branch, tip); err != nil {
-		fail("replace %s on %s: %v", branch, pub.Push.Remote, err)
-		return
 	}
 	result.Status, result.Pushed = ResultRefreshed, pub.Push.Remote
 	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: pub.Push.Remote, NewBranch: branch})

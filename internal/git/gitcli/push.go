@@ -106,9 +106,9 @@ func PushReplacing(ctx context.Context, dir, remote, branch, expected string) er
 // PushCommitReplacing is PushReplacing for a commit that need not be on a branch
 // of the clone: it puts commit on the remote's branch, over the commit that was
 // seen there. The local branch of that name is not read or changed, so a branch
-// that is checked out in a worktree does not stand in the way.
-//
-// STUB: it does nothing until a later commit.
+// that is checked out in a worktree does not stand in the way. The lease is the one of PushReplacing, naming the commit that was seen, and the
+// credentials and the environment are those of Push.
 func PushCommitReplacing(ctx context.Context, dir, remote, branch, commit, expected string) error {
-	return nil
+	return push(ctx, dir, remote, branch,
+		"push", "--force-with-lease="+branch+":"+expected, remote, commit+":refs/heads/"+branch)
 }
