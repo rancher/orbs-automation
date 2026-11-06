@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
@@ -34,8 +35,17 @@ type ApplyResult struct {
 // the post-edit steps) and commits what changed. A step that fails is the
 // dispatcher's *StepError, and the caller aborts the work. A run that changes
 // nothing is ErrNothingChanged.
-//
-// STUB: does nothing until a later commit.
 func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
-	return ApplyResult{}, nil
+	res, err := a.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), a.Runner, a.Release, a.Branch, w.Dir)
+	if err != nil {
+		return ApplyResult{}, err
+	}
+	commit, err := w.Commit(ctx, GitCommit{Message: a.Message, Name: a.Name, Email: a.Email, Sign: a.Sign})
+	if errors.Is(err, gitcli.ErrNothingToCommit) {
+		return ApplyResult{}, ErrNothingChanged
+	}
+	if err != nil {
+		return ApplyResult{}, err
+	}
+	return ApplyResult{Commit: commit, Changes: res.Changes}, nil
 }
