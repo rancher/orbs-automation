@@ -86,7 +86,7 @@ func (r *Repo) Clean() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return st.InProgress == "" && len(st.Tracked) == 0, nil
+	return st.Clean(), nil
 }
 
 // BranchCommit returns the commit a local branch is at, and false when the

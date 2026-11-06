@@ -129,14 +129,13 @@ type State struct {
 // operation in progress. Untracked files do not make it unclean (Collisions says
 // when one still gets in the way), and neither does a detached HEAD.
 func (s State) Clean() bool {
-	return s.Branch != "" && s.InProgress == "" && len(s.Tracked) == 0
+	return s.InProgress == "" && len(s.Tracked) == 0
 }
 
 // CleanOnBranch reports whether the clone can be worked in directly: it is
-// Clean and HEAD is a branch.
-//
-// STUB: always false until the next commit.
-func (s State) CleanOnBranch() bool { return false }
+// Clean and HEAD is a branch, since a branch cannot be started in place from a
+// detached HEAD without losing where it was.
+func (s State) CleanOnBranch() bool { return s.Branch != "" && s.Clean() }
 
 // inProgress maps the file git leaves in its directory to the operation.
 var inProgress = []struct{ file, name string }{
