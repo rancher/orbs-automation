@@ -47,8 +47,7 @@ func TestQuestionWithNothingToOpenIsAboutTheClosing(t *testing.T) {
 
 	q := question(c)
 
-	assert.Contains(t, q, "close #101")
-	assert.Contains(t, q, "rancher/rancher")
+	assert.Contains(t, q, "Close #101 in rancher/rancher")
 	assert.NotContains(t, q, "Push", "nothing is pushed")
 }
 
