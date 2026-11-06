@@ -44,6 +44,11 @@ type pushOnly struct {
 	err error
 }
 
+// Fetch says the branch is not on the remote, so the push is the ordinary one.
+func (g pushOnly) Fetch(context.Context, string, string, string) (string, error) {
+	return "", errors.New("couldn't find remote ref")
+}
+
 func (g pushOnly) Push(_ context.Context, dir, remote, branch string) error {
 	g.log.add("push %s %s %s", dir, remote, branch)
 	return g.err

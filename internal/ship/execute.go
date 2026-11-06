@@ -172,7 +172,7 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 			return plan, errors.New("pushing to the fork needs githubUser in the user file: the PR's head is the fork's owner and the branch")
 		}
 		pub.Push, pub.HeadOwner = target, settings.GitHubUser
-		pub.IsBot, pub.BotLabels = in.CI, consumer.PullRequests.BotLabels
+		pub.IsBot, pub.BotLabels, pub.Refresh = in.CI, consumer.PullRequests.BotLabels, in.Refresh
 		plan.Push = &target
 		if me, err = pub.Remote.Me(ctx); err != nil {
 			return plan, fmt.Errorf("%w: %v", ErrNoRemote, err)
