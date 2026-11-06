@@ -1,12 +1,13 @@
 # Task commands
 
-**Status:** draft. `gero repo branch` is built; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+**Status:** draft. `gero repo branch` is built, and so are the version functions `gero repo tag` will use; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 
 The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an engineer who wants one part of the process and not the whole. Each runs one task and `ship` chains the same tasks, so a step behaves the same alone and inside `ship`. They are workstation commands: they act as the engineer, in the engineer's own clone, and read the same settings as `ship`.
 
 | Command | Task | Does |
 |---|---|---|
 | `gero repo branch [project] <line> <name>` | `createbranch` | Makes a branch off the upstream branch of a release line |
+| `gero repo tag [project] <line> [tag]` **(leaning)** | `createtag` | Tags the head of a release line's upstream branch |
 | `gero repo push [project] [--branch <name>]` | `pushbranch` | Pushes a branch, never forced |
 | `gero pr create [project] [--head <branch>] [--base <line\|branch>]` | `createpr` | Opens a PR for a branch that is already pushed, and labels it |
 | `gero ship bump …` **(leaning)** | `bumpcommit` | Applies one change set to a branch and commits it |
@@ -38,6 +39,36 @@ Would create my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
 ```
 
 An optional `--from <ref>` for cutting the branch off something other than the head of the line, a branch or a tag, is **(leaning)** and not decided.
+
+## `gero repo tag [project] <line> [tag]` **(leaning)**
+
+Makes the tag `<tag>` on the head of the upstream branch of the release line `<line>`, found as `repo branch` finds it. The head is read from the host when the command runs, never from a local branch, so a tag is always on what is live. With two arguments they are the line and the tag, with one the line, and with three the project comes first.
+
+**The tag is made on the host**, through the API, as a lightweight tag: a ref at that commit. Nothing is pushed from the machine and no clone is needed, so an engineer and a workflow run the same task. The tags of these repositories are lightweight, bar a few that people made by hand with `git tag -a`, and the producer's release workflow runs on `push: tags: "*"`. A tag made with the workflow's default `GITHUB_TOKEN` does not start workflows, so the token has to be a person's or an App's ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)).
+
+**A given tag is checked, not trusted.** It matches the project's `tagPattern`, is a version in the line's series (`0.8.x` for shell's `v2.15`), is newer than the line's newest tag, and does not exist. A tag that exists on the same commit is "already tagged" and the command succeeds, so a rerun is safe; on another commit it is an error. A tag is never moved, deleted or forced.
+
+**An omitted tag is chosen** from the newest tag of the line's series, whichever kind it is, by `Version.NextPrerelease` and `NextStable` ([`internal/semver`](../../internal/semver/next.go)), which know nothing of projects. This command and `repo status` decide what is allowed and pass them the version, the bump and the label:
+
+| Newest tag | Default | `--stable` |
+|---|---|---|
+| stable `v0.8.3` | prerelease `v0.8.4-rc.1`, or `--minor` or `--major` for a higher version | the next stable `v0.8.4`, unless the project sets `requiresPrerelease`, which refuses it and says an RC comes first |
+| prerelease `v0.8.4-rc.1` | `v0.8.4-rc.2` | `v0.8.4`, the promotion of that RC |
+
+* **Prereleases are written with a dot, `rc.1`.** That is SemVer, and the components we own can be more exact than Rancher's `rc1`. A prerelease that already exists is continued in its own style (`rc1` to `rc2`), since `rc.2` sorts below `rc1`, which would be a tag that is older than the one before it.
+* **A promotion, the "unRC", is never the default.** It needs `--stable`, always asks, and says what it is: `Tag v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head has commits since that RC it refuses and says how many, since a stable tag is made from a commit that already has an RC (`requiresPrerelease`, [IMPLEMENTATION](../IMPLEMENTATION.md)). `--yes` skips the question, as everywhere.
+* **A tag asks once.** Tags are hard to undo, so a plain prerelease asks too, and `--yes`, `GERO_NON_INTERACTIVE` and `--dry-run` work as for `ship`. A dry run says which tag, on which commit and in which repository, and sends nothing.
+
+```
+$ gero repo tag shell v2.15
+Tag v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell?  [y/N] y
+Tagged v0.8.4-rc.1  https://github.com/rancher/shell/releases/tag/v0.8.4-rc.1
+
+$ gero repo tag shell v2.15 --stable
+Tag v0.8.4 on release/v2.15 at 8c61398, which is v0.8.4-rc.1 with no commits since, in rancher/shell?  [y/N]
+```
+
+**In CI** the same task runs as the bot. The tracking issue's sign-off, a check before a stable tag is made, is a gate above this command and not part of it, and is not decided ([METADATA](METADATA.md#control-labels)).
 
 ## `gero repo push [project] [--branch <name>]`
 
@@ -77,11 +108,13 @@ Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds t
 
 ## Not built yet
 
-* `gero repo push`, `gero pr create` and `gero ship bump`.
+* `gero repo tag` (its version functions are built), `gero repo push`, `gero pr create` and `gero ship bump`.
 
 ## Open questions
 
 * What `ship bump` commits onto, and how it picks the consumer and method (above).
 * Whether `repo branch` gets `--from <ref>`.
+* For `repo tag`: whether the default bump after a stable is always a patch with `--minor` and `--major` for the rest, and the name `--stable` for the promotion. Whether an annotated or signed tag is ever wanted, which the API does not make.
+* For `repo tag`: whether the line may be given as a branch, as `repo branch` accepts, since a tag is only meaningful on a line's own series.
 * Whether a later token such as `@` should stand for the checked-out branch where a branch is a positional, which none is now.
 * Whether `repo push` and `pr create` share one `--push-to` resolution call or each repeats it. A shared one belongs in `internal/ship` with `resolvePushTarget` until a task needs it, then in a domain package.
