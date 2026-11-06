@@ -977,3 +977,132 @@ func TestRenderTextADryRunListsNoPRs(t *testing.T) {
 
 	assert.NotContains(t, renderText(p, false), "Pull requests", "nothing was opened, so there is nothing to click")
 }
+
+// onLines is the plan of previewPlan with its target on a Rancher line, as a run
+// against rancher gives: the line is v2.15 and the consumer's branch is
+// release/v2.15.
+func onLines() domain.Plan {
+	p := previewPlan()
+	p.Targets[0].Line = "v2.15"
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+	return p
+}
+
+func TestRenderTextTargetsAreKeyedByLineWithTheBranchBesideIt(t *testing.T) {
+	out := renderText(onLines(), false)
+
+	assert.Regexp(t, `(?m)^  LINE\s+BRANCH\s+HEAD\s+NOW\s+STATUS$`, out)
+	assert.Regexp(t, `(?m)^  v2\.15\s+release/v2\.15\s+2222222`, out)
+}
+
+func TestRenderTextStreamedLinesAreKeyedByLineAndAPushNamesTheBranch(t *testing.T) {
+	p := onLines()
+	r := published()
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	for _, want := range []string{
+		"v2.15: bot/scc-operator-v0.5.3-v2.15, in place",
+		"v2.15: pushed bot/scc-operator-v0.5.3-v2.15 to origin",
+		"v2.15: opened #104 https://github.com/rancher/rancher/pull/104",
+		"v2.15: closed #101",
+		"v2.15: opened",
+	} {
+		assert.Contains(t, out, want)
+	}
+	assert.NotContains(t, out, "release/v2.15: ", "the line is the key, not the base branch")
+}
+
+func TestRenderTextABranchInNoLineIsKeyedByItsBranch(t *testing.T) {
+	p := previewPlan()
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+	p = withResults(p, published())
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: pushed bot/scc-operator-v0.5.3-v2.15 to origin")
+	assert.Regexp(t, `(?m)^  release/v2\.15\s+release/v2\.15\s+2222222`, out, "the branch twice, as there is no line to name it")
+}
+
+func TestRenderTextTheSummaryTablesAndGroupsAreKeyedByLine(t *testing.T) {
+	p := onLines()
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.Worktree, "the clone has uncommitted changes")
+	p.NoPush = true
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Regexp(t, `(?m)^  LINE\s+RESULT\s+WHERE\s+NEW BRANCH$`, out)
+	assert.Regexp(t, `(?m)^  v2\.15\s+committed\s+worktree\s+bot/scc-operator-v0\.5\.3-v2\.15$`, out)
+	assert.Contains(t, out, "worktree (v2.15): the clone has uncommitted changes")
+	assert.Contains(t, out, "git -C /src/rancher log --oneline upstream/release/v2.15..bot/scc-operator-v0.5.3-v2.15", "a command to copy keeps the branch")
+}
+
+func TestRenderTextThePRPreviewAndTheClosingListAreKeyedByLine(t *testing.T) {
+	p := onLines()
+	p = withResults(p, published())
+
+	out := renderText(p, false)
+
+	assert.Regexp(t, `(?m)^  LINE\s+NEW BRANCH\s+TITLE$`, out)
+	assert.Regexp(t, `(?m)^  v2\.15\s+bot/scc-operator-v0\.5\.3-v2\.15\s+\[v2\.15\] Update`, out)
+	assert.Regexp(t, `(?m)^  RESULT\s+LINE\s+BASE\s+LINK$`, out)
+	assert.Regexp(t, `(?m)^  opened\s+v2\.15\s+release/v2\.15\s+https://github.com/rancher/rancher/pull/104$`, out)
+}
+
+func TestRenderTextWarningsAndBlockedAreGroupedByLine(t *testing.T) {
+	p := previewPlanWithTargets()
+	p.Targets[2].Line = "v2.14"
+	p.Targets[2].Warnings = []string{"this is a downgrade"}
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "blocked (v2.14): downgrade: older")
+	assert.Contains(t, out, "Warning (v2.14): this is a downgrade")
+}
+
+func TestRenderTextADryRunsWouldCloseIsKeyedByLine(t *testing.T) {
+	p := onLines()
+	p.DryRun = true
+	r := committed("bot/x", "abcdef0123456789", domain.Worktree, "a dry run never moves your checkout")
+	r.Status = domain.ResultWouldCommit
+	r.WouldSupersede = []domain.PRRef{{Number: 101}}
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Regexp(t, `(?m)^  v2\.15: would close #101$`, out)
+}
+
+func TestReplayCarriesTheLineAndWhatWasPushed(t *testing.T) {
+	p := onLines()
+	p = withResults(p, published())
+
+	events := replay(p)
+
+	for _, e := range events {
+		switch e.Kind {
+		case domain.EventTargetChecked, domain.EventTargetStarted, domain.EventCommit, domain.EventPushed, domain.EventPROpened,
+			domain.EventSuperseded, domain.EventTargetDone:
+			assert.Equal(t, "v2.15", e.Line, string(e.Kind))
+		}
+		if e.Kind == domain.EventPushed {
+			assert.Equal(t, "bot/scc-operator-v0.5.3-v2.15", e.NewBranch)
+		}
+	}
+}
+
+func TestLogSinkRecordsTheLineAndWhatWasPushed(t *testing.T) {
+	recs := logged(t, slog.LevelInfo,
+		domain.Event{Kind: domain.EventPushed, Branch: "release/v2.15", Line: "v2.15", Remote: "origin", NewBranch: "bot/x"},
+		domain.Event{Kind: domain.EventTargetChecked, Branch: "main", Target: &domain.TargetPlan{Target: domain.Target{Branch: "main"}}},
+	)
+
+	require.Len(t, recs, 2)
+	assert.Equal(t, "v2.15", recs[0]["line"])
+	assert.Equal(t, "release/v2.15", recs[0]["branch"])
+	assert.Equal(t, "bot/x", recs[0]["new_branch"])
+	_, hasLine := recs[1]["line"]
+	assert.False(t, hasLine, "no line attribute for a branch in no line")
+}
