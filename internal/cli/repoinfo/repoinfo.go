@@ -34,6 +34,9 @@ type Workspace interface {
 type Clone interface {
 	// Head returns the full ref HEAD points to and its abbreviated commit.
 	Head() (ref, short string, err error)
+	// Clean reports whether no tracked file is changed and no operation (merge,
+	// rebase) is in progress.
+	Clean() (bool, error)
 }
 
 // Opener opens the clone in dir.
@@ -112,7 +115,10 @@ type LocalInfo struct {
 	Source string `json:"source,omitempty"`
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
-	Error  string `json:"error,omitempty"`
+	// Dirty is set when a tracked file is changed or an operation is in
+	// progress.
+	Dirty bool   `json:"dirty,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 // Run reports on the Project named by slugs, or on the one whose repository

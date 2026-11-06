@@ -53,9 +53,13 @@ func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, 
 type fakeClone struct {
 	ref, short string
 	headErr    error
+	dirty      bool
+	cleanErr   error
 }
 
 func (f fakeClone) Head() (string, string, error) { return f.ref, f.short, f.headErr }
+
+func (f fakeClone) Clean() (bool, error) { return !f.dirty, f.cleanErr }
 
 func opener(c Clone, err error) Opener {
 	return func(string) (Clone, error) { return c, err }
