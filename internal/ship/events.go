@@ -12,6 +12,11 @@ const (
 	EventResolved EventKind = "resolved"
 	// EventTargetChecked: one branch has been read. Target is its state.
 	EventTargetChecked EventKind = "target checked"
+	// EventTargetsChecked: every branch has been read, so what they hold can be
+	// shown before the slower checks that follow.
+	//
+	// STUB: not emitted until a later commit.
+	EventTargetsChecked EventKind = "targets checked"
 	// EventImagesChecked: the release's images have been looked for, once.
 	EventImagesChecked EventKind = "images checked"
 	// EventTargetStarted: the work for one branch has begun, in Place.

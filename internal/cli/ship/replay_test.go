@@ -24,9 +24,9 @@ func TestReplayOfACheckOnlyPlan(t *testing.T) {
 	events := replay(p)
 
 	assert.Equal(t, []domain.EventKind{
-		domain.EventResolved, domain.EventTargetChecked, domain.EventImagesChecked, domain.EventDone,
+		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked, domain.EventImagesChecked, domain.EventDone,
 	}, kinds(events))
-	require.Len(t, events, 4)
+	require.Len(t, events, 5)
 	require.NotNil(t, events[0].Plan)
 	assert.Equal(t, "rancher/scc-operator", events[0].Plan.Producer)
 	assert.Equal(t, "v0.5.3", events[0].Plan.Release.Tag)
@@ -34,8 +34,8 @@ func TestReplayOfACheckOnlyPlan(t *testing.T) {
 	require.NotNil(t, events[1].Target)
 	assert.Equal(t, "release/v2.15", events[1].Target.Branch)
 	assert.Equal(t, "release/v2.15", events[1].Branch)
-	require.NotNil(t, events[3].Plan)
-	assert.Len(t, events[3].Plan.Targets, 1, "the whole plan at the end")
+	require.NotNil(t, events[4].Plan)
+	assert.Len(t, events[4].Plan.Targets, 1, "the whole plan at the end")
 }
 
 func TestReplayHasNoImagesEventWhenTheyWereNotChecked(t *testing.T) {
@@ -53,17 +53,17 @@ func TestReplayOfARunThatCommitted(t *testing.T) {
 	events := replay(p)
 
 	assert.Equal(t, []domain.EventKind{
-		domain.EventResolved, domain.EventTargetChecked,
+		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked,
 		domain.EventTargetStarted, domain.EventCommit, domain.EventCommit, domain.EventTargetDone, domain.EventDone,
 	}, kinds(events))
-	require.Len(t, events, 7)
-	assert.Equal(t, domain.InPlace, events[2].Place)
-	assert.Equal(t, "release/v2.15", events[2].Branch)
-	require.NotNil(t, events[3].Commit)
-	assert.Equal(t, "one", events[3].Commit.Subject)
-	assert.Equal(t, "two", events[4].Commit.Subject)
-	require.NotNil(t, events[5].Result)
-	assert.Equal(t, domain.ResultCommitted, events[5].Result.Status)
+	require.Len(t, events, 8)
+	assert.Equal(t, domain.InPlace, events[3].Place)
+	assert.Equal(t, "release/v2.15", events[3].Branch)
+	require.NotNil(t, events[4].Commit)
+	assert.Equal(t, "one", events[4].Commit.Subject)
+	assert.Equal(t, "two", events[5].Commit.Subject)
+	require.NotNil(t, events[6].Result)
+	assert.Equal(t, domain.ResultCommitted, events[6].Result.Status)
 }
 
 func TestReplayOfATargetThatFailedBeforeItStartedHasNoStartedEvent(t *testing.T) {
@@ -73,6 +73,6 @@ func TestReplayOfATargetThatFailedBeforeItStartedHasNoStartedEvent(t *testing.T)
 	events := replay(p)
 
 	assert.Equal(t, []domain.EventKind{
-		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetDone, domain.EventDone,
+		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked, domain.EventTargetDone, domain.EventDone,
 	}, kinds(events), "no place was chosen, so the work never started")
 }

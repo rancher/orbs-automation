@@ -62,7 +62,7 @@ func TestShipEmitsTheEventsInTheOrderTheWorkHappens(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []EventKind{
-		EventResolved, EventTargetChecked, EventTargetChecked, EventImagesChecked,
+		EventResolved, EventTargetChecked, EventTargetChecked, EventTargetsChecked, EventImagesChecked,
 		EventTargetStarted, EventCommit, EventCommit, EventTargetDone, EventDone,
 	}, rec.kinds())
 	resolved := rec.first(t, EventResolved)
@@ -115,7 +115,7 @@ func TestShipWithoutAnExecutorEmitsOnlyTheCheck(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []EventKind{
-		EventResolved, EventTargetChecked, EventTargetChecked, EventImagesChecked, EventDone,
+		EventResolved, EventTargetChecked, EventTargetChecked, EventTargetsChecked, EventImagesChecked, EventDone,
 	}, rec.kinds())
 }
 
@@ -130,7 +130,7 @@ func TestShipABlockedReleaseEmitsNoWork(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []EventKind{
-		EventResolved, EventTargetChecked, EventTargetChecked, EventImagesChecked, EventDone,
+		EventResolved, EventTargetChecked, EventTargetChecked, EventTargetsChecked, EventImagesChecked, EventDone,
 	}, rec.kinds())
 	require.NotNil(t, rec.first(t, EventDone).Plan)
 	assert.NotEmpty(t, rec.first(t, EventDone).Plan.Blockers)
@@ -145,7 +145,7 @@ func TestShipAFailureAfterACommitStillEndsTheTarget(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []EventKind{
-		EventResolved, EventTargetChecked, EventImagesChecked,
+		EventResolved, EventTargetChecked, EventTargetsChecked, EventImagesChecked,
 		EventTargetStarted, EventCommit, EventCommit, EventTargetDone, EventDone,
 	}, rec.kinds(), "the commits made before the failure were reported as they were made")
 	require.NotNil(t, rec.first(t, EventTargetDone).Result)
