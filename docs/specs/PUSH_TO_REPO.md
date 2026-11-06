@@ -1,6 +1,6 @@
 # Ship (push to repo)
 
-**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`, and so is the update dispatcher it uses, and the step runner (`internal/steprun`). Preparing the branch and the commit are built, behind `--no-push` and `--dry-run`. The push and the PR are not.
+**Status:** draft, built for the workstation. `gero ship` checks the state, makes the commits (one per unit of work), asks once, pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub, and **not yet against real GitHub**: the push spike (`TestPushSpikeToARealRemote`) and a trial on a scratch repository are still to be run. The CI variant is not built.
 
 `gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md).
 
@@ -162,11 +162,11 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* The push, the PR and superseding an older one, with `--yes` and the confirmation, and a plain run doing all of it.
+* A run against real GitHub: the push spike, and a first PR on a scratch repository.
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
-* The use of the PR service by `ship` (the service itself is built), the check for open PRs the new one would supersede, and its wiring into the command (the push-target layers, `botLabels` and the `--push-to` flag are built and reach `Ship`; the GitHub credentials and the confirmation are not).
+* `GERO_NON_INTERACTIVE` as an alias of `--yes` (the flags `--yes` and `--non-interactive` exist).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
 ## Open questions
