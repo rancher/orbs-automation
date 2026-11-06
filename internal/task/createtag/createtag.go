@@ -25,6 +25,18 @@ var (
 	// ErrNotNewer is returned for a version that is not newer than the newest tag
 	// the line already has.
 	ErrNotNewer = errors.New("the tag is not newer than the line's newest")
+	// ErrNeedsPrerelease is returned for a stable tag of a project that requires a
+	// prerelease first, when the commit has no prerelease of that version.
+	ErrNeedsPrerelease = errors.New("a stable tag needs a prerelease of that version on the same commit first")
+	// ErrNothingNew is returned when the commit already has the line's newest tag,
+	// so another tag of the line would say nothing new.
+	ErrNothingNew = errors.New("the commit already has the line's newest tag")
+	// ErrMovedSincePrerelease is returned when a prerelease is to be promoted to
+	// stable and the head of the branch is no longer the commit it was made on.
+	ErrMovedSincePrerelease = errors.New("the branch has moved since the prerelease")
+	// ErrNoBase is returned when there is no tag to follow and no series to start
+	// one from.
+	ErrNoBase = errors.New("the line has no tag to follow and no series to start from")
 	// ErrTagExists is returned when the tag is already there, on another commit. A
 	// tag is never moved.
 	ErrTagExists = errors.New("the tag already exists on another commit")
@@ -40,6 +52,9 @@ type Input struct {
 	Tags    []git.Tag
 	Pattern string // the project's tagPattern, such as "v*"; "" matches every tag
 	Series  string // the line's series, such as "0.8.x" or "v2.15"; "" for no series
+	// RequiresPrerelease is the project's release.requiresPrerelease: a stable tag
+	// is only made on a commit that already has a prerelease of its version.
+	RequiresPrerelease bool
 }
 
 // Action is what making the tag comes to.
@@ -145,3 +160,32 @@ func Run(ctx context.Context, r Remote, in Input) (Decision, error) {
 
 // short abbreviates a commit for a message.
 func short(commit string) string { return commit[:min(len(commit), 8)] }
+
+// Choice is what Choose needs to pick the tag to make when none was named.
+type Choice struct {
+	Tags    []git.Tag
+	Pattern string
+	Series  string
+	Commit  string // the head of the line's branch
+	// Stable asks for a stable tag: the promotion of the newest prerelease, or after
+	// a stable tag the next stable one. Without it the tag is a prerelease.
+	Stable bool
+	// Bump says how much a new version rises after a stable tag. It does not
+	// apply to the iteration or the promotion of a prerelease.
+	Bump               semver.Bump
+	RequiresPrerelease bool
+}
+
+// Chosen is the tag Choose picked.
+type Chosen struct {
+	Tag string
+	// Promotes is the prerelease that the tag is the stable version of, when it is.
+	Promotes *git.Tag
+}
+
+// Choose picks the tag to make from the newest tag of the line, with
+// internal/semver doing the arithmetic. It is the policy that semver does not
+// have: which tag may follow which.
+//
+// STUB: picks nothing until a later commit.
+func Choose(c Choice) (Chosen, error) { return Chosen{}, nil }
