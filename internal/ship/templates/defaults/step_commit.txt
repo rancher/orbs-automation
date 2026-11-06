@@ -1,0 +1,5 @@
+Run `{command}`
+
+Part of updating {source} to {tag}: the {phase} step.
+
+Automation: gero ship
