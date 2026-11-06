@@ -156,8 +156,6 @@ type Plan struct {
 	Want     string  `json:"want"`     // what the consumer should hold for the release
 	DryRun   bool    `json:"dryRun"`   // the run was a dry run: no branch or PR is created
 	// Refresh says --refresh was given, so the report does not suggest it.
-	//
-	// STUB: never set until a later commit.
 	Refresh  bool             `json:"refresh,omitempty"`
 	NoPush   bool             `json:"noPush"` // the run stops after the commit, with the branch left in the clone; never set with DryRun
 	Status   Status           `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
@@ -196,7 +194,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	}
 	plan := Plan{
 		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.route.Consumer.Repo.Name,
-		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun,
+		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
 	}
 	header := plan
 	emit(sink, Event{Kind: EventResolved, Plan: &header})

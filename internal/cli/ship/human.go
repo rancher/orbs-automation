@@ -264,7 +264,11 @@ func (h *humanSink) done(e domain.Event) {
 	case domain.ResultAlreadyOpen:
 		behind := ""
 		if r.BehindBy > 0 {
-			behind = fmt.Sprintf(" (behind %s by %d; --refresh to rebuild)", e.Branch, r.BehindBy)
+			hint := "; --refresh to rebuild"
+			if h.header.Refresh {
+				hint = "" // it was given, so the result says what came of it
+			}
+			behind = fmt.Sprintf(" (behind %s by %d%s)", e.Branch, r.BehindBy, hint)
 		}
 		note := ""
 		if r.Note != "" {
