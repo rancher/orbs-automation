@@ -642,3 +642,20 @@ func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestInputFromCarriesTheFlagsAndTheSettings(t *testing.T) {
+	s := clicfg.Settings{BranchPrefix: "dan/", DryRun: true}
+	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Branch: "main", Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
+
+	got := inputFrom(s, opts)
+
+	assert.Equal(t, domain.Input{
+		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Branch: "main", Prerelease: true,
+		BranchPrefix: "dan/", AllowDowngrade: true, DryRun: true, NoPush: true, PushTo: "upstream",
+	}, got)
+}
+
+func TestInputFromTheActorIsTheBotInCIAndTheEngineerOtherwise(t *testing.T) {
+	assert.True(t, inputFrom(clicfg.Settings{CI: true}, Options{}).CI)
+	assert.False(t, inputFrom(clicfg.Settings{}, Options{}).CI)
+}
