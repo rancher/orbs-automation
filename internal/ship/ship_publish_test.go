@@ -392,3 +392,86 @@ func TestShipANoPushRunDoesNotLookForAHead(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, lg.has("open head"))
 }
+
+// earlierAttempt puts a branch of the name on the remote, as an earlier attempt
+// left it: made on the target, by the actor, with the trailer, so the commits are
+// ours but are not the ones this run builds.
+func earlierAttempt(t *testing.T, ws *realWorkspace, author string, trailer bool) string {
+	t.Helper()
+	runGit(t, ws.up, "checkout", "--quiet", "-b", botV215, "release/v2.15")
+	put(t, ws.up, "earlier.txt", "an earlier attempt")
+	runGit(t, ws.up, "add", ".")
+	message := "Update scc-operator\n\nAn earlier attempt"
+	if trailer {
+		message += "\n\nAutomation: gero ship"
+	}
+	runGit(t, ws.up, "commit", "--quiet", "--author="+author, "-m", message)
+	tip := runGit(t, ws.up, "rev-parse", "HEAD")
+	runGit(t, ws.up, "checkout", "--quiet", "main")
+	return tip
+}
+
+func TestShipAnEarlierAttemptsBranchOnTheRemoteStopsAPlainRunWithAWayForward(t *testing.T) {
+	ws, _, ex, _, lg := publishing(t)
+	theirs := earlierAttempt(t, ws, "Dev <dev@example.com>", true)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultFailed, res.Status)
+	assert.Contains(t, res.Error, "--refresh", "it says how to go on")
+	assert.Contains(t, res.Error, botV215)
+	assert.Equal(t, theirs, runGit(t, ws.up, "rev-parse", botV215), "the remote's branch is untouched")
+	assert.False(t, lg.has("create"), "no PR was opened for a branch that was not pushed")
+}
+
+func TestShipRefreshReplacesAnEarlierAttemptsBranchAndOpensThePR(t *testing.T) {
+	ws, _, ex, _, lg := publishing(t)
+	theirs := earlierAttempt(t, ws, "Dev <dev@example.com>", true)
+	in := realRun()
+	in.Refresh = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	assert.NotEqual(t, theirs, runGit(t, ws.up, "rev-parse", botV215))
+	assert.Equal(t, res.Tip(), runGit(t, ws.up, "rev-parse", botV215), "the branch is the one this run built")
+	assert.True(t, lg.has("create"))
+}
+
+func TestShipWillNotReplaceABranchWithCommitsThatAreNotOurs(t *testing.T) {
+	ws, _, ex, _, lg := publishing(t)
+	theirs := earlierAttempt(t, ws, "Someone <someone@example.com>", true)
+	in := realRun()
+	in.Refresh = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultFailed, res.Status)
+	assert.Contains(t, res.Error, "someone@example.com", "whose commit it is")
+	assert.Equal(t, theirs, runGit(t, ws.up, "rev-parse", botV215), "even --refresh does not replace it")
+	assert.False(t, lg.has("create"))
+}
+
+func TestShipABranchAlreadyOnTheRemoteAtTheSameCommitJustGetsItsPR(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	remote.createErr = errors.New("A pull request already exists, or GitHub is down")
+	first, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+	require.NoError(t, err)
+	require.Equal(t, ResultFailed, onlyResult(t, first).Status, "pushed, but the PR was not opened")
+	pushed := runGit(t, ws.up, "rev-parse", botV215)
+	remote.createErr = nil
+	lg.calls = nil
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, ResultOpened, onlyResult(t, plan).Status)
+	assert.Equal(t, pushed, runGit(t, ws.up, "rev-parse", botV215), "nothing new to push")
+	assert.True(t, lg.has("create"))
+}
