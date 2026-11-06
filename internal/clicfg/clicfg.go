@@ -235,14 +235,23 @@ func Load(in Inputs) (Settings, error) {
 		s.sources[k.name] = src
 	}
 
-	if s.DryRun, err = loadDryRun(in.Flags, getenv); err != nil {
+	if s.DryRun, s.sources["dryRun"], err = loadBool("dryRun", in.Flags, getenv, "dry-run"); err != nil {
 		return Settings{}, err
 	}
-	s.sources["dryRun"] = SourceDefault
-	if _, set := flagValue(in.Flags, FlagName("dryRun")); set {
-		s.sources["dryRun"] = SourceFlag
-	} else if getenv(EnvName("dryRun")) != "" {
-		s.sources["dryRun"] = SourceEnv
+	// --yes is the same switch as --non-interactive.
+	if s.NonInteractive, s.sources["nonInteractive"], err = loadBool("nonInteractive", in.Flags, getenv, "non-interactive", "yes"); err != nil {
+		return Settings{}, err
+	}
+	s.sources["signCommits"] = SourceDefault
+	if fc.SignCommits != nil {
+		s.SignCommits, s.sources["signCommits"] = *fc.SignCommits, SourceFile
+	}
+	if ev := getenv(EnvName("signCommits")); ev != "" {
+		on, err := strconv.ParseBool(ev)
+		if err != nil {
+			return Settings{}, fmt.Errorf("%s: must be true or false, got %q", where("signCommits", SourceEnv, ""), ev)
+		}
+		s.SignCommits, s.sources["signCommits"] = on, SourceEnv
 	}
 
 	s.Fork, s.GitHubUser, s.BranchPrefix, s.PushTo = fc.Fork, fc.GitHubUser, fc.BranchPrefix, fc.PushTo
@@ -268,24 +277,28 @@ func flagValue(flags FlagLookup, name string) (string, bool) {
 	return flags(name)
 }
 
-// loadDryRun reads --dry-run, else GERO_DRY_RUN, else off. It is not a user-file
-// key on purpose: a file that turned it on would silence every write.
-func loadDryRun(flags FlagLookup, getenv func(string) string) (bool, error) {
+// loadBool reads an on/off switch that is a flag (under any of flagNames) or an
+// environment variable and never a user-file key: the last flag given, else the
+// environment, else off. It says which layer decided. A file that could turn
+// these on would silence every write or answer yes to every question.
+func loadBool(key string, flags FlagLookup, getenv func(string) string, flagNames ...string) (bool, Source, error) {
 	value, src := "", SourceDefault
-	if v := getenv(EnvName("dryRun")); v != "" {
+	if v := getenv(EnvName(key)); v != "" {
 		value, src = v, SourceEnv
 	}
-	if v, set := flagValue(flags, FlagName("dryRun")); set {
-		value, src = v, SourceFlag
+	for _, name := range flagNames {
+		if v, set := flagValue(flags, name); set {
+			value, src = v, SourceFlag
+		}
 	}
 	if value == "" {
-		return false, nil
+		return false, src, nil
 	}
 	on, err := strconv.ParseBool(value)
 	if err != nil {
-		return false, fmt.Errorf("%s: must be true or false, got %q", where("dryRun", src, ""), value)
+		return false, src, fmt.Errorf("%s: must be true or false, got %q", where(key, src, ""), value)
 	}
-	return on, nil
+	return on, src, nil
 }
 
 // where says what a rejected value came from, so the message sends the developer

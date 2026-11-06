@@ -20,6 +20,7 @@ type fileConfig struct {
 	GitHubUser   string    `yaml:"githubUser"`
 	BranchPrefix string    `yaml:"branchPrefix"`
 	PushTo       string    `yaml:"pushTo"`
+	SignCommits  *bool     `yaml:"signCommits"`
 	Repos        fileRepos `yaml:"repos"`
 }
 
