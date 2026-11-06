@@ -256,28 +256,68 @@ type Comment struct {
 // BehindBy says how many commits base has that head does not: how far a PR's
 // branch is behind the branch it targets. head is owner:branch for a branch in a
 // fork.
-//
-// STUB: nothing until a later commit.
-func (s *Service) BehindBy(ctx context.Context, slug, base, head string) (int, error) { return 0, nil }
+func (s *Service) BehindBy(ctx context.Context, slug, base, head string) (int, error) {
+	owner, name, err := split(slug)
+	if err != nil {
+		return 0, err
+	}
+	cmp, _, err := s.client.Repositories.CompareCommits(ctx, owner, name, base, head, &gogithub.ListOptions{PerPage: 1})
+	if err != nil {
+		return 0, fmt.Errorf("compare %s with %s in %s: %w", head, base, slug, err)
+	}
+	return cmp.GetBehindBy(), nil
+}
 
 // UpdateBody replaces the title and the body of a pull request.
-//
-// STUB: updates nothing until a later commit.
 func (s *Service) UpdateBody(ctx context.Context, slug string, number int, title, body string) error {
+	owner, name, err := split(slug)
+	if err != nil {
+		return err
+	}
+	if _, _, err := s.client.PullRequests.Edit(ctx, owner, name, number, &gogithub.PullRequest{Title: &title, Body: &body}); err != nil {
+		return fmt.Errorf("update %s#%d: %w", slug, number, err)
+	}
 	return nil
 }
 
 // Comments lists the comments of a pull request or an issue, oldest first, up to
 // the first limit of them (DefaultMax when it is 0).
-//
-// STUB: none until a later commit.
 func (s *Service) Comments(ctx context.Context, slug string, number, limit int) ([]Comment, error) {
-	return nil, nil
+	owner, name, err := split(slug)
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = DefaultMax
+	}
+	opts := &gogithub.IssueListCommentsOptions{ListOptions: gogithub.ListOptions{PerPage: 100}}
+	var out []Comment
+	for {
+		page, resp, err := s.client.Issues.ListComments(ctx, owner, name, number, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list the comments of %s#%d: %w", slug, number, err)
+		}
+		for _, c := range page {
+			out = append(out, Comment{ID: c.GetID(), Body: c.GetBody(), Author: c.GetUser().GetLogin()})
+		}
+		if len(out) >= limit {
+			return out[:limit], nil
+		}
+		if resp.NextPage == 0 {
+			return out, nil
+		}
+		opts.Page = resp.NextPage
+	}
 }
 
 // EditComment replaces the body of a comment.
-//
-// STUB: edits nothing until a later commit.
 func (s *Service) EditComment(ctx context.Context, slug string, id int64, body string) error {
+	owner, name, err := split(slug)
+	if err != nil {
+		return err
+	}
+	if _, _, err := s.client.Issues.UpdateComment(ctx, owner, name, id, gogithub.IssueCommentRequest{Body: body}); err != nil {
+		return fmt.Errorf("edit comment %d of %s: %w", id, slug, err)
+	}
 	return nil
 }
