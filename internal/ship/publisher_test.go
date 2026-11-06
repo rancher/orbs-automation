@@ -57,7 +57,8 @@ type fakeRemote struct {
 	createErr error
 	commentOn map[int]error
 	closeOn   map[int]error
-	open      pulls.Open // what OpenForBase finds
+	open      pulls.Open            // what OpenForBase finds
+	openBy    map[string]pulls.Open // what it finds for a base, when that is set
 	openErr   error
 	meErr     error
 }
@@ -69,6 +70,9 @@ func (f *fakeRemote) Me(context.Context) (string, error) {
 
 func (f *fakeRemote) OpenForBase(_ context.Context, slug, base string, _ int) (pulls.Open, error) {
 	f.log.add("open %s %s", slug, base)
+	if found, ok := f.openBy[base]; ok {
+		return found, f.openErr
+	}
 	return f.open, f.openErr
 }
 
