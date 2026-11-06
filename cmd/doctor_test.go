@@ -310,10 +310,15 @@ func TestDoctorWiring(t *testing.T) {
 
 // withConfigDir points GERO_CONFIG_DIR at a new directory holding files (name to
 // content), so the configuration checks do not depend on the working directory.
-// No files is an empty directory, which is a valid config with nothing in it.
+// No files is a config with one line in it and no projects: an empty directory is
+// not a config, since it is almost always the wrong directory, and a project
+// would add a repos warning to every report.
 func withConfigDir(t *testing.T, files map[string]string) {
 	t.Helper()
 	dir := t.TempDir()
+	if files == nil {
+		files = map[string]string{"rancher.lines.yaml": "apiVersion: gero/v1alpha1\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n"}
+	}
 	for name, content := range files {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
 	}

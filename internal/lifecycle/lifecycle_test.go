@@ -51,11 +51,11 @@ func TestParsePicksTheNamedProduct(t *testing.T) {
 }
 
 // page wraps one version table in a product section the way the real page does.
-func page(product, table string) string {
+func page(table string) string {
 	return fmt.Sprintf(`<table><tbody>
-<tr class="row" data-url="%s"><td>Product</td></tr>
+<tr class="row" data-url="p"><td>Product</td></tr>
 <tr class="sub_row"><td colspan="10">%s</td></tr>
-</tbody></table>`, product, table)
+</tbody></table>`, table)
 }
 
 func versionTable(header string, rows ...string) string {
@@ -69,7 +69,7 @@ func row(cells ...string) string {
 }
 
 func TestParseReadsColumnsByHeader(t *testing.T) {
-	html := page("p", versionTable("<th>EOL</th><th>Version</th><th>EOM</th><th>GA</th>",
+	html := page(versionTable("<th>EOL</th><th>Version</th><th>EOM</th><th>GA</th>",
 		row("3 Mar 2028", "2.15.x", "2 Feb 2027", "1 Jan 2026")))
 
 	got, err := Parse(strings.NewReader(html), "p")
@@ -81,7 +81,7 @@ func TestParseReadsColumnsByHeader(t *testing.T) {
 }
 
 func TestParseHeaderTextIsCaseAndSpaceInsensitive(t *testing.T) {
-	html := page("p", versionTable("<th> version </th><th>Ga</th><th>eom</th><th>EOL </th>",
+	html := page(versionTable("<th> version </th><th>Ga</th><th>eom</th><th>EOL </th>",
 		row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027")))
 
 	got, err := Parse(strings.NewReader(html), "p")
@@ -91,7 +91,7 @@ func TestParseHeaderTextIsCaseAndSpaceInsensitive(t *testing.T) {
 }
 
 func TestParseABlankDateIsNotSet(t *testing.T) {
-	html := page("p", versionTable(stdHeader, row("2.16.x", "1 Jan 2027", "", "&nbsp;")))
+	html := page(versionTable(stdHeader, row("2.16.x", "1 Jan 2027", "", "&nbsp;")))
 
 	got, err := Parse(strings.NewReader(html), "p")
 
@@ -100,7 +100,7 @@ func TestParseABlankDateIsNotSet(t *testing.T) {
 }
 
 func TestParseSkipsRowsWithNoCells(t *testing.T) {
-	html := page("p", versionTable(stdHeader,
+	html := page(versionTable(stdHeader,
 		"<tr></tr>",
 		row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027")))
 
@@ -114,7 +114,7 @@ func TestParseSkipsRowsWithNoCells(t *testing.T) {
 func TestParsePlaceholdersAreNotSet(t *testing.T) {
 	for _, placeholder := range []string{"TBD", "tbd", "N/A", "Not Applicable", "-", "—", "–"} {
 		t.Run(placeholder, func(t *testing.T) {
-			html := page("p", versionTable(stdHeader, row("2.16.x", placeholder, placeholder, placeholder)))
+			html := page(versionTable(stdHeader, row("2.16.x", placeholder, placeholder, placeholder)))
 
 			got, err := Parse(strings.NewReader(html), "p")
 
@@ -131,7 +131,7 @@ func TestParseFailsLoudly(t *testing.T) {
 		product string
 		want    string
 	}{
-		{"product not on the page", page("p", versionTable(stdHeader)), "other", `"other"`},
+		{"product not on the page", page(versionTable(stdHeader)), "other", `"other"`},
 		{"empty page", "", "p", `"p"`},
 		{
 			"section without a table",
@@ -143,22 +143,22 @@ func TestParseFailsLoudly(t *testing.T) {
 			`<table><tr class="row" data-url="p"><td>x</td></tr></table>`,
 			"p", "version table",
 		},
-		{"missing EOM column", page("p", versionTable("<th>Version</th><th>GA</th><th>EOL</th>", row("2.15.x", "1 Jan 2026", "1 Jan 2027"))), "p", "EOM"},
-		{"missing GA column", page("p", versionTable("<th>Version</th><th>EOM</th><th>EOL</th>", row("2.15.x", "1 Jul 2026", "1 Jan 2027"))), "p", "GA"},
-		{"missing EOL column", page("p", versionTable("<th>Version</th><th>GA</th><th>EOM</th>", row("2.15.x", "1 Jan 2026", "1 Jul 2026"))), "p", "EOL"},
-		{"missing version column", page("p", versionTable("<th>GA</th><th>EOM</th><th>EOL</th>")), "p", "Version"},
-		{"table with unrelated headers", page("p", versionTable("<th>Name</th><th>Price</th>")), "p", "version table"},
-		{"version not a line", page("p", versionTable(stdHeader, row("latest", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"latest"`},
-		{"version without the x", page("p", versionTable(stdHeader, row("2.15", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"2.15"`},
-		{"date that is not a date", page("p", versionTable(stdHeader, row("2.15.x", "soon", "1 Jul 2026", "1 Jan 2027"))), "p", `"soon"`},
-		{"impossible date", page("p", versionTable(stdHeader, row("2.15.x", "31 Feb 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"31 Feb 2026"`},
-		{"unknown month", page("p", versionTable(stdHeader, row("2.15.x", "1 Foo 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"1 Foo 2026"`},
+		{"missing EOM column", page(versionTable("<th>Version</th><th>GA</th><th>EOL</th>", row("2.15.x", "1 Jan 2026", "1 Jan 2027"))), "p", "EOM"},
+		{"missing GA column", page(versionTable("<th>Version</th><th>EOM</th><th>EOL</th>", row("2.15.x", "1 Jul 2026", "1 Jan 2027"))), "p", "GA"},
+		{"missing EOL column", page(versionTable("<th>Version</th><th>GA</th><th>EOM</th>", row("2.15.x", "1 Jan 2026", "1 Jul 2026"))), "p", "EOL"},
+		{"missing version column", page(versionTable("<th>GA</th><th>EOM</th><th>EOL</th>")), "p", "Version"},
+		{"table with unrelated headers", page(versionTable("<th>Name</th><th>Price</th>")), "p", "version table"},
+		{"version not a line", page(versionTable(stdHeader, row("latest", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"latest"`},
+		{"version without the x", page(versionTable(stdHeader, row("2.15", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"2.15"`},
+		{"date that is not a date", page(versionTable(stdHeader, row("2.15.x", "soon", "1 Jul 2026", "1 Jan 2027"))), "p", `"soon"`},
+		{"impossible date", page(versionTable(stdHeader, row("2.15.x", "31 Feb 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"31 Feb 2026"`},
+		{"unknown month", page(versionTable(stdHeader, row("2.15.x", "1 Foo 2026", "1 Jul 2026", "1 Jan 2027"))), "p", `"1 Foo 2026"`},
 		{
 			"same line twice",
-			page("p", versionTable(stdHeader, row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"), row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))),
+			page(versionTable(stdHeader, row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"), row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"))),
 			"p", "v2.15",
 		},
-		{"row with too few cells", page("p", versionTable(stdHeader, "<tr><td>2.15.x</td><td>1 Jan 2026</td></tr>")), "p", "2.15"},
+		{"row with too few cells", page(versionTable(stdHeader, "<tr><td>2.15.x</td><td>1 Jan 2026</td></tr>")), "p", "2.15"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -172,7 +172,7 @@ func TestParseFailsLoudly(t *testing.T) {
 }
 
 func TestParseNamesTheRowThatFailed(t *testing.T) {
-	html := page("p", versionTable(stdHeader,
+	html := page(versionTable(stdHeader,
 		row("2.15.x", "1 Jan 2026", "1 Jul 2026", "1 Jan 2027"),
 		row("2.14.x", "oops", "1 Jul 2026", "1 Jan 2027")))
 

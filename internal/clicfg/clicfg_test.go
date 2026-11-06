@@ -294,7 +294,7 @@ func TestLoadRejectsUnknownContext(t *testing.T) {
 
 func TestOpenUserFileFollowsForcedContext(t *testing.T) {
 	t.Run("workstation forced in a CI environment loads the file", func(t *testing.T) {
-		home := writeUserFile(t, "upstream: x\n")
+		home := writeUserFile(t)
 
 		r, _, err := OpenUserFile(env(map[string]string{"CI": "true", "GERO_CONTEXT": "workstation"}), home)
 
@@ -304,7 +304,7 @@ func TestOpenUserFileFollowsForcedContext(t *testing.T) {
 	})
 
 	t.Run("CI forced on a workstation ignores the file", func(t *testing.T) {
-		home := writeUserFile(t, "upstream: x\n")
+		home := writeUserFile(t)
 
 		r, _, err := OpenUserFile(env(map[string]string{"GERO_CONTEXT": "ci"}), home)
 
@@ -341,18 +341,19 @@ func TestUserFilePath(t *testing.T) {
 	}
 }
 
-func writeUserFile(t *testing.T, content string) (home string) {
+// writeUserFile makes a home directory whose user file sets upstream.
+func writeUserFile(t *testing.T) (home string) {
 	t.Helper()
 	home = t.TempDir()
 	dir := filepath.Join(home, ".config", "gero")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(content), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("upstream: x\n"), 0o600))
 	return home
 }
 
 func TestOpenUserFile(t *testing.T) {
 	t.Run("present at default path", func(t *testing.T) {
-		home := writeUserFile(t, "upstream: x\n")
+		home := writeUserFile(t)
 
 		r, path, err := OpenUserFile(env(nil), home)
 
@@ -373,7 +374,7 @@ func TestOpenUserFile(t *testing.T) {
 	})
 
 	t.Run("CI ignores the default file", func(t *testing.T) {
-		home := writeUserFile(t, "upstream: x\n")
+		home := writeUserFile(t)
 
 		r, _, err := OpenUserFile(env(map[string]string{"CI": "true"}), home)
 

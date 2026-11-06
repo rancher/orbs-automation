@@ -32,6 +32,7 @@ linters:
             - github.com/google/go-github
             - github.com/go-git/go-git
             - go.yaml.in/yaml/v3
+            - golang.org/x/net/html
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
         # internal/errs for exit-code errors and its own subpackages.
@@ -93,6 +94,16 @@ linters:
           deny:
             - pkg: go.yaml.in/yaml
               desc: YAML is only allowed in internal/clicfg, internal/config/loader and internal/yamledit (docs/specs/DEPENDENCY_POLICY.md)
+        # The HTML parser reads the SUSE lifecycle page and nothing else
+        # (docs/specs/DEPENDENCY_POLICY.md).
+        nohtml:
+          list-mode: lax
+          files:
+            - "!**/internal/lifecycle/**"
+            - "!$test"
+          deny:
+            - pkg: golang.org/x/net/html
+              desc: the HTML parser is only allowed in internal/lifecycle (docs/specs/DEPENDENCY_POLICY.md)
         # Central config is loaded, defaulted and validated only by
         # internal/workspace, so no command can use config that skipped them
         # (docs/specs/WORKSPACE.md, docs/specs/PROJECT_LAYOUT.md).
