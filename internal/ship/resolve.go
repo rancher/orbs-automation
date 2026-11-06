@@ -91,16 +91,11 @@ func (r resolution) branches(in Input) (branches []string, named bool, err error
 // lists the ones it does.
 func (r resolution) lineBranch(line string) (string, error) {
 	consumer := r.route.Consumer
-	want := line
-	if !strings.HasPrefix(want, "v") {
-		want = "v" + want
+	if branch, ok := consumer.BranchOfLine(line); ok {
+		return branch, nil
 	}
 	var have []string
 	for _, l := range consumer.Release.Lines {
-		if l.Line == want {
-			branch, _ := consumer.Branch(l)
-			return branch, nil
-		}
 		have = append(have, l.Line)
 	}
 	if len(have) == 0 {

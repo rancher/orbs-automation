@@ -2,6 +2,7 @@ package config
 
 import (
 	"slices"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
 )
@@ -64,18 +65,23 @@ func (p Project) LineOf(tag string) string {
 }
 
 // BranchOfLine returns the branch the Project keeps a Rancher line on, and
-// whether it has the line. The line may be written without the v. For release
+// whether it has the line. The line may be written without the v, in any case. For release
 // branches perLine it is the line's own branch, or the default branch for a line
 // with none; for single it is the default branch, whatever the line says, as
 // ReleaseBranches does.
-//
-// STUB: the line's own branch, ignoring the single layout and the missing v.
 func (p Project) BranchOfLine(line string) (branch string, ok bool) {
+	if !strings.HasPrefix(strings.ToLower(line), "v") {
+		line = "v" + line
+	}
 	for _, l := range p.Release.Lines {
-		if l.Line == line {
-			b, _ := p.Branch(l)
-			return b, true
+		if !strings.EqualFold(l.Line, line) {
+			continue
 		}
+		if p.Release.Branches == BranchesSingle {
+			return p.Repo.DefaultBranch, true
+		}
+		b, _ := p.Branch(l)
+		return b, true
 	}
 	return "", false
 }

@@ -29,11 +29,8 @@ func (r Route) BranchesFor(producer config.Project, line string) ([]string, erro
 		return nil, fmt.Errorf("%w: the release is in none of the release lines of %s, so there is no branch to follow it to",
 			ErrNoBranches, producer.Repo.Name)
 	}
-	for _, l := range consumer.Release.Lines {
-		if l.Line == line {
-			branch, _ := consumer.Branch(l)
-			return []string{branch}, nil
-		}
+	if branch, ok := consumer.BranchOfLine(line); ok {
+		return []string{branch}, nil
 	}
 	return nil, fmt.Errorf("%w: %s has no release line %s, which the release is in", ErrNoBranches, consumer.Repo.Name, line)
 }

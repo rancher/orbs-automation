@@ -131,11 +131,8 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 // line's own branch, or the default branch for a line that has none. A branch of
 // the project's, such as release/v2.15 or main, is taken as it is.
 func lineBranch(p config.Project, line string) (string, error) {
-	for _, l := range p.Release.Lines {
-		if strings.EqualFold(l.Line, line) {
-			branch, _ := p.Branch(l)
-			return branch, nil
-		}
+	if branch, ok := p.BranchOfLine(line); ok {
+		return branch, nil
 	}
 	branches := p.ReleaseBranches()
 	if slices.Contains(branches, line) {
