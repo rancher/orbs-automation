@@ -288,6 +288,34 @@ func (h *humanSink) summary(p *domain.Plan) {
 	}
 	h.out.Line("")
 	h.out.Line(trailer(p))
+	h.links(p)
+}
+
+// links ends the report with the PRs the run opened, refreshed or found already
+// open, each with its link, so they can be copied or clicked. A run that opened
+// none, such as a dry run or one that stopped at the commits, has no list.
+func (h *humanSink) links(p *domain.Plan) {
+	var rows [][]string
+	for _, t := range p.Targets {
+		r := t.Result
+		if r == nil || r.PR == nil {
+			continue
+		}
+		switch r.Status {
+		case domain.ResultOpened, domain.ResultRefreshed, domain.ResultAlreadyOpen:
+			rows = append(rows, []string{string(r.Status), t.Branch, r.PR.URL})
+		}
+	}
+	if len(rows) == 0 {
+		return
+	}
+	h.out.Line("")
+	h.out.Line("Pull requests")
+	h.out.BeginTable("RESULT", "BRANCH", "LINK")
+	for _, row := range rows {
+		h.out.Row(row...)
+	}
+	h.out.EndTable()
 }
 
 // commits is the table of what was done for each branch, why a worktree was used
