@@ -18,9 +18,10 @@ remote URL). The repository you are in plays no part, so the project is always
 named, by its config name or owner/name slug.
 
 A program cannot change its parent shell's directory, so this only prints the
-path. Wrap it in a shell function to move there:
+path. gero shell install adds a gero function to your shell profile that
+makes gero cd <project> move you there; by hand it is
 
-  gcd() { local d; d=$(gero cd "$@") && cd "$d"; }
+  cd "$(gero cd <project>)"
 
 The command fails when the project is not in the central config, or has no
 clone, or several equally good ones.`,
