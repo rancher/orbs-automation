@@ -134,7 +134,7 @@ func TestPrepareDryRunAlwaysUsesAWorktreeAndFinishRemovesBoth(t *testing.T) {
 	assert.Contains(t, w.Reason, "dry run")
 	assert.Equal(t, "main", current(t, clone))
 
-	require.NoError(t, w.Finish(bg, GitCLI{}, false))
+	require.NoError(t, w.Finish(bg, false))
 
 	assert.NoDirExists(t, w.Dir)
 	assert.False(t, branchExists(t, clone, "bot/x-v1"))
@@ -252,7 +252,7 @@ func TestCommitInPlaceTakesTheEditAndTheCreatedFilesButNotTheEngineersOwn(t *tes
 	put(t, w.Dir, "build.yaml", "image: new\n")
 	put(t, w.Dir, "generated/out.go", "package g\n")
 
-	hash, err := w.Commit(bg, GitCLI{}, GitCommit{Message: "Update\n\nbody"})
+	hash, err := w.Commit(bg, GitCommit{Message: "Update\n\nbody"})
 
 	require.NoError(t, err)
 	assert.Equal(t, hash, runGit(t, w.Dir, "rev-parse", "HEAD"))
@@ -273,7 +273,7 @@ func TestCommitInAWorktreeTakesEverythingTheRunCreated(t *testing.T) {
 	put(t, w.Dir, "build.yaml", "image: new\n")
 	put(t, w.Dir, "generated/out.go", "package g\n")
 
-	_, err := w.Commit(bg, GitCLI{}, GitCommit{Message: "m"})
+	_, err := w.Commit(bg, GitCommit{Message: "m"})
 
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"build.yaml", "generated/out.go"},
@@ -285,7 +285,7 @@ func TestCommitWithNothingChangedIsNothingToCommit(t *testing.T) {
 	clone := engineer(t, up)
 	w := mustPrepare(t, request(t, up, clone))
 
-	_, err := w.Commit(bg, GitCLI{}, GitCommit{Message: "m"})
+	_, err := w.Commit(bg, GitCommit{Message: "m"})
 
 	require.ErrorIs(t, err, gitcli.ErrNothingToCommit)
 }
@@ -296,10 +296,10 @@ func TestFinishInPlaceReturnsToTheStartingBranchAndKeepsOrDeletesTheNewOne(t *te
 		clone := engineer(t, up)
 		w := mustPrepare(t, request(t, up, clone))
 		put(t, w.Dir, "build.yaml", "image: new\n")
-		_, err := w.Commit(bg, GitCLI{}, GitCommit{Message: "m"})
+		_, err := w.Commit(bg, GitCommit{Message: "m"})
 		require.NoError(t, err)
 
-		require.NoError(t, w.Finish(bg, GitCLI{}, keep))
+		require.NoError(t, w.Finish(bg, keep))
 
 		assert.Equal(t, "main", current(t, clone), "keep %v", keep)
 		assert.Equal(t, keep, branchExists(t, clone, "bot/x-v1"), "keep %v", keep)
@@ -313,10 +313,10 @@ func TestFinishAWorktreeRemovesItAndKeepsTheBranchWhenAsked(t *testing.T) {
 	put(t, clone, "build.yaml", "image: mine\n")
 	w := mustPrepare(t, request(t, up, clone))
 	put(t, w.Dir, "build.yaml", "image: new\n")
-	hash, err := w.Commit(bg, GitCLI{}, GitCommit{Message: "m"})
+	hash, err := w.Commit(bg, GitCommit{Message: "m"})
 	require.NoError(t, err)
 
-	require.NoError(t, w.Finish(bg, GitCLI{}, true))
+	require.NoError(t, w.Finish(bg, true))
 
 	assert.NoDirExists(t, w.Dir)
 	assert.Equal(t, hash, runGit(t, clone, "rev-parse", "bot/x-v1"), "the commit is there to review")
@@ -331,7 +331,7 @@ func TestAbortInPlaceUndoesTheRunAndNothingOfTheEngineers(t *testing.T) {
 	put(t, w.Dir, "build.yaml", "image: half done\n")
 	put(t, w.Dir, "generated/out.go", "package g\n")
 
-	require.NoError(t, w.Abort(bg, GitCLI{}))
+	require.NoError(t, w.Abort(bg))
 
 	assert.Equal(t, "main", current(t, clone))
 	assert.False(t, branchExists(t, clone, "bot/x-v1"))
@@ -347,7 +347,7 @@ func TestAbortAWorktreeRemovesItAndTheBranch(t *testing.T) {
 	w := mustPrepare(t, request(t, up, clone))
 	put(t, w.Dir, "build.yaml", "image: half done\n")
 
-	require.NoError(t, w.Abort(bg, GitCLI{}))
+	require.NoError(t, w.Abort(bg))
 
 	assert.NoDirExists(t, w.Dir)
 	assert.False(t, branchExists(t, clone, "bot/x-v1"))

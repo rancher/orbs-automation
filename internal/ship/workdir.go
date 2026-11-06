@@ -3,6 +3,10 @@ package ship
 import (
 	"context"
 	"errors"
+	"fmt"
+	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
 )
@@ -126,33 +130,119 @@ type Work struct {
 	// was not in place.
 	Place  Place
 	Reason string
+
+	g         Git
+	clone     string   // the engineer's clone
+	branch    string   // the new branch
+	start     string   // the branch the clone was on, to go back to in place
+	untracked []string // the untracked files the engineer already had, in place
 }
 
 // Prepare fetches the target branch and creates the new branch at the commit
-// the state check read, in place or in a worktree as ChoosePlace says.
-//
-// STUB: prepares nothing until a later commit.
+// the state check read, in place or in a worktree as ChoosePlace says. It
+// creates nothing when it fails.
 func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
-	return &Work{}, nil
+	st, err := g.State(ctx, req.CloneDir)
+	if err != nil {
+		return nil, fmt.Errorf("read the state of %s: %w", req.CloneDir, err)
+	}
+	head, err := g.Fetch(ctx, req.CloneDir, req.Remote, req.Target)
+	if err != nil {
+		return nil, err
+	}
+	if head != req.Base {
+		return nil, fmt.Errorf("%w: %s is at %s, and it was checked at %s", ErrBaseMoved, req.Target, short(head), short(req.Base))
+	}
+	if st.Branch == req.Branch {
+		return nil, fmt.Errorf("%w: %s", ErrBranchCheckedOut, req.Branch)
+	}
+	if commit, found, err := g.BranchCommit(ctx, req.CloneDir, req.Branch); err != nil {
+		return nil, err
+	} else if found {
+		if commit != req.Base {
+			return nil, fmt.Errorf("%w: %s is at %s, not at %s: delete it or keep it, it is yours", ErrBranchExists, req.Branch, short(commit), short(req.Base))
+		}
+		// Identical to where the new branch would start, so nothing is lost.
+		if err := g.DeleteBranch(ctx, req.CloneDir, req.Branch); err != nil {
+			return nil, err
+		}
+	}
+	collisions, err := g.Collisions(ctx, req.CloneDir, req.Base, st.Untracked)
+	if err != nil {
+		return nil, err
+	}
+	choice := ChoosePlace(CloneState{Branch: st.Branch, InProgress: st.InProgress, Tracked: st.Tracked, Collisions: collisions}, req.DryRun)
+	w := &Work{Place: choice.Place, Reason: choice.Reason, g: g, clone: req.CloneDir, branch: req.Branch}
+	switch choice.Place {
+	case InPlace:
+		if err := g.StartBranch(ctx, req.CloneDir, req.Branch, req.Base); err != nil {
+			return nil, err
+		}
+		w.Dir, w.start, w.untracked = req.CloneDir, st.Branch, st.Untracked
+	default:
+		w.Dir = filepath.Join(req.TempDir, strings.ReplaceAll(req.Branch, "/", "-"))
+		if err := g.AddWorktree(ctx, req.CloneDir, w.Dir, req.Branch, req.Base); err != nil {
+			return nil, err
+		}
+	}
+	return w, nil
+}
+
+// short abbreviates a commit for a message.
+func short(commit string) string {
+	if len(commit) > 8 {
+		return commit[:8]
+	}
+	return commit
+}
+
+// created lists the untracked files in Dir the run made: the ones that were not
+// there when the work began.
+func (w *Work) created(ctx context.Context) ([]string, error) {
+	st, err := w.g.State(ctx, w.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("read the state of %s: %w", w.Dir, err)
+	}
+	return slices.DeleteFunc(st.Untracked, func(p string) bool { return slices.Contains(w.untracked, p) }), nil
 }
 
 // Commit commits what the edit and the steps changed in Dir: the tracked files,
 // and the untracked ones the run created, never the engineer's own.
-//
-// STUB: commits nothing until a later commit.
-func (w *Work) Commit(ctx context.Context, g Git, c GitCommit) (string, error) {
-	return "", nil
+func (w *Work) Commit(ctx context.Context, c GitCommit) (string, error) {
+	created, err := w.created(ctx)
+	if err != nil {
+		return "", err
+	}
+	c.Stage = created
+	return w.g.Commit(ctx, w.Dir, c)
 }
 
 // Finish ends the work. In place the clone goes back to the branch it started
 // on; a worktree is removed. The new branch is kept when keep is set, and
-// deleted otherwise.
-//
-// STUB: does nothing until a later commit.
-func (w *Work) Finish(ctx context.Context, g Git, keep bool) error { return nil }
+// deleted otherwise. Every step is tried, and the errors are joined.
+func (w *Work) Finish(ctx context.Context, keep bool) error {
+	var errs []error
+	if w.Place == InPlace {
+		errs = append(errs, w.g.Checkout(ctx, w.clone, w.start))
+	} else {
+		errs = append(errs, w.g.RemoveWorktree(ctx, w.clone, w.Dir))
+	}
+	if !keep {
+		errs = append(errs, w.g.DeleteBranch(ctx, w.clone, w.branch))
+	}
+	return errors.Join(errs...)
+}
 
 // Abort ends the work after a failure: whatever the run changed in the clone is
 // undone, and the branch is not kept.
-//
-// STUB: does nothing until a later commit.
-func (w *Work) Abort(ctx context.Context, g Git) error { return nil }
+func (w *Work) Abort(ctx context.Context) error {
+	var errs []error
+	if w.Place == InPlace {
+		created, err := w.created(ctx)
+		if err == nil {
+			err = w.g.Discard(ctx, w.Dir, created)
+		}
+		errs = append(errs, err)
+	}
+	return errors.Join(append(errs, w.Finish(ctx, false))...)
+}
