@@ -1,5 +1,7 @@
 package ship
 
+import "strings"
+
 // Place is where the branch for one target is prepared.
 type Place string
 
@@ -31,8 +33,18 @@ type Choice struct {
 // place only when the clone is on a branch, with no operation in progress, no
 // change to a tracked file and no untracked file in the way, and this is not a
 // dry run. Otherwise it is a worktree, and the reason says which.
-//
-// STUB: always a worktree, with no reason, until a later commit.
 func ChoosePlace(s CloneState, dryRun bool) Choice {
-	return Choice{Place: Worktree}
+	switch {
+	case dryRun:
+		return Choice{Worktree, "a dry run never moves your checkout"}
+	case s.Branch == "":
+		return Choice{Worktree, "HEAD is detached"}
+	case s.InProgress != "":
+		return Choice{Worktree, "a " + s.InProgress + " is in progress"}
+	case len(s.Tracked) > 0:
+		return Choice{Worktree, "the clone has uncommitted changes"}
+	case len(s.Collisions) > 0:
+		return Choice{Worktree, "untracked files would be overwritten: " + strings.Join(s.Collisions, ", ")}
+	}
+	return Choice{Place: InPlace}
 }
