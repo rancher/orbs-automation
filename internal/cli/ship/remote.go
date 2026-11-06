@@ -2,6 +2,7 @@ package ship
 
 import (
 	"context"
+	"errors"
 
 	gogithub "github.com/google/go-github/v93/github"
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -32,6 +33,12 @@ func newRemote(c github.Credentials, s clicfg.Settings, opts ...gogithub.ClientO
 // Me is the login whose PRs are the actor's own: the bot's, named by
 // GERO_BOT_USER, in CI, where the token is an installation's and has no user,
 // and otherwise the one the token belongs to.
-//
-// STUB: nobody until a later commit.
-func (r githubRemote) Me(ctx context.Context) (string, error) { return "", nil }
+func (r githubRemote) Me(ctx context.Context) (string, error) {
+	if r.s.CI {
+		if r.s.BotUser == "" {
+			return "", errors.New("in CI the bot's login is needed to tell which PRs are its own: set GERO_BOT_USER")
+		}
+		return r.s.BotUser, nil
+	}
+	return github.Login(ctx, r.creds, r.opts...)
+}
