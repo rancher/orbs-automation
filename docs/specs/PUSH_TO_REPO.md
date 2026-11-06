@@ -136,6 +136,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 * The push, the PR and superseding an older one, with `--yes` and the confirmation, and a plain run doing all of it.
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
+* Progressive output: the report is printed once at the end, so a run that fetches, runs steps and commits for several branches is silent until it finishes. It should report each target as it finishes ([CLI_OUTPUT](CLI_OUTPUT.md#not-built-yet)).
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
 * The check for open PRs the new one would supersede.

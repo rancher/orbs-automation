@@ -59,6 +59,7 @@ A spike built one confirm-and-table program per option in a scratch module (`huh
 * `--no-color`, and `NO_COLOR` and TTY detection beyond what commands do by default.
 * `internal/ui`.
 * Handing the logger to commands.
+* **Progressive output.** A command that does several things in order (`gero ship` first) builds its whole report and prints it at the end, so a long run is silent until it is done. It should print each stage as it finishes, in the order the work happens: the state of each branch as it is read, then the images, then each commit as it is made. The report is already ordered that way, so the change is to hand the renderer to the command as an event stream (a stage finished, a target finished) rather than render a finished value. The `--json` form needs its own shape for this, since one document cannot be printed in pieces: JSON lines, or a single document at the end as today. Not designed yet.
 
 ## Open questions
 
