@@ -921,3 +921,59 @@ func TestReplayOfARefreshedTargetHasTheRefreshedEventAfterThePush(t *testing.T) 
 		domain.EventTargetDone, domain.EventDone,
 	}, got)
 }
+
+func TestRenderTextEndsWithTheLinksToThePRsThatWereOpenedRefreshedOrAlreadyOpen(t *testing.T) {
+	p := previewPlanWithTargets()
+	ready := p.Targets[1]
+	mk := func(branch string, r *domain.TargetResult) domain.TargetPlan {
+		t := ready
+		t.Branch = branch
+		t.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-" + branch, Title: "t"}
+		t.Result = r
+		return t
+	}
+	opened := published()
+	again := refreshed()
+	open := &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 90, URL: "https://github.com/rancher/rancher/pull/90"}}
+	failed := &domain.TargetResult{Status: domain.ResultFailed, Branch: "bot/y", Error: "push rejected"}
+	p.Targets = []domain.TargetPlan{mk("release/v2.15", opened), mk("main", again), mk("release/v2.14", open), mk("release/v2.13", failed)}
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+
+	out := renderText(p, false)
+
+	i := strings.LastIndex(out, "Pull requests")
+	require.GreaterOrEqual(t, i, 0, "a list of them: %s", out)
+	list := out[i:]
+	assert.Greater(t, i, strings.Index(out, "Opened"), "after the line that says what the run did")
+	for _, line := range strings.Split(strings.TrimRight(list, "\n"), "\n")[1:] {
+		assert.True(t, strings.HasPrefix(line, "  "), "only rows of the list follow its heading, as it is the last thing printed: %q", line)
+	}
+	for _, want := range []string{
+		"opened", "release/v2.15", "https://github.com/rancher/rancher/pull/104",
+		"refreshed", "main",
+		"already open", "release/v2.14", "https://github.com/rancher/rancher/pull/90",
+	} {
+		assert.Contains(t, list, want)
+	}
+	assert.NotContains(t, list, "release/v2.13", "a target that failed has no PR to link")
+	assert.NotContains(t, list, "push rejected")
+}
+
+func TestRenderTextHasNoListOfPRsWhenThereAreNone(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+
+	assert.NotContains(t, renderText(p, false), "Pull requests")
+	assert.NotContains(t, renderText(previewPlan(), false), "Pull requests")
+}
+
+func TestRenderTextADryRunListsNoPRs(t *testing.T) {
+	p := previewPlan()
+	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	r := refreshed()
+	r.Status = domain.ResultWouldRefresh
+	p = withResults(p, r)
+
+	assert.NotContains(t, renderText(p, false), "Pull requests", "nothing was opened, so there is nothing to click")
+}
