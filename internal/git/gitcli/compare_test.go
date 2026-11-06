@@ -45,7 +45,6 @@ func TestMergeBaseOfUnrelatedCommitsIsAnError(t *testing.T) {
 
 func TestCommitsSinceListsWhatABranchAddedOldestFirstWithWhoMadeThem(t *testing.T) {
 	dir := clone(t, upstream(t))
-	run(t, dir, "config", "user.email", "dev@example.com")
 	base := run(t, dir, "rev-parse", "main")
 	run(t, dir, "checkout", "--quiet", "-b", "bot/x")
 	write(t, dir, "build.yaml", "image: new\n")
@@ -61,7 +60,7 @@ func TestCommitsSinceListsWhatABranchAddedOldestFirstWithWhoMadeThem(t *testing.
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	assert.Equal(t, first, got[0].Hash)
-	assert.Equal(t, "dev@example.com", got[0].AuthorEmail)
+	assert.Equal(t, "t@example.com", got[0].AuthorEmail, "the author the test helper commits as")
 	assert.Contains(t, got[0].Message, "body line")
 	assert.Contains(t, got[0].Message, "Automation: gero ship", "the trailers are in the message")
 	assert.Equal(t, second, got[1].Hash)

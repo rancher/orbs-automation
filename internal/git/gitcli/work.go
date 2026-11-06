@@ -2,6 +2,8 @@ package gitcli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -345,29 +347,75 @@ type CommitFact struct {
 }
 
 // MergeBase returns the best common ancestor of two commits: where a branch
-// left the branch it was made from.
-//
-// STUB: nothing until a later commit.
-func MergeBase(ctx context.Context, dir, a, b string) (string, error) { return "", nil }
+// left the branch it was made from. Commits with no common ancestor are an
+// error.
+func MergeBase(ctx context.Context, dir, a, b string) (string, error) {
+	out, err := inDir(ctx, dir, "merge-base", a, b)
+	if exitCode(err) == 1 {
+		return "", fmt.Errorf("%s and %s have no common ancestor", a, b)
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
 
 // CommitsSince lists the commits reachable from tip and not from base, oldest
 // first: what a branch added.
-//
-// STUB: none until a later commit.
-func CommitsSince(ctx context.Context, dir, base, tip string) ([]CommitFact, error) { return nil, nil }
+func CommitsSince(ctx context.Context, dir, base, tip string) ([]CommitFact, error) {
+	out, err := inDir(ctx, dir, "log", "--reverse", "--format=%H%x1f%ae%x1f%B%x1e", base+".."+tip)
+	if err != nil {
+		return nil, err
+	}
+	var facts []CommitFact
+	for _, record := range strings.Split(out, "\x1e") {
+		record = strings.TrimLeft(record, "\n")
+		if strings.TrimSpace(record) == "" {
+			continue
+		}
+		fields := strings.SplitN(record, "\x1f", 3)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("git log gave a commit in a shape that was not expected: %q", record)
+		}
+		facts = append(facts, CommitFact{Hash: fields[0], AuthorEmail: fields[1], Message: strings.TrimRight(fields[2], "\n")})
+	}
+	return facts, nil
+}
 
 // ChangeFingerprint identifies the change tip makes to base, so two branches can
 // be compared by what they do and not by the trees they sit on, which differ
 // wherever the branch they came from has moved. It is a hash of the diff with no
 // context lines, and without what depends on where the change is or on what
 // surrounds it: the blob ids and the positions of the hunks.
-//
-// STUB: empty until a later commit.
-func ChangeFingerprint(ctx context.Context, dir, base, tip string) (string, error) { return "", nil }
+func ChangeFingerprint(ctx context.Context, dir, base, tip string) (string, error) {
+	out, err := inDir(ctx, dir, "diff", "--no-color", "--no-ext-diff", "--no-renames", "-U0", base, tip)
+	if err != nil {
+		return "", err
+	}
+	var kept []string
+	for _, line := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(line, "index "):
+			continue
+		case strings.HasPrefix(line, "@@"):
+			line = "@@"
+		}
+		kept = append(kept, line)
+	}
+	sum := sha256.Sum256([]byte(strings.Join(kept, "\n")))
+	return hex.EncodeToString(sum[:]), nil
+}
 
 // ConfigIn returns what git would use for key in the clone in dir, or "" when it
 // is not set: the clone's own settings, then the user's and the system's. It is
 // how to know the identity a commit made there would have.
-//
-// STUB: empty until a later commit.
-func ConfigIn(ctx context.Context, dir, key string) (string, error) { return "", nil }
+func ConfigIn(ctx context.Context, dir, key string) (string, error) {
+	out, err := inDir(ctx, dir, "config", "--get", key)
+	if exitCode(err) == 1 {
+		return "", nil // not set
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
