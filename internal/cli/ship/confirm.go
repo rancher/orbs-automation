@@ -28,6 +28,18 @@ func question(c domain.Confirmation) string {
 		parts = append(parts, fmt.Sprintf("Push the %s for %s to %s (%s) and open %d %s in %s",
 			noun, strings.Join(c.Opens, ", "), c.Push.Remote, c.Push.Role, len(c.Opens), prs, c.Consumer))
 	}
+	if len(c.Refreshes) > 0 {
+		verb := "rebuild"
+		if len(parts) == 0 {
+			verb = "Rebuild"
+		}
+		noun := "branch"
+		if len(c.Refreshes) > 1 {
+			noun = "branches"
+		}
+		parts = append(parts, fmt.Sprintf("%s the %s for %s and push over %s to %s (%s) if %s differ",
+			verb, noun, strings.Join(c.Refreshes, ", "), "what is there", c.Push.Remote, c.Push.Role, differ(len(c.Refreshes))))
+	}
 	if len(c.Closes) > 0 {
 		verb := "close"
 		if len(parts) == 0 {
@@ -40,6 +52,14 @@ func question(c domain.Confirmation) string {
 		parts = append(parts, fmt.Sprintf("%s %s%s", verb, refNumbers(c.Closes), in))
 	}
 	return strings.Join(parts, ", then ") + "? [y/N] "
+}
+
+// differ is "it differs" or "they differ".
+func differ(n int) string {
+	if n > 1 {
+		return "they"
+	}
+	return "it"
 }
 
 // confirmer returns the function that asks before a run writes. With yes it says

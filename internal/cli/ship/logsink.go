@@ -59,6 +59,9 @@ func (l logSink) Event(e domain.Event) {
 	case domain.EventPROpened:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "pr opened",
 			slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))
+	case domain.EventRefreshed:
+		l.log.LogAttrs(ctx, slog.LevelInfo, "refreshed",
+			slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))
 	case domain.EventSuperseded:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "superseded", slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number))
 	case domain.EventCommit:

@@ -47,8 +47,6 @@ type Options struct {
 	PushTo string
 	// Refresh is --refresh: rebuild an open PR of yours and replace its branch if
 	// it differs.
-	//
-	// STUB: not carried until a later commit.
 	Refresh bool
 	// Yes is --yes: go on without asking. Interactive says In is a terminal that
 	// the question can be asked on; without it and without Yes a run that writes
@@ -125,7 +123,7 @@ func inputFrom(s clicfg.Settings, opts Options) domain.Input {
 	return domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
-		PushTo: opts.PushTo, CI: s.CI,
+		PushTo: opts.PushTo, CI: s.CI, Refresh: opts.Refresh,
 	}
 }
 

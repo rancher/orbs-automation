@@ -863,7 +863,7 @@ func TestInputFromCarriesRefresh(t *testing.T) {
 
 func refreshed() *domain.TargetResult {
 	return &domain.TargetResult{
-		Status: domain.ResultRefreshed, Branch: "bot/scc-operator-v0.5.3-v2.15", Pushed: "origin",
+		Status: domain.ResultRefreshed, Branch: "bot/scc-operator-v0.5.3-v2.15", Pushed: "origin", Place: domain.InPlace,
 		PR:      &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
 		Commits: []domain.CommitInfo{{Hash: "abcdef0123456789", Subject: "Update"}, {Hash: "1234567890abcdef", Subject: "Run gen"}},
 	}

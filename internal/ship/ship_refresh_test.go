@@ -93,6 +93,7 @@ func TestRefreshOfABranchThatDiffersReplacesItAndRecordsIt(t *testing.T) {
 	assert.Equal(t, 104, res.PR.Number, "the same PR")
 	assert.Equal(t, "upstream", res.Pushed)
 	require.Len(t, res.Commits, 2, "the edit and what the script made")
+	assert.NotEmpty(t, res.Place, "where the rebuild was made, as for any build")
 	newTip := runGit(t, ws.up, "rev-parse", botV215)
 	assert.NotEqual(t, oldTip, newTip)
 	assert.Equal(t, res.Tip(), newTip, "the remote's branch is the rebuilt one")

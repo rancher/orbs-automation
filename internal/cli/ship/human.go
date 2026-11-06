@@ -61,6 +61,8 @@ func (h *humanSink) Event(e domain.Event) {
 		h.out.Line(fmt.Sprintf("  %s: opened #%d %s", e.Branch, e.PR.Number, e.PR.URL))
 	case domain.EventSuperseded:
 		h.out.Line(fmt.Sprintf("  %s: closed #%d", e.Branch, e.PR.Number))
+	case domain.EventRefreshed:
+		h.out.Line(fmt.Sprintf("  %s: refreshed #%d %s", e.Branch, e.PR.Number, e.PR.URL))
 	case domain.EventTargetDone:
 		h.done(e)
 	case domain.EventDone:
@@ -255,7 +257,13 @@ func (h *humanSink) done(e domain.Event) {
 		if r.BehindBy > 0 {
 			behind = fmt.Sprintf(" (behind %s by %d; --refresh to rebuild)", e.Branch, r.BehindBy)
 		}
-		h.out.Line(fmt.Sprintf("  %s: already open #%d %s%s", e.Branch, r.PR.Number, r.PR.URL, behind))
+		note := ""
+		if r.Note != "" {
+			note = " (" + r.Note + ")"
+		}
+		h.out.Line(fmt.Sprintf("  %s: already open #%d %s%s%s", e.Branch, r.PR.Number, r.PR.URL, behind, note))
+	case domain.ResultWouldRefresh:
+		h.out.Line(fmt.Sprintf("  %s: would refresh #%d", e.Branch, r.PR.Number))
 	default:
 		h.out.Line(fmt.Sprintf("  %s: %s", e.Branch, r.Status))
 	}
@@ -378,11 +386,21 @@ func trailer(p *domain.Plan) string {
 			opened++
 		}
 	}
+	refreshed := 0
+	for _, t := range p.Targets {
+		if t.Result != nil && t.Result.Status == domain.ResultRefreshed {
+			refreshed++
+		}
+	}
 	switch {
 	case opened == 1:
 		return "Opened 1 PR."
 	case opened > 1:
 		return fmt.Sprintf("Opened %d PRs.", opened)
+	case refreshed == 1:
+		return "Refreshed 1 PR."
+	case refreshed > 1:
+		return fmt.Sprintf("Refreshed %d PRs.", refreshed)
 	case hasResults(*p):
 		return "No PR was opened."
 	}

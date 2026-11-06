@@ -34,6 +34,9 @@ func replay(plan domain.Plan) []domain.Event {
 		if r.Status == domain.ResultOpened && r.PR != nil {
 			events = append(events, domain.Event{Kind: domain.EventPROpened, Branch: t.Branch, PR: r.PR})
 		}
+		if r.Status == domain.ResultRefreshed {
+			events = append(events, domain.Event{Kind: domain.EventRefreshed, Branch: t.Branch, PR: r.PR})
+		}
 		for i := range r.Superseded {
 			events = append(events, domain.Event{Kind: domain.EventSuperseded, Branch: t.Branch, PR: &r.Superseded[i]})
 		}
