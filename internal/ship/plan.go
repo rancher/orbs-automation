@@ -75,6 +75,11 @@ type Input struct {
 	DryRun bool
 	// PushTo is --push-to: fork or upstream, or "" to let the settings decide.
 	PushTo string
+	// Refresh rebuilds an already open PR of the actor's whose branch differs from
+	// what a fresh build would make, and replaces its branch.
+	//
+	// STUB: not used until a later commit.
+	Refresh bool
 	// CI says the actor is the bot, in CI: it always pushes to the upstream and
 	// the bot's labels are added.
 	CI bool

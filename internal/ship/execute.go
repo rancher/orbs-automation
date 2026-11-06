@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -30,6 +31,10 @@ const (
 	ResultAlreadyOpen ResultStatus = "already open"
 	// ResultBlocked: the actor's own PR at a newer version is open.
 	ResultBlocked ResultStatus = "blocked"
+	// ResultRefreshed: the actor's own open PR was rebuilt and its branch replaced.
+	ResultRefreshed ResultStatus = "refreshed"
+	// ResultWouldRefresh: a dry run found that a refresh would replace the branch.
+	ResultWouldRefresh ResultStatus = "would refresh"
 )
 
 // TargetResult is what a run did for one target that needed a PR.
@@ -52,6 +57,9 @@ type TargetResult struct {
 	// BehindBy is how many commits the target has that an already open PR's branch
 	// does not, when it is behind.
 	BehindBy int `json:"behindBy,omitempty"`
+	// Note says more about the result than its status does: that an already open
+	// PR is identical to a fresh build, or why it was not refreshed.
+	Note string `json:"note,omitempty"`
 }
 
 // PRRef is a PR, by number and where to see it.
@@ -74,6 +82,8 @@ type Executor struct {
 	// to go on. It is not asked for a dry run, a --no-push run, or when nothing
 	// would be written. Not set means go on.
 	Confirm func(ctx context.Context, c Confirmation) (bool, error)
+	// Now is the time, for the line a refresh records. Not set is time.Now.
+	Now func() time.Time
 }
 
 // Confirmation is what a run is about to do, for the one question before it
@@ -87,6 +97,9 @@ type Confirmation struct {
 	Closes   []PRRef    // the older PRs that will be closed, for every target
 	Already  []string   // the target branches whose PR is already open
 	Blocked  []string   // the target branches a newer PR of the actor's blocks
+	// Refreshes are the target branches whose open PR will be rebuilt, and its
+	// branch replaced if it differs: a force push, with a lease.
+	Refreshes []string
 }
 
 // ErrDeclined is returned by Ship, with the plan, when the confirmation was

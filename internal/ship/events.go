@@ -30,6 +30,8 @@ const (
 	EventPROpened EventKind = "pr opened"
 	// EventSuperseded: an older PR was commented on and closed. PR is it.
 	EventSuperseded EventKind = "superseded"
+	// EventRefreshed: an open PR's branch was replaced by a rebuilt one. PR is it.
+	EventRefreshed EventKind = "refreshed"
 	// EventTargetDone: the work for one branch has ended, with Result.
 	EventTargetDone EventKind = "target done"
 	// EventDone: the run has ended. Plan is the whole of it.
