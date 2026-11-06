@@ -6,6 +6,7 @@ package repo
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -81,19 +82,23 @@ func (r *Repo) Head() (ref, short string, err error) {
 // operation in progress. Untracked files do not count, and neither does a
 // detached HEAD.
 func (r *Repo) Clean() (bool, error) {
-	return true, nil
+	st, err := gitcli.Status(context.Background(), r.dir)
+	if err != nil {
+		return false, err
+	}
+	return st.InProgress == "" && len(st.Tracked) == 0, nil
 }
 
 // BranchCommit returns the commit a local branch is at, and false when the
 // clone has no such branch.
 func (r *Repo) BranchCommit(branch string) (string, bool, error) {
-	return "", false, nil
+	return gitcli.BranchCommit(context.Background(), r.dir, branch)
 }
 
 // Count returns how many commits are reachable from to and not from from. It is
 // false when the clone lacks either commit.
 func (r *Repo) Count(from, to string) (int, bool, error) {
-	return 0, false, nil
+	return gitcli.CountCommits(context.Background(), r.dir, from, to)
 }
 
 type datedTag struct {
