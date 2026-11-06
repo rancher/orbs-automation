@@ -13,11 +13,8 @@ import (
 	"os"
 	"regexp"
 	"slices"
-	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/steprun"
@@ -158,151 +155,9 @@ func renderText(p domain.Plan, full bool) string {
 	return buf.String()
 }
 
-// renderTextBuilt is the report as it was built in one piece, kept until the
-// human sink replaces it.
-func renderTextBuilt(p domain.Plan, full bool) string {
-	var b strings.Builder
-	kind := "stable"
-	if !p.Release.Stable {
-		kind = "prerelease"
-	}
-	fmt.Fprintf(&b, "Ship %s %s (%s) to %s\n\n", p.Producer, p.Release.Tag, kind, p.Consumer)
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "  method\t%s (%s, %s)\n  want\t%s\n  status\t%s\n", p.Method, p.Strategy, p.File, p.Want, p.Status)
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
-	for _, blocker := range p.Blockers {
-		b.WriteString("  blocked: " + blocker + "\n")
-	}
-
-	b.WriteString("\nTargets\n")
-	w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  BRANCH\tHEAD\tNOW\tSTATUS")
-	for _, t := range p.Targets {
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.Branch, git.Short(t.Commit), t.Current, t.Status)
-	}
-	_ = w.Flush()
-	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Blockers }) {
-		fmt.Fprintf(&b, "  blocked (%s): %s\n", strings.Join(g.branches, ", "), g.text)
-	}
-	for _, t := range p.Targets {
-		if t.Error != "" {
-			fmt.Fprintf(&b, "  %s failed: %s\n", t.Branch, t.Error)
-		}
-	}
-
-	for _, warning := range p.Warnings {
-		b.WriteString("\nWarning: " + warning + "\n")
-	}
-	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
-		fmt.Fprintf(&b, "\nWarning (%s): %s\n", strings.Join(g.branches, ", "), g.text)
-	}
-	if p.Images != nil && len(p.Images.Rows) > 0 {
-		b.WriteString("\nImages\n")
-		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-		for _, r := range p.Images.Rows {
-			status := r.Status
-			if r.Detail != "" {
-				status += " (" + r.Detail + ")"
-			}
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", r.Image, r.Label, status, r.Reference)
-		}
-		_ = w.Flush()
-	}
-	if prs := previews(p); len(prs) > 0 {
-		b.WriteString("\nPR\n")
-		w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-		for _, t := range prs {
-			fmt.Fprintf(w, "  %s\t%s\t%s\n", t.Branch, t.Preview.Branch, t.Preview.Title)
-		}
-		_ = w.Flush()
-		if labels := prs[0].Preview.Labels; len(labels) > 0 {
-			b.WriteString("  labels: " + strings.Join(labels, ", ") + "\n")
-		}
-		if full {
-			for _, t := range prs {
-				writeBlock(&b, "Commit message ("+t.Branch+")", t.Preview.CommitMessage)
-				writeBlock(&b, "Body ("+t.Branch+")", t.Preview.Body)
-			}
-		}
-	}
-	writeCommits(&b, p)
-	switch {
-	case p.DryRun && hasResults(p):
-		b.WriteString("\nDry run: the commits were made in temporary worktrees and removed. Nothing was pushed, and no branch or PR was created.\n")
-	case p.DryRun:
-		b.WriteString("\nDry run: nothing was written, and no branch or PR was created.\n")
-	case p.NoPush && hasResults(p):
-		b.WriteString("\nNo push: the commits are on branches in your clone, with nothing pushed and no PR created.\n")
-	case p.NoPush:
-		b.WriteString("\nNo push: no commit was made.\n")
-	default:
-		// Creating the branches and PRs is not built yet, so nothing is written
-		// without --dry-run either.
-		b.WriteString("\nNothing was written: creating the branches and PRs is not built yet.\n")
-	}
-	return b.String()
-}
-
 // hasResults reports whether a run made, or tried to make, any commit.
 func hasResults(p domain.Plan) bool {
 	return slices.ContainsFunc(p.Targets, func(t domain.TargetPlan) bool { return t.Result != nil })
-}
-
-// writeCommits lists what a run did for each target that needed a PR: the result,
-// where the commits were made and the new branch; then why a worktree was used
-// and what failed, each grouped over the branches it applies to; then the
-// commits of each target, oldest first; then how to review the ones that are on
-// branches.
-func writeCommits(b *strings.Builder, p domain.Plan) {
-	if !hasResults(p) {
-		return
-	}
-	b.WriteString("\nCommits\n")
-	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  BRANCH\tRESULT\tWHERE\tNEW BRANCH")
-	for _, t := range p.Targets {
-		if r := t.Result; r != nil {
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.Branch, r.Status, r.Place, r.Branch)
-		}
-	}
-	_ = w.Flush()
-	result := func(text func(*domain.TargetResult) string) func(domain.TargetPlan) []string {
-		return func(t domain.TargetPlan) []string {
-			if t.Result == nil || text(t.Result) == "" {
-				return nil
-			}
-			return []string{text(t.Result)}
-		}
-	}
-	for _, g := range groupTargets(p.Targets, result(func(r *domain.TargetResult) string { return r.Reason })) {
-		fmt.Fprintf(b, "  worktree (%s): %s\n", strings.Join(g.branches, ", "), g.text)
-	}
-	for _, g := range groupTargets(p.Targets, result(func(r *domain.TargetResult) string { return r.Error })) {
-		fmt.Fprintf(b, "  failed (%s): %s\n", strings.Join(g.branches, ", "), g.text)
-	}
-	for _, t := range p.Targets {
-		if r := t.Result; r != nil && len(r.Commits) > 0 {
-			fmt.Fprintf(b, "\n  %s\n", t.Branch)
-			for _, c := range r.Commits {
-				fmt.Fprintf(b, "    %s  %s\n", git.Short(c.Hash), c.Subject)
-			}
-		}
-	}
-	if p.DryRun {
-		return // the branches were removed, so there is nothing to review
-	}
-	var review []string
-	for _, t := range p.Targets {
-		if r := t.Result; r != nil && r.Status == domain.ResultCommitted {
-			rng := fmt.Sprintf("%s/%s", p.Remote, t.Branch)
-			review = append(review,
-				fmt.Sprintf("  git -C %s log --oneline %s..%s\n", p.Clone, rng, r.Branch),
-				fmt.Sprintf("  git -C %s diff %s...%s\n", p.Clone, rng, r.Branch))
-		}
-	}
-	if len(review) > 0 {
-		b.WriteString("\nReview:\n" + strings.Join(review, ""))
-	}
 }
 
 // group is one text and the branches it applies to.
@@ -338,18 +193,6 @@ func previews(p domain.Plan) []domain.TargetPlan {
 		}
 	}
 	return out
-}
-
-// writeBlock writes a heading and the text under it, indented.
-func writeBlock(b *strings.Builder, heading, text string) {
-	b.WriteString("\n" + heading + "\n")
-	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		if line == "" {
-			b.WriteString("\n")
-			continue
-		}
-		b.WriteString("  " + line + "\n")
-	}
 }
 
 func renderJSON(p domain.Plan) (string, error) {
