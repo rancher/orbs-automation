@@ -321,3 +321,23 @@ func execGit(dir string, args ...string) *exec.Cmd {
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
 	return cmd
 }
+
+func TestCountCommits(t *testing.T) {
+	dir := clone(t, upstream(t))
+	main := run(t, dir, "rev-parse", "main")
+	run(t, dir, "fetch", "--quiet", "upstream", "release/v1")
+	release := run(t, dir, "rev-parse", "FETCH_HEAD")
+
+	n, known, err := CountCommits(ctx, dir, main, release)
+	require.NoError(t, err)
+	assert.True(t, known)
+	assert.Equal(t, 1, n, "the release branch is one commit past main")
+	n, known, err = CountCommits(ctx, dir, release, main)
+	require.NoError(t, err)
+	assert.True(t, known)
+	assert.Zero(t, n, "main has nothing release lacks")
+
+	_, known, err = CountCommits(ctx, dir, main, strings.Repeat("a", 40))
+	require.NoError(t, err)
+	assert.False(t, known, "a commit the clone does not hold is unknown, not zero")
+}
