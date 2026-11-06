@@ -13,6 +13,11 @@ type Refs struct {
 }
 
 // Branch returns the branch of the name and whether there is one.
-//
-// STUB: reports no branch until a later commit.
-func (r Refs) Branch(name string) (Branch, bool) { return Branch{}, false }
+func (r Refs) Branch(name string) (Branch, bool) {
+	for _, b := range r.Branches {
+		if b.Name == name {
+			return b, true
+		}
+	}
+	return Branch{}, false
+}

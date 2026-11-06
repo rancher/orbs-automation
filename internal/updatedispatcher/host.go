@@ -1,6 +1,9 @@
 package updatedispatcher
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // FileSource reads one file of a repository at a commit, as the host has it.
 type FileSource interface {
@@ -19,6 +22,10 @@ type hostTree struct {
 }
 
 // ReadFile reads path at the commit.
-//
-// STUB: reads nothing until a later commit.
-func (t hostTree) ReadFile(ctx context.Context, path string) ([]byte, error) { return nil, nil }
+func (t hostTree) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	data, err := t.src.UpstreamFile(ctx, t.slug, t.commit, path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s of %s at %s: %w", path, t.slug, t.commit, err)
+	}
+	return data, nil
+}
