@@ -139,6 +139,22 @@ linters:
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/git/repo
               desc: commands open repositories through internal/workspace (docs/specs/PROJECT_LAYOUT.md)
+        # A task is one action that commands compose. It reaches the world through
+        # domain packages and its own small interface, and knows nothing of the CLI,
+        # the terminal or another task, so any command can chain it
+        # (docs/specs/PROJECT_LAYOUT.md, Tasks).
+        task:
+          list-mode: lax
+          files:
+            - "**/internal/task/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/cli
+              desc: a task does not know about commands; commands compose tasks (docs/specs/PROJECT_LAYOUT.md)
+            - pkg: github.com/rancher/orbs-automation/internal/ui
+              desc: a task reports through its own sink and never prints (docs/specs/PROJECT_LAYOUT.md)
+            - pkg: github.com/rancher/orbs-automation/internal/task
+              desc: a task never calls another task; the command or conveyor chains them (docs/specs/PROJECT_LAYOUT.md)
         # main.go only calls cmd.Execute().
         entrypoint:
           list-mode: strict
