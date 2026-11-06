@@ -51,8 +51,6 @@ type TargetResult struct {
 	WouldSupersede []PRRef `json:"wouldSupersede,omitempty"`
 	// BehindBy is how many commits the target has that an already open PR's branch
 	// does not, when it is behind.
-	//
-	// STUB: never set until a later commit.
 	BehindBy int `json:"behindBy,omitempty"`
 }
 
@@ -269,6 +267,13 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher
 	if pub != nil && st.dec.Action == PublishAlreadyOpen {
 		result := &TargetResult{Status: ResultAlreadyOpen, Branch: tp.Preview.Branch, Warnings: st.warnings,
 			PR: &PRRef{Number: st.dec.Open.Number, URL: st.dec.Open.URL}}
+		if open := st.dec.Open; open.HeadOwner != "" {
+			behind, err := pub.Remote.BehindBy(ctx, plan.Consumer, tp.Branch, open.HeadOwner+":"+open.HeadRef)
+			if err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not tell whether #%d is behind %s: %v", open.Number, tp.Branch, err))
+			}
+			result.BehindBy = behind
+		}
 		if in.DryRun {
 			result.WouldSupersede = refs(st.dec.Supersede)
 		} else {

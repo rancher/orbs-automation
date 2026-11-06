@@ -251,15 +251,15 @@ func TestShipARerunOfANoPushRunReportsTheExistingBranch(t *testing.T) {
 }
 
 // mine is an existing PR of the actor's for the fixture's bump, with its head.
-func mine(number int, version string) pulls.PR {
-	p := existing(number, "danpock", version)
+func mine(version string) pulls.PR {
+	p := existing(104, "danpock", version)
 	p.HeadOwner, p.HeadRef, p.Base = "danpock", botV215, "release/v2.15"
 	return p
 }
 
 func TestShipAnAlreadyOpenPRSaysHowFarBehindItIs(t *testing.T) {
 	ws, clone, ex, remote, lg := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.open = pulls.Open{PRs: []pulls.PR{mine("v0.5.3")}}
 	remote.behind = 7
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
@@ -275,7 +275,7 @@ func TestShipAnAlreadyOpenPRSaysHowFarBehindItIs(t *testing.T) {
 
 func TestShipAnAlreadyOpenPRThatIsCurrentIsNotBehind(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.open = pulls.Open{PRs: []pulls.PR{mine("v0.5.3")}}
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
@@ -285,7 +285,7 @@ func TestShipAnAlreadyOpenPRThatIsCurrentIsNotBehind(t *testing.T) {
 
 func TestShipNotBeingAbleToTellHowFarBehindIsAWarning(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.open = pulls.Open{PRs: []pulls.PR{mine("v0.5.3")}}
 	remote.behindErr = errors.New("rate limited")
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
@@ -300,7 +300,7 @@ func TestShipNotBeingAbleToTellHowFarBehindIsAWarning(t *testing.T) {
 
 func TestShipADryRunAlsoSaysHowFarBehind(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.open = pulls.Open{PRs: []pulls.PR{mine("v0.5.3")}}
 	remote.behind = 3
 	in := realRun()
 	in.DryRun = true
