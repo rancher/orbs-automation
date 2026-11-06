@@ -36,9 +36,7 @@ spec:
           default: "{tag}"
       postEdit:
         - run: scripts/generate-buildconfig
-          since: v2.16
-        - run: [go, generate, ./pkg/...]
-          until: v2.15
+
   images:
     - name: rancher/rancher
     - name: rancher/rancher-agent
