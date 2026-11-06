@@ -65,6 +65,8 @@ type Git interface {
 	ForceBranch(ctx context.Context, dir, name, commit string) error
 	// PushReplacing pushes over a branch that is at expected on the remote.
 	PushReplacing(ctx context.Context, dir, remote, branch, expected string) error
+	// PushCommitReplacing is PushReplacing for a commit, whatever the local branch.
+	PushCommitReplacing(ctx context.Context, dir, remote, branch, commit, expected string) error
 }
 
 // GitCLI is Git through the git binary (internal/git/gitcli).
@@ -134,6 +136,10 @@ func (GitCLI) ChangeFingerprint(ctx context.Context, dir, base, tip string) (str
 
 func (GitCLI) ForceBranch(ctx context.Context, dir, name, commit string) error {
 	return gitcli.ForceBranch(ctx, dir, name, commit)
+}
+
+func (GitCLI) PushCommitReplacing(ctx context.Context, dir, remote, branch, commit, expected string) error {
+	return gitcli.PushCommitReplacing(ctx, dir, remote, branch, commit, expected)
 }
 
 func (GitCLI) PushReplacing(ctx context.Context, dir, remote, branch, expected string) error {
