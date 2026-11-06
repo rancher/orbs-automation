@@ -76,3 +76,39 @@ func TestReplayOfATargetThatFailedBeforeItStartedHasNoStartedEvent(t *testing.T)
 		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked, domain.EventTargetDone, domain.EventDone,
 	}, kinds(events), "no place was chosen, so the work never started")
 }
+
+func TestReplayOfAPublishedTargetHasTheStepsOfPublishing(t *testing.T) {
+	p := previewPlan()
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
+	r.Status = domain.ResultOpened
+	r.Pushed = "origin"
+	r.PR = &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}
+	r.Superseded = []domain.PRRef{{Number: 101}, {Number: 90}}
+	p = withResults(p, r)
+
+	events := replay(p)
+
+	assert.Equal(t, []domain.EventKind{
+		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked,
+		domain.EventTargetStarted, domain.EventCommit, domain.EventPushed, domain.EventPROpened,
+		domain.EventSuperseded, domain.EventSuperseded, domain.EventTargetDone, domain.EventDone,
+	}, kinds(events))
+	require.Len(t, events, 11)
+	assert.Equal(t, "origin", events[5].Remote)
+	require.NotNil(t, events[6].PR)
+	assert.Equal(t, 104, events[6].PR.Number)
+	assert.Equal(t, 101, events[7].PR.Number)
+	assert.Equal(t, 90, events[8].PR.Number)
+}
+
+func TestReplayOfAnAlreadyOpenTargetHasNoStartedAndNoCommits(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104}, Superseded: []domain.PRRef{{Number: 101}}})
+
+	events := replay(p)
+
+	assert.Equal(t, []domain.EventKind{
+		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked,
+		domain.EventSuperseded, domain.EventTargetDone, domain.EventDone,
+	}, kinds(events), "it was already open: the older one was closed and nothing else was made")
+}

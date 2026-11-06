@@ -13,8 +13,10 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
@@ -658,4 +660,119 @@ func TestInputFromCarriesTheFlagsAndTheSettings(t *testing.T) {
 func TestInputFromTheActorIsTheBotInCIAndTheEngineerOtherwise(t *testing.T) {
 	assert.True(t, inputFrom(clicfg.Settings{CI: true}, Options{}).CI)
 	assert.False(t, inputFrom(clicfg.Settings{}, Options{}).CI)
+}
+
+// published is a target whose branch was pushed and PR opened.
+func published() *domain.TargetResult {
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
+	r.Status = domain.ResultOpened
+	r.Pushed = "origin"
+	r.PR = &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}
+	r.Superseded = []domain.PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}}
+	return r
+}
+
+func TestRenderTextShowsEachStepOfPublishingAndTheLinkToThePR(t *testing.T) {
+	p := previewPlan()
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+	p = withResults(p, published())
+
+	out := renderText(p, false)
+
+	for _, want := range []string{
+		"release/v2.15: pushed to origin",
+		"release/v2.15: opened #104 https://github.com/rancher/rancher/pull/104",
+		"release/v2.15: closed #101",
+		"opened",
+	} {
+		assert.Contains(t, out, want)
+	}
+	assert.NotContains(t, out, "git -C", "an opened PR has nothing to review locally")
+	assert.Contains(t, out, "Opened 1 PR.")
+	assert.NotContains(t, out, "not built yet")
+}
+
+func TestRenderTextAnAlreadyOpenTargetNamesThePR(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}})
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: already open #104 https://github.com/rancher/rancher/pull/104")
+	assert.Contains(t, out, "No PR was opened.")
+}
+
+func TestRenderTextABlockedTargetSaysWhy(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultBlocked, Branch: "bot/x", Error: "#110 already ships v0.5.4 to release/v2.15, which is newer than v0.5.3"})
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: blocked: #110 already ships v0.5.4")
+	assert.Contains(t, out, "blocked (release/v2.15): #110 already ships v0.5.4", "and in the summary, as a failure is")
+	assert.NotContains(t, out, "failed (", "a blocked target did not fail")
+}
+
+func TestRenderTextWarningsOfAResultAreGroupedAcrossBranches(t *testing.T) {
+	p := previewPlanWithTargets()
+	ready := p.Targets[1]
+	second := ready
+	second.Branch = "release/v2.13"
+	second.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-v2.13", Title: "t"}
+	p.Targets = []domain.TargetPlan{ready, second}
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+	a, b := published(), published()
+	b.Branch = "bot/scc-operator-v0.5.3-v2.13"
+	a.Warnings = []string{"label team/orbs is not in rancher/rancher, so it was not applied"}
+	b.Warnings = a.Warnings
+	p = withResults(p, a, b)
+
+	out := renderText(p, false)
+
+	assert.Equal(t, 1, strings.Count(out, "label team/orbs is not in rancher/rancher"), "once, naming the branches")
+	assert.Contains(t, out, "warning (release/v2.15, release/v2.13): label team/orbs is not in rancher/rancher")
+}
+
+func TestRenderTextADryRunSaysWhatItWouldClose(t *testing.T) {
+	p := previewPlan()
+	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.Worktree, "a dry run never moves your checkout")
+	r.Status = domain.ResultWouldCommit
+	r.WouldSupersede = []domain.PRRef{{Number: 101}, {Number: 90}}
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: would close #101, #90")
+}
+
+func TestRenderTextWhereItPushesIsShown(t *testing.T) {
+	p := previewPlan()
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+	p.Push = &domain.PushTarget{Role: domain.RoleFork, Remote: "origin", Source: "a fork is set"}
+	p = withResults(p, published())
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "push to  fork (origin), as a fork is set")
+}
+
+func TestRenderTextTheDecisionAboutEachTargetsExistingPRsIsShown(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, published())
+	events := replay(p)
+	events = append([]domain.Event{events[0]}, append([]domain.Event{{
+		Kind: domain.EventDecided, Branch: "release/v2.15",
+		Decision: &domain.Publish{Action: domain.PublishCreate, Supersede: []pulls.PR{{Number: 101}, {Number: 90}}},
+	}}, events[1:]...)...)
+	var buf bytes.Buffer
+	stream := ui.NewStream(&buf)
+	sink := newHumanSink(stream, false)
+
+	for _, e := range events {
+		sink.Event(e)
+	}
+	stream.Flush()
+
+	assert.Contains(t, buf.String(), "release/v2.15: a new PR, and #101, #90 will be closed")
 }
