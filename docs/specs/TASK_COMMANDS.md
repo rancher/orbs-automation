@@ -55,7 +55,7 @@ Makes the tag `<tag>` on the head of the upstream branch of the release line `<l
 | stable `v0.8.3` | prerelease `v0.8.4-rc.1`, or `--minor` or `--major` for a higher version | the next stable `v0.8.4`, unless the project sets `requiresPrerelease`, which refuses it and says an RC comes first |
 | prerelease `v0.8.4-rc.1` | `v0.8.4-rc.2` | `v0.8.4`, the promotion of that RC |
 
-* **Prereleases are written with a dot, `rc.1`.** That is SemVer, and the components we own can be more exact than Rancher's `rc1`. A prerelease that already exists is continued in its own style (`rc1` to `rc2`), since `rc.2` sorts below `rc1`, which would be a tag that is older than the one before it.
+* **Prereleases are written with a dot, `rc.1`,** as SemVer has it and as the team's repositories already do. A legacy prerelease with no dot (`rc1`) is continued in its own style (`rc2`), since `rc.2` sorts below `rc1` and would be a tag older than the one before it. A new prerelease is always dotted.
 * **A promotion, the "unRC", is never the default.** It needs `--stable`, always asks, and says what it is: `Tag v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head has commits since that RC it refuses and says how many, since a stable tag is made from a commit that already has an RC (`requiresPrerelease`, [IMPLEMENTATION](../IMPLEMENTATION.md)). `--yes` skips the question, as everywhere.
 * **A tag asks once.** Tags are hard to undo, so a plain prerelease asks too, and `--yes`, `GERO_NON_INTERACTIVE` and `--dry-run` work as for `ship`. A dry run says which tag, on which commit and in which repository, and sends nothing.
 
