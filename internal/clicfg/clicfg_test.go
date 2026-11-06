@@ -475,3 +475,79 @@ func TestLoadDryRunIsNotAUserFileKey(t *testing.T) {
 	require.Error(t, err, "a file that turned it on would turn it on for every run")
 	assert.Contains(t, err.Error(), "dryRun")
 }
+
+func TestLoadNonInteractive(t *testing.T) {
+	tests := []struct {
+		name  string
+		env   map[string]string
+		flags map[string]string
+		want  bool
+		src   Source
+	}{
+		{"off by default", nil, nil, false, SourceDefault},
+		{"the flag", nil, map[string]string{"non-interactive": "true"}, true, SourceFlag},
+		{"the alias flag", nil, map[string]string{"yes": "true"}, true, SourceFlag},
+		{"the env, true", map[string]string{"GERO_NON_INTERACTIVE": "true"}, nil, true, SourceEnv},
+		{"the env, 1", map[string]string{"GERO_NON_INTERACTIVE": "1"}, nil, true, SourceEnv},
+		{"the env, false", map[string]string{"GERO_NON_INTERACTIVE": "false"}, nil, false, SourceEnv},
+		{"the flag beats the env, off", map[string]string{"GERO_NON_INTERACTIVE": "true"}, map[string]string{"yes": "false"}, false, SourceFlag},
+		{"the flag beats the env, on", map[string]string{"GERO_NON_INTERACTIVE": "false"}, map[string]string{"non-interactive": "true"}, true, SourceFlag},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{Getenv: env(tt.env), Flags: flags(tt.flags)})
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.NonInteractive)
+			assert.Equal(t, tt.src, s.Source("nonInteractive"))
+		})
+	}
+}
+
+func TestLoadNonInteractiveRejectsAnythingElse(t *testing.T) {
+	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_NON_INTERACTIVE": "maybe"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nonInteractive")
+	assert.Contains(t, err.Error(), "maybe")
+}
+
+func TestLoadNonInteractiveIsNotAUserFileKey(t *testing.T) {
+	_, err := Load(Inputs{UserFile: strings.NewReader("nonInteractive: true\n"), UserFileName: "config.yaml"})
+	require.Error(t, err, "a file that turned it on would answer yes to every question")
+	assert.Contains(t, err.Error(), "nonInteractive")
+}
+
+func TestLoadSignCommits(t *testing.T) {
+	tests := []struct {
+		name string
+		file string
+		env  map[string]string
+		want bool
+		src  Source
+	}{
+		{"off by default", "", nil, false, SourceDefault},
+		{"the file", "signCommits: true\n", nil, true, SourceFile},
+		{"the file, off", "signCommits: false\n", nil, false, SourceFile},
+		{"the env", "", map[string]string{"GERO_SIGN_COMMITS": "true"}, true, SourceEnv},
+		{"the env beats the file, off", "signCommits: true\n", map[string]string{"GERO_SIGN_COMMITS": "false"}, false, SourceEnv},
+		{"the env beats the file, on", "signCommits: false\n", map[string]string{"GERO_SIGN_COMMITS": "1"}, true, SourceEnv},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := Inputs{Getenv: env(tt.env)}
+			if tt.file != "" {
+				in.UserFile, in.UserFileName = strings.NewReader(tt.file), "config.yaml"
+			}
+			s, err := Load(in)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.SignCommits)
+			assert.Equal(t, tt.src, s.Source("signCommits"))
+		})
+	}
+}
+
+func TestLoadSignCommitsRejectsAnythingElse(t *testing.T) {
+	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_SIGN_COMMITS": "sometimes"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "signCommits")
+	assert.Contains(t, err.Error(), "sometimes")
+}
