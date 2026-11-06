@@ -36,7 +36,7 @@ type ApplyResult struct {
 // dispatcher's *StepError, and the caller aborts the work. A run that changes
 // nothing is ErrNothingChanged.
 func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
-	res, err := a.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), a.Runner, a.Release, a.Branch, w.Dir)
+	res, err := a.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), a.Runner, a.Release, a.Branch, w.Dir, nil)
 	if err != nil {
 		return ApplyResult{}, err
 	}

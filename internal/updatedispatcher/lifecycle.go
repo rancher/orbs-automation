@@ -100,10 +100,37 @@ func (inv Invocation) Steps(branch string) (pre, post []StepRef) {
 	return pre, post
 }
 
+// UnitKind says what a Unit is.
+type UnitKind string
+
+// The kinds of unit.
+const (
+	UnitStep UnitKind = "step"
+	UnitEdit UnitKind = "edit"
+)
+
+// Unit is one piece of the lifecycle that may leave changes behind: a step, or
+// the strategy's edit.
+type Unit struct {
+	Kind    UnitKind
+	Phase   Phase    // for a step: where it runs
+	Index   int      // for a step: its position in that phase's list
+	Run     []string // for a step: its command
+	Changes []Change // for the edit: what the strategy changed
+}
+
+// Checkpoint is called after each unit has finished, so the caller can act on
+// what it left behind, such as committing it. An error stops the run. The
+// dispatcher knows nothing of what the caller does.
+type Checkpoint func(ctx context.Context, u Unit) error
+
 // Run runs the lifecycle for one branch in the clone: the pre-edit steps, Apply,
-// then the post-edit steps. A step that fails stops the run, as a *StepError; if
-// it is a post-edit step the edit has been made, and Result says what changed.
-func (inv Invocation) Run(ctx context.Context, tree WritableTree, runner StepRunner, rel Release, branch string, dir string) (Result, error) {
+// then the post-edit steps, calling after (when it is not nil) once each has
+// finished. A step that fails stops the run, as a *StepError; if it is a
+// post-edit step the edit has been made, and Result says what changed.
+//
+// STUB: after is not called until a later commit.
+func (inv Invocation) Run(ctx context.Context, tree WritableTree, runner StepRunner, rel Release, branch string, dir string, after Checkpoint) (Result, error) {
 	pre, post := inv.Steps(branch)
 	env := StepEnv{Dir: dir, Env: inv.stepEnv(rel, branch)}
 	for _, ref := range pre {

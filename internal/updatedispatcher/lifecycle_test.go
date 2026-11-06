@@ -108,7 +108,7 @@ func TestRunWrapsTheEditInTheSteps(t *testing.T) {
 	runner := &recorder{trace: &trace}
 	tracing := &tracingTree{memTree: tree, trace: &trace}
 
-	res, err := inv.Run(context.Background(), tracing, runner, rel, "release/v2.15", "/work/rancher")
+	res, err := inv.Run(context.Background(), tracing, runner, rel, "release/v2.15", "/work/rancher", nil)
 
 	require.NoError(t, err)
 	assert.True(t, res.Changed)
@@ -131,7 +131,7 @@ func TestRunGivesEachStepTheDirectoryAndTheEnvironment(t *testing.T) {
 	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
 	runner := &recorder{}
 
-	_, err := inv.Run(context.Background(), tree, runner, rel, "release/v2.15", "/work/rancher")
+	_, err := inv.Run(context.Background(), tree, runner, rel, "release/v2.15", "/work/rancher", nil)
 
 	require.NoError(t, err)
 	env := runner.envs[0]
@@ -148,7 +148,7 @@ func TestRunAPreEditFailureStopsBeforeTheEdit(t *testing.T) {
 	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
 	runner := &recorder{fail: "pre-edge"}
 
-	_, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w")
+	_, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w", nil)
 
 	var stepErr *StepError
 	require.ErrorAs(t, err, &stepErr)
@@ -165,7 +165,7 @@ func TestRunAPostEditFailureKeepsWhatWasChanged(t *testing.T) {
 	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
 	runner := &recorder{fail: "post-method-new"}
 
-	res, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w")
+	res, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w", nil)
 
 	var stepErr *StepError
 	require.ErrorAs(t, err, &stepErr)
@@ -181,7 +181,7 @@ func TestRunAnEditFailureRunsNoPostEditStep(t *testing.T) {
 	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
 	runner := &recorder{}
 
-	_, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w")
+	_, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w", nil)
 
 	require.Error(t, err)
 	var stepErr *StepError
@@ -195,7 +195,7 @@ func TestRunWhenAlreadyUpToDateStillRunsTheSteps(t *testing.T) {
 	inv := invocationFor(t, stepConfig())
 	tree := &memTree{files: map[string]string{"build.yaml": "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"}}
 	runner := &recorder{}
-	res, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w")
+	res, err := inv.Run(context.Background(), tree, runner, rel, "main", "/w", nil)
 	require.NoError(t, err)
 	assert.False(t, res.Changed)
 	assert.NotEmpty(t, runner.ran)
