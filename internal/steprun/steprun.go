@@ -16,7 +16,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -83,24 +82,11 @@ func program(name, dir string) (string, error) {
 	if !strings.ContainsRune(name, '/') {
 		return name, nil
 	}
-	if filepath.IsAbs(name) {
-		return "", fmt.Errorf("%w: %s is an absolute path", ErrOutsideClone, name)
+	abs, err := updatedispatcher.Within(dir, name)
+	if errors.Is(err, updatedispatcher.ErrOutsideTree) {
+		return "", fmt.Errorf("%w: %v", ErrOutsideClone, err)
 	}
-	abs := filepath.Join(dir, name)
-	rel, err := filepath.Rel(dir, abs)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%w: %s", ErrOutsideClone, name)
-	}
-	// A symlink in the repository must not lead out of it either.
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		root, rerr := filepath.EvalSymlinks(dir)
-		if rerr == nil {
-			if r, err := filepath.Rel(root, resolved); err != nil || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) {
-				return "", fmt.Errorf("%w: %s resolves outside it", ErrOutsideClone, name)
-			}
-		}
-	}
-	return abs, nil
+	return abs, err
 }
 
 // environment is the default environment with the call's variables added, in a
