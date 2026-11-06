@@ -245,3 +245,39 @@ func convert(p *gogithub.PullRequest) PR {
 		Labels: labels, Draft: p.GetDraft(),
 	}
 }
+
+// Comment is a comment on a pull request or an issue.
+type Comment struct {
+	ID     int64
+	Body   string
+	Author string
+}
+
+// BehindBy says how many commits base has that head does not: how far a PR's
+// branch is behind the branch it targets. head is owner:branch for a branch in a
+// fork.
+//
+// STUB: nothing until a later commit.
+func (s *Service) BehindBy(ctx context.Context, slug, base, head string) (int, error) { return 0, nil }
+
+// UpdateBody replaces the title and the body of a pull request.
+//
+// STUB: updates nothing until a later commit.
+func (s *Service) UpdateBody(ctx context.Context, slug string, number int, title, body string) error {
+	return nil
+}
+
+// Comments lists the comments of a pull request or an issue, oldest first, up to
+// the first limit of them (DefaultMax when it is 0).
+//
+// STUB: none until a later commit.
+func (s *Service) Comments(ctx context.Context, slug string, number, limit int) ([]Comment, error) {
+	return nil, nil
+}
+
+// EditComment replaces the body of a comment.
+//
+// STUB: edits nothing until a later commit.
+func (s *Service) EditComment(ctx context.Context, slug string, id int64, body string) error {
+	return nil
+}
