@@ -10,7 +10,6 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -323,7 +322,7 @@ func TestRunANamedStableTagOfAProjectThatRequiresAPrereleaseNeedsOneOnTheHead(t 
 }
 
 func TestRunMinorAndMajorRaiseTheVersionAfterAStableTag(t *testing.T) {
-	for bump, want := range map[semver.Bump]string{semver.Minor: "v0.6.0-rc.1", semver.Major: "v1.0.0-rc.1"} {
+	for bump, want := range map[Bump]string{BumpMinor: "v0.6.0-rc.1", BumpMajor: "v1.0.0-rc.1"} {
 		var g tagging
 		ws := shell()
 		ws.project.Release = config.Release{Branching: config.BranchingSingle, TagPattern: "v*"}
@@ -353,7 +352,7 @@ func TestRunWithNothingNewOnTheHeadChoosesNothing(t *testing.T) {
 func TestRunATagAndAWayToChooseOneAreNotBothAllowed(t *testing.T) {
 	for _, opts := range []Options{
 		{Line: "v2.15", Tag: "v0.8.4", Stable: true, Yes: true},
-		{Line: "v2.15", Tag: "v0.8.4", Bump: semver.Minor, Yes: true},
+		{Line: "v2.15", Tag: "v0.8.4", Bump: BumpMinor, Yes: true},
 	} {
 		var g tagging
 

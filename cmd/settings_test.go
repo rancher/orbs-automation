@@ -191,3 +191,20 @@ func TestRepoTagsYesFlagsAreTheSameSettingAsShips(t *testing.T) {
 		}
 	}
 }
+
+func TestRepoTagMinorAndMajorAreExclusive(t *testing.T) {
+	tag, _, err := rootCmd.Find([]string{"repo", "tag"})
+	require.NoError(t, err)
+	for _, name := range []string{"stable", "minor", "major"} {
+		require.NotNil(t, tag.Flags().Lookup(name), name)
+	}
+	t.Cleanup(func() {
+		for _, f := range []string{"minor", "major"} {
+			_ = tag.Flags().Set(f, "false")
+			tag.Flags().Lookup(f).Changed = false
+		}
+	})
+	require.NoError(t, tag.ParseFlags([]string{"--minor", "--major"}))
+
+	assert.Error(t, tag.ValidateFlagGroups())
+}

@@ -1,6 +1,6 @@
 # Task commands
 
-**Status:** draft. `gero repo branch` is built, and so is `gero repo tag` with a named tag; choosing the tag and the promotion are not, nor is the rest. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+**Status:** draft. `gero repo branch` and `gero repo tag` are built; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 
 The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an engineer who wants one part of the process and not the whole. Each runs one task and `ship` chains the same tasks, so a step behaves the same alone and inside `ship`. They are workstation commands: they act as the engineer, in the engineer's own clone, and read the same settings as `ship`.
 
@@ -48,7 +48,7 @@ Makes the tag `<tag>` on the head of the upstream branch of the release line `<l
 
 **A given tag is checked, not trusted.** It matches the project's `tagPattern`, is a version in the line's series (`0.8.x` for shell's `v2.15`), is newer than the line's newest tag, and does not exist. A tag that exists on the same commit is "already tagged" and the command succeeds, so a rerun is safe; on another commit it is an error. A tag is never moved, deleted or forced.
 
-**An omitted tag is chosen** from the newest tag of the line's series, whichever kind it is, by `Version.NextPrerelease` and `NextStable` ([`internal/semver`](../../internal/semver/next.go)), which know nothing of projects. This command and `repo status` decide what is allowed and pass them the version, the bump and the label:
+**An omitted tag is chosen** (`--stable`, `--minor` and `--major` only apply then, and a tag with one of them is an error) from the newest tag of the line's series, whichever kind it is, and a commit that already has that tag gets no new one. With no tag in the line yet, the first is the start of its series (`v0.8.0-rc.1` for `0.8.x`), and a project with no series has to name it. The version is written with the `v` the line's tags have, else the project's pattern says, by `Version.NextPrerelease` and `NextStable` ([`internal/semver`](../../internal/semver/next.go)), which know nothing of projects. This command and `repo status` decide what is allowed and pass them the version, the bump and the label:
 
 | Newest tag | Default | `--stable` |
 |---|---|---|
@@ -56,7 +56,7 @@ Makes the tag `<tag>` on the head of the upstream branch of the release line `<l
 | prerelease `v0.8.4-rc.1` | `v0.8.4-rc.2` | `v0.8.4`, the promotion of that RC |
 
 * **Prereleases are written with a dot, `rc.1`,** as SemVer has it and as the team's repositories already do. A legacy prerelease with no dot (`rc1`) is continued in its own style (`rc2`), since `rc.2` sorts below `rc1` and would be a tag older than the one before it. A new prerelease is always dotted.
-* **A promotion, the "unRC", is never the default.** It needs `--stable`, always asks, and says what it is: `Tag v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head has commits since that RC it refuses and says how many, since a stable tag is made from a commit that already has an RC (`requiresPrerelease`, [IMPLEMENTATION](../IMPLEMENTATION.md)). `--yes` skips the question, as everywhere.
+* **A promotion, the "unRC", is never the default.** It needs `--stable`, always asks, and says what it is: `Tag v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head is no longer on that RC's commit it refuses and names both commits, since the promotion is the same code made stable, and the way on is another RC. A project with `requiresPrerelease` also refuses a stable tag after a stable one, and a stable tag that is named is only made on a commit that has a prerelease of its version ([IMPLEMENTATION](../IMPLEMENTATION.md)). `--yes` skips the question, as everywhere.
 * **A tag asks once.** Tags are hard to undo, so a plain prerelease asks too, and `--yes`, `GERO_NON_INTERACTIVE` and `--dry-run` work as for `ship`. A dry run says which tag, on which commit and in which repository, and sends nothing, and needs no token. What is asked is settled first, so a tag the line cannot have is an error and not a question. `--json` is for a program and never asks: it needs `--yes`.
 
 ```
@@ -108,7 +108,7 @@ Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds t
 
 ## Not built yet
 
-* `gero repo tag` choosing the tag when none is named, and `--stable` with its promotion rules and `requiresPrerelease` (the version functions are built, `NextStable` and `NextPrerelease`). `gero repo push`, `gero pr create` and `gero ship bump`.
+* `gero repo push`, `gero pr create` and `gero ship bump`.
 
 ## Open questions
 

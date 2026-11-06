@@ -27,11 +27,29 @@ import (
 // terminal to ask on and no --yes.
 var ErrNeedsApproval = errors.New("this makes a tag and needs approval, but there is no terminal to ask on: pass --yes")
 
+// Bump is how much a new version rises after a stable tag, as the command line
+// says it. The zero value is a patch.
+type Bump int
+
+// The bumps.
+const (
+	BumpPatch Bump = iota
+	BumpMinor
+	BumpMajor
+)
+
+func (b Bump) semver() semver.Bump {
+	switch b {
+	case BumpMinor:
+		return semver.Minor
+	case BumpMajor:
+		return semver.Major
+	}
+	return semver.Patch
+}
+
 // ErrDeclined is returned when the answer to the question was no.
 var ErrDeclined = errors.New("declined: nothing was tagged")
-
-// ErrNoTag is returned when no tag was named. Choosing one is not built yet.
-var ErrNoTag = errors.New("name the tag to make: choosing one is not built yet")
 
 // ErrTagAndChoice is returned when a tag is named and so is how to choose one.
 var ErrTagAndChoice = errors.New("name the tag, or ask for one to be chosen with --stable, --minor or --major, and not both")
@@ -46,7 +64,7 @@ type Options struct {
 	// a prerelease, and how much a new version rises after a stable tag. They are
 	// not used with a tag.
 	Stable bool
-	Bump   semver.Bump
+	Bump   Bump
 	Yes    bool // go on without asking
 	// Interactive says In is a terminal that the question can be asked on.
 	Interactive bool
@@ -115,8 +133,8 @@ func run(ctx context.Context, w io.Writer, ws Workspace, newRemote func() (creat
 	if format != clicfg.OutputText && format != clicfg.OutputJSON {
 		return fmt.Errorf("output format %q is not supported by repo tag: use text or json", format)
 	}
-	if opts.Tag == "" {
-		return ErrNoTag
+	if opts.Tag != "" && (opts.Stable || opts.Bump != BumpPatch) {
+		return ErrTagAndChoice
 	}
 	project, err := ws.Project(opts.Project)
 	if err != nil {
@@ -135,12 +153,29 @@ func run(ctx context.Context, w io.Writer, ws Workspace, newRemote func() (creat
 	if !ok {
 		return fmt.Errorf("%s has no branch %s on the host", slug, branch)
 	}
-	in := createtag.Input{Repo: slug, Tag: opts.Tag, Commit: head.Commit, Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series}
+	tag, promotes := opts.Tag, ""
+	if tag == "" {
+		chosen, err := createtag.Choose(createtag.Choice{
+			Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series, Commit: head.Commit,
+			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: project.Release.RequiresPrerelease,
+		})
+		if err != nil {
+			return err
+		}
+		tag = chosen.Tag
+		if chosen.Promotes != nil {
+			promotes = chosen.Promotes.Name
+		}
+	}
+	in := createtag.Input{
+		Repo: slug, Tag: tag, Commit: head.Commit, Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series,
+		RequiresPrerelease: project.Release.RequiresPrerelease,
+	}
 	decision, err := createtag.Check(in)
 	if err != nil {
 		return err
 	}
-	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: opts.Tag, DryRun: dryRun}
+	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, DryRun: dryRun}
 	if decision.Newest != nil {
 		res.Newest = decision.Newest.Name
 	}
@@ -176,7 +211,7 @@ func approve(w io.Writer, format string, res Result, opts Options) error {
 	if !opts.Interactive || format != clicfg.OutputText {
 		return ErrNeedsApproval
 	}
-	if _, err := fmt.Fprintf(w, "Tag %s on %s at %s in %s? [y/N] ", res.Tag, res.Branch, short(res.Commit), res.Project); err != nil {
+	if _, err := fmt.Fprintf(w, "Tag %s? [y/N] ", res.what()); err != nil {
 		return err
 	}
 	line, err := bufio.NewReader(opts.In).ReadString('\n')
@@ -197,7 +232,7 @@ func report(w io.Writer, format string, res Result) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
 	}
-	where := fmt.Sprintf("%s on %s at %s in %s", res.Tag, res.Branch, short(res.Commit), res.Project)
+	where := res.what()
 	var err error
 	switch res.Action {
 	case "tagged":
@@ -208,6 +243,16 @@ func report(w io.Writer, format string, res Result) error {
 		_, err = fmt.Fprintf(w, "%s is already tagged on %s at %s in %s: nothing to do\n", res.Tag, res.Branch, short(res.Commit), res.Project)
 	}
 	return err
+}
+
+// what says which tag is made on what, as the question and the report put it. A
+// promotion says which prerelease it is the stable version of, and that the head
+// has not moved since, which is the reason it is allowed.
+func (r Result) what() string {
+	if r.Promotes != "" {
+		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project)
+	}
+	return fmt.Sprintf("%s on %s at %s in %s", r.Tag, r.Branch, short(r.Commit), r.Project)
 }
 
 // lineBranch finds the branch a release line lives on, and the series of

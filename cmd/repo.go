@@ -114,9 +114,9 @@ the repository you are in is used.`,
 		},
 	}
 	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
-	var yes, nonInteractive bool
+	var yes, nonInteractive, stable, minor, major bool
 	tagCmd := &cobra.Command{
-		Use:   "tag [project] <line> <tag>",
+		Use:   "tag [project] <line> [tag]",
 		Short: "Tag the head of the upstream branch of a release line",
 		Long: `Make the tag <tag> on the head of the upstream branch of a release line,
 as the host has it now, and not on anything in your clone. The line is one of
@@ -133,7 +133,16 @@ moved. It asks once before it makes the tag; --yes and GERO_NON_INTERACTIVE skip
 the question, and --dry-run says what would be tagged without a token.
 
 With two arguments, a version second is the line and the tag, and anything else
-is the Project and the line. Naming the tag is required for now.`,
+is the Project and the line.
+
+Without a tag, one is chosen from the newest tag of the line's series. After a
+stable tag it is the first prerelease of the next patch version (v0.8.4-rc.1),
+or of the next minor or major version with --minor or --major; after a
+prerelease it is the next one of the same version (rc.2). --stable asks for a
+stable tag instead: the promotion of the newest prerelease, which is only made
+while the branch is still on the commit that prerelease is on, and after a
+stable tag the next stable one, unless the Project requires a prerelease before
+every stable tag. A promotion always asks, and says which prerelease it is.`,
 		Args: cobra.RangeArgs(1, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -146,14 +155,25 @@ is the Project and the line. Naming the tag is required for now.`,
 			}
 			s := settingsFrom(cmd)
 			project, line, tag := repotag.ParseArgs(args)
+			bump := repotag.BumpPatch
+			switch {
+			case minor:
+				bump = repotag.BumpMinor
+			case major:
+				bump = repotag.BumpMajor
+			}
 			return repotag.Run(ctx, cmd.OutOrStdout(), s, cwd, repotag.Options{
-				Project: project, Line: line, Tag: tag, Yes: s.NonInteractive,
+				Project: project, Line: line, Tag: tag, Stable: stable, Bump: bump, Yes: s.NonInteractive,
 				In: cmd.InOrStdin(), Interactive: isTerminal(os.Stdin),
 			})
 		},
 	}
 	tagCmd.Flags().BoolVarP(&yes, "yes", "y", false, "go on without asking before the tag is made")
 	tagCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "the same as --yes: never ask")
+	tagCmd.Flags().BoolVar(&stable, "stable", false, "choose a stable tag: the promotion of the newest prerelease, or the next stable one")
+	tagCmd.Flags().BoolVar(&minor, "minor", false, "choose the first prerelease of the next minor version, after a stable tag")
+	tagCmd.Flags().BoolVar(&major, "major", false, "choose the first prerelease of the next major version, after a stable tag")
+	tagCmd.MarkFlagsMutuallyExclusive("minor", "major")
 	imagesCmd := &cobra.Command{
 		Use:   "images",
 		Short: "Check the images a repository publishes",
