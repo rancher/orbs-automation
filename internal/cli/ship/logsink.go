@@ -40,6 +40,27 @@ func (l logSink) Event(e domain.Event) {
 			attrs = append(attrs, slog.String("reason", e.Reason))
 		}
 		l.log.LogAttrs(ctx, slog.LevelInfo, "target started", attrs...)
+	case domain.EventDecided:
+		level := slog.LevelInfo
+		attrs := []slog.Attr{
+			slog.String("branch", e.Branch), slog.String("action", string(e.Decision.Action)),
+			slog.Int("supersede", len(e.Decision.Supersede)),
+		}
+		if e.Decision.Open != nil {
+			attrs = append(attrs, slog.Int("open", e.Decision.Open.Number))
+		}
+		if e.Decision.Newer != nil {
+			level = slog.LevelWarn
+			attrs = append(attrs, slog.Int("newer", e.Decision.Newer.Number))
+		}
+		l.log.LogAttrs(ctx, level, "decided", attrs...)
+	case domain.EventPushed:
+		l.log.LogAttrs(ctx, slog.LevelInfo, "pushed", slog.String("branch", e.Branch), slog.String("remote", e.Remote))
+	case domain.EventPROpened:
+		l.log.LogAttrs(ctx, slog.LevelInfo, "pr opened",
+			slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))
+	case domain.EventSuperseded:
+		l.log.LogAttrs(ctx, slog.LevelInfo, "superseded", slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number))
 	case domain.EventCommit:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "commit",
 			slog.String("branch", e.Branch), slog.String("commit", e.Commit.Hash), slog.String("subject", e.Commit.Subject))
@@ -52,6 +73,12 @@ func (l logSink) Event(e domain.Event) {
 		if e.Result.Error != "" {
 			level = slog.LevelWarn
 			attrs = append(attrs, slog.String("error", e.Result.Error))
+		}
+		if e.Result.PR != nil {
+			attrs = append(attrs, slog.Int("pr", e.Result.PR.Number))
+		}
+		if len(e.Result.Warnings) > 0 {
+			attrs = append(attrs, slog.Int("warnings", len(e.Result.Warnings)))
 		}
 		l.log.LogAttrs(ctx, level, "target done", attrs...)
 	case domain.EventDone:
