@@ -85,7 +85,7 @@ with both flags it is a dry run.`,
 	}
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
 	shipCmd.Flags().StringVar(&in.Method, "method", "", "the consumer's update method, when the project uses several of one consumer's")
-	shipCmd.Flags().StringVar(&in.Line, "line", "", "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to")
+	shipCmd.Flags().StringSliceVar(&in.Lines, "line", nil, "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to; repeat it or separate lines with commas for several")
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")

@@ -65,12 +65,12 @@ type PushSettings struct {
 
 // Input is what the user asked to ship.
 type Input struct {
-	Project    string // the producer, by config name or slug
-	Arg        string // a tag, a release line of the producer, or empty for the latest
-	To         string // the consumer, when the producer ships to several
-	Method     string // the consumer's update method, when the producer uses several of one consumer
-	Line       string // the consumer's Rancher line to ship to, such as v2.15, in place of every branch the release goes to
-	Prerelease bool   // let prereleases count
+	Project    string   // the producer, by config name or slug
+	Arg        string   // a tag, a release line of the producer, or empty for the latest
+	To         string   // the consumer, when the producer ships to several
+	Method     string   // the consumer's update method, when the producer uses several of one consumer
+	Lines      []string // the consumer's Rancher lines to ship to, such as v2.15, in place of every branch the release goes to
+	Prerelease bool     // let prereleases count
 	// DryRun is the invocation's --dry-run: compute and report, and create no
 	// branch or PR. It is carried into the plan so the report says which it is.
 	DryRun bool

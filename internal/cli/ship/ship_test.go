@@ -82,7 +82,7 @@ type fakeProber struct{ result registry.Result }
 
 func (f fakeProber) Exists(context.Context, string, string, string) registry.Result { return f.result }
 
-var in = domain.Input{Project: "scc-operator", Line: "v2.16"}
+var in = domain.Input{Project: "scc-operator", Lines: []string{"v2.16"}}
 
 func readyWorkspace() *fakeWorkspace {
 	return &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.5.2\n"}}
@@ -237,7 +237,7 @@ func TestParseArgs(t *testing.T) {
 }
 
 func TestRunNotInAProjectSaysToNameOne(t *testing.T) {
-	_, err := runWith(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, nil, clicfg.OutputText, domain.Input{Line: "v2.16"})
+	_, err := runWith(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, nil, clicfg.OutputText, domain.Input{Lines: []string{"v2.16"}})
 	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.ErrorContains(t, err, "name the project")
 }
@@ -643,12 +643,12 @@ func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 
 func TestInputFromCarriesTheFlagsAndTheSettings(t *testing.T) {
 	s := clicfg.Settings{BranchPrefix: "dan/", DryRun: true}
-	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Line: "v2.16", Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
+	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Lines: []string{"v2.16"}, Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
 
 	got := inputFrom(s, opts)
 
 	assert.Equal(t, domain.Input{
-		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Line: "v2.16", Prerelease: true,
+		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Lines: []string{"v2.16"}, Prerelease: true,
 		BranchPrefix: "dan/", AllowDowngrade: true, DryRun: true, NoPush: true, PushTo: "upstream",
 	}, got)
 }

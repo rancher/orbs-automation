@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
@@ -83,12 +84,17 @@ func (r resolution) specs(in Input) (specs []spec, named bool, err error) {
 	if err != nil {
 		return nil, false, err
 	}
-	if in.Line != "" {
-		branch, err := r.lineBranch(in.Line)
-		if err != nil {
-			return nil, true, err
+	if len(in.Lines) > 0 {
+		for _, line := range in.Lines {
+			branch, err := r.lineBranch(line)
+			if err != nil {
+				return nil, true, err
+			}
+			if !slices.ContainsFunc(specs, func(s spec) bool { return s.branch == branch }) {
+				specs = append(specs, spec{branch, release})
+			}
 		}
-		return []spec{{branch, release}}, true, nil
+		return specs, true, nil
 	}
 	branches, err := r.route.BranchesFor(r.producer, release.Line)
 	if err != nil {
