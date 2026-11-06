@@ -364,7 +364,7 @@ func TestRenderTextShowsTheCommitsAndHowToReviewThem(t *testing.T) {
 	out := renderText(p, false)
 
 	for _, want := range []string{
-		"Commits", "committed", "in place", "abcdef0", "bot/scc-operator-v0.5.3-v2.15",
+		"Results", "committed", "in place", "abcdef0", "bot/scc-operator-v0.5.3-v2.15",
 		"git -C /src/rancher diff upstream/release/v2.15...bot/scc-operator-v0.5.3-v2.15",
 		"No push: the commits are on branches in your clone, with nothing pushed and no PR created.",
 	} {
@@ -505,7 +505,7 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 	// images' with the images.
 	order := []string{
 		"Ship rancher/scc-operator", "Targets", "Warning (release/v2.15): this is a downgrade",
-		"Images", "Warning: image rancher/x", "\nPR\n", "Commits", "Review:", "No push: the commits are on branches",
+		"Images", "Warning: image rancher/x", "\nPR\n", "Results", "Review:", "No push: the commits are on branches",
 	}
 	last := -1
 	for _, section := range order {
@@ -1033,7 +1033,7 @@ func TestRenderTextTheSummaryTablesAndGroupsAreKeyedByLine(t *testing.T) {
 
 	out := renderText(p, false)
 
-	assert.Regexp(t, `(?m)^  LINE\s+RESULT\s+WHERE\s+NEW BRANCH$`, out)
+	assert.Regexp(t, `(?m)^  LINE\s+RESULT\s+WHERE\s+BRANCH$`, out)
 	assert.Regexp(t, `(?m)^  v2\.15\s+committed\s+worktree\s+bot/scc-operator-v0\.5\.3-v2\.15$`, out)
 	assert.Contains(t, out, "worktree (v2.15): the clone has uncommitted changes")
 	assert.Contains(t, out, "git -C /src/rancher log --oneline upstream/release/v2.15..bot/scc-operator-v0.5.3-v2.15", "a command to copy keeps the branch")
@@ -1133,4 +1133,36 @@ func TestRenderTextStillSuggestsRefreshWhenItWasNotGiven(t *testing.T) {
 	p = withResults(p, behind())
 
 	assert.Contains(t, renderText(p, false), "(behind release/v2.15 by 7; --refresh to rebuild)")
+}
+
+func TestRenderTextResultsOfTargetsThatNeededNoWorkHaveNoWhereColumn(t *testing.T) {
+	p := onLines()
+	p = withResults(p, behind()) // already open: nothing was built, so nothing was built anywhere
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "\nResults\n")
+	assert.NotContains(t, out, "\nCommits\n", "there are no commits to list")
+	assert.Regexp(t, `(?m)^  LINE\s+RESULT\s+BRANCH$`, out)
+	assert.NotContains(t, out, "WHERE")
+	assert.Regexp(t, `(?m)^  v2\.15\s+already open\s+bot/x$`, out)
+}
+
+func TestRenderTextAMixOfWorkAndNoWorkShowsWhereWithADashForNoWork(t *testing.T) {
+	p := previewPlanWithTargets()
+	ready := p.Targets[1]
+	second := ready
+	second.Branch, second.Line = "release/v2.14", "v2.14"
+	second.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-v2.14", Title: "t"}
+	ready.Line = "v2.15"
+	p.Targets = []domain.TargetPlan{ready, second}
+	p.Clone, p.Remote, p.NoPush = "/src/rancher", "upstream", true
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""),
+		&domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/scc-operator-v0.5.3-v2.14", PR: &domain.PRRef{Number: 90}})
+
+	out := renderText(p, false)
+
+	assert.Regexp(t, `(?m)^  LINE\s+RESULT\s+WHERE\s+BRANCH$`, out)
+	assert.Regexp(t, `(?m)^  v2\.15\s+committed\s+in place\s+bot/scc-operator-v0\.5\.3-v2\.15$`, out)
+	assert.Regexp(t, `(?m)^  v2\.14\s+already open\s+-\s+bot/scc-operator-v0\.5\.3-v2\.14$`, out)
 }
