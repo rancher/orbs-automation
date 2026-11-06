@@ -41,3 +41,36 @@ func TestRepoBranchTagsWiring(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+// Wiring only: the logic is tested in internal/cli/repobranch.
+func TestRepoBranchWiring(t *testing.T) {
+	t.Run("takes a line and a name, with a project first when there is one", func(t *testing.T) {
+		_, _, err := execRoot(t, "repo", "branch", "v2.15")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "2 and 3")
+
+		_, _, err = execRoot(t, "repo", "branch", "a", "b", "c", "d")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "2 and 3")
+	})
+
+	t.Run("the help says what it does and has --switch", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "branch", "--help")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "--switch")
+		assert.Contains(t, stdout, "release line")
+	})
+
+	t.Run("outside any project it is the project that is missing, and nothing is printed", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		stdout, _, err := execRoot(t, "repo", "branch", "v2.15", "my-fix")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Empty(t, stdout)
+	})
+}
