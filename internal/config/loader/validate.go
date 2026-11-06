@@ -137,6 +137,9 @@ func (v *validator) project(p config.Project, phases map[string]string, haveLine
 	for _, m := range p.UpdateMethods {
 		textVars = append(textVars, templates.StrategyVars[m.Strategy]...)
 	}
+	if p.PullRequests.PushTo != "" {
+		v.oneOf(where, "pullRequests.pushTo", p.PullRequests.PushTo, "fork", "upstream")
+	}
 	for field, text := range map[string]string{
 		"pullRequests.title": p.PullRequests.Title, "pullRequests.branchPrefix": p.PullRequests.BranchPrefix,
 	} {
