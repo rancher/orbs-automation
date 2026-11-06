@@ -324,14 +324,115 @@ func TestRunPassesADryRunToThePlan(t *testing.T) {
 	assert.True(t, got.DryRun)
 }
 
-func TestRenderTextSaysWhatNoPushWillDo(t *testing.T) {
+func TestRenderTextNoPushWithNoCommitsSaysSo(t *testing.T) {
 	p := previewPlan()
 	p.NoPush = true
 
 	out := renderText(p, false)
 
-	assert.Contains(t, out, "No push: the commit will be left on a branch in your clone for review")
+	assert.Contains(t, out, "No push: no commit was made.")
 	assert.NotContains(t, out, "Dry run")
+}
+
+// withResults is the plan with one result per target that has a PR.
+func withResults(p domain.Plan, results ...*domain.TargetResult) domain.Plan {
+	for i, r := range results {
+		p.Targets[i].Result = r
+	}
+	return p
+}
+
+func committed(branch, commit string, place domain.Place, reason string) *domain.TargetResult {
+	return &domain.TargetResult{Status: domain.ResultCommitted, Branch: branch, Commit: commit, Place: place, Reason: reason}
+}
+
+func TestRenderTextShowsTheCommitsAndHowToReviewThem(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+
+	out := renderText(p, false)
+
+	for _, want := range []string{
+		"Commits", "committed", "in place", "abcdef0", "bot/scc-operator-v0.5.3-v2.15",
+		"git -C /src/rancher diff upstream/release/v2.15...bot/scc-operator-v0.5.3-v2.15",
+		"No push: the commits are on branches in your clone, with nothing pushed and no PR created.",
+	} {
+		assert.Contains(t, out, want)
+	}
+	assert.NotContains(t, out, "abcdef0123456789", "commits are shortened")
+	assert.NotContains(t, out, "Nothing was written")
+}
+
+func TestRenderTextADryRunShowsWouldCommitAndNoReview(t *testing.T) {
+	p := previewPlan()
+	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.Worktree, "a dry run never moves your checkout")
+	r.Status = domain.ResultWouldCommit
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "would commit")
+	assert.Contains(t, out, "worktree")
+	assert.NotContains(t, out, "git -C", "the branch was removed, so there is nothing to review")
+	assert.Contains(t, out, "Dry run: the commits were made in temporary worktrees and removed. Nothing was pushed, and no branch or PR was created.")
+	assert.NotContains(t, out, "Dry run: nothing was written")
+}
+
+func TestRenderTextGroupsTheReasonForAWorktreeAcrossBranches(t *testing.T) {
+	p := previewPlanWithTargets()
+	ready := p.Targets[1]
+	second := ready
+	second.Branch = "release/v2.13"
+	second.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-v2.13", Title: "t"}
+	p.Targets = []domain.TargetPlan{ready, second}
+	p.Status, p.Clone, p.Remote, p.NoPush = domain.StatusReady, "/src/rancher", "upstream", true
+	reason := "the clone has uncommitted changes"
+	p = withResults(p,
+		committed("bot/scc-operator-v0.5.3-v2.15", "1111111aaaa", domain.Worktree, reason),
+		committed("bot/scc-operator-v0.5.3-v2.13", "2222222bbbb", domain.Worktree, reason))
+
+	out := renderText(p, false)
+
+	assert.Equal(t, 1, strings.Count(out, reason), "once, naming the branches")
+	assert.Contains(t, out, "worktree (release/v2.15, release/v2.13): "+reason)
+}
+
+func TestRenderTextShowsAFailedCommitAndWhy(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	p = withResults(p, &domain.TargetResult{
+		Status: domain.ResultFailed, Branch: "bot/scc-operator-v0.5.3-v2.15",
+		Error: "method postEdit[0] ./scripts/gen.sh: exit status 1: no go toolchain",
+	})
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "failed (release/v2.15): method postEdit[0] ./scripts/gen.sh: exit status 1: no go toolchain")
+	assert.NotContains(t, out, "git -C", "nothing to review")
+}
+
+func TestRenderTextAnUpToDateResultHasNoBranch(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultUpToDate, Branch: "bot/scc-operator-v0.5.3-v2.15"})
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "already up to date")
+	assert.NotContains(t, out, "git -C")
+}
+
+func TestRunReportsFailedTargetsAndReturnsErrFailed(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultFailed, Branch: "b", Error: "boom"})
+
+	assert.ErrorIs(t, failedErr(p), ErrFailed)
+	p.Targets[0].Result.Status = domain.ResultCommitted
+	assert.NoError(t, failedErr(p))
+	p.Targets[0].Result = nil
+	assert.NoError(t, failedErr(p))
 }
 
 func TestRunPassesNoPushToThePlanExceptInADryRun(t *testing.T) {

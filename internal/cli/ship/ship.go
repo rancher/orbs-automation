@@ -108,6 +108,15 @@ func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, forma
 	return out, nil
 }
 
+// ErrFailed is returned, with the report still written, when a commit for a
+// target failed.
+var ErrFailed = errors.New("some targets failed")
+
+// failedErr is ErrFailed when any target's result is a failure.
+//
+// STUB: never fails until a later commit.
+func failedErr(domain.Plan) error { return nil }
+
 func renderText(p domain.Plan, full bool) string {
 	var b strings.Builder
 	kind := "stable"
