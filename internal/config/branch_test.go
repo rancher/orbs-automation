@@ -71,3 +71,23 @@ func TestProjectLineOf(t *testing.T) {
 	assert.Equal(t, "v2.16", kuberlr.LineOf("v9.0.0"))
 	assert.Equal(t, "", Project{}.LineOf("v1.0.0"), "no lines")
 }
+
+func TestProjectBranchOfLine(t *testing.T) {
+	repo := Repo{Name: "o/a", DefaultBranch: "main"}
+	lines := []ProjectLine{{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"}}
+	perLine := Project{Repo: repo, Release: Release{Branches: BranchesPerLine, Lines: lines}}
+	single := Project{Repo: repo, Release: Release{Branches: BranchesSingle, Lines: lines}}
+
+	for line, want := range map[string]string{"v2.15": "release/v2.15", "2.15": "release/v2.15", "v2.16": "main"} {
+		got, ok := perLine.BranchOfLine(line)
+		assert.True(t, ok, line)
+		assert.Equal(t, want, got, "perLine: the line's own branch, else the default: "+line)
+	}
+	got, ok := single.BranchOfLine("v2.15")
+	assert.True(t, ok)
+	assert.Equal(t, "main", got, "single keeps every line on the default branch")
+	_, ok = perLine.BranchOfLine("v2.99")
+	assert.False(t, ok, "a line the project does not have")
+	_, ok = Project{Repo: repo}.BranchOfLine("v2.15")
+	assert.False(t, ok, "no lines at all")
+}
