@@ -16,34 +16,26 @@ func init() {
 		Use:   "repo",
 		Short: "Inspect version and tag facts for a repository",
 	}
-	var offline bool
 	infoCmd := &cobra.Command{
 		Use:   "info [name|owner/name]",
-		Short: "Show the config entry, latest releases and local state of a repository",
-		Long: `Print what is known about a repository: its central-config entry (owned,
-default branch, release policy and lines), its latest stable and pre-release
-tags as the host reports them, and where it is cloned on this machine with the
-state of that clone.
+		Short: "Show the config entry and local clone of a repository, without the network",
+		Long: `Print what is known about a repository without reading the network: its
+central-config entry (owned, default branch, release policy and lines), and
+where it is cloned on this machine with the state of that clone.
 
 Name a Project (its config name, such as scc-operator, or its owner/name
 slug) to look at it, else the repository you are in is used (. says so
-explicitly). For a project
-with a release branch per line, the latest tags are shown for each line.
+explicitly). A missing clone leaves the rest of the report.
 
-The tags are read from the host, so they are current even when your clone is
-not. A public repository needs no token. Pass --offline to skip the network;
-the rest of the report is still shown, as it is when no clone is found.`,
+For what the host has (the latest tags, the branch heads, and how the clone
+compares), use repo status.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			ctx := cmd.Context()
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			out, err := repoinfo.Run(ctx, settingsFrom(cmd), cwd, args, repoinfo.Options{Offline: offline})
+			out, err := repoinfo.Run(settingsFrom(cmd), cwd, args)
 			if err != nil {
 				return err
 			}
@@ -51,7 +43,6 @@ the rest of the report is still shown, as it is when no clone is found.`,
 			return err
 		},
 	}
-	infoCmd.Flags().BoolVar(&offline, "offline", false, "do not read tags from the host")
 	imagesCmd := &cobra.Command{
 		Use:   "images",
 		Short: "Check the images a repository publishes",

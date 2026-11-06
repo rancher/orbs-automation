@@ -1,15 +1,14 @@
 package repoinfo
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,11 +21,7 @@ type fakeWorkspace struct {
 	current    string
 	projectErr error
 	paths      map[string]workspace.RepoPath
-	tags       []git.Tag
-	branches   []git.Branch
-	tagsErr    error
 	asked      string
-	tagCalls   []string
 }
 
 func (f *fakeWorkspace) Project(slug string) (config.Project, error) {
@@ -44,11 +39,6 @@ func (f *fakeWorkspace) RepoPath(slug string) (workspace.RepoPath, error) {
 	p := f.paths[slug]
 	p.Slug = slug
 	return p, p.Err
-}
-
-func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
-	f.tagCalls = append(f.tagCalls, slug)
-	return git.Refs{Tags: f.tags, Branches: f.branches}, f.tagsErr
 }
 
 type fakeClone struct {
@@ -80,34 +70,19 @@ func rancherProject() config.Project {
 	}
 }
 
-func tag(name string) git.Tag { return git.Tag{Name: name, Commit: "sha-" + name} }
-
-func info(name string) *TagInfo { return &TagInfo{Tag: name, Commit: "sha-" + name} }
-
 func fixture() *fakeWorkspace {
 	return &fakeWorkspace{
 		projects: map[string]config.Project{"rancher/rancher": rancherProject()},
 		current:  "rancher/rancher",
 		paths:    map[string]workspace.RepoPath{"rancher/rancher": {Path: "/src/rancher", Source: workspace.PathCwd}},
-		tags: []git.Tag{
-			tag("main-abc1234"), tag("v2.13.0-rc.1"), tag("v2.12.1"), tag("v2.12.2-rc.1"),
-			tag("v2.12.0"), tag("v2.13.0-rc.10"), tag("v2.13.0-rc.2"),
-		},
-		branches: []git.Branch{
-			{Name: "main", Commit: "sha-head-main"},
-			{Name: "release/v2.12", Commit: "sha-head-release/v2.12"},
-			{Name: "release/v2.11", Commit: "sha-head-release/v2.11"}, // not a release branch of this project
-		},
 	}
 }
 
 var cloneOnMain = fakeClone{ref: "refs/heads/main", short: "abc1234"}
 
-var ctx = context.Background()
-
 func TestInfoConfigAndLocalState(t *testing.T) {
 	ws := fixture()
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), []string{"rancher/rancher"}, Options{Offline: true})
+	got, err := gather(ws, opener(cloneOnMain, nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/rancher", ws.asked)
 	assert.Equal(t, "rancher/rancher", got.Slug)
@@ -123,104 +98,16 @@ func TestInfoConfigAndLocalState(t *testing.T) {
 	}, got.Local)
 }
 
-func TestInfoOfflineReadsNoTags(t *testing.T) {
-	ws := fixture()
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	assert.Nil(t, got.Upstream)
-	assert.Empty(t, ws.tagCalls, "offline means no request")
-}
-
-func TestInfoUpstreamTags(t *testing.T) {
-	ws := fixture()
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"rancher/rancher"}, ws.tagCalls)
-
-	require.NotNil(t, got.Upstream)
-	assert.Equal(t, info("v2.12.1"), got.Upstream.LatestStable)
-	assert.Equal(t, info("v2.13.0-rc.10"), got.Upstream.LatestPrerelease, "rc.10 is after rc.2")
-	assert.Empty(t, got.Upstream.Error)
-}
-
-func TestInfoUpstreamTagsPerLine(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-
-	byLine := map[string]LineInfo{}
-	for _, l := range got.Release.Lines {
-		byLine[l.Line] = l
-	}
-	assert.Nil(t, byLine["v2.13"].LatestStable, "nothing stable in v2.13 yet")
-	assert.Equal(t, info("v2.13.0-rc.10"), byLine["v2.13"].LatestPrerelease)
-	assert.Equal(t, info("v2.12.1"), byLine["v2.12"].LatestStable)
-	assert.Equal(t, info("v2.12.2-rc.1"), byLine["v2.12"].LatestPrerelease, "newer than v2.12.1, so a release is coming")
-}
-
-func TestInfoBranchHeadsPerLine(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-
-	assert.Equal(t, "sha-head-main", got.Release.Lines[0].Head, "the development line is on the default branch")
-	assert.Equal(t, "sha-head-release/v2.12", got.Release.Lines[1].Head)
-	assert.Equal(t, []BranchInfo{
-		{Branch: "main", Commit: "sha-head-main"},
-		{Branch: "release/v2.12", Commit: "sha-head-release/v2.12"},
-	}, got.Upstream.Heads, "the heads of the branches a release touches")
-}
-
-func TestInfoBranchHeadsOfASingleBranchProject(t *testing.T) {
-	ws := fixture()
-	p := ws.projects["rancher/rancher"]
-	p.Release.Branches, p.Release.Lines = "single", nil
-	ws.projects["rancher/rancher"] = p
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-	assert.Equal(t, []BranchInfo{{Branch: "main", Commit: "sha-head-main"}}, got.Upstream.Heads)
-}
-
-func TestInfoAMissingBranchHasNoHead(t *testing.T) {
-	ws := fixture()
-	ws.branches = []git.Branch{{Name: "main", Commit: "sha-head-main"}}
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-	assert.Empty(t, got.Release.Lines[1].Head)
-	assert.Equal(t, BranchInfo{Branch: "release/v2.12"}, got.Upstream.Heads[1])
-	assert.Contains(t, renderText(got), "(not found)")
-}
-
-func TestInfoOfflineHasNoHeads(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	assert.Empty(t, got.Release.Lines[0].Head)
-}
-
-func TestInfoUpstreamTagsFollowTheTagPattern(t *testing.T) {
-	ws := fixture()
-	p := ws.projects["rancher/rancher"]
-	p.Release.TagPattern = "other-*"
-	ws.projects["rancher/rancher"] = p
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-	assert.Nil(t, got.Upstream.LatestStable)
-	assert.Nil(t, got.Upstream.LatestPrerelease)
-}
-
-func TestInfoUpstreamErrorKeepsTheRest(t *testing.T) {
-	ws := fixture()
-	ws.tagsErr = errors.New("network down")
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-	require.NotNil(t, got.Upstream)
-	assert.Equal(t, "network down", got.Upstream.Error)
-	assert.Equal(t, "rancher/rancher", got.Slug)
-	assert.Equal(t, "abc1234", got.Local.Commit)
-	assert.Nil(t, got.Release.Lines[0].LatestStable)
+// The Workspace and Clone it is given have no way to reach the network: this
+// is the command's contract, kept by what the interfaces offer.
+func TestInfoNeedsNothingFromTheHost(t *testing.T) {
+	var _ Workspace = (*fakeWorkspace)(nil)
+	assert.Equal(t, 2, reflect.TypeFor[Workspace]().NumMethod(), "Project and RepoPath only")
 }
 
 func TestInfoFromCurrentRepository(t *testing.T) {
 	ws := fixture()
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{Offline: true})
+	got, err := gather(ws, opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	assert.Empty(t, ws.asked, "an empty slug asks for the working directory's Project")
 	assert.Equal(t, "rancher/rancher", got.Slug)
@@ -230,7 +117,7 @@ func TestInfoProjectErrors(t *testing.T) {
 	for _, want := range []error{workspace.ErrNotProject, workspace.ErrUnknownProject, workspace.ErrNotFound} {
 		ws := fixture()
 		ws.projectErr = want
-		_, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
+		_, err := gather(ws, opener(cloneOnMain, nil), nil)
 		assert.ErrorIs(t, err, want)
 	}
 }
@@ -238,83 +125,69 @@ func TestInfoProjectErrors(t *testing.T) {
 func TestInfoUnresolvedCloneKeepsTheRest(t *testing.T) {
 	ws := fixture()
 	ws.paths["rancher/rancher"] = workspace.RepoPath{Err: workspace.ErrRepoNotFound}
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), []string{"rancher/rancher"}, Options{})
+	got, err := gather(ws, opener(cloneOnMain, nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/rancher", got.Slug)
 	assert.Equal(t, LocalInfo{Error: workspace.ErrRepoNotFound.Error()}, got.Local)
-	require.NotNil(t, got.Upstream, "the upstream does not need a clone")
-	assert.Equal(t, info("v2.12.1"), got.Upstream.LatestStable)
+	assert.Contains(t, renderText(got), "unavailable")
 }
 
 func TestInfoDetachedHead(t *testing.T) {
 	c := cloneOnMain
 	c.ref, c.headErr = "", workspace.ErrDetachedHead
-	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
+	got, err := gather(fixture(), opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "(detached)", got.Local.Branch)
+	assert.False(t, got.Local.Dirty, "a detached HEAD alone is not a change")
+}
+
+func TestInfoDirtyClone(t *testing.T) {
+	c := cloneOnMain
+	c.dirty = true
+	got, err := gather(fixture(), opener(c, nil), nil)
+	require.NoError(t, err)
+	assert.True(t, got.Local.Dirty)
+	assert.Contains(t, renderText(got), "changes or an operation in progress")
+
+	got, err = gather(fixture(), opener(cloneOnMain, nil), nil)
+	require.NoError(t, err)
+	assert.False(t, got.Local.Dirty)
+	assert.Contains(t, renderText(got), "clean")
 }
 
 func TestInfoUnreadableClone(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(nil, errors.New("boom")), nil, Options{Offline: true})
+	got, err := gather(fixture(), opener(nil, errors.New("boom")), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "/src/rancher", got.Local.Path)
 	assert.Equal(t, "boom", got.Local.Error)
 	assert.Empty(t, got.Local.Branch)
 }
 
+func TestInfoUnreadableWorkTree(t *testing.T) {
+	c := cloneOnMain
+	c.cleanErr = errors.New("status failed")
+	got, err := gather(fixture(), opener(c, nil), nil)
+	require.NoError(t, err)
+	assert.Equal(t, "status failed", got.Local.Error)
+	assert.False(t, got.Local.Dirty)
+}
+
 func TestRenderTextHeadings(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{})
+	got, err := gather(fixture(), opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	out := renderText(got)
 
-	for _, want := range []string{
-		"rancher/rancher\n", "\nRelease lines\n", "\nUpstream\n", "\nLocal clone\n",
-	} {
+	for _, want := range []string{"rancher/rancher\n", "\nRelease lines\n", "\nLocal clone\n"} {
 		assert.Contains(t, out, want)
 	}
 	for _, want := range []string{
-		"owned", "yes", "default branch", "main", "perLine",
-		"HEAD", "sha-hea", "LATEST STABLE", "LATEST PRE-RELEASE", "latest stable", "latest pre-release",
-		"v2.13", "main (default branch)", "release/v2.12",
-		"v2.12.1 (sha-v2.", // the commit is shown short; the fake's is shorter than 7 characters
-		"/src/rancher", "cwd", "abc1234",
+		"owned", "yes", "default branch", "main", "perLine", "LINE", "SERIES", "BRANCH",
+		"v2.13", "main (default branch)", "release/v2.12", "/src/rancher", "cwd", "abc1234",
 	} {
 		assert.Contains(t, out, want)
 	}
-	assert.Less(t, indexOf(out, "Release lines"), indexOf(out, "\nUpstream\n"))
-	assert.Less(t, indexOf(out, "\nUpstream\n"), indexOf(out, "Local clone"))
-}
-
-func indexOf(s, sub string) int {
-	for i := range s {
-		if len(s[i:]) >= len(sub) && s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
-func TestRenderTextOfflineSaysTagsWereNotRead(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	out := renderText(got)
-	assert.Contains(t, out, "not read (--offline)")
-	assert.NotContains(t, out, "LATEST STABLE", "the table has no tag columns without tags")
-}
-
-func TestRenderTextUpstreamError(t *testing.T) {
-	ws := fixture()
-	ws.tagsErr = errors.New("network down")
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
-	require.NoError(t, err)
-	out := renderText(got)
-	assert.Contains(t, out, "unavailable: network down")
-	assert.NotContains(t, out, "LATEST STABLE")
-}
-
-func TestRenderTextShortensCommits(t *testing.T) {
-	assert.Equal(t, "v1.0.0 (0123456)", tagText(&TagInfo{Tag: "v1.0.0", Commit: "0123456789abcdef"}))
-	assert.Equal(t, "-", tagText(nil))
+	assert.NotContains(t, out, "Upstream", "the host is not read")
+	assert.Less(t, strings.Index(out, "Release lines"), strings.Index(out, "Local clone"))
 }
 
 func TestRenderTextShowsLocalError(t *testing.T) {
@@ -327,64 +200,24 @@ func TestRenderTextSingleProjectHasNoLinesTable(t *testing.T) {
 	p := ws.projects["rancher/rancher"]
 	p.Release.Branches, p.Release.Lines = "single", nil
 	ws.projects["rancher/rancher"] = p
-	got, err := gather(ctx, ws, opener(cloneOnMain, nil), nil, Options{})
+	got, err := gather(ws, opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
-	out := renderText(got)
-	assert.NotContains(t, out, "Release lines")
-	assert.Contains(t, out, "\nUpstream\n")
-	assert.Contains(t, out, "head of main", "without a table, the branch head is in the upstream section")
+	assert.NotContains(t, renderText(got), "Release lines")
 }
 
 func TestRenderJSON(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{})
+	got, err := gather(fixture(), opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	out, err := renderJSON(got)
 	require.NoError(t, err)
 	var back Info
 	require.NoError(t, json.Unmarshal([]byte(out), &back))
 	assert.Equal(t, got, back)
-	assert.Contains(t, out, `"commit": "sha-v2.12.1"`, "JSON carries the full commit")
+	assert.NotContains(t, out, "upstream")
 }
 
 func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	s := clicfg.Settings{Output: clicfg.OutputEnv}
-	_, err := Run(ctx, s, t.TempDir(), nil, Options{})
+	_, err := Run(s, t.TempDir(), nil)
 	assert.ErrorContains(t, err, "not supported by repo info")
-}
-
-func TestInfoDirtyClone(t *testing.T) {
-	c := cloneOnMain
-	c.dirty = true
-	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	assert.True(t, got.Local.Dirty)
-	assert.Contains(t, renderText(got), "changes or an operation in progress")
-
-	got, err = gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	assert.False(t, got.Local.Dirty)
-	assert.Contains(t, renderText(got), "clean")
-}
-
-func TestInfoDetachedHeadIsNotDirty(t *testing.T) {
-	c := cloneOnMain
-	c.ref, c.headErr = "", workspace.ErrDetachedHead
-	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	assert.False(t, got.Local.Dirty, "a detached HEAD alone is not a change")
-	assert.NotContains(t, renderText(got), "changes or an operation in progress")
-}
-
-func TestInfoUnreadableWorkTree(t *testing.T) {
-	c := cloneOnMain
-	c.cleanErr = errors.New("status failed")
-	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
-	require.NoError(t, err)
-	assert.Equal(t, "status failed", got.Local.Error)
-	assert.False(t, got.Local.Dirty)
-}
-
-// What the Workspace offers is all repo info can ask of the host: nothing.
-func TestInfoNeedsNothingFromTheHost(t *testing.T) {
-	assert.Equal(t, 2, reflect.TypeFor[Workspace]().NumMethod(), "Project and RepoPath only")
 }
