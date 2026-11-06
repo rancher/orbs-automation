@@ -66,7 +66,31 @@ type Executor struct {
 	// and with it a run that is not --no-push or --dry-run pushes and opens the
 	// PRs. Without it a run stops at the commits.
 	Publish *Publisher
+	// Confirm, when set, is asked once before anything is written, if the run is
+	// going to publish something: it is given what will be done and says whether
+	// to go on. It is not asked for a dry run, a --no-push run, or when nothing
+	// would be written. Not set means go on.
+	//
+	// STUB: not asked until a later commit.
+	Confirm func(ctx context.Context, c Confirmation) (bool, error)
 }
+
+// Confirmation is what a run is about to do, for the one question before it
+// writes: the targets that will get a new PR, the older PRs that will be closed,
+// and the targets that will be left alone.
+type Confirmation struct {
+	Consumer string     // the repository the PRs are in
+	Release  string     // the tag being shipped
+	Push     PushTarget // where the branches are pushed
+	Opens    []string   // the target branches that will get a new PR
+	Closes   []PRRef    // the older PRs that will be closed, for every target
+	Already  []string   // the target branches whose PR is already open
+	Blocked  []string   // the target branches a newer PR of the actor's blocks
+}
+
+// ErrDeclined is returned by Ship, with the plan, when the confirmation was
+// answered no. Nothing was written.
+var ErrDeclined = errors.New("declined: nothing was written")
 
 // Tip is the newest commit of the result, or "" when there is none.
 func (r TargetResult) Tip() string { return tip(r.Commits) }
