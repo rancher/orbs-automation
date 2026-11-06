@@ -50,6 +50,16 @@ when you have one) and opens the PR, and closes your own older PRs for the same
 bump, with a comment. PRs by anyone else are never touched. --yes goes on
 without asking, and is needed where there is no terminal.
 
+When your own PR for this release is already open, nothing is rebuilt, and the
+report says whether it is behind its base. --refresh rebuilds it on a scratch
+branch from the current head of the target and compares the change with the
+branch that is there: if they are the same nothing is pushed, and if they differ
+the branch is replaced (a force push that is only allowed while the remote branch
+is still where it was seen), the PR's title and body are refreshed, and the
+refresh is recorded in one comment that gero keeps on the PR. It only touches a
+branch that is yours to change: in the repository you push to, under the name this
+run would use, with every commit made by gero as you.
+
 --no-push stops after the commits and keeps the branches in your clone for
 review, without contacting GitHub. --dry-run does everything but write: it uses a
 worktree, removes it and the branch, and says what it would push, open and close;
@@ -78,6 +88,7 @@ with both flags it is a dry run.`,
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")
 	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	shipCmd.Flags().BoolVar(&in.Refresh, "refresh", false, "rebuild your open PR for this release and replace its branch if it differs")
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")

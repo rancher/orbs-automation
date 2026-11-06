@@ -176,7 +176,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* A run against real GitHub: the push spike, and a first PR on a scratch repository.
+* A run against real GitHub: the push spike, and a first PR on a scratch repository. The same goes for `--refresh`, whose forced push has only been tried against local repositories.
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.

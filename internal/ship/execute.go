@@ -484,7 +484,7 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		result.Note = "identical to a fresh build"
 		return
 	}
-	result.Commits = built.Commits
+	result.Commits, result.Place, result.Reason = built.Commits, built.Place, built.Reason
 	if in.DryRun {
 		result.Status = ResultWouldRefresh
 		return
