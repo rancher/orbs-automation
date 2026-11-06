@@ -166,3 +166,29 @@ func TestConfigInReadsTheClonesSettingsAndEmptyWhenUnset(t *testing.T) {
 	assert.Empty(t, none)
 	assert.False(t, strings.Contains(none, "\n"))
 }
+
+func TestForceBranchCreatesAndMovesABranch(t *testing.T) {
+	dir := clone(t, upstream(t))
+	one := branchOff(t, dir, "bot/one", "one")
+	run(t, dir, "checkout", "--quiet", "main")
+
+	require.NoError(t, ForceBranch(ctx, dir, "bot/new", one))
+	assert.Equal(t, one, run(t, dir, "rev-parse", "bot/new"), "created")
+
+	two := branchOff(t, dir, "bot/two", "two")
+	run(t, dir, "checkout", "--quiet", "main")
+	require.NoError(t, ForceBranch(ctx, dir, "bot/new", two))
+	assert.Equal(t, two, run(t, dir, "rev-parse", "bot/new"), "moved over what it held")
+}
+
+func TestForceBranchRefusesTheCheckedOutBranch(t *testing.T) {
+	dir := clone(t, upstream(t))
+	other := branchOff(t, dir, "bot/other", "other")
+	run(t, dir, "checkout", "--quiet", "main")
+	before := run(t, dir, "rev-parse", "main")
+
+	err := ForceBranch(ctx, dir, "main", other)
+
+	require.Error(t, err)
+	assert.Equal(t, before, run(t, dir, "rev-parse", "main"))
+}
