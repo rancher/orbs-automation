@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/github/pulls"
@@ -227,7 +228,20 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 			Error: fmt.Sprintf("look for the open PRs of %s: %v", plan.Consumer, err)}
 		return st
 	}
-	st.dec = decidePublish(open.PRs, me, st.m)
+	prs := open.PRs
+	// The listing reads only the newest, so also ask for the one head this run
+	// would push to, which is exact whatever the number of open PRs.
+	head := pub.headOwner(plan.Consumer) + ":" + tp.Preview.Branch
+	if byHead, err := pub.Remote.OpenForHead(ctx, plan.Consumer, head); err != nil {
+		st.warnings = append(st.warnings, fmt.Sprintf("could not look for the PR of %s: %v", tp.Preview.Branch, err))
+	} else {
+		for _, p := range byHead {
+			if !slices.ContainsFunc(prs, func(q pulls.PR) bool { return q.Number == p.Number }) {
+				prs = append(prs, p)
+			}
+		}
+	}
+	st.dec = decidePublish(prs, me, st.m)
 	emit(sink, Event{Kind: EventDecided, Branch: tp.Branch, Decision: &st.dec})
 	if open.Truncated {
 		st.warnings = append(st.warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this bump may have been missed", len(open.PRs), plan.Consumer))
