@@ -282,3 +282,23 @@ func TestShipWithNoCloneIsFineWhenEverythingIsUpToDate(t *testing.T) {
 }
 
 var _ updatedispatcher.StepRunner = steprun.Runner{}
+
+func TestShipRecordsTheCloneAndRemoteItMadeCommitsIn(t *testing.T) {
+	ws, clone, ex := newShip(t)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+
+	require.NoError(t, err)
+	assert.Equal(t, clone, plan.Clone)
+	assert.Equal(t, "upstream", plan.Remote)
+}
+
+func TestShipRecordsNoCloneWhenItMadeNoCommits(t *testing.T) {
+	ws, _, _ := newShip(t)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, plan.Clone)
+	assert.Empty(t, plan.Remote)
+}
