@@ -212,3 +212,99 @@ func TestInvocationCheckIsTheReadSide(t *testing.T) {
 	assert.Equal(t, RelationNewer, got.Relation)
 	assert.Zero(t, tree.writes)
 }
+
+// units records the checkpoints.
+type units struct{ got []Unit }
+
+func (u *units) after(_ context.Context, unit Unit) error {
+	u.got = append(u.got, unit)
+	return nil
+}
+
+func TestRunCallsTheCheckpointAfterEachUnitInOrder(t *testing.T) {
+	inv := invocationFor(t, stepConfig())
+	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
+	u := &units{}
+
+	_, err := inv.Run(context.Background(), tree, &recorder{}, rel, "release/v2.15", "/w", u.after)
+
+	require.NoError(t, err)
+	require.Len(t, u.got, 5, "two pre steps, the edit, two post steps")
+	kinds := make([]UnitKind, len(u.got))
+	for i, unit := range u.got {
+		kinds[i] = unit.Kind
+	}
+	assert.Equal(t, []UnitKind{UnitStep, UnitStep, UnitEdit, UnitStep, UnitStep}, kinds)
+	assert.Equal(t, MethodPreEdit, u.got[0].Phase)
+	assert.Equal(t, []string{"pre-method"}, u.got[0].Run)
+	assert.Equal(t, EdgePreEdit, u.got[1].Phase)
+	assert.Equal(t, EdgePostEdit, u.got[3].Phase)
+	assert.Equal(t, MethodPostEdit, u.got[4].Phase)
+	assert.Equal(t, []string{"post-method-old"}, u.got[4].Run)
+	assert.Equal(t, 1, u.got[4].Index, "the position in the phase's own list")
+}
+
+func TestRunTheEditUnitSaysWhatTheStrategyChanged(t *testing.T) {
+	inv := invocationFor(t, fixtureConfig())
+	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
+	u := &units{}
+
+	_, err := inv.Run(context.Background(), tree, &recorder{}, rel, "main", "/w", u.after)
+
+	require.NoError(t, err)
+	require.Len(t, u.got, 1)
+	assert.Equal(t, UnitEdit, u.got[0].Kind)
+	require.Len(t, u.got[0].Changes, 1)
+	assert.Equal(t, "rancher/scc-operator:v0.5.3", u.got[0].Changes[0].To)
+}
+
+func TestRunCallsTheCheckpointAfterTheUnitHasDoneItsWork(t *testing.T) {
+	inv := invocationFor(t, stepConfig())
+	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
+	runner := &recorder{}
+	var seen []string
+	after := func(_ context.Context, u Unit) error {
+		if u.Kind == UnitStep {
+			seen = append(seen, u.Run[0]+" after "+runner.ran[len(runner.ran)-1])
+		}
+		return nil
+	}
+
+	_, err := inv.Run(context.Background(), tree, runner, rel, "release/v2.15", "/w", after)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"pre-method after pre-method", "pre-edge after pre-edge", "post-edge after post-edge", "post-method-old after post-method-old",
+	}, seen, "each step had run when its checkpoint was called")
+}
+
+func TestRunAFailingCheckpointStopsTheRun(t *testing.T) {
+	inv := invocationFor(t, stepConfig())
+	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
+	runner := &recorder{}
+	boom := errors.New("commit failed")
+	after := func(_ context.Context, u Unit) error {
+		if u.Kind == UnitEdit {
+			return boom
+		}
+		return nil
+	}
+
+	_, err := inv.Run(context.Background(), tree, runner, rel, "release/v2.15", "/w", after)
+
+	require.ErrorIs(t, err, boom)
+	assert.Equal(t, []string{"pre-method", "pre-edge"}, runner.ran, "no post-edit step ran")
+}
+
+func TestRunAFailingStepHasNoCheckpointOfItsOwn(t *testing.T) {
+	inv := invocationFor(t, stepConfig())
+	tree := &memTree{files: map[string]string{"build.yaml": buildYAML}}
+	runner := &recorder{fail: "post-edge"}
+	u := &units{}
+
+	_, err := inv.Run(context.Background(), tree, runner, rel, "release/v2.15", "/w", u.after)
+
+	var stepErr *StepError
+	require.True(t, errors.As(err, &stepErr))
+	require.Len(t, u.got, 3, "the two pre steps and the edit, and nothing for the step that failed")
+}
