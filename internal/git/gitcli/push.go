@@ -85,3 +85,13 @@ func tail(s string, n int) string {
 	}
 	return strings.Join(lines, "; ")
 }
+
+// PushReplacing pushes branch to remote over a branch that is already there, and
+// only if the remote's branch is still at expected: the commit that was seen
+// when it was decided to replace it. It is `git push --force-with-lease`, with the
+// lease naming the commit, so a push made since is never overwritten, which a
+// plain force would do. If the remote's branch has moved the push is rejected
+// (ErrPushRejected). The credentials and the environment are those of Push.
+//
+// STUB: pushes nothing until a later commit.
+func PushReplacing(ctx context.Context, dir, remote, branch, expected string) error { return nil }
