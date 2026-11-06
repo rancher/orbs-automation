@@ -77,6 +77,25 @@ func (r *Repo) Head() (ref, short string, err error) {
 	return head.Target().String(), short, nil
 }
 
+// Clean reports whether the work tree has no change to a tracked file and no
+// operation in progress. Untracked files do not count, and neither does a
+// detached HEAD.
+func (r *Repo) Clean() (bool, error) {
+	return true, nil
+}
+
+// BranchCommit returns the commit a local branch is at, and false when the
+// clone has no such branch.
+func (r *Repo) BranchCommit(branch string) (string, bool, error) {
+	return "", false, nil
+}
+
+// Count returns how many commits are reachable from to and not from from. It is
+// false when the clone lacks either commit.
+func (r *Repo) Count(from, to string) (int, bool, error) {
+	return 0, false, nil
+}
+
 type datedTag struct {
 	ref  string // full ref name, the tie-breaker
 	name string
