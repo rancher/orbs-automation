@@ -84,6 +84,9 @@ func (h *humanSink) resolved(p *domain.Plan) {
 		// Each target has its own release, which the table of targets names.
 		h.out.Line(fmt.Sprintf("Ship %s to %s", p.Producer, p.Consumer))
 	}
+	for _, note := range p.Notes {
+		h.out.Line("  left out  " + note)
+	}
 	h.out.Line("")
 	h.header = *p
 }

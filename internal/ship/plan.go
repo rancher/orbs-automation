@@ -168,6 +168,9 @@ type Plan struct {
 	Blockers []string        `json:"blockers,omitempty"` // in the way of the whole release
 	Images   []ReleaseImages `json:"images,omitempty"`   // one check for each release that some target needs a PR for
 	Warnings []string        `json:"warnings,omitempty"`
+	// Notes are lines that were left out of the run, and why, known before any
+	// target is read.
+	Notes []string `json:"notes,omitempty"`
 	// Clone and Remote are the engineer's clone of the consumer and its upstream
 	// remote, set by Ship when it made commits, so the report can say how to
 	// review them.
@@ -212,14 +215,16 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	if err != nil {
 		return Plan{}, resolution{}, err
 	}
-	specs, named, err := res.specs(in)
+	sel, err := res.specs(in)
 	if err != nil {
 		return Plan{}, resolution{}, err
 	}
+	specs, named := sel.specs, sel.named
 	plan := Plan{
 		Producer: res.producer.Repo.Name, Consumer: res.route.Consumer.Repo.Name,
 		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
 	}
+	plan.Notes = sel.notes
 	for _, sp := range specs {
 		if !slices.ContainsFunc(plan.Releases, func(r Release) bool { return r.Tag == sp.release.Tag }) {
 			plan.Releases = append(plan.Releases, sp.release)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -753,6 +754,8 @@ func TestCheckALinedProducerSkipsALineWithNoReleaseButNamingItIsAnError(t *testi
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got), "nothing to ship to v2.16")
+	require.Len(t, got.Notes, 1)
+	assert.Contains(t, got.Notes[0], "v2.16", "and it says so")
 
 	_, err = Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Lines: []string{"v2.16"}})
 	require.ErrorIs(t, err, ErrNoRelease)
@@ -785,4 +788,19 @@ func TestCheckAUniversalProducerShipsOneReleaseToWhateverLinesAreNamed(t *testin
 	require.NoError(t, err)
 	assert.Equal(t, []string{"v0.5.3", "v0.5.3"}, releasesOf(got))
 	assert.True(t, got.Uniform())
+}
+
+func TestCheckEachTargetOfALinedProducerPreviewsItsOwnRelease(t *testing.T) {
+	ws := laned(t, "v8.1.0", "v9.0.0")
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
+
+	require.NoError(t, err)
+	require.Len(t, got.Targets, 2)
+	for i, want := range []string{"v9.0.0", "v8.1.0"} {
+		pv := got.Targets[i].Preview
+		require.NotNil(t, pv, want)
+		assert.Contains(t, pv.Title, strings.TrimPrefix(want, "v"), "the title is for its own release")
+		assert.Contains(t, pv.Body, "version: "+want, "and so is the marker")
+	}
 }

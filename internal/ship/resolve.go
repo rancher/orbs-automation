@@ -75,54 +75,149 @@ func (r resolution) relOf(rel Release) updatedispatcher.Release {
 	}
 }
 
-// specs returns the targets to check, each with its release, and whether the
-// user named them. A named line is the only one, on the branch the consumer keeps
-// it on. Otherwise the edge's lines decide, as the dispatcher works them out for
-// the release's line, and its error is given the advice to name a line.
-func (r resolution) specs(in Input) (specs []spec, named bool, err error) {
+// selection is the targets of a run, each with its release.
+type selection struct {
+	specs []spec
+	// named says the user named the lines, so a target that cannot be read is an
+	// error and not one failed target among several.
+	named bool
+	// notes are lines that were left out, and why.
+	notes []string
+}
+
+// followsLines reports whether the releases of the producer go to the consumer's
+// branch for the line each is in: the producer has release lines of its own, and
+// the edge does not send every release to every branch.
+func (r resolution) followsLines() bool {
+	return !r.producer.IsUniversal() && r.route.Edge.AcceptLines(r.producer) == config.AcceptLinesAll
+}
+
+// consumerLine finds a line of the consumer by name, with or without the v.
+func (r resolution) consumerLine(line string) (config.ProjectLine, bool) {
+	line = withV(line)
+	for _, l := range r.route.Consumer.Release.Lines {
+		if strings.EqualFold(l.Line, line) {
+			return l, true
+		}
+	}
+	return config.ProjectLine{}, false
+}
+
+func withV(line string) string {
+	if !strings.HasPrefix(strings.ToLower(line), "v") {
+		return "v" + line
+	}
+	return line
+}
+
+// specs chooses the targets to check, each with its release.
+//
+// A producer whose releases follow the lines, given no release, ships each line
+// the latest of its own series (a line the producer has no release in is left
+// out, with a note, unless it was named). Otherwise there is one release for every
+// target: the tag, or the latest of a line or of all. A named line is a target on
+// the branch the consumer keeps it on. Without one the edge's lines decide, as the
+// dispatcher works them out for the release's line, and its error is given the
+// advice to name a line. A release that follows lines is only shipped to the line
+// it is in (ErrLineMismatch).
+func (r resolution) specs(in Input) (selection, error) {
+	if in.Arg == "" && r.followsLines() {
+		return r.eachLine(in)
+	}
 	release, err := ResolveRelease(r.producer, r.tags, in.Arg, in.Prerelease, r.route.Method.Accept)
 	if err != nil {
-		return nil, false, err
+		return selection{}, err
 	}
 	if len(in.Lines) > 0 {
+		sel := selection{named: true}
 		for _, line := range in.Lines {
-			branch, err := r.lineBranch(line)
-			if err != nil {
-				return nil, true, err
+			canonical, ok := r.consumerLine(line)
+			if !ok {
+				return selection{}, r.noSuchLine(line)
 			}
-			if !slices.ContainsFunc(specs, func(s spec) bool { return s.branch == branch }) {
-				specs = append(specs, spec{branch, release})
+			if r.followsLines() && !strings.EqualFold(canonical.Line, release.Line) {
+				where := "no line of " + r.producer.Repo.Name
+				if release.Line != "" {
+					where = release.Line
+				}
+				return selection{}, fmt.Errorf("%w: %s is in %s, not %s", ErrLineMismatch, release.Tag, where, canonical.Line)
 			}
+			branch, _ := r.route.Consumer.BranchOfLine(canonical.Line)
+			sel.add(branch, release)
 		}
-		return specs, true, nil
+		return sel, nil
 	}
 	branches, err := r.route.BranchesFor(r.producer, release.Line)
 	if err != nil {
-		return nil, false, fmt.Errorf("%w: %v; name a line of %s with --line", ErrNoTargets, err, r.route.Consumer.Name)
+		return selection{}, fmt.Errorf("%w: %v; name a line of %s with --line", ErrNoTargets, err, r.route.Consumer.Name)
 	}
+	var sel selection
 	for _, b := range branches {
-		specs = append(specs, spec{b, release})
+		sel.add(b, release)
 	}
-	return specs, false, nil
+	return sel, nil
 }
 
-// lineBranch is the branch the consumer keeps a line on: its own, or the default
-// branch for a line that has none (the one in development). The line may be
-// written without the v. A line the consumer does not have is an error that
-// lists the ones it does.
-func (r resolution) lineBranch(line string) (string, error) {
-	consumer := r.route.Consumer
-	if branch, ok := consumer.BranchOfLine(line); ok {
-		return branch, nil
+// add makes a target of the branch, unless it already is one.
+func (s *selection) add(branch string, release Release) {
+	if !slices.ContainsFunc(s.specs, func(sp spec) bool { return sp.branch == branch }) {
+		s.specs = append(s.specs, spec{branch, release})
 	}
+}
+
+// eachLine is specs for a producer whose releases follow the lines, when no
+// release was asked for: the latest of the series of each line, for the lines
+// named, or else the lines both the producer and the consumer have, in the
+// producer's order.
+func (r resolution) eachLine(in Input) (selection, error) {
+	sel := selection{named: len(in.Lines) > 0}
+	var lines []string
+	if sel.named {
+		for _, line := range in.Lines {
+			canonical, ok := r.consumerLine(line)
+			if !ok {
+				return selection{}, r.noSuchLine(line)
+			}
+			lines = append(lines, canonical.Line)
+		}
+	} else {
+		for _, l := range r.producer.Release.Lines {
+			if _, ok := r.consumerLine(l.Line); ok {
+				lines = append(lines, l.Line)
+			}
+		}
+	}
+	for _, line := range lines {
+		release, err := ResolveRelease(r.producer, r.tags, line, in.Prerelease, r.route.Method.Accept)
+		if err != nil {
+			if sel.named {
+				return selection{}, err
+			}
+			sel.notes = append(sel.notes, fmt.Sprintf("%s: %v", line, err))
+			continue
+		}
+		branch, _ := r.route.Consumer.BranchOfLine(line)
+		sel.add(branch, release)
+	}
+	if len(sel.specs) == 0 {
+		return selection{}, fmt.Errorf("%w: %s has no release in any line that %s has; name a line of %s with --line",
+			ErrNoTargets, r.producer.Repo.Name, r.route.Consumer.Repo.Name, r.route.Consumer.Name)
+	}
+	return sel, nil
+}
+
+// noSuchLine is the error for a line the consumer does not have: it lists the
+// ones it does.
+func (r resolution) noSuchLine(line string) error {
+	consumer := r.route.Consumer
 	var have []string
 	for _, l := range consumer.Release.Lines {
 		have = append(have, l.Line)
 	}
 	if len(have) == 0 {
-		return "", fmt.Errorf("%w: %s has no release lines, so there is no line %s to ship to", ErrNoTargets, consumer.Repo.Name, line)
+		return fmt.Errorf("%w: %s has no release lines, so there is no line %s to ship to", ErrNoTargets, consumer.Repo.Name, line)
 	}
-	return "", fmt.Errorf("%w: %s has no release line %s; it has %s", ErrNoTargets, consumer.Repo.Name, line, strings.Join(have, ", "))
+	return fmt.Errorf("%w: %s has no release line %s; it has %s", ErrNoTargets, consumer.Repo.Name, line, strings.Join(have, ", "))
 }
 
 // pickRoute chooses the route to ship down: the one to the consumer named by to

@@ -23,7 +23,10 @@ and any other lone argument is the project.
 
 The release is a tag, used as given, or a release line of the project, which
 resolves to the line's latest stable tag; with neither, the project's latest
-stable tag. --prerelease lets prereleases count. The project's
+stable tag. A project with a version series for each Rancher line (shell's 0.9.x
+for v2.16, 0.8.x for v2.15) ships each line the latest tag of its own series
+when none is given, and a tag only to the line it is in. --prerelease lets
+prereleases count. The project's
 downstream edges name the consumers and the update method of each; name one
 with --to, and a method with --method, when there are several. Every branch of the consumer that the release goes to is
 checked: all its release branches for a project that is not tied to release

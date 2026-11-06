@@ -1167,3 +1167,46 @@ func TestRenderTextAMixOfWorkAndNoWorkShowsWhereWithADashForNoWork(t *testing.T)
 	assert.Regexp(t, `(?m)^  v2\.15\s+committed\s+in place\s+bot/scc-operator-v0\.5\.3-v2\.15$`, out)
 	assert.Regexp(t, `(?m)^  v2\.14\s+already open\s+-\s+bot/scc-operator-v0\.5\.3-v2\.14$`, out)
 }
+
+// eachLine is the plan of a producer whose lines each have a release: two targets,
+// two releases, two values.
+func eachLine() domain.Plan {
+	p := previewPlan()
+	p.Producer = "rancher/shell"
+	p.Releases = []domain.Release{{Tag: "v0.9.1-rc.2"}, {Tag: "v0.8.3", Stable: true}}
+	p.Want = ""
+	p.Notes = []string{"v2.14: no such release: rancher/shell has no tags in line v2.14"}
+	second := p.Targets[0]
+	p.Targets[0].Line, p.Targets[0].Release, p.Targets[0].Want = "v2.16", "v0.9.1-rc.2", "rancher/shell:v0.9.1-rc.2"
+	second.Line, second.Release, second.Want = "v2.15", "v0.8.3", "rancher/shell:v0.8.3"
+	second.Preview = nil
+	p.Targets = append(p.Targets, second)
+	p.Images = []domain.ReleaseImages{
+		{Release: "v0.9.1-rc.2", Report: registry.Report{Rows: []registry.Row{{Image: "rancher/shell", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/shell:v0.9.1-rc.2"}}}},
+		{Release: "v0.8.3", Report: registry.Report{Rows: []registry.Row{{Image: "rancher/shell", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/shell:v0.8.3"}}}},
+	}
+	return p
+}
+
+func TestRenderTextOfALinePerReleasePlanNamesTheReleaseAndValueOfEachTarget(t *testing.T) {
+	out := renderText(eachLine(), false)
+
+	assert.Contains(t, out, "Ship rancher/shell to rancher/rancher\n", "no one release in the title")
+	assert.NotContains(t, out, "want    ", "no one value either")
+	for _, want := range []string{"RELEASE", "WANT", "v2.16", "v0.9.1-rc.2", "rancher/shell:v0.9.1-rc.2", "v2.15", "v0.8.3", "rancher/shell:v0.8.3"} {
+		assert.Contains(t, out, want)
+	}
+	assert.Contains(t, out, "Images (v0.9.1-rc.2)")
+	assert.Contains(t, out, "Images (v0.8.3)")
+	assert.Contains(t, out, "left out  v2.14: no such release")
+}
+
+func TestRenderTextOfASingleReleasePlanIsAsItWas(t *testing.T) {
+	out := renderText(previewPlan(), false)
+
+	assert.Contains(t, out, "Ship rancher/scc-operator v0.5.3 (stable) to rancher/rancher")
+	assert.Contains(t, out, "  want    b")
+	assert.NotContains(t, out, "RELEASE")
+	assert.NotContains(t, out, "WANT")
+	assert.NotContains(t, out, "Images (")
+}
