@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/task/createpr"
@@ -134,16 +133,33 @@ func (p Publisher) headOwner(consumer string) string {
 // rebuilt the branch.
 const refreshMarker = "<!-- gero:refresh v1 -->"
 
-// recordRefresh refreshes the PR's title and body from the preview, and records
-// the refresh in the comment gero keeps for the purpose: one that is edited in
-// place, found by its marker and by being the actor's own, with a line added for
-// each refresh, and created the first time. A failure is a warning.
-func (p Publisher) recordRefresh(ctx context.Context, consumer string, tp TargetPlan, base string, now time.Time, res *TargetResult) {
-	number := res.PR.Number
-	if err := p.Remote.UpdateBody(ctx, consumer, number, tp.Preview.Title, tp.Preview.Body); err != nil {
-		res.Warnings = append(res.Warnings, fmt.Sprintf("could not refresh the title and body of #%d: %v", number, err))
+// descriptionStale reports whether the PR's title or body is not what a fresh
+// build would give it, and the body it should have: the new text with the hidden
+// blocks of the old one that gero ship does not write kept (mergeBody).
+func descriptionStale(open pulls.PR, tp TargetPlan) (body string, stale bool) {
+	body = mergeBody(open.Body, tp.Preview.Body)
+	return body, open.Title != tp.Preview.Title || !sameBody(body, open.Body)
+}
+
+// updateDescription brings the PR's title and body up to date, and says whether it
+// did. A failure is a warning.
+func (p Publisher) updateDescription(ctx context.Context, consumer string, open pulls.PR, tp TargetPlan, res *TargetResult) bool {
+	body, stale := descriptionStale(open, tp)
+	if !stale {
+		return false
 	}
-	line := fmt.Sprintf("- Rebuilt on %s@%s (%s)", tp.Branch, short(base), now.UTC().Format("2006-01-02 15:04 UTC"))
+	if err := p.Remote.UpdateBody(ctx, consumer, open.Number, tp.Preview.Title, body); err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not refresh the title and body of #%d: %v", open.Number, err))
+		return false
+	}
+	return true
+}
+
+// recordRefresh records what a refresh did in the comment gero keeps for the
+// purpose: one that is edited in place, found by its marker and by being the
+// actor's own, with a line added for each refresh, and created the first time. A
+// failure is a warning.
+func (p Publisher) recordRefresh(ctx context.Context, consumer string, number int, line string, res *TargetResult) {
 	me, err := p.Remote.Me(ctx)
 	var comments []pulls.Comment
 	if err == nil {

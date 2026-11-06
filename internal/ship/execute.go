@@ -494,13 +494,27 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		fail("compare the rebuilt branch with %s: %v", branch, err)
 		return
 	}
-	if before == after {
+	now := time.Now
+	if ex.Now != nil {
+		now = ex.Now
+	}
+	stamp := now().UTC().Format("2006-01-02 15:04 UTC")
+	behind := result.BehindBy > 0
+	if before == after && !behind {
 		if !in.DryRun {
 			if err := g.DeleteBranch(ctx, clone, scratchName); err != nil {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove the scratch branch %s: %v", scratchName, err))
 			}
 		}
 		result.Note = "identical to a fresh build"
+		switch _, stale := descriptionStale(*open, tp); {
+		case !stale:
+		case in.DryRun:
+			result.Note += "; would update the description"
+		case pub.updateDescription(ctx, plan.Consumer, *open, tp, result):
+			result.Note += "; description updated"
+			pub.recordRefresh(ctx, plan.Consumer, open.Number, "- Updated the description ("+stamp+")", result)
+		}
 		return
 	}
 	result.Commits, result.Place, result.Reason = built.Commits, built.Place, built.Reason
@@ -522,9 +536,10 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 	result.Status, result.Pushed = ResultRefreshed, pub.Push.Remote
 	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: pub.Push.Remote, NewBranch: branch})
 	emit(sink, Event{Kind: EventRefreshed, Branch: tp.Branch, Line: tp.Line, PR: result.PR})
-	now := time.Now
-	if ex.Now != nil {
-		now = ex.Now
+	pub.updateDescription(ctx, plan.Consumer, *open, tp, result)
+	line := fmt.Sprintf("- Rebuilt on %s@%s (%s)", tp.Branch, short(base), stamp)
+	if behind {
+		line += fmt.Sprintf(", was %d behind", result.BehindBy)
 	}
-	pub.recordRefresh(ctx, plan.Consumer, tp, base, now(), result)
+	pub.recordRefresh(ctx, plan.Consumer, open.Number, line, result)
 }
