@@ -67,18 +67,46 @@ func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
 }
 
 // branches returns the consumer branches to check, and whether the user named
-// them. A named branch is the only one. Otherwise the edge's lines decide, as
-// the dispatcher works them out for the release's line, and its error is given
-// the advice to name a branch.
+// them. A named line is the only one, on the branch the consumer keeps it on.
+// Otherwise the edge's lines decide, as the dispatcher works them out for the
+// release's line, and its error is given the advice to name a line.
 func (r resolution) branches(in Input) (branches []string, named bool, err error) {
-	if in.Branch != "" {
-		return []string{in.Branch}, true, nil
+	if in.Line != "" {
+		branch, err := r.lineBranch(in.Line)
+		if err != nil {
+			return nil, true, err
+		}
+		return []string{branch}, true, nil
 	}
 	branches, err = r.route.BranchesFor(r.producer, r.release.Line)
 	if err != nil {
-		return nil, false, fmt.Errorf("%w: %v; name one with --branch", ErrNoTargets, err)
+		return nil, false, fmt.Errorf("%w: %v; name a line of %s with --line", ErrNoTargets, err, r.route.Consumer.Name)
 	}
 	return branches, false, nil
+}
+
+// lineBranch is the branch the consumer keeps a line on: its own, or the default
+// branch for a line that has none (the one in development). The line may be
+// written without the v. A line the consumer does not have is an error that
+// lists the ones it does.
+func (r resolution) lineBranch(line string) (string, error) {
+	consumer := r.route.Consumer
+	want := line
+	if !strings.HasPrefix(want, "v") {
+		want = "v" + want
+	}
+	var have []string
+	for _, l := range consumer.Release.Lines {
+		if l.Line == want {
+			branch, _ := consumer.Branch(l)
+			return branch, nil
+		}
+		have = append(have, l.Line)
+	}
+	if len(have) == 0 {
+		return "", fmt.Errorf("%w: %s has no release lines, so there is no line %s to ship to", ErrNoTargets, consumer.Repo.Name, line)
+	}
+	return "", fmt.Errorf("%w: %s has no release line %s; it has %s", ErrNoTargets, consumer.Repo.Name, line, strings.Join(have, ", "))
 }
 
 // pickRoute chooses the route to ship down: the one to the consumer named by to

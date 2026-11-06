@@ -36,7 +36,7 @@ type Options struct {
 	Arg        string // a tag, a release line of the producer, or empty for the latest
 	To         string // the consumer, when the producer ships to several
 	Method     string // the consumer's update method, when the producer uses several of one consumer
-	Branch     string // the consumer's branch to update
+	Line       string // the consumer's Rancher line to update
 	Prerelease bool   // let prereleases count
 	Preview    bool   // print the commit message and PR body too, not only the branch and title
 	// AllowDowngrade ships a release older than what the consumer holds.
@@ -121,7 +121,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 // actor is the bot when the process runs in CI.
 func inputFrom(s clicfg.Settings, opts Options) domain.Input {
 	return domain.Input{
-		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
+		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Line: opts.Line, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
 		PushTo: opts.PushTo, CI: s.CI, Refresh: opts.Refresh,
 	}

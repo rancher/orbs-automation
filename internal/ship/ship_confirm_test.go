@@ -133,8 +133,8 @@ func TestShipAClosingOfOlderPRsAloneIsAWriteThatIsAskedAbout(t *testing.T) {
 
 func TestShipIsNotAskedForADryRunOrANoPushRun(t *testing.T) {
 	for _, in := range []Input{
-		{Project: "scc-operator", Branch: "release/v2.15", DryRun: true},
-		{Project: "scc-operator", Branch: "release/v2.15", NoPush: true},
+		{Project: "scc-operator", Line: "v2.15", DryRun: true},
+		{Project: "scc-operator", Line: "v2.15", NoPush: true},
 	} {
 		ws, _, ex, _, _ := publishing(t)
 		q := &asked{answer: false}

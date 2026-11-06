@@ -27,8 +27,10 @@ stable tag. --prerelease lets prereleases count. The project's
 downstream edges name the consumers and the update method of each; name one
 with --to, and a method with --method, when there are several. Every branch of the consumer that the release goes to is
 checked: all its release branches for a project that is not tied to release
-lines, or the branch for the release's line for one that is. --branch limits it
-to one branch of the consumer.
+lines, or the branch for the release's line for one that is. --line limits it
+to one Rancher line of the consumer (v2.15 or 2.15), on whichever branch the
+consumer keeps that line, so the same flag works for consumers that name their
+branches differently.
 
 Before anything is written the state is checked, from the host and not from
 any clone: the release and the target branch must exist, the consumer's
@@ -83,7 +85,7 @@ with both flags it is a dry run.`,
 	}
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
 	shipCmd.Flags().StringVar(&in.Method, "method", "", "the consumer's update method, when the project uses several of one consumer's")
-	shipCmd.Flags().StringVar(&in.Branch, "branch", "", "check only this branch of the consumer, instead of every branch the release goes to")
+	shipCmd.Flags().StringVar(&in.Line, "line", "", "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to")
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")

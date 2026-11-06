@@ -49,6 +49,7 @@ func (f *fakeWorkspace) Project(string) (config.Project, error) {
 func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
 	rancher := config.Project{
 		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
+		Release: config.Release{Branches: config.BranchesPerLine, Lines: []config.ProjectLine{{Line: "v2.16"}}},
 		UpdateMethods: []config.UpdateMethod{{
 			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
 			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
@@ -81,7 +82,7 @@ type fakeProber struct{ result registry.Result }
 
 func (f fakeProber) Exists(context.Context, string, string, string) registry.Result { return f.result }
 
-var in = domain.Input{Project: "scc-operator", Branch: "main"}
+var in = domain.Input{Project: "scc-operator", Line: "v2.16"}
 
 func readyWorkspace() *fakeWorkspace {
 	return &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.5.2\n"}}
@@ -236,7 +237,7 @@ func TestParseArgs(t *testing.T) {
 }
 
 func TestRunNotInAProjectSaysToNameOne(t *testing.T) {
-	_, err := runWith(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, nil, clicfg.OutputText, domain.Input{Branch: "main"})
+	_, err := runWith(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, nil, clicfg.OutputText, domain.Input{Line: "v2.16"})
 	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.ErrorContains(t, err, "name the project")
 }
@@ -642,12 +643,12 @@ func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 
 func TestInputFromCarriesTheFlagsAndTheSettings(t *testing.T) {
 	s := clicfg.Settings{BranchPrefix: "dan/", DryRun: true}
-	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Branch: "main", Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
+	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Line: "v2.16", Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
 
 	got := inputFrom(s, opts)
 
 	assert.Equal(t, domain.Input{
-		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Branch: "main", Prerelease: true,
+		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Line: "v2.16", Prerelease: true,
 		BranchPrefix: "dan/", AllowDowngrade: true, DryRun: true, NoPush: true, PushTo: "upstream",
 	}, got)
 }
@@ -797,7 +798,7 @@ func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
 		declining(), clicfg.OutputText, in, false)
 
 	require.ErrorIs(t, err, domain.ErrDeclined)
-	assert.Contains(t, out.String(), "main: a new PR", "what it was going to do was shown before it asked")
+	assert.Contains(t, out.String(), "v2.16: a new PR", "what it was going to do was shown before it asked")
 	assert.Contains(t, out.String(), "Nothing was written.")
 }
 

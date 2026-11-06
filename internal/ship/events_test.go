@@ -142,7 +142,7 @@ func TestShipAFailureAfterACommitStillEndsTheTarget(t *testing.T) {
 	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}, {Run: config.Command{"false"}}}
 	rec := &recording{}
 
-	_, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, rec)
+	_, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, rec)
 
 	require.NoError(t, err)
 	assert.Equal(t, []EventKind{
