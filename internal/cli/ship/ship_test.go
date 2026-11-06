@@ -73,7 +73,9 @@ func (f *fakeWorkspace) CloneDir(string) (string, error) { return "/clone", f.cl
 
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
-func (f *fakeWorkspace) PushSettings(string) domain.PushSettings { return domain.PushSettings{} }
+func (f *fakeWorkspace) PushSettings(string) domain.PushSettings {
+	return domain.PushSettings{Upstream: "upstream"}
+}
 
 type fakeProber struct{ result registry.Result }
 
@@ -775,4 +777,53 @@ func TestRenderTextTheDecisionAboutEachTargetsExistingPRsIsShown(t *testing.T) {
 	stream.Flush()
 
 	assert.Contains(t, buf.String(), "release/v2.15: a new PR, and #101, #90 will be closed")
+}
+
+// quietRemote is a GitHub with no open PRs, which is asked nothing it cannot answer.
+type quietRemote struct{ domain.Remote }
+
+func (quietRemote) Me(context.Context) (string, error) { return "danpock", nil }
+
+func (quietRemote) OpenForBase(context.Context, string, string, int) (pulls.Open, error) {
+	return pulls.Open{}, nil
+}
+
+func declining() *domain.Executor {
+	return &domain.Executor{
+		Publish: &domain.Publisher{Remote: quietRemote{}},
+		Confirm: func(context.Context, domain.Confirmation) (bool, error) { return false, nil },
+	}
+}
+
+func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
+	var out bytes.Buffer
+
+	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		declining(), clicfg.OutputText, in, false)
+
+	require.ErrorIs(t, err, domain.ErrDeclined)
+	assert.Contains(t, out.String(), "main: a new PR", "what it was going to do was shown before it asked")
+	assert.Contains(t, out.String(), "Nothing was written.")
+}
+
+func TestRunToADeclinedRunInJSONStillWritesThePlan(t *testing.T) {
+	var out bytes.Buffer
+
+	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		declining(), clicfg.OutputJSON, in, false)
+
+	require.ErrorIs(t, err, domain.ErrDeclined)
+	var plan domain.Plan
+	require.NoError(t, json.Unmarshal(out.Bytes(), &plan), out.String())
+	assert.Equal(t, "rancher/scc-operator", plan.Producer)
+}
+
+func TestRunToAnErrorBeforeAnyPlanIsJustTheError(t *testing.T) {
+	var out bytes.Buffer
+
+	err := runTo(context.Background(), &out, nil, &fakeWorkspace{err: errors.New("no such project")}, fakeProber{},
+		nil, clicfg.OutputJSON, in, false)
+
+	require.Error(t, err)
+	assert.Empty(t, out.String(), "no document for a run that never made a plan")
 }
