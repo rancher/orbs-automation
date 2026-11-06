@@ -24,7 +24,7 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 		return TargetPlan{}, fmt.Errorf("read %s of %s: %w", target.Branch, consumerSlug, err)
 	}
 
-	tp := TargetPlan{Target: target, Current: chk.Current, Want: chk.Want, File: chk.Change.Path, Status: StatusReady}
+	tp := TargetPlan{Target: target, Line: r.route.Consumer.LineOfBranch(branch), Current: chk.Current, Want: chk.Want, File: chk.Change.Path, Status: StatusReady}
 	if chk.UpToDate {
 		tp.Status = StatusUpToDate
 		return tp, nil

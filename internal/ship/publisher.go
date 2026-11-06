@@ -67,7 +67,7 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 		return
 	}
 	res.Pushed = p.Push.Remote
-	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Remote: p.Push.Remote})
+	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: p.Push.Remote, NewBranch: branch})
 	head := branch
 	if p.Push.Role == RoleFork {
 		head = p.HeadOwner + ":" + branch
@@ -82,9 +82,9 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 	}
 	res.Status, res.PR = ResultOpened, &PRRef{Number: pr.Number, URL: pr.URL}
 	res.Warnings = append(res.Warnings, pr.Warnings...)
-	emit(sink, Event{Kind: EventPROpened, Branch: tp.Branch, PR: res.PR})
+	emit(sink, Event{Kind: EventPROpened, Branch: tp.Branch, Line: tp.Line, PR: res.PR})
 
-	p.supersede(ctx, consumer, pr.Number, m, tp.Branch, dec.Supersede, res, sink)
+	p.supersede(ctx, consumer, pr.Number, m, tp, dec.Supersede, res, sink)
 }
 
 // pushBranch puts the branch on the remote with the pushbranch task, and says
@@ -103,7 +103,7 @@ func (p Publisher) pushBranch(ctx context.Context, tp TargetPlan) error {
 // supersede tells each older PR that the one numbered by is its replacement, and
 // closes it, in that order: a PR that could not be told is left open. A failure
 // is a warning, and only what was closed is recorded.
-func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Marker, branch string, older []pulls.PR, res *TargetResult, sink Sink) {
+func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Marker, tp TargetPlan, older []pulls.PR, res *TargetResult, sink Sink) {
 	for _, old := range older {
 		note := fmt.Sprintf("Superseded by #%d (%s %s).", by, m.Source, m.Version)
 		if err := p.Remote.Comment(ctx, consumer, old.Number, note); err != nil {
@@ -116,7 +116,7 @@ func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Mar
 		}
 		ref := PRRef{Number: old.Number, URL: old.URL}
 		res.Superseded = append(res.Superseded, ref)
-		emit(sink, Event{Kind: EventSuperseded, Branch: branch, PR: &ref})
+		emit(sink, Event{Kind: EventSuperseded, Branch: tp.Branch, Line: tp.Line, PR: &ref})
 	}
 }
 

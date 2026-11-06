@@ -201,7 +201,7 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 	}
 	for k, i := range ready {
 		plan.Targets[i].Result = res.workTarget(ctx, ex, pub, clone, remote, in, plan, states[k], sink)
-		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Result: plan.Targets[i].Result})
+		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Line: plan.Targets[i].Line, Result: plan.Targets[i].Result})
 	}
 	return plan, nil
 }
@@ -246,7 +246,7 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 		}
 	}
 	st.dec = decidePublish(prs, me, st.m)
-	emit(sink, Event{Kind: EventDecided, Branch: tp.Branch, Decision: &st.dec})
+	emit(sink, Event{Kind: EventDecided, Branch: tp.Branch, Line: tp.Line, Decision: &st.dec})
 	if open.Truncated {
 		st.warnings = append(st.warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this bump may have been missed", len(open.PRs), plan.Consumer))
 	}
@@ -313,7 +313,7 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher
 		if in.DryRun {
 			result.WouldSupersede = refs(st.dec.Supersede)
 		} else {
-			pub.supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp.Branch, st.dec.Supersede, result, sink)
+			pub.supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp, st.dec.Supersede, result, sink)
 		}
 		if in.Refresh {
 			r.refresh(ctx, ex, pub, clone, remote, in, plan, st, result, sink)
@@ -360,7 +360,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 		return fail(err)
 	}
 	result.Place, result.Reason = w.Place, w.Reason
-	emit(sink, Event{Kind: EventTargetStarted, Branch: tp.Branch, Place: w.Place, Reason: w.Reason})
+	emit(sink, Event{Kind: EventTargetStarted, Branch: tp.Branch, Line: tp.Line, Place: w.Place, Reason: w.Reason})
 	if w.Reused {
 		// The branch is one of ours that is current, so nothing is built: what it
 		// holds is what is published.
@@ -375,7 +375,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	applied, err := Apply{
 		Invocation: r.invocation, Release: r.rel, Branch: tp.Branch,
 		Message: tp.Preview.CommitMessage, Runner: ex.Runner,
-		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Commit: &c}) },
+		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Line: tp.Line, Commit: &c}) },
 		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: r.release, target: tp.Target}),
 	}.Run(ctx, w)
 	if errors.Is(err, ErrNothingChanged) {
@@ -520,8 +520,8 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		return
 	}
 	result.Status, result.Pushed = ResultRefreshed, pub.Push.Remote
-	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Remote: pub.Push.Remote})
-	emit(sink, Event{Kind: EventRefreshed, Branch: tp.Branch, PR: result.PR})
+	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: pub.Push.Remote, NewBranch: branch})
+	emit(sink, Event{Kind: EventRefreshed, Branch: tp.Branch, Line: tp.Line, PR: result.PR})
 	now := time.Now
 	if ex.Now != nil {
 		now = ex.Now

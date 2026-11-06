@@ -119,8 +119,6 @@ type TargetPlan struct {
 	// Line is the Rancher line the consumer's branch is the branch of, such as
 	// v2.15, or "" for a branch that is in no line. It is how a report names a
 	// target, since a line means the same in every project and a branch does not.
-	//
-	// STUB: never set until a later commit.
 	Line      string   `json:"line,omitempty"`
 	Current   string   `json:"current"` // what the consumer holds now
 	File      string   `json:"-"`       // the file the method edits; the plan carries it once
@@ -198,7 +196,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 			}
 			// One branch of several that could not be read does not stop the
 			// others: it is reported as failed.
-			tp = TargetPlan{Target: Target{Branch: branch}, Status: StatusFailed, Error: err.Error()}
+			tp = TargetPlan{Target: Target{Branch: branch}, Line: res.route.Consumer.LineOfBranch(branch), Status: StatusFailed, Error: err.Error()}
 		}
 		needsPR = needsPR || tp.Status == StatusReady
 		if plan.Want == "" {
@@ -206,7 +204,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		}
 		plan.Targets = append(plan.Targets, tp)
 		checked := tp
-		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Target: &checked})
+		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Line: tp.Line, Target: &checked})
 	}
 	emit(sink, Event{Kind: EventTargetsChecked})
 	if needsPR {
