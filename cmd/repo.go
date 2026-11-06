@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/branchtags"
 	"github.com/rancher/orbs-automation/internal/cli/imagesexist"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
+	"github.com/rancher/orbs-automation/internal/cli/repostatus"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,41 @@ compares), use repo status.`,
 				return err
 			}
 			_, err = fmt.Fprint(cmd.OutOrStdout(), out)
+			return err
+		},
+	}
+	statusCmd := &cobra.Command{
+		Use:   "status [name|owner/name]",
+		Short: "Show where the releases of a repository stand, as the host has them",
+		Long: `Print where the releases of a repository stand: for each release line (or
+the one release branch of a Project without lines), the commit at the head of
+the branch on the host, its latest stable and pre-release tags, the commits on
+the branch since the latest tag, and whether the local clone's branch is in
+sync, behind or ahead.
+
+Name a Project (its config name, such as scc-operator, or its owner/name
+slug) to look at it, else the repository you are in is used (. says so
+explicitly). The tags and heads are read from the host, so they are current
+even when your clone is not. A public repository needs no token. The commit
+counts come from the local clone and are left out when it is missing or lacks
+the commits (fetch to get them).
+
+The report is printed before the command exits 1 when the host could not be
+read. For config and the clone alone, with no network, use repo info.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			out, err := repostatus.Run(ctx, settingsFrom(cmd), cwd, args)
+			if out != "" {
+				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
+			}
 			return err
 		},
 	}
@@ -84,6 +120,7 @@ is not found or a registry could not be reached.`,
 	repoCmd.AddCommand(imagesCmd)
 	repoCmd.AddCommand(
 		infoCmd,
+		statusCmd,
 		&cobra.Command{
 			Use:   "branch-tags",
 			Short: "Resolve branch and previous tags from the repository state",
