@@ -107,3 +107,13 @@ func TestQuestionWithAnOpenAndARefreshAsksAboutBoth(t *testing.T) {
 	assert.Contains(t, q, "open 1 PR")
 	assert.Contains(t, q, "rebuild the branch for release/v2.15")
 }
+
+func TestQuestionSaysWhenABranchOnTheRemoteMayBeReplaced(t *testing.T) {
+	c := opening("main")
+	c.MayReplace = true
+
+	q := question(c)
+
+	assert.Contains(t, q, "replacing the branch on origin if an earlier attempt left one of ours")
+	assert.NotContains(t, question(opening("main")), "replacing")
+}

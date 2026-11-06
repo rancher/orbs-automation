@@ -177,3 +177,30 @@ func TestShipEveryTargetIsDecidedBeforeTheFirstOneStarts(t *testing.T) {
 	assert.Less(t, lastDecided, firstStarted, "all the lookups come first, so the question is accurate: %v", kinds)
 	assert.Len(t, rec.of(EventDecided), 2)
 }
+
+func TestShipTheQuestionSaysWhenARefreshMayReplaceABranchOnTheRemote(t *testing.T) {
+	ws, _, ex, _, _ := publishing(t)
+	q := &asked{answer: false}
+	ex.Confirm = q.confirm
+	in := realRun()
+	in.Refresh = true
+
+	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.ErrorIs(t, err, ErrDeclined)
+	require.Len(t, q.got, 1)
+	assert.Equal(t, []string{"release/v2.15"}, q.got[0].Opens)
+	assert.True(t, q.got[0].MayReplace)
+}
+
+func TestShipTheQuestionDoesNotSayItWithoutRefresh(t *testing.T) {
+	ws, _, ex, _, _ := publishing(t)
+	q := &asked{answer: false}
+	ex.Confirm = q.confirm
+
+	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.ErrorIs(t, err, ErrDeclined)
+	require.Len(t, q.got, 1)
+	assert.False(t, q.got[0].MayReplace)
+}
