@@ -16,6 +16,9 @@ var (
 	// ErrPrerelease is returned for a prerelease the consumer does not accept
 	// unless it is asked for.
 	ErrPrerelease = errors.New("prerelease not accepted")
+	// ErrLineMismatch is returned when a release is asked to go to a line that is
+	// not the one it is in, for a producer whose releases follow the lines.
+	ErrLineMismatch = errors.New("release is in another line")
 )
 
 // Release is the version of the producer that is being shipped.
