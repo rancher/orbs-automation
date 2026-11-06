@@ -126,25 +126,39 @@ type Checkpoint func(ctx context.Context, u Unit) error
 
 // Run runs the lifecycle for one branch in the clone: the pre-edit steps, Apply,
 // then the post-edit steps, calling after (when it is not nil) once each has
-// finished. A step that fails stops the run, as a *StepError; if it is a
-// post-edit step the edit has been made, and Result says what changed.
-//
-// STUB: after is not called until a later commit.
+// finished. A step that fails stops the run, as a *StepError, with no checkpoint
+// of its own; if it is a post-edit step the edit has been made, and Result says
+// what changed. An error from after stops the run as it is.
 func (inv Invocation) Run(ctx context.Context, tree WritableTree, runner StepRunner, rel Release, branch string, dir string, after Checkpoint) (Result, error) {
 	pre, post := inv.Steps(branch)
 	env := StepEnv{Dir: dir, Env: inv.stepEnv(rel, branch)}
-	for _, ref := range pre {
+	checkpoint := func(u Unit) error {
+		if after == nil {
+			return nil
+		}
+		return after(ctx, u)
+	}
+	step := func(ref StepRef) error {
 		if err := runner.Run(ctx, ref.Step, env); err != nil {
-			return Result{}, &StepError{Phase: ref.Phase, Index: ref.Index, Run: ref.Step.Run, Err: err}
+			return &StepError{Phase: ref.Phase, Index: ref.Index, Run: ref.Step.Run, Err: err}
+		}
+		return checkpoint(Unit{Kind: UnitStep, Phase: ref.Phase, Index: ref.Index, Run: ref.Step.Run})
+	}
+	for _, ref := range pre {
+		if err := step(ref); err != nil {
+			return Result{}, err
 		}
 	}
 	res, err := inv.Route.Method.Updater.Apply(ctx, tree, inv.Inputs, rel)
 	if err != nil {
 		return Result{}, err
 	}
+	if err := checkpoint(Unit{Kind: UnitEdit, Changes: res.Changes}); err != nil {
+		return res, err
+	}
 	for _, ref := range post {
-		if err := runner.Run(ctx, ref.Step, env); err != nil {
-			return res, &StepError{Phase: ref.Phase, Index: ref.Index, Run: ref.Step.Run, Err: err}
+		if err := step(ref); err != nil {
+			return res, err
 		}
 	}
 	return res, nil
