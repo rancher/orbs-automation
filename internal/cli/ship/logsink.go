@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	domain "github.com/rancher/orbs-automation/internal/ship"
 )
@@ -22,7 +23,7 @@ func (l logSink) Event(e domain.Event) {
 	switch e.Kind {
 	case domain.EventResolved:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "ship resolved",
-			slog.String("producer", e.Plan.Producer), slog.String("release", e.Plan.Release.Tag),
+			slog.String("producer", e.Plan.Producer), slog.String("release", releaseTags(e.Plan)),
 			slog.String("consumer", e.Plan.Consumer), slog.String("method", e.Plan.Method))
 	case domain.EventTargetChecked:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "target checked", about(e,
@@ -33,7 +34,7 @@ func (l logSink) Event(e domain.Event) {
 		if failed {
 			level = slog.LevelWarn
 		}
-		l.log.LogAttrs(ctx, level, "images checked", slog.Int("rows", len(e.Images.Rows)), slog.Bool("failed", failed))
+		l.log.LogAttrs(ctx, level, "images checked", slog.String("release", e.Release), slog.Int("rows", len(e.Images.Rows)), slog.Bool("failed", failed))
 	case domain.EventTargetStarted:
 		attrs := about(e, slog.String("place", string(e.Place)))
 		if e.Reason != "" {
@@ -103,4 +104,13 @@ func (s sinks) Event(e domain.Event) {
 			sink.Event(e)
 		}
 	}
+}
+
+// releaseTags names the releases of a plan: the tag, or the tags of the several.
+func releaseTags(p *domain.Plan) string {
+	tags := make([]string, len(p.Releases))
+	for i, r := range p.Releases {
+		tags[i] = r.Tag
+	}
+	return strings.Join(tags, ", ")
 }

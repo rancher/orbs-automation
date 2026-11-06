@@ -150,10 +150,10 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 func previewPlan() domain.Plan {
 	return domain.Plan{
 		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Method: "build-yaml-bump", Strategy: "yamlBump", File: "build.yaml",
-		Release: domain.Release{Tag: "v0.5.3", Stable: true}, Want: "b", Status: domain.StatusReady,
+		Releases: []domain.Release{{Tag: "v0.5.3", Stable: true}}, Want: "b", Status: domain.StatusReady,
 		Targets: []domain.TargetPlan{{
 			Target:  domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},
-			Current: "a", Status: domain.StatusReady,
+			Release: "v0.5.3", Current: "a", Want: "b", Status: domain.StatusReady,
 			Preview: &domain.Preview{
 				Branch: "bot/scc-operator-v0.5.3-v2.15", Title: "[v2.15] Update scc-operator to v0.5.3",
 				Labels:        []string{"status/auto-created", "team/orbs"},
@@ -494,10 +494,10 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
 	p.Warnings = []string{"image rancher/x is not on Prime production"}
 	p.Targets[0].Warnings = []string{"this is a downgrade"}
-	p.Images = &registry.Report{
+	p.Images = []domain.ReleaseImages{{Release: "v0.5.3", Report: registry.Report{
 		Rows:     []registry.Row{{Image: "rancher/scc-operator", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/scc-operator:v0.5.3"}},
 		Warnings: p.Warnings,
-	}
+	}}}
 	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
 
 	out := renderText(p, false)

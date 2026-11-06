@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/git"
@@ -222,7 +223,7 @@ type targetState struct {
 // version blocks the target, and a failed lookup fails it, each before any work.
 // It only reads.
 func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string, plan Plan, tp TargetPlan, sink Sink) targetState {
-	st := targetState{tp: tp, m: Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: plan.Release.Tag}}
+	st := targetState{tp: tp, m: Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: tp.Release}}
 	if pub == nil {
 		return st
 	}
@@ -256,7 +257,7 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 	if st.dec.Action == PublishBlocked {
 		newer, _ := ParseMarker(st.dec.Newer.Body)
 		st.done = &TargetResult{Status: ResultBlocked, Branch: tp.Preview.Branch, Warnings: st.warnings,
-			Error: fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", st.dec.Newer.Number, newer.Version, tp.Branch, plan.Release.Tag)}
+			Error: fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", st.dec.Newer.Number, newer.Version, tp.Branch, tp.Release)}
 	}
 	return st
 }
@@ -264,7 +265,7 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 // confirmation is what the run is about to do, and whether that is anything
 // that writes: a PR to open, or an older one to close.
 func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, bool) {
-	c := Confirmation{Consumer: plan.Consumer, Release: plan.Release.Tag}
+	c := Confirmation{Consumer: plan.Consumer, Release: releaseTags(plan)}
 	if plan.Push != nil {
 		c.Push = *plan.Push
 	}
@@ -320,7 +321,7 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher
 		}
 		return result
 	}
-	result := r.commitTarget(ctx, ex, clone, remote, in, tp, sink)
+	result := r.commitTarget(ctx, ex, clone, remote, in, tp, plan.ReleaseOf(tp.Release), sink)
 	result.Warnings = append(result.Warnings, st.warnings...)
 	switch {
 	case pub == nil:
@@ -343,7 +344,7 @@ func refs(prs []pulls.PR) []PRRef {
 
 // commitTarget makes the commit for one target and ends the work, whatever
 // happened, so the clone is as it was found apart from the branch it keeps.
-func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remote string, in Input, tp TargetPlan, sink Sink) *TargetResult {
+func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remote string, in Input, tp TargetPlan, release Release, sink Sink) *TargetResult {
 	result := &TargetResult{Branch: tp.Preview.Branch}
 	fail := func(err error) *TargetResult {
 		result.Status, result.Error = ResultFailed, err.Error()
@@ -373,10 +374,10 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	}
 
 	applied, err := Apply{
-		Invocation: r.invocation, Release: r.rel, Branch: tp.Branch,
+		Invocation: r.invocation, Release: r.relOf(release), Branch: tp.Branch,
 		Message: tp.Preview.CommitMessage, Runner: ex.Runner,
 		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Line: tp.Line, Commit: &c}) },
-		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: r.release, target: tp.Target}),
+		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}),
 	}.Run(ctx, w)
 	if errors.Is(err, ErrNothingChanged) {
 		result.Status = ResultUpToDate
@@ -479,7 +480,7 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 	preview := *tp.Preview
 	preview.Branch = scratchName
 	scratch.Preview = &preview
-	built := r.commitTarget(ctx, ex, clone, remote, in, scratch, sink)
+	built := r.commitTarget(ctx, ex, clone, remote, in, scratch, plan.ReleaseOf(tp.Release), sink)
 	switch built.Status {
 	case ResultCommitted, ResultWouldCommit:
 	case ResultUpToDate:
@@ -543,4 +544,14 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		line += fmt.Sprintf(", was %d behind", result.BehindBy)
 	}
 	pub.recordRefresh(ctx, plan.Consumer, open.Number, line, result)
+}
+
+// releaseTags names the releases of a plan: the one tag, or the tags of the
+// several, in order.
+func releaseTags(p Plan) string {
+	tags := make([]string, len(p.Releases))
+	for i, r := range p.Releases {
+		tags[i] = r.Tag
+	}
+	return strings.Join(tags, ", ")
 }

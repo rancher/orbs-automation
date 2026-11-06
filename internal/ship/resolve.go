@@ -12,13 +12,13 @@ import (
 
 // resolution is everything about a run that is the same for every target branch:
 // who ships to whom, how the consumer keeps the value, which release, and the
-// consumer's refs.
+// consumer's refs. Which release goes to which branch is not here: with a
+// producer that has release lines, each line has its own (specs).
 type resolution struct {
 	producer     config.Project
 	route        updatedispatcher.Route
 	invocation   updatedispatcher.Invocation
-	release      Release
-	rel          updatedispatcher.Release // what the strategy makes the value from
+	tags         []git.Tag // the producer's, from the host
 	consumerRefs git.Refs
 }
 
@@ -52,13 +52,7 @@ func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
 	if err != nil {
 		return resolution{}, fmt.Errorf("read the tags of %s: %w", producer.Repo.Name, err)
 	}
-	if res.release, err = ResolveRelease(producer, producerRefs.Tags, in.Arg, in.Prerelease, route.Method.Accept); err != nil {
-		return resolution{}, err
-	}
-	res.rel = updatedispatcher.Release{
-		Tag: res.release.Tag, Version: strings.TrimPrefix(res.release.Tag, "v"),
-		Image: producer.EffectiveImages()[0].Name, SourceRepo: producer.Repo.Name,
-	}
+	res.tags = producerRefs.Tags
 	consumerSlug := route.Consumer.Repo.Name
 	if res.consumerRefs, err = ws.UpstreamRefs(ctx, consumerSlug); err != nil {
 		return resolution{}, fmt.Errorf("read the branches of %s: %w", consumerSlug, err)
@@ -66,23 +60,44 @@ func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
 	return res, nil
 }
 
-// branches returns the consumer branches to check, and whether the user named
-// them. A named line is the only one, on the branch the consumer keeps it on.
-// Otherwise the edge's lines decide, as the dispatcher works them out for the
-// release's line, and its error is given the advice to name a line.
-func (r resolution) branches(in Input) (branches []string, named bool, err error) {
+// spec is one target branch of the consumer, with the release that goes to it.
+type spec struct {
+	branch  string
+	release Release
+}
+
+// relOf is what the strategy makes the value from, for a release.
+func (r resolution) relOf(rel Release) updatedispatcher.Release {
+	return updatedispatcher.Release{
+		Tag: rel.Tag, Version: strings.TrimPrefix(rel.Tag, "v"),
+		Image: r.producer.EffectiveImages()[0].Name, SourceRepo: r.producer.Repo.Name,
+	}
+}
+
+// specs returns the targets to check, each with its release, and whether the
+// user named them. A named line is the only one, on the branch the consumer keeps
+// it on. Otherwise the edge's lines decide, as the dispatcher works them out for
+// the release's line, and its error is given the advice to name a line.
+func (r resolution) specs(in Input) (specs []spec, named bool, err error) {
+	release, err := ResolveRelease(r.producer, r.tags, in.Arg, in.Prerelease, r.route.Method.Accept)
+	if err != nil {
+		return nil, false, err
+	}
 	if in.Line != "" {
 		branch, err := r.lineBranch(in.Line)
 		if err != nil {
 			return nil, true, err
 		}
-		return []string{branch}, true, nil
+		return []spec{{branch, release}}, true, nil
 	}
-	branches, err = r.route.BranchesFor(r.producer, r.release.Line)
+	branches, err := r.route.BranchesFor(r.producer, release.Line)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: %v; name a line of %s with --line", ErrNoTargets, err, r.route.Consumer.Name)
 	}
-	return branches, false, nil
+	for _, b := range branches {
+		specs = append(specs, spec{b, release})
+	}
+	return specs, false, nil
 }
 
 // lineBranch is the branch the consumer keeps a line on: its own, or the default

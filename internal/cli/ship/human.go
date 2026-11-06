@@ -43,7 +43,7 @@ func (h *humanSink) Event(e domain.Event) {
 		h.endTargets()
 	case domain.EventImagesChecked:
 		h.endTargets()
-		h.images(e.Images)
+		h.images(e.Release, e.Images)
 		h.pr()
 	case domain.EventDecided:
 		h.endTargets()
@@ -73,11 +73,17 @@ func (h *humanSink) Event(e domain.Event) {
 }
 
 func (h *humanSink) resolved(p *domain.Plan) {
-	kind := "stable"
-	if !p.Release.Stable {
-		kind = "prerelease"
+	switch {
+	case len(p.Releases) == 1:
+		kind := "stable"
+		if !p.Releases[0].Stable {
+			kind = "prerelease"
+		}
+		h.out.Line(fmt.Sprintf("Ship %s %s (%s) to %s", p.Producer, p.Releases[0].Tag, kind, p.Consumer))
+	default:
+		// Each target has its own release, which the table of targets names.
+		h.out.Line(fmt.Sprintf("Ship %s to %s", p.Producer, p.Consumer))
 	}
-	h.out.Line(fmt.Sprintf("Ship %s %s (%s) to %s", p.Producer, p.Release.Tag, kind, p.Consumer))
 	h.out.Line("")
 	h.header = *p
 }
@@ -91,16 +97,24 @@ func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 			method += ", " + t.File
 		}
 		h.out.Line(method + ")")
-		if t.Want != "" {
+		if t.Want != "" && h.header.Uniform() {
 			h.out.Line("  want    " + t.Want)
 			h.wantShown = true
 		}
 		h.out.Line("")
 		h.out.Line("Targets")
-		h.out.BeginTable("LINE", "BRANCH", "HEAD", "NOW", "STATUS")
+		if h.header.Uniform() {
+			h.out.BeginTable("LINE", "BRANCH", "HEAD", "NOW", "STATUS")
+		} else {
+			h.out.BeginTable("LINE", "BRANCH", "RELEASE", "HEAD", "NOW", "WANT", "STATUS")
+		}
 		h.inTargets = true
 	}
-	h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), t.Current, string(t.Status))
+	if h.header.Uniform() {
+		h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), t.Current, string(t.Status))
+	} else {
+		h.out.Row(t.Key(), t.Branch, t.Release, git.Short(t.Commit), t.Current, t.Want, string(t.Status))
+	}
 	h.targets = append(h.targets, *t)
 }
 
@@ -126,13 +140,17 @@ func (h *humanSink) endTargets() {
 	}
 }
 
-func (h *humanSink) images(r *registry.Report) {
+func (h *humanSink) images(release string, r *registry.Report) {
 	if r == nil {
 		return
 	}
 	if len(r.Rows) > 0 {
 		h.out.Line("")
-		h.out.Line("Images")
+		if h.header.Uniform() {
+			h.out.Line("Images")
+		} else {
+			h.out.Line("Images (" + release + ")")
+		}
 		h.out.BeginTable("IMAGE", "REGISTRY", "STATUS", "REFERENCE")
 		for _, row := range r.Rows {
 			status := row.Status

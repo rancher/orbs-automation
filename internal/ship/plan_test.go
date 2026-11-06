@@ -153,7 +153,7 @@ func TestCheckReady(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/scc-operator", got.Producer)
-	assert.Equal(t, Release{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}, got.Release)
+	assert.Equal(t, []Release{{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}}, got.Releases)
 	assert.Equal(t, "rancher/rancher", got.Consumer)
 	assert.Equal(t, "build-yaml-bump", got.Method)
 	assert.Equal(t, "yamlBump", got.Strategy)
@@ -163,8 +163,9 @@ func TestCheckReady(t *testing.T) {
 	assert.Equal(t, "rancher/scc-operator:v0.5.3", got.Want)
 	assert.Equal(t, StatusReady, got.Status)
 	assert.Empty(t, got.Blockers)
-	require.NotNil(t, got.Images)
-	assert.False(t, got.Images.Failed())
+	require.Len(t, got.Images, 1)
+	assert.Equal(t, "v0.5.3", got.Images[0].Release)
+	assert.False(t, got.Images[0].Failed())
 	assert.Equal(t, "scc-operator", ws.asked[0][len("project "):])
 }
 
@@ -181,7 +182,7 @@ func TestCheckAlreadyUpToDate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, got.Status)
 	assert.Equal(t, got.Targets[0].Current, got.Want)
-	assert.Nil(t, got.Images, "nothing else runs")
+	assert.Empty(t, got.Images, "nothing else runs")
 	assert.Zero(t, p.calls)
 }
 
@@ -194,13 +195,15 @@ func TestCheckBlockedByAMissingImage(t *testing.T) {
 	assert.Equal(t, StatusBlocked, got.Status)
 	require.Len(t, got.Blockers, 1)
 	assert.Contains(t, got.Blockers[0], "images")
-	assert.True(t, got.Images.Failed())
+	require.Len(t, got.Images, 1)
+	assert.True(t, got.Images[0].Failed())
 }
 
 func TestCheckAnExplicitTagAndALine(t *testing.T) {
 	got, err := Check(ctx, fixture(), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Line: "v2.15"})
 	require.NoError(t, err)
-	assert.Equal(t, "v0.5.2", got.Release.Tag)
+	require.Len(t, got.Releases, 1)
+	assert.Equal(t, "v0.5.2", got.Releases[0].Tag)
 	assert.Equal(t, StatusUpToDate, got.Status, "the consumer already holds v0.5.2")
 }
 
@@ -210,8 +213,9 @@ func TestCheckARefusedPrerelease(t *testing.T) {
 
 	got, err := Check(ctx, withDevLine(fixture()), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.6.0-rc.1", Line: "v2.16", Prerelease: true})
 	require.NoError(t, err)
-	assert.Equal(t, "v0.6.0-rc.1", got.Release.Tag)
-	assert.False(t, got.Release.Stable)
+	require.Len(t, got.Releases, 1)
+	assert.Equal(t, "v0.6.0-rc.1", got.Releases[0].Tag)
+	assert.False(t, got.Releases[0].Stable)
 }
 
 func TestCheckABranchTheConsumerDoesNotHave(t *testing.T) {
@@ -362,7 +366,7 @@ func TestCheckABlockedDowngrade(t *testing.T) {
 	assert.Contains(t, got.Targets[0].Blockers[0], "downgrade")
 	assert.NotContains(t, got.Targets[0].Blockers[0], "0.5.3", "the values are in the table, so the text is the same for every branch and can be grouped")
 	assert.Contains(t, got.Targets[0].Blockers[0], "--allow-downgrade")
-	assert.Nil(t, got.Images, "a blocked downgrade stops here, as an up to date consumer does")
+	assert.Empty(t, got.Images, "a blocked downgrade stops here, as an up to date consumer does")
 	assert.Nil(t, got.Targets[0].Preview)
 }
 
@@ -374,7 +378,7 @@ func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
 	assert.Empty(t, got.Targets[0].Blockers)
 	require.NotEmpty(t, got.Targets[0].Warnings)
 	assert.Contains(t, got.Targets[0].Warnings[0], "downgrade")
-	assert.NotNil(t, got.Images, "once it is allowed the rest of the check runs")
+	assert.NotEmpty(t, got.Images, "once it is allowed the rest of the check runs")
 	assert.NotNil(t, got.Targets[0].Preview)
 }
 
@@ -462,7 +466,7 @@ func TestCheckNoImagesWhenEveryTargetIsUpToDate(t *testing.T) {
 	got, err := Check(ctx, ws, p, Input{Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, got.Status)
-	assert.Nil(t, got.Images)
+	assert.Empty(t, got.Images)
 	assert.Zero(t, p.calls)
 }
 
@@ -474,7 +478,7 @@ func TestCheckAMixOfUpToDateAndReady(t *testing.T) {
 	assert.Equal(t, StatusUpToDate, got.Targets[0].Status)
 	assert.Equal(t, StatusReady, got.Targets[1].Status)
 	assert.Equal(t, StatusReady, got.Status)
-	assert.NotNil(t, got.Images, "one of them needs a PR")
+	assert.NotEmpty(t, got.Images, "one of them needs a PR")
 	assert.Nil(t, got.Targets[0].Preview)
 	assert.NotNil(t, got.Targets[1].Preview)
 }
@@ -616,7 +620,7 @@ func TestCheckADryRunChecksTheSameThings(t *testing.T) {
 	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator", DryRun: true})
 	require.NoError(t, err)
 	assert.Equal(t, StatusReady, got.Status)
-	assert.NotNil(t, got.Images)
+	assert.NotEmpty(t, got.Images)
 	assert.NotNil(t, got.Targets[0].Preview)
 }
 

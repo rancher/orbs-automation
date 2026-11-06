@@ -3,7 +3,6 @@ package ship
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +18,7 @@ func kinds(events []domain.Event) []domain.EventKind {
 
 func TestReplayOfACheckOnlyPlan(t *testing.T) {
 	p := previewPlan()
-	p.Images = &registry.Report{}
+	p.Images = []domain.ReleaseImages{{Release: "v0.5.3"}}
 
 	events := replay(p)
 
@@ -29,7 +28,8 @@ func TestReplayOfACheckOnlyPlan(t *testing.T) {
 	require.Len(t, events, 5)
 	require.NotNil(t, events[0].Plan)
 	assert.Equal(t, "rancher/scc-operator", events[0].Plan.Producer)
-	assert.Equal(t, "v0.5.3", events[0].Plan.Release.Tag)
+	require.Len(t, events[0].Plan.Releases, 1)
+	assert.Equal(t, "v0.5.3", events[0].Plan.Releases[0].Tag)
 	assert.Empty(t, events[0].Plan.Targets, "the header only, as a run emits it")
 	require.NotNil(t, events[1].Target)
 	assert.Equal(t, "release/v2.15", events[1].Target.Branch)

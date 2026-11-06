@@ -15,7 +15,7 @@ const (
 	// EventTargetsChecked: every branch has been read, so what they hold can be
 	// shown before the slower checks that follow.
 	EventTargetsChecked EventKind = "targets checked"
-	// EventImagesChecked: the release's images have been looked for, once.
+	// EventImagesChecked: the images of one release have been looked for, once.
 	EventImagesChecked EventKind = "images checked"
 	// EventTargetStarted: the work for one branch has begun, in Place.
 	EventTargetStarted EventKind = "target started"
@@ -50,6 +50,7 @@ type Event struct {
 
 	Plan     *Plan            // Resolved: the header. Done: everything
 	Target   *TargetPlan      // TargetChecked
+	Release  string           // ImagesChecked: the tag of the release
 	Images   *registry.Report // ImagesChecked
 	Place    Place            // TargetStarted: where the work is done
 	Reason   string           // TargetStarted: why that was a worktree

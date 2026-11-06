@@ -12,19 +12,20 @@ import (
 // would be: nothing, blocked, or a PR, with the PR previewed. The images are the
 // release's and are checked once by the caller. It returns an error when the
 // branch or its file cannot be read.
-func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string, in Input) (TargetPlan, error) {
+func (r resolution) checkTarget(ctx context.Context, ws Workspace, sp spec, in Input) (TargetPlan, error) {
+	branch := sp.branch
 	consumerSlug := r.route.Consumer.Repo.Name
 	head, ok := r.consumerRefs.Branch(branch)
 	if !ok {
 		return TargetPlan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, branch)
 	}
 	target := Target{Branch: head.Name, Commit: head.Commit}
-	chk, err := r.invocation.Check(ctx, updatedispatcher.HostTree(ws, consumerSlug, target.Commit), r.rel)
+	chk, err := r.invocation.Check(ctx, updatedispatcher.HostTree(ws, consumerSlug, target.Commit), r.relOf(sp.release))
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("read %s of %s: %w", target.Branch, consumerSlug, err)
 	}
 
-	tp := TargetPlan{Target: target, Line: r.route.Consumer.LineOfBranch(branch), Current: chk.Current, Want: chk.Want, File: chk.Change.Path, Status: StatusReady}
+	tp := TargetPlan{Target: target, Line: r.route.Consumer.LineOfBranch(branch), Release: sp.release.Tag, Current: chk.Current, Want: chk.Want, File: chk.Change.Path, Status: StatusReady}
 	if chk.UpToDate {
 		tp.Status = StatusUpToDate
 		return tp, nil
@@ -47,7 +48,7 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 		steps = append(steps, ref.Step)
 	}
 	preview, err := renderPreview(previewInput{
-		producer: r.producer, consumer: r.route.Consumer, release: r.release, target: target,
+		producer: r.producer, consumer: r.route.Consumer, release: sp.release, target: target,
 		check: chk, steps: steps, userPrefix: in.BranchPrefix,
 	})
 	if err != nil {

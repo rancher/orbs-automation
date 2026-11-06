@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
@@ -122,7 +123,8 @@ type TargetPlan struct {
 	Line      string   `json:"line,omitempty"`
 	Current   string   `json:"current"` // what the consumer holds now
 	File      string   `json:"-"`       // the file the method edits; the plan carries it once
-	Want      string   `json:"-"`       // what it should hold; the same for every branch
+	Release   string   `json:"release"` // the tag of the release that goes to this branch
+	Want      string   `json:"want"`    // what it should hold for that release
 	Status    Status   `json:"status"`
 	Downgrade bool     `json:"downgrade,omitempty"` // the release is older than what the consumer holds
 	Blockers  []string `json:"blockers,omitempty"`
@@ -147,22 +149,25 @@ func (t TargetPlan) Key() string {
 // branches, and whether anything stands in the way. It is read-only, and
 // nothing was written to produce it.
 type Plan struct {
-	Producer string  `json:"producer"` // the repository slug
-	Release  Release `json:"release"`
-	Consumer string  `json:"consumer"` // the repository slug
-	Method   string  `json:"method"`   // the consumer's update method
-	Strategy string  `json:"strategy"` // what the method uses to read and write the value
-	File     string  `json:"file"`     // the consumer's file the strategy edits
-	Want     string  `json:"want"`     // what the consumer should hold for the release
-	DryRun   bool    `json:"dryRun"`   // the run was a dry run: no branch or PR is created
+	Producer string `json:"producer"` // the repository slug
+	// Releases are the releases that go to the targets, each once, in the order
+	// of the targets. One when every target gets the same, as for a producer that
+	// is not tied to release lines; several when each line gets its own.
+	Releases []Release `json:"releases"`
+	Consumer string    `json:"consumer"`       // the repository slug
+	Method   string    `json:"method"`         // the consumer's update method
+	Strategy string    `json:"strategy"`       // what the method uses to read and write the value
+	File     string    `json:"file"`           // the consumer's file the strategy edits
+	Want     string    `json:"want,omitempty"` // what the consumer should hold, when every target is to hold the same
+	DryRun   bool      `json:"dryRun"`         // the run was a dry run: no branch or PR is created
 	// Refresh says --refresh was given, so the report does not suggest it.
-	Refresh  bool             `json:"refresh,omitempty"`
-	NoPush   bool             `json:"noPush"` // the run stops after the commit, with the branch left in the clone; never set with DryRun
-	Status   Status           `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
-	Targets  []TargetPlan     `json:"targets"`
-	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
-	Images   *registry.Report `json:"images,omitempty"`   // checked once, and only when some target needs a PR
-	Warnings []string         `json:"warnings,omitempty"`
+	Refresh  bool            `json:"refresh,omitempty"`
+	NoPush   bool            `json:"noPush"` // the run stops after the commit, with the branch left in the clone; never set with DryRun
+	Status   Status          `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
+	Targets  []TargetPlan    `json:"targets"`
+	Blockers []string        `json:"blockers,omitempty"` // in the way of the whole release
+	Images   []ReleaseImages `json:"images,omitempty"`   // one check for each release that some target needs a PR for
+	Warnings []string        `json:"warnings,omitempty"`
 	// Clone and Remote are the engineer's clone of the consumer and its upstream
 	// remote, set by Ship when it made commits, so the report can say how to
 	// review them.
@@ -172,6 +177,25 @@ type Plan struct {
 	// at the open PRs.
 	Push *PushTarget `json:"push,omitempty"`
 }
+
+// ReleaseImages is the check of the images of one release.
+type ReleaseImages struct {
+	Release string `json:"release"` // the tag
+	registry.Report
+}
+
+// ReleaseOf is the release of a tag the plan ships.
+func (p Plan) ReleaseOf(tag string) Release {
+	for _, r := range p.Releases {
+		if r.Tag == tag {
+			return r
+		}
+	}
+	return Release{Tag: tag}
+}
+
+// Uniform reports whether every target gets the same release.
+func (p Plan) Uniform() bool { return len(p.Releases) <= 1 }
 
 // Check runs the state check for in. It resolves the release, finds the
 // consumer, and for each target branch reads what the consumer holds through the
@@ -188,46 +212,75 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	if err != nil {
 		return Plan{}, resolution{}, err
 	}
-	branches, named, err := res.branches(in)
+	specs, named, err := res.specs(in)
 	if err != nil {
 		return Plan{}, resolution{}, err
 	}
 	plan := Plan{
-		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.route.Consumer.Repo.Name,
+		Producer: res.producer.Repo.Name, Consumer: res.route.Consumer.Repo.Name,
 		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
+	}
+	for _, sp := range specs {
+		if !slices.ContainsFunc(plan.Releases, func(r Release) bool { return r.Tag == sp.release.Tag }) {
+			plan.Releases = append(plan.Releases, sp.release)
+		}
 	}
 	header := plan
 	emit(sink, Event{Kind: EventResolved, Plan: &header})
-	needsPR := false
-	for _, branch := range branches {
-		tp, err := res.checkTarget(ctx, ws, branch, in)
+	var needsPR []string // the tags of the releases that some target needs a PR for
+	for _, sp := range specs {
+		tp, err := res.checkTarget(ctx, ws, sp, in)
 		if err != nil {
 			if named {
 				return Plan{}, resolution{}, err // asked for this branch, so not being able to read it is the answer
 			}
 			// One branch of several that could not be read does not stop the
 			// others: it is reported as failed.
-			tp = TargetPlan{Target: Target{Branch: branch}, Line: res.route.Consumer.LineOfBranch(branch), Status: StatusFailed, Error: err.Error()}
+			tp = TargetPlan{Target: Target{Branch: sp.branch}, Line: res.route.Consumer.LineOfBranch(sp.branch), Release: sp.release.Tag, Status: StatusFailed, Error: err.Error()}
 		}
-		needsPR = needsPR || tp.Status == StatusReady
-		if plan.Want == "" {
-			plan.File, plan.Want = tp.File, tp.Want // the same for every branch
+		if tp.Status == StatusReady && !slices.Contains(needsPR, sp.release.Tag) {
+			needsPR = append(needsPR, sp.release.Tag)
+		}
+		if plan.File == "" {
+			plan.File = tp.File
 		}
 		plan.Targets = append(plan.Targets, tp)
 		checked := tp
 		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Line: tp.Line, Target: &checked})
 	}
 	emit(sink, Event{Kind: EventTargetsChecked})
-	if needsPR {
-		images := registry.CheckProject(ctx, res.producer, prober, res.release.Tag)
-		plan.Images, plan.Warnings = &images, images.Warnings
+	plan.Want = sharedWant(plan.Targets)
+	for _, tag := range needsPR {
+		images := registry.CheckProject(ctx, res.producer, prober, tag)
+		plan.Images = append(plan.Images, ReleaseImages{Release: tag, Report: images})
+		plan.Warnings = append(plan.Warnings, images.Warnings...)
 		if images.Failed() {
-			plan.Blockers = append(plan.Blockers, "images: the release is not fully published")
+			blocker := "images: the release is not fully published"
+			if !plan.Uniform() {
+				blocker = "images: " + tag + " is not fully published"
+			}
+			plan.Blockers = append(plan.Blockers, blocker)
 		}
-		emit(sink, Event{Kind: EventImagesChecked, Images: &images})
+		emit(sink, Event{Kind: EventImagesChecked, Release: tag, Images: &images})
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil
+}
+
+// sharedWant is what every target is to hold, or "" when they differ or none was
+// read.
+func sharedWant(targets []TargetPlan) string {
+	want := ""
+	for _, t := range targets {
+		switch {
+		case t.Want == "":
+		case want == "":
+			want = t.Want
+		case want != t.Want:
+			return ""
+		}
+	}
+	return want
 }
 
 // overall is the state of the whole plan.
