@@ -147,16 +147,20 @@ func (t TargetPlan) Key() string {
 // branches, and whether anything stands in the way. It is read-only, and
 // nothing was written to produce it.
 type Plan struct {
-	Producer string           `json:"producer"` // the repository slug
-	Release  Release          `json:"release"`
-	Consumer string           `json:"consumer"` // the repository slug
-	Method   string           `json:"method"`   // the consumer's update method
-	Strategy string           `json:"strategy"` // what the method uses to read and write the value
-	File     string           `json:"file"`     // the consumer's file the strategy edits
-	Want     string           `json:"want"`     // what the consumer should hold for the release
-	DryRun   bool             `json:"dryRun"`   // the run was a dry run: no branch or PR is created
-	NoPush   bool             `json:"noPush"`   // the run stops after the commit, with the branch left in the clone; never set with DryRun
-	Status   Status           `json:"status"`   // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
+	Producer string  `json:"producer"` // the repository slug
+	Release  Release `json:"release"`
+	Consumer string  `json:"consumer"` // the repository slug
+	Method   string  `json:"method"`   // the consumer's update method
+	Strategy string  `json:"strategy"` // what the method uses to read and write the value
+	File     string  `json:"file"`     // the consumer's file the strategy edits
+	Want     string  `json:"want"`     // what the consumer should hold for the release
+	DryRun   bool    `json:"dryRun"`   // the run was a dry run: no branch or PR is created
+	// Refresh says --refresh was given, so the report does not suggest it.
+	//
+	// STUB: never set until a later commit.
+	Refresh  bool             `json:"refresh,omitempty"`
+	NoPush   bool             `json:"noPush"` // the run stops after the commit, with the branch left in the clone; never set with DryRun
+	Status   Status           `json:"status"` // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
 	Targets  []TargetPlan     `json:"targets"`
 	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
 	Images   *registry.Report `json:"images,omitempty"`   // checked once, and only when some target needs a PR
