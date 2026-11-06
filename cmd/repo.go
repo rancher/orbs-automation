@@ -157,10 +157,14 @@ is not found or a registry could not be reached.`,
 		statusCmd,
 		branchCmd,
 		&cobra.Command{
-			Use:   "current-tags",
-			Short: "Resolve branch and previous tags from the repository state",
-			Long: `Print the branch tag, the static tag for this commit and the previous
-static tag, for refs/heads/main and refs/heads/release/<version>.
+			Use:     "build-tags",
+			Aliases: []string{"current-tags"}, // its first name, which a workflow may still use
+			Short:   "Name the tags of a build of this branch's head, and the previous one",
+			Long: `Print the tags for a build of the head of this branch, for refs/heads/main and
+refs/heads/release/<version>: the rolling tag of the branch (branch_tag), the
+fixed tag for this commit (branch_static_tag), and the previous fixed tag
+(prev_static_tag), which a release tool such as goreleaser can use as the start
+of its changelog when it cannot work out the right one itself.
 
 The ref and commit come from GITHUB_REF and GITHUB_SHA when both are set,
 else from the git repository in the current directory.`,
