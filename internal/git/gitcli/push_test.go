@@ -2,6 +2,7 @@ package gitcli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -113,4 +114,41 @@ func TestPushReachesTheEngineersCredentialsAndNothingSecret(t *testing.T) {
 	assert.NotContains(t, env, "secret-token")
 	assert.NotContains(t, env, "another-secret")
 	assert.True(t, strings.Contains(env, "GIT_TERMINAL_PROMPT=0"), "git may not prompt on a terminal")
+}
+
+// TestPushSpikeToARealRemote pushes a throwaway branch to a real remote, through
+// whatever credentials this machine has, and deletes it again. It settles what no
+// local test can: that the variables Push passes on reach the engineer's SSH
+// agent or credential helper. It is skipped unless GERO_SPIKE_PUSH_URL names a
+// repository that is safe to push a branch to, such as a scratch fork:
+//
+//	GERO_SPIKE_PUSH_URL=git@github.com:you/scratch.git go test ./internal/git/gitcli -run PushSpike -v
+//
+// An https URL needs a credential helper (gh auth setup-git), since prompts are
+// off.
+func TestPushSpikeToARealRemote(t *testing.T) {
+	url := os.Getenv("GERO_SPIKE_PUSH_URL")
+	if url == "" {
+		t.Skip("set GERO_SPIKE_PUSH_URL to a scratch repository to run the push spike")
+	}
+	requireGit(t)
+	dir := t.TempDir()
+	run(t, dir, "init", "--quiet", "--initial-branch=main")
+	run(t, dir, "config", "user.name", "gero spike")
+	run(t, dir, "config", "user.email", "spike@example.invalid")
+	write(t, dir, "spike.txt", "gero push spike\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "--quiet", "-m", "gero push spike")
+	run(t, dir, "remote", "add", "spike", url)
+	branch := "gero-spike-" + strings.ReplaceAll(t.Name(), "/", "-") + "-" + filepath.Base(dir)
+	run(t, dir, "checkout", "--quiet", "-b", branch)
+	t.Cleanup(func() { // best effort, with the full environment: a leftover branch is harmless but untidy
+		_ = exec.Command("git", "-C", dir, "push", "--quiet", "spike", "--delete", branch).Run()
+	})
+
+	require.NoError(t, Push(ctx, dir, "spike", branch))
+
+	remote := run(t, dir, "ls-remote", "--heads", "spike", branch)
+	assert.Contains(t, remote, "refs/heads/"+branch, "the branch is on the real remote")
+	assert.Contains(t, remote, run(t, dir, "rev-parse", "HEAD"))
 }

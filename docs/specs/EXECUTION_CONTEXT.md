@@ -59,7 +59,9 @@ The actor is who the commits and the PRs are attributed to. It is two things tha
 
 ## Push credentials and signing
 
-**Push uses the `git` binary through `internal/git/gitcli` (leaning).** Reading refs, committing and cloning stay with go-git ([GITHUB_ACCESS](GITHUB_ACCESS.md)). A push needs what go-git does not carry: the engineer's SSH agent and `~/.ssh/config`, credential helpers and hooks on a workstation, and a token over HTTPS in CI. This is the kind of operation the escape hatch exists for, and the reason is recorded next to the code. In CI the token reaches `git` through `internal/execx`'s scrubbed environment as a one-shot credential, never written to a remote URL or to disk. **(unverified)** needs a spike against a real fork and a real HTTPS remote. Which remote a push goes to is in [PUSH_TO_REPO](PUSH_TO_REPO.md).
+**Push uses the `git` binary through `internal/git/gitcli` (leaning).** Reading refs, committing and cloning stay with go-git ([GITHUB_ACCESS](GITHUB_ACCESS.md)). A push needs what go-git does not carry: the engineer's SSH agent and `~/.ssh/config`, credential helpers and hooks on a workstation, and a token over HTTPS in CI. This is the kind of operation the escape hatch exists for, and the reason is recorded next to the code. In CI the token reaches `git` through `internal/execx`'s scrubbed environment as a one-shot credential, never written to a remote URL or to disk. Which remote a push goes to is in [PUSH_TO_REPO](PUSH_TO_REPO.md).
+
+**What is built and what is not.** `gitcli.Push` is the script's `git push -u <remote> <branch>`, never forced, with prompts off (`GIT_TERMINAL_PROMPT=0`) so a missing credential fails at once. On a workstation git does the authenticating itself, with the engineer's SSH agent, `~/.ssh/config` and credential helpers; `execx` scrubs the environment, so `Push` passes on only the variables that reach them (`SSH_AUTH_SOCK`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS` and the `GIT_CONFIG_*` file variables) and never a token. That is tested against local bare repositories, including that a diverged remote is rejected and left alone and that the environment is what is described. **(unverified)** against a real remote: `TestPushSpikeToARealRemote` pushes a throwaway branch and deletes it, and runs only when `GERO_SPIKE_PUSH_URL` names a scratch repository. The CI path, a token as a one-shot credential over HTTPS, is not built and is part of `gero ci:ship`.
 
 **Signing is off by default and opt-in for humans.** Signed commits are not required by the target repositories. An engineer who wants them sets `signCommits: true` in the user file (or `GERO_SIGN_COMMITS=true`) **(leaning)**.
 
@@ -86,7 +88,7 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 ## Not built yet
 
 * Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`) but only `gero doctor` (the `commit-identity` check) calls it so far. The cross-repo token check (`cigate.RequireCrossRepoToken`), the workstation-signs detection (`clicfg.WorkstationSigns`) and the `auth status` fallback for installation tokens exist too, and likewise wait for a command to call them. The fallback treats a 403 from `GET /user` as an installation token and is unverified against a real one.
-* The `gitcli` push and the `signCommits` key. Signing through `git` is in `gitcli.CommitChanges` (its `Sign` option) and waits for the key.
+* The `signCommits` key, and the push as a step of `ship` (`gitcli.Push` exists). Signing through `git` is in `gitcli.CommitChanges` (its `Sign` option) and waits for the key.
 * The write-command contract: preflight line, the work branch or worktree, the confirmation and `--non-interactive`.
 * Any write command at all. These are the rules the first one is built against.
 
