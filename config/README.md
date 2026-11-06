@@ -46,6 +46,7 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `updateMethods[].preEdit`, `postEdit` | none |
 | `updateMethods[].allowedParams[].required` | true, unless the entry has a `default` |
 | `pullRequests.labels` | none |
+| `pullRequests.pushTo` | none: `fork` or `upstream`, for a repository that is only ever pushed to one way; the flag and the user's settings come first |
 | `pullRequests.botLabels` | none: applied only to a PR the bot opens, such as `origin/bot` |
 
 `release.requiresPrerelease` is off unless a project opts in. Stricter release verification is opt-in, which also leaves room for more checks later.

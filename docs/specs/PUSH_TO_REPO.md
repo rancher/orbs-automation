@@ -166,14 +166,13 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
-* The use of the PR service by `ship` (the service itself is built), the check for open PRs the new one would supersede, and the push-target layers above (only the `fork` setting and `gitcli.Push` exist).
+* The use of the PR service by `ship` (the service itself is built), the check for open PRs the new one would supersede, and its wiring into the command (the push-target layers, `botLabels` and the `--push-to` flag are built and reach `Ship`; the GitHub credentials and the confirmation are not).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
 ## Open questions
 
 * Whether a PR that is open at the same version but out of date (its base has moved on) should be refreshed: rebuilt from the latest head of the target and pushed with `--force-with-lease`. That is an exception to never forcing, so it would be explicit (a flag), limited to the actor's own branch and to a branch that has only our commits. Not designed.
 * Whether the default PR title should carry something that identifies the tooling. Identity is the marker, the author and, in shared repositories, a label such as `origin/bot`; a title is a project's own convention, and matching on it is fragile.
-* The names of the push-target settings (`pushTo`, `repos.overrides.<slug>.pushTo`, `pullRequests.pushTo`) and of the flag are proposals until they are built.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
 * The shape of `gero ci:ship` (above).
 * Whether a clean clone with untracked files should be worked in place when none collide, as designed here, or sent to a worktree whenever there are any.

@@ -85,12 +85,14 @@ File-only keys, all **(leaning)**:
 
 | File key | Meaning |
 |---|---|
-| `fork` | Remote that holds the developer's fork; where `gero` pushes branches |
+| `fork` | Remote that holds the developer's fork |
+| `pushTo` | Where `gero ship` pushes branches, `fork` or `upstream`. Without it, the fork when one is set, else the upstream ([PUSH_TO_REPO](PUSH_TO_REPO.md#where-the-branch-is-pushed)) |
 | `githubUser` | Used to build fork refs for PRs |
 | `branchPrefix` | Prefix for branches `gero` creates (for example `dan/`) |
 | `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
 | `repos.search` | Directories scanned to depth 2 for clones, matched to slugs by remote URL. No directory layout is assumed |
 | `repos.overrides.<slug>.upstream` | Per-repo upstream remote name |
+| `repos.overrides.<slug>.pushTo` | Per-repo `pushTo`, which beats the project's and the user's own |
 
 ```yaml
 # All keys optional. Unknown keys are an error. No secrets.
@@ -101,6 +103,7 @@ upstream: upstream
 fork: origin
 githubUser: danpock
 branchPrefix: dan/
+pushTo: fork
 repos:
   search:
     - ~/GitProjects/SUSE
@@ -109,6 +112,7 @@ repos:
   overrides:
     rancher/scc-operator:
       upstream: rancher
+      pushTo: upstream
 ```
 
 ## Locating the central application config
