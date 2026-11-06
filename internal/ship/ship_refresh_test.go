@@ -252,6 +252,6 @@ func TestRefreshIsPartOfWhatTheConfirmationAsksAbout(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, q.got, 1)
-	assert.Equal(t, []string{"release/v2.15"}, q.got[0].Refreshes)
+	assert.Equal(t, []string{"v2.15"}, q.got[0].Refreshes, "named by line, as the report names it")
 	assert.Empty(t, q.got[0].Opens)
 }
