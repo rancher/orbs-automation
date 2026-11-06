@@ -73,6 +73,7 @@ type Inputs struct {
 // RepoOverride holds per-repo settings from repos.overrides.
 type RepoOverride struct {
 	Upstream string
+	PushTo   string // fork or upstream: where branches for this repo are pushed
 }
 
 // Repos locates local clones of the repositories named in the central config.
@@ -92,6 +93,7 @@ type Settings struct {
 	Fork         string // remote holding the developer's fork
 	GitHubUser   string
 	BranchPrefix string
+	PushTo       string // fork or upstream: where branches are pushed, unless a repo or the flag says
 	Repos        Repos
 	UserFile     string // path of the user file that was loaded; empty when none applied
 	CI           bool   // the process runs in CI rather than on a workstation

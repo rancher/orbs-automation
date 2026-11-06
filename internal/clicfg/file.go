@@ -19,6 +19,7 @@ type fileConfig struct {
 	Fork         string    `yaml:"fork"`
 	GitHubUser   string    `yaml:"githubUser"`
 	BranchPrefix string    `yaml:"branchPrefix"`
+	PushTo       string    `yaml:"pushTo"`
 	Repos        fileRepos `yaml:"repos"`
 }
 
@@ -30,6 +31,7 @@ type fileRepos struct {
 
 type fileRepoOverride struct {
 	Upstream string `yaml:"upstream"`
+	PushTo   string `yaml:"pushTo"`
 }
 
 // userFileLabel is how an error names the user file: its path, or "user config"
