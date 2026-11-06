@@ -17,7 +17,7 @@ What a consumer edits, and how, is the consumer's update methods and the produce
 * `--prerelease` lets prereleases count: when resolving a line, and for a prerelease tag that the consumer's method would refuse (`accept.when` is `stable`).
 * The routes out of the producer are its `downstream` edges. `--to <consumer>` picks one consumer when there are several, and `--method` one method when it uses several of the same consumer's.
 * **Which branches.** Without `--branch`, every branch of the consumer that the release goes to is checked, in config order, newest first. The edge's `lines` decides which, and an omitted one is worked out from the producer: a **universal** edge (the default for a producer that lists no `release.lines`, since its releases belong to no line) goes to every release branch of the consumer, and one that **follows lines** (the default for a producer with lines) goes to the consumer's branch for the line the release is in. A release in no line of the producer, or a line the consumer lacks, has no branch to go to, and the error says to name one. `--branch <target>` limits the run to that one branch, which may be any branch the consumer has.
-* `--allow-downgrade` ships a release older than what a branch holds. `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` skips the one confirmation.
+* `--allow-downgrade` ships a release older than what a branch holds. `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` skips the one confirmation. `--no-push` does everything up to and including the commit, leaves the branch in your clone for review, and stops before the push and the PR; it is what the script's `--dry-run` was, and it is not `--dry-run`, which writes nothing.
 
 ## The state check
 
@@ -70,6 +70,8 @@ Per target branch, newest first:
 
 `--dry-run` runs steps 1 to 4 in a temporary worktree and prints what 5 and 6 would do. It never pushes a branch or opens a PR, and it never moves the engineer's checkout. The worktree and its branch are removed afterwards. The report says it was a dry run.
 
+`--no-push` runs steps 1 to 4 for real and stops, so the engineer can review the commit and push it later. The branch is kept, whichever place it was prepared in, and the report names it and the command to see the change (`git diff <upstream>/<target>...<branch>`). A dirty clone still gets a worktree, which is removed while the branch stays. `--no-push` with `--dry-run` is a dry run.
+
 ## Preparing the branch
 
 The consumer's clone is found as for every command ([WORKSPACE](WORKSPACE.md#resolving-repo-paths)). With none, the command fails and says to clone it or set `repos.paths.<slug>`; it never clones for itself. Each target branch is prepared the same way:
@@ -77,7 +79,7 @@ The consumer's clone is found as for every command ([WORKSPACE](WORKSPACE.md#res
 1. **Fetch** the one upstream branch the state check read: objects only, so no local branch and nothing in the working tree moves. The new branch starts at the commit the state check read. If the branch has moved since, the check is read again before anything is written.
 2. **Pick where to work**, once per run from the state the clone is in:
    * **In place**, when the clone is clean and this is not a dry run: `git switch -c <branch> <commit>` in the engineer's own checkout.
-   * **A temporary worktree** otherwise: `git worktree add -b <branch> <dir> <commit>` under the temp directory. The engineer's checkout is not touched at all. A dry run always works here.
+   * **A temporary worktree** otherwise: `git worktree add -b <branch> <dir> <commit>` under the temp directory. The engineer's checkout is not touched at all. A dry run always works here, and removes the branch with it.
 3. **Clean** means: HEAD is a branch (not detached), no merge, rebase, cherry-pick or bisect is in progress, and no tracked file is staged, modified or deleted. Untracked files are allowed, unless one would be overwritten by the target branch's tree, which sends the run to a worktree instead.
 4. **The commit holds only what the run changed.** Staging is every tracked file the edit and the steps changed, plus untracked files that appeared during the run, never the engineer's own untracked files.
 5. **Afterwards, in place:** the branch the engineer started on is checked out again, and the new branch stays in the repository, since it is what gets pushed. A worktree is removed whatever happened.
