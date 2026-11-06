@@ -34,9 +34,9 @@ type PushRemotes struct {
 
 // PushTarget is where a branch will be pushed, and what decided it.
 type PushTarget struct {
-	Role   PushRole
-	Remote string // the remote's name
-	Source string // the layer that decided, for the report
+	Role   PushRole `json:"role"`
+	Remote string   `json:"remote"` // the remote's name
+	Source string   `json:"source"` // the layer that decided, for the report
 }
 
 // resolvePushTarget decides where to push. In CI the answer is always the

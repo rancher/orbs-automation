@@ -35,6 +35,7 @@ type fakeWorkspace struct {
 	asked      []string
 	cloneDir   string // the engineer's clone, for Ship
 	cloneErr   error
+	push       PushSettings
 }
 
 // Project returns the producer with the edges of the links, as the loaded config
@@ -69,6 +70,9 @@ func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
 func (f *fakeWorkspace) CloneDir(string) (string, error) { return f.cloneDir, f.cloneErr }
 
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
+
+// PushSettings answers from the field.
+func (f *fakeWorkspace) PushSettings(string) PushSettings { return f.push }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
 	f.asked = append(f.asked, "refs "+slug)

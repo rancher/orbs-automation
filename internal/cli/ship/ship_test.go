@@ -71,6 +71,8 @@ func (f *fakeWorkspace) CloneDir(string) (string, error) { return "/clone", f.cl
 
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
+func (f *fakeWorkspace) PushSettings(string) domain.PushSettings { return domain.PushSettings{} }
+
 type fakeProber struct{ result registry.Result }
 
 func (f fakeProber) Exists(context.Context, string, string, string) registry.Result { return f.result }

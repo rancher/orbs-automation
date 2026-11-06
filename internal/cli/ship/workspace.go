@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -20,6 +21,15 @@ func (w shipWorkspace) CloneDir(slug string) (string, error) {
 		return "", fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
 	}
 	return rp.Path, nil
+}
+
+// PushSettings are the user's settings that decide where a branch for slug is
+// pushed.
+func (w shipWorkspace) PushSettings(slug string) domain.PushSettings {
+	p := w.Workspace.PushSettings(slug)
+	return domain.PushSettings{
+		UserRepo: p.UserRepo, UserDefault: p.UserDefault, Fork: p.Fork, Upstream: p.Upstream, GitHubUser: p.GitHubUser,
+	}
 }
 
 // Remote is the name of the upstream remote of slug.

@@ -47,6 +47,19 @@ type Workspace interface {
 	// Remote is the name of the remote of a repository's clone that is its
 	// upstream.
 	Remote(slug string) (string, error)
+	// PushSettings are the user's settings that decide where a branch for a
+	// repository is pushed.
+	PushSettings(slug string) PushSettings
+}
+
+// PushSettings are the user's settings that decide where a branch is pushed, as
+// the workspace has them.
+type PushSettings struct {
+	UserRepo    string // repos.overrides.<slug>.pushTo
+	UserDefault string // pushTo
+	Fork        string // the remote that holds the engineer's fork
+	Upstream    string // the remote that is the real repository
+	GitHubUser  string // the owner of the fork, for a PR's head
 }
 
 // Input is what the user asked to ship.
@@ -60,6 +73,13 @@ type Input struct {
 	// DryRun is the invocation's --dry-run: compute and report, and create no
 	// branch or PR. It is carried into the plan so the report says which it is.
 	DryRun bool
+	// PushTo is --push-to: fork or upstream, or "" to let the settings decide.
+	//
+	// STUB: not used until a later commit.
+	PushTo string
+	// CI says the actor is the bot, in CI: it always pushes to the upstream and
+	// the bot's labels are added.
+	CI bool
 	// NoPush stops after the commit: the branch is left in the clone for review,
 	// and nothing is pushed and no PR is created. With DryRun it is a dry run.
 	NoPush bool
@@ -132,6 +152,9 @@ type Plan struct {
 	// review them.
 	Clone  string `json:"clone,omitempty"`
 	Remote string `json:"remote,omitempty"`
+	// Push is where the branches are pushed, or would be, set when the run looks
+	// at the open PRs.
+	Push *PushTarget `json:"push,omitempty"`
 }
 
 // Check runs the state check for in. It resolves the release, finds the
