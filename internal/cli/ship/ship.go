@@ -253,7 +253,7 @@ func groupTargets(targets []domain.TargetPlan, texts func(domain.TargetPlan) []s
 				groups = append(groups, group{text: text})
 				i = len(groups) - 1
 			}
-			groups[i].branches = append(groups[i].branches, t.Branch)
+			groups[i].branches = append(groups[i].branches, t.Key())
 		}
 	}
 	return groups

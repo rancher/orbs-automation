@@ -25,9 +25,9 @@ func (l logSink) Event(e domain.Event) {
 			slog.String("producer", e.Plan.Producer), slog.String("release", e.Plan.Release.Tag),
 			slog.String("consumer", e.Plan.Consumer), slog.String("method", e.Plan.Method))
 	case domain.EventTargetChecked:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "target checked",
-			slog.String("branch", e.Branch), slog.String("status", string(e.Target.Status)),
-			slog.String("current", e.Target.Current), slog.String("want", e.Target.Want))
+		l.log.LogAttrs(ctx, slog.LevelInfo, "target checked", about(e,
+			slog.String("status", string(e.Target.Status)),
+			slog.String("current", e.Target.Current), slog.String("want", e.Target.Want))...)
 	case domain.EventImagesChecked:
 		level, failed := slog.LevelInfo, e.Images.Failed()
 		if failed {
@@ -35,17 +35,14 @@ func (l logSink) Event(e domain.Event) {
 		}
 		l.log.LogAttrs(ctx, level, "images checked", slog.Int("rows", len(e.Images.Rows)), slog.Bool("failed", failed))
 	case domain.EventTargetStarted:
-		attrs := []slog.Attr{slog.String("branch", e.Branch), slog.String("place", string(e.Place))}
+		attrs := about(e, slog.String("place", string(e.Place)))
 		if e.Reason != "" {
 			attrs = append(attrs, slog.String("reason", e.Reason))
 		}
 		l.log.LogAttrs(ctx, slog.LevelInfo, "target started", attrs...)
 	case domain.EventDecided:
 		level := slog.LevelInfo
-		attrs := []slog.Attr{
-			slog.String("branch", e.Branch), slog.String("action", string(e.Decision.Action)),
-			slog.Int("supersede", len(e.Decision.Supersede)),
-		}
+		attrs := about(e, slog.String("action", string(e.Decision.Action)), slog.Int("supersede", len(e.Decision.Supersede)))
 		if e.Decision.Open != nil {
 			attrs = append(attrs, slog.Int("open", e.Decision.Open.Number))
 		}
@@ -55,24 +52,18 @@ func (l logSink) Event(e domain.Event) {
 		}
 		l.log.LogAttrs(ctx, level, "decided", attrs...)
 	case domain.EventPushed:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "pushed", slog.String("branch", e.Branch), slog.String("remote", e.Remote))
+		l.log.LogAttrs(ctx, slog.LevelInfo, "pushed", about(e, slog.String("remote", e.Remote), slog.String("new_branch", e.NewBranch))...)
 	case domain.EventPROpened:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "pr opened",
-			slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))
+		l.log.LogAttrs(ctx, slog.LevelInfo, "pr opened", about(e, slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))...)
 	case domain.EventRefreshed:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "refreshed",
-			slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))
+		l.log.LogAttrs(ctx, slog.LevelInfo, "refreshed", about(e, slog.Int("pr", e.PR.Number), slog.String("url", e.PR.URL))...)
 	case domain.EventSuperseded:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "superseded", slog.String("branch", e.Branch), slog.Int("pr", e.PR.Number))
+		l.log.LogAttrs(ctx, slog.LevelInfo, "superseded", about(e, slog.Int("pr", e.PR.Number))...)
 	case domain.EventCommit:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "commit",
-			slog.String("branch", e.Branch), slog.String("commit", e.Commit.Hash), slog.String("subject", e.Commit.Subject))
+		l.log.LogAttrs(ctx, slog.LevelInfo, "commit", about(e, slog.String("commit", e.Commit.Hash), slog.String("subject", e.Commit.Subject))...)
 	case domain.EventTargetDone:
 		level := slog.LevelInfo
-		attrs := []slog.Attr{
-			slog.String("branch", e.Branch), slog.String("status", string(e.Result.Status)),
-			slog.String("new_branch", e.Result.Branch),
-		}
+		attrs := about(e, slog.String("status", string(e.Result.Status)), slog.String("new_branch", e.Result.Branch))
 		if e.Result.Error != "" {
 			level = slog.LevelWarn
 			attrs = append(attrs, slog.String("error", e.Result.Error))
@@ -88,6 +79,16 @@ func (l logSink) Event(e domain.Event) {
 		l.log.LogAttrs(ctx, slog.LevelInfo, "ship done",
 			slog.String("status", string(e.Plan.Status)), slog.Int("blockers", len(e.Plan.Blockers)))
 	}
+}
+
+// about is the attributes that say which target an event is about: its branch and,
+// when it is in one, its Rancher line.
+func about(e domain.Event, rest ...slog.Attr) []slog.Attr {
+	attrs := []slog.Attr{slog.String("branch", e.Branch)}
+	if e.Line != "" {
+		attrs = append(attrs, slog.String("line", e.Line))
+	}
+	return append(attrs, rest...)
 }
 
 // sinks sends each event to every sink, in order, skipping the nil ones.

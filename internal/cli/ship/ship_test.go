@@ -675,7 +675,7 @@ func TestRenderTextShowsEachStepOfPublishingAndTheLinkToThePR(t *testing.T) {
 	out := renderText(p, false)
 
 	for _, want := range []string{
-		"release/v2.15: pushed to origin",
+		"release/v2.15: pushed bot/scc-operator-v0.5.3-v2.15 to origin",
 		"release/v2.15: opened #104 https://github.com/rancher/rancher/pull/104",
 		"release/v2.15: closed #101",
 		"opened",
@@ -879,7 +879,7 @@ func TestRenderTextARefreshedPRIsShownWithItsNewCommits(t *testing.T) {
 	out := renderText(p, false)
 
 	assert.Contains(t, out, "release/v2.15: refreshed #104 https://github.com/rancher/rancher/pull/104")
-	assert.Contains(t, out, "release/v2.15: pushed to origin")
+	assert.Contains(t, out, "release/v2.15: pushed bot/scc-operator-v0.5.3-v2.15 to origin")
 	assert.Contains(t, out, "refreshed")
 	assert.Contains(t, out, "Refreshed 1 PR.")
 	assert.NotContains(t, out, "git -C", "nothing is waiting in the clone to be reviewed")

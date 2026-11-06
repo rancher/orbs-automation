@@ -99,6 +99,8 @@ go-git cannot create linked worktrees or switch a checkout the way `git` does, s
 
 ## What a run reports
 
+A target is named in the report by its **Rancher line** (`v2.15`), which means the same in every project, and not by the consumer's branch (`release/v2.15`, or `main` for the development line), which does not. The branch is shown beside it in the tables, in the closing list of PRs as its base, and wherever it is a command to copy; a branch that is in no line is named by its branch. The same line is on every event and in the JSON (`line`). A push is reported with the branch it pushed, as `v2.15: pushed bot/scc-operator-v0.5.3-v2.15 to origin`.
+
 After the state check, each target that needs a PR gets a result, shown under the targets and carried in `--json`:
 
 | Result | Meaning |

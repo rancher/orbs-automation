@@ -56,13 +56,13 @@ func (h *humanSink) Event(e domain.Event) {
 	case domain.EventCommit:
 		h.out.Line(fmt.Sprintf("    %s  %s", git.Short(e.Commit.Hash), e.Commit.Subject))
 	case domain.EventPushed:
-		h.out.Line(fmt.Sprintf("  %s: pushed to %s", e.Branch, e.Remote))
+		h.out.Line(fmt.Sprintf("  %s: pushed %s to %s", name(e), e.NewBranch, e.Remote))
 	case domain.EventPROpened:
-		h.out.Line(fmt.Sprintf("  %s: opened #%d %s", e.Branch, e.PR.Number, e.PR.URL))
+		h.out.Line(fmt.Sprintf("  %s: opened #%d %s", name(e), e.PR.Number, e.PR.URL))
 	case domain.EventSuperseded:
-		h.out.Line(fmt.Sprintf("  %s: closed #%d", e.Branch, e.PR.Number))
+		h.out.Line(fmt.Sprintf("  %s: closed #%d", name(e), e.PR.Number))
 	case domain.EventRefreshed:
-		h.out.Line(fmt.Sprintf("  %s: refreshed #%d %s", e.Branch, e.PR.Number, e.PR.URL))
+		h.out.Line(fmt.Sprintf("  %s: refreshed #%d %s", name(e), e.PR.Number, e.PR.URL))
 	case domain.EventTargetDone:
 		h.done(e)
 	case domain.EventDone:
@@ -97,10 +97,10 @@ func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 		}
 		h.out.Line("")
 		h.out.Line("Targets")
-		h.out.BeginTable("BRANCH", "HEAD", "NOW", "STATUS")
+		h.out.BeginTable("LINE", "BRANCH", "HEAD", "NOW", "STATUS")
 		h.inTargets = true
 	}
-	h.out.Row(t.Branch, git.Short(t.Commit), t.Current, string(t.Status))
+	h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), t.Current, string(t.Status))
 	h.targets = append(h.targets, *t)
 }
 
@@ -117,7 +117,7 @@ func (h *humanSink) endTargets() {
 	}
 	for _, t := range h.targets {
 		if t.Error != "" {
-			h.out.Line(fmt.Sprintf("  %s failed: %s", t.Branch, t.Error))
+			h.out.Line(fmt.Sprintf("  %s failed: %s", t.Key(), t.Error))
 		}
 	}
 	for _, g := range groupTargets(h.targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
@@ -161,9 +161,9 @@ func (h *humanSink) pr() {
 	}
 	h.out.Line("")
 	h.out.Line("PR")
-	h.out.BeginTable("BRANCH", "NEW BRANCH", "TITLE")
+	h.out.BeginTable("LINE", "NEW BRANCH", "TITLE")
 	for _, t := range prs {
-		h.out.Row(t.Branch, t.Preview.Branch, t.Preview.Title)
+		h.out.Row(t.Key(), t.Preview.Branch, t.Preview.Title)
 	}
 	h.out.EndTable()
 	if labels := prs[0].Preview.Labels; len(labels) > 0 {
@@ -171,8 +171,8 @@ func (h *humanSink) pr() {
 	}
 	if h.full {
 		for _, t := range prs {
-			h.block("Commit message ("+t.Branch+")", t.Preview.CommitMessage)
-			h.block("Body ("+t.Branch+")", t.Preview.Body)
+			h.block("Commit message ("+t.Key()+")", t.Preview.CommitMessage)
+			h.block("Body ("+t.Key()+")", t.Preview.Body)
 		}
 	}
 }
@@ -205,15 +205,24 @@ func (h *humanSink) decided(e domain.Event) {
 	}
 	switch d.Action {
 	case domain.PublishBlocked:
-		h.out.Line(fmt.Sprintf("  %s: blocked by #%d, which is newer", e.Branch, d.Newer.Number))
+		h.out.Line(fmt.Sprintf("  %s: blocked by #%d, which is newer", name(e), d.Newer.Number))
 	case domain.PublishAlreadyOpen:
-		h.out.Line(fmt.Sprintf("  %s: already open as #%d%s", e.Branch, d.Open.Number, strings.Replace(closing, " #", ", and #", 1)))
+		h.out.Line(fmt.Sprintf("  %s: already open as #%d%s", name(e), d.Open.Number, strings.Replace(closing, " #", ", and #", 1)))
 	default:
 		if closing != "" {
 			closing = ", and" + closing
 		}
-		h.out.Line(fmt.Sprintf("  %s: a new PR%s", e.Branch, closing))
+		h.out.Line(fmt.Sprintf("  %s: a new PR%s", name(e), closing))
 	}
+}
+
+// name is what the report calls the target an event is about: its line, or its
+// branch when it is in none.
+func name(e domain.Event) string {
+	if e.Line != "" {
+		return e.Line
+	}
+	return e.Branch
 }
 
 // numbers lists PRs by number: #101, #90.
@@ -241,7 +250,7 @@ func (h *humanSink) started(e domain.Event) {
 			newBranch = t.Preview.Branch
 		}
 	}
-	h.out.Line(fmt.Sprintf("  %s: %s, %s", e.Branch, newBranch, e.Place))
+	h.out.Line(fmt.Sprintf("  %s: %s, %s", name(e), newBranch, e.Place))
 }
 
 func (h *humanSink) done(e domain.Event) {
@@ -249,9 +258,9 @@ func (h *humanSink) done(e domain.Event) {
 	r := e.Result
 	switch r.Status {
 	case domain.ResultFailed:
-		h.out.Line(fmt.Sprintf("  %s: failed: %s", e.Branch, r.Error))
+		h.out.Line(fmt.Sprintf("  %s: failed: %s", name(e), r.Error))
 	case domain.ResultBlocked:
-		h.out.Line(fmt.Sprintf("  %s: blocked: %s", e.Branch, r.Error))
+		h.out.Line(fmt.Sprintf("  %s: blocked: %s", name(e), r.Error))
 	case domain.ResultAlreadyOpen:
 		behind := ""
 		if r.BehindBy > 0 {
@@ -261,11 +270,11 @@ func (h *humanSink) done(e domain.Event) {
 		if r.Note != "" {
 			note = " (" + r.Note + ")"
 		}
-		h.out.Line(fmt.Sprintf("  %s: already open #%d %s%s%s", e.Branch, r.PR.Number, r.PR.URL, behind, note))
+		h.out.Line(fmt.Sprintf("  %s: already open #%d %s%s%s", name(e), r.PR.Number, r.PR.URL, behind, note))
 	case domain.ResultWouldRefresh:
-		h.out.Line(fmt.Sprintf("  %s: would refresh #%d", e.Branch, r.PR.Number))
+		h.out.Line(fmt.Sprintf("  %s: would refresh #%d", name(e), r.PR.Number))
 	default:
-		h.out.Line(fmt.Sprintf("  %s: %s", e.Branch, r.Status))
+		h.out.Line(fmt.Sprintf("  %s: %s", name(e), r.Status))
 	}
 }
 
@@ -303,7 +312,7 @@ func (h *humanSink) links(p *domain.Plan) {
 		}
 		switch r.Status {
 		case domain.ResultOpened, domain.ResultRefreshed, domain.ResultAlreadyOpen:
-			rows = append(rows, []string{string(r.Status), t.Branch, r.PR.URL})
+			rows = append(rows, []string{string(r.Status), t.Key(), t.Branch, r.PR.URL})
 		}
 	}
 	if len(rows) == 0 {
@@ -311,7 +320,7 @@ func (h *humanSink) links(p *domain.Plan) {
 	}
 	h.out.Line("")
 	h.out.Line("Pull requests")
-	h.out.BeginTable("RESULT", "BRANCH", "LINK")
+	h.out.BeginTable("RESULT", "LINE", "BASE", "LINK")
 	for _, row := range rows {
 		h.out.Row(row...)
 	}
@@ -324,10 +333,10 @@ func (h *humanSink) links(p *domain.Plan) {
 func (h *humanSink) commits(p *domain.Plan) {
 	h.out.Line("")
 	h.out.Line("Commits")
-	h.out.BeginTable("BRANCH", "RESULT", "WHERE", "NEW BRANCH")
+	h.out.BeginTable("LINE", "RESULT", "WHERE", "NEW BRANCH")
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil {
-			h.out.Row(t.Branch, string(r.Status), string(r.Place), r.Branch)
+			h.out.Row(t.Key(), string(r.Status), string(r.Place), r.Branch)
 		}
 	}
 	h.out.EndTable()
@@ -355,7 +364,7 @@ func (h *humanSink) commits(p *domain.Plan) {
 	}
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil && len(r.WouldSupersede) > 0 {
-			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Branch, refNumbers(r.WouldSupersede)))
+			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Key(), refNumbers(r.WouldSupersede)))
 		}
 	}
 	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string {
