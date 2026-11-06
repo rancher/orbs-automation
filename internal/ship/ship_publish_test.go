@@ -249,3 +249,76 @@ func TestShipARerunOfANoPushRunReportsTheExistingBranch(t *testing.T) {
 	assert.Equal(t, onlyResult(t, first).Commits, res.Commits)
 	assert.Equal(t, tip, runGit(t, clone, "rev-parse", botV215))
 }
+
+// mine is an existing PR of the actor's for the fixture's bump, with its head.
+func mine(number int, version string) pulls.PR {
+	p := existing(number, "danpock", version)
+	p.HeadOwner, p.HeadRef, p.Base = "danpock", botV215, "release/v2.15"
+	return p
+}
+
+func TestShipAnAlreadyOpenPRSaysHowFarBehindItIs(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.behind = 7
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, 7, res.BehindBy)
+	assert.True(t, lg.has("behind release/v2.15 danpock:"+botV215), "asked about the PR's own branch in the fork")
+	assert.False(t, branchExistsIn(t, clone, botV215), "and nothing was built: a rebuild needs --refresh")
+	assert.False(t, lg.has("push"))
+}
+
+func TestShipAnAlreadyOpenPRThatIsCurrentIsNotBehind(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	assert.Zero(t, onlyResult(t, plan).BehindBy)
+}
+
+func TestShipNotBeingAbleToTellHowFarBehindIsAWarning(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.behindErr = errors.New("rate limited")
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "behind")
+	assert.Contains(t, res.Warnings[0], "rate limited")
+}
+
+func TestShipADryRunAlsoSaysHowFarBehind(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{mine(104, "v0.5.3")}}
+	remote.behind = 3
+	in := realRun()
+	in.DryRun = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, 3, onlyResult(t, plan).BehindBy)
+}
+
+func TestShipAPRWithNoKnownHeadIsNotAskedAbout(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	gone := existing(104, "danpock", "v0.5.3") // the fork it was from is deleted: no head owner
+	remote.open = pulls.Open{PRs: []pulls.PR{gone}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
+	assert.False(t, lg.has("behind"))
+}
