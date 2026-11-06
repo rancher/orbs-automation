@@ -9,25 +9,58 @@ import (
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/rancher/orbs-automation/internal/yamledit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type fakeWorkspace struct {
-	producer config.Project
-	links    []config.Link
-	linksErr error
-	refs     map[string]git.Refs // by repository slug
-	refsErr  map[string]error
-	files    map[string]string // "slug@ref:path"
-	asked    []string
+// link is a route as the tests build it: the producer's edge, the consumer
+// project and the consumer's method. fakeWorkspace turns the links into a config
+// and the real update dispatcher engine.
+type link struct {
+	Consumer config.Project
+	Method   config.UpdateMethod
+	Edge     config.Edge
 }
 
-func (f *fakeWorkspace) Links(key string) (config.Project, []config.Link, error) {
-	f.asked = append(f.asked, "links "+key)
-	return f.producer, f.links, f.linksErr
+type fakeWorkspace struct {
+	producer   config.Project
+	links      []link
+	projectErr error
+	refs       map[string]git.Refs // by repository slug
+	refsErr    map[string]error
+	files      map[string]string // "slug@ref:path"
+	asked      []string
+}
+
+// Project returns the producer with the edges of the links, as the loaded config
+// has it.
+func (f *fakeWorkspace) Project(key string) (config.Project, error) {
+	f.asked = append(f.asked, "project "+key)
+	producer := f.producer
+	producer.Downstream = nil
+	for _, l := range f.links {
+		producer.Downstream = append(producer.Downstream, l.Edge)
+	}
+	return producer, f.projectErr
+}
+
+// Updates builds the real engine from the links, as the workspace does from the
+// loaded config.
+func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
+	producer := f.producer
+	producer.Downstream = nil
+	projects := []config.Project{producer}
+	for _, l := range f.links {
+		producer.Downstream = append(producer.Downstream, l.Edge)
+		consumer := l.Consumer
+		consumer.UpdateMethods = []config.UpdateMethod{l.Method}
+		projects = append(projects, consumer)
+	}
+	projects[0] = producer
+	return updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: projects})
 }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
@@ -63,8 +96,8 @@ func (f *fakeProber) Exists(_ context.Context, host, image, tag string) registry
 // riLink is the route from scc-operator to rancher's build-yaml-bump method, as
 // the config writes it: the consumer fixes the file, offers updateKey and value,
 // and the producer says which key and that the value is an image reference.
-func riLink(strategy string) config.Link {
-	return config.Link{
+func riLink(strategy string) link {
+	return link{
 		Consumer: config.Project{
 			Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
 			Release: config.Release{Branches: "perLine", Lines: []config.ProjectLine{{Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}},
@@ -85,7 +118,7 @@ func riLink(strategy string) config.Link {
 func fixture() *fakeWorkspace {
 	return &fakeWorkspace{
 		producer: universal(),
-		links:    []config.Link{riLink("yamlBump")},
+		links:    []link{riLink("yamlBump")},
 		refs: map[string]git.Refs{
 			"rancher/scc-operator": {Tags: tags("v0.5.2", "v0.5.3", "v0.6.0-rc.1")},
 			"rancher/rancher": {Branches: []git.Branch{
@@ -120,7 +153,7 @@ func TestCheckReady(t *testing.T) {
 	assert.Empty(t, got.Blockers)
 	require.NotNil(t, got.Images)
 	assert.False(t, got.Images.Failed())
-	assert.Equal(t, "scc-operator", ws.asked[0][len("links "):])
+	assert.Equal(t, "scc-operator", ws.asked[0][len("project "):])
 }
 
 func TestCheckReadsTheFileAtTheCommitItListed(t *testing.T) {
@@ -185,7 +218,7 @@ func TestCheckConsumers(t *testing.T) {
 	t.Run("several and none chosen", func(t *testing.T) {
 		ws := fixture()
 		other := riLink("yamlBump")
-		other.Consumer.Name, other.Consumer.Repo.Name = "charts", "rancher/charts"
+		other.Consumer.Name, other.Consumer.Repo.Name, other.Edge.To = "charts", "rancher/charts", "charts"
 		ws.links = append(ws.links, other)
 		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
 		assert.ErrorIs(t, err, ErrAmbiguousConsumer)
@@ -196,7 +229,7 @@ func TestCheckConsumers(t *testing.T) {
 		for _, to := range []string{"charts", "rancher/charts", "Rancher/Charts"} {
 			ws := fixture()
 			other := riLink("yamlBump")
-			other.Consumer.Name, other.Consumer.Repo.Name = "charts", "rancher/charts"
+			other.Consumer.Name, other.Consumer.Repo.Name, other.Edge.To = "charts", "rancher/charts", "charts"
 			ws.links = append(ws.links, other)
 			ws.refs["rancher/charts"] = ws.refs["rancher/rancher"]
 			ws.files["rancher/charts@sha-main:build.yaml"] = "defaultSccOperatorImage: x\n"
@@ -213,9 +246,10 @@ func TestCheckConsumers(t *testing.T) {
 
 func TestCheckUnknownStrategy(t *testing.T) {
 	ws := fixture()
-	ws.links = []config.Link{riLink("chartsPackageBump")}
+	ws.links = []link{riLink("chartsPackageBump")}
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "main"})
-	assert.ErrorIs(t, err, ErrUnknownStrategy)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "chartsPackageBump", "the engine says which strategy is not known")
 }
 
 func TestCheckReadFailures(t *testing.T) {
@@ -248,7 +282,7 @@ func TestCheckHostErrors(t *testing.T) {
 
 func TestCheckProducerErrors(t *testing.T) {
 	ws := fixture()
-	ws.linksErr = workspace.ErrUnknownProject
+	ws.projectErr = workspace.ErrUnknownProject
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "nope", Branch: "main"})
 	assert.ErrorIs(t, err, workspace.ErrUnknownProject)
 }
@@ -259,7 +293,7 @@ func TestCheckValueVariables(t *testing.T) {
 	c.Edge.Params = map[string]string{
 		"updateKey": "defaultSccOperatorImage", "value": "{sourceRepo}@{version}",
 	}
-	ws.links = []config.Link{c}
+	ws.links = []link{c}
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/scc-operator@0.5.3", got.Want)
@@ -299,7 +333,7 @@ func TestCheckABadPlaceholderIsAnError(t *testing.T) {
 	ws := fixture()
 	c := riLink("yamlBump")
 	c.Consumer.PullRequests.Title = "Update {nope}"
-	ws.links = []config.Link{c}
+	ws.links = []link{c}
 	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Branch: "release/v2.15"})
 	assert.ErrorContains(t, err, "nope")
 }
@@ -492,7 +526,7 @@ func linedLoop(t *testing.T) *fakeWorkspace {
 		{Line: "v2.15", Branch: "release/v2.15"},
 		{Line: "v2.14", Branch: "release/v2.14"},
 	}
-	ws.producer, ws.links = producer, []config.Link{c}
+	ws.producer, ws.links = producer, []link{c}
 	ws.refs["rancher/kuberlr"] = git.Refs{Tags: tags("v8.1.0", "v9.0.0", "v7.0.0")}
 	ws.files["rancher/rancher@sha-main:build.yaml"] = "defaultSccOperatorImage: rancher/kuberlr:v9.0.0\n"
 	return ws

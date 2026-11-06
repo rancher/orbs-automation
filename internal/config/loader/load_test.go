@@ -31,17 +31,13 @@ func TestLoadDecodesProject(t *testing.T) {
     title: "[{branch}] bump"
     labels:
       - status/auto-created
-  sources:
-    - from: backup-restore-operator
+  updateMethods:
+    - name: package-bump
+      strategy: chartsPackageBump
       accept:
         when: all
-        lines: universal
-      update:
-        strategy: chartsPackageBump
-        params:
-          package: rancher-backup
-        postEdit:
-          - go generate ./...
+      postEdit:
+        - run: [go, generate, ./...]
 `)}
 
 	got, err := Load(fsys)
@@ -60,14 +56,11 @@ func TestLoadDecodesProject(t *testing.T) {
 			},
 		},
 		PullRequests: config.PullRequests{Title: "[{branch}] bump", Labels: []string{"status/auto-created"}},
-		Sources: []config.Source{{
-			From:   "backup-restore-operator",
-			Accept: config.Accept{When: "all", Lines: "universal"},
-			Update: config.Update{
-				Strategy: "chartsPackageBump",
-				Params:   map[string]string{"package": "rancher-backup"},
-				PostEdit: []string{"go generate ./..."},
-			},
+		UpdateMethods: []config.UpdateMethod{{
+			Name:     "package-bump",
+			Strategy: "chartsPackageBump",
+			Accept:   config.Accept{When: "all"},
+			PostEdit: []config.Step{{Run: config.Command{"go", "generate", "./..."}}},
 		}},
 	}, got.Projects[0])
 }

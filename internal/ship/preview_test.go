@@ -4,23 +4,24 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func previewFixture() previewInput {
-	strategy, _ := LookupStrategy("yamlBump")
-	c := riLink("yamlBump")
 	return previewInput{
 		producer: config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}},
-		link:     c,
-		params:   bindParams(c),
+		consumer: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}},
 		release:  Release{Tag: "v0.5.3", Commit: "sha", Stable: true},
 		target:   Target{Branch: "release/v2.15", Commit: "sha-215"},
-		strategy: strategy,
-		file:     "build.yaml",
-		current:  "rancher/scc-operator:v0.5.2",
-		want:     "rancher/scc-operator:v0.5.3",
+		check: updatedispatcher.Check{
+			Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3",
+			Change: updatedispatcher.Change{
+				Path: "build.yaml", From: "rancher/scc-operator:v0.5.2", To: "rancher/scc-operator:v0.5.3",
+				Description: "Updated `defaultSccOperatorImage` in `build.yaml` from `rancher/scc-operator:v0.5.2` to `rancher/scc-operator:v0.5.3`",
+			},
+		},
 	}
 }
 
@@ -57,7 +58,7 @@ func TestRenderPreviewTheDevelopmentBranch(t *testing.T) {
 
 func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
 	in := previewFixture()
-	in.link.Consumer.PullRequests = config.PullRequests{
+	in.consumer.PullRequests = config.PullRequests{
 		Title:        "Bump {source} ({version}) on {targetBranch}",
 		BranchPrefix: "auto/{project}/",
 		Labels:       []string{"status/auto-created", "team/orbs"},
@@ -71,7 +72,7 @@ func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
 
 func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 	in := previewFixture()
-	in.link.Consumer.PullRequests.BranchPrefix = "bot/{source}-"
+	in.consumer.PullRequests.BranchPrefix = "bot/{source}-"
 	in.userPrefix = "dan/"
 	got, err := renderPreview(in)
 	require.NoError(t, err)
@@ -90,7 +91,7 @@ func TestRenderPreviewListsThePostEditCommands(t *testing.T) {
 func TestRenderPreviewAPrereleaseKeepsItsTag(t *testing.T) {
 	in := previewFixture()
 	in.release = Release{Tag: "v0.6.0-rc.1", Stable: false}
-	in.want = "rancher/scc-operator:v0.6.0-rc.1"
+	in.check.Want = "rancher/scc-operator:v0.6.0-rc.1"
 	got, err := renderPreview(in)
 	require.NoError(t, err)
 	assert.Equal(t, "bot/scc-operator-v0.6.0-rc.1-v2.15", got.Branch)
@@ -98,12 +99,12 @@ func TestRenderPreviewAPrereleaseKeepsItsTag(t *testing.T) {
 
 func TestRenderPreviewRejectsAnUnknownPlaceholder(t *testing.T) {
 	in := previewFixture()
-	in.link.Consumer.PullRequests.Title = "Update {nope}"
+	in.consumer.PullRequests.Title = "Update {nope}"
 	_, err := renderPreview(in)
 	assert.ErrorContains(t, err, "nope")
 
 	in = previewFixture()
-	in.link.Consumer.PullRequests.BranchPrefix = "{nope}/"
+	in.consumer.PullRequests.BranchPrefix = "{nope}/"
 	_, err = renderPreview(in)
 	assert.ErrorContains(t, err, "nope")
 }

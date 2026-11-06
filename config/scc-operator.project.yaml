@@ -8,3 +8,8 @@ spec:
     owned: true
   release:
     requiresPrerelease: true
+  downstream:
+    - to: rancher
+      method: build-yaml-bump
+      params:
+        updateKey: defaultSccOperatorImage

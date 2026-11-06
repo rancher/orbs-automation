@@ -25,11 +25,6 @@ func valid() config.Config {
 						{Line: "v2.15", Branch: "release/v2.15"},
 					},
 				},
-				Sources: []config.Source{{
-					From:   "b",
-					Accept: config.Accept{When: "stable", Lines: "all"},
-					Update: config.Update{Strategy: "bump"},
-				}},
 			},
 			{
 				Name:    "b",
@@ -141,11 +136,6 @@ func TestValidateProblems(t *testing.T) {
 			func(c *config.Config) { c.Projects[0].PullRequests.BranchPrefix = "bot/{nope}-" },
 			[]string{"pullRequests.branchPrefix", "nope"},
 		},
-		{"source from unknown project", func(c *config.Config) { c.Projects[0].Sources[0].From = "nope" }, []string{"sources[0]", `"nope"`}},
-		{"source from itself", func(c *config.Config) { c.Projects[0].Sources[0].From = "a" }, []string{"sources[0]", "itself"}},
-		{"unknown accept.when", func(c *config.Config) { c.Projects[0].Sources[0].Accept.When = "rc" }, []string{"accept.when", `"rc"`}},
-		{"unknown accept.lines", func(c *config.Config) { c.Projects[0].Sources[0].Accept.Lines = "some" }, []string{"accept.lines", `"some"`}},
-		{"empty update strategy", func(c *config.Config) { c.Projects[0].Sources[0].Update.Strategy = "" }, []string{"update.strategy"}},
 		{"external repo name", func(c *config.Config) { c.Externals[0].Repo.Name = "x" }, []string{`External "x"`, "repo.name"}},
 		{
 			"relationship to unknown project",
@@ -189,12 +179,6 @@ func TestValidateProblems(t *testing.T) {
 	}
 }
 
-func TestValidateAcceptsAnOmittedAcceptLines(t *testing.T) {
-	c := valid()
-	c.Projects[0].Sources[0].Accept.Lines = ""
-	assert.NoError(t, Validate(WithDefaults(c)))
-}
-
 func TestValidateAcceptsPullRequestTemplates(t *testing.T) {
 	c := valid()
 	c.Projects[0].PullRequests.Title = "[{branch}] Update {source} to {version} ({tag}) {{literal}}"
@@ -203,15 +187,22 @@ func TestValidateAcceptsPullRequestTemplates(t *testing.T) {
 }
 
 func TestValidateStrategyVariablesInThePRTitle(t *testing.T) {
-	c := valid()
+	c := withMethods()
 	c.Projects[0].PullRequests.Title = "[{branch}] {package} {chartVersion} {action}"
-	c.Projects[0].Sources[0].Update.Strategy = "chartsPackageBump"
-	assert.NoError(t, Validate(c), "the strategy of one of its sources supplies those variables")
+	m := &c.Projects[0].UpdateMethods[0]
+	m.Strategy = "chartsPackageBump"
+	m.With = map[string]string{"package": "rancher-backup"}
+	m.AllowedParams = nil
+	c.Projects[1].Downstream[0].Params = nil
+	assert.NoError(t, Validate(WithDefaults(c)), "the strategy of one of its methods supplies those variables")
 
-	c.Projects[0].Sources[0].Update.Strategy = "buildYamlBump"
-	err := Validate(c)
+	m.Strategy = "yamlBump"
+	m.With = map[string]string{"file": "build.yaml"}
+	m.AllowedParams = []config.AllowedParam{{Key: "updateKey"}}
+	c.Projects[1].Downstream[0].Params = map[string]string{"updateKey": "k"}
+	err := Validate(WithDefaults(c))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "package", "no source supplies them")
+	assert.Contains(t, err.Error(), "package", "no method supplies them")
 }
 
 func TestValidateAcceptsImages(t *testing.T) {

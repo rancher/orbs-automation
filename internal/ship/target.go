@@ -6,7 +6,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // checkTarget reads what one consumer branch holds and decides what a bump of it
@@ -14,26 +14,22 @@ import (
 // release's and are checked once by the caller. It returns an error when the
 // branch or its file cannot be read.
 func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string, in Input) (TargetPlan, error) {
-	consumerSlug := r.link.Consumer.Repo.Name
+	consumerSlug := r.route.Consumer.Repo.Name
 	target, ok := findBranch(r.consumerRefs, branch)
 	if !ok {
 		return TargetPlan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, branch)
 	}
-	src, err := ws.UpstreamFile(ctx, consumerSlug, target.Commit, r.file)
+	chk, err := r.invocation.Check(ctx, remoteTree{ws: ws, slug: consumerSlug, commit: target.Commit}, r.rel)
 	if err != nil {
-		return TargetPlan{}, fmt.Errorf("read %s on %s of %s: %w", r.file, branch, consumerSlug, err)
-	}
-	current, err := r.strategy.Read(src, r.params)
-	if err != nil {
-		return TargetPlan{}, fmt.Errorf("read %s on %s of %s: %w", r.file, branch, consumerSlug, err)
+		return TargetPlan{}, fmt.Errorf("read %s of %s: %w", target.Branch, consumerSlug, err)
 	}
 
-	tp := TargetPlan{Target: target, Current: current, Status: StatusReady}
-	if current == r.want {
+	tp := TargetPlan{Target: target, Current: chk.Current, Want: chk.Want, File: chk.Change.Path, Status: StatusReady}
+	if chk.UpToDate {
 		tp.Status = StatusUpToDate
 		return tp, nil
 	}
-	if downgrade(r.strategy, current, r.want) {
+	if chk.Relation == updatedispatcher.RelationOlder {
 		tp.Downgrade = true
 		message := "the release is older than what the branch holds"
 		if !in.AllowDowngrade {
@@ -45,10 +41,14 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 		}
 		tp.Warnings = append(tp.Warnings, "this is a downgrade: "+message)
 	}
+	pre, post := r.invocation.Steps(target.Branch)
+	var steps []config.Step
+	for _, ref := range append(pre, post...) {
+		steps = append(steps, ref.Step)
+	}
 	preview, err := renderPreview(previewInput{
-		producer: r.producer, link: r.link, release: r.release, target: target,
-		strategy: r.strategy, params: r.params, steps: r.steps(target.Branch),
-		file: r.file, current: current, want: r.want, userPrefix: in.BranchPrefix,
+		producer: r.producer, consumer: r.route.Consumer, release: r.release, target: target,
+		check: chk, steps: steps, userPrefix: in.BranchPrefix,
 	})
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("render the PR: %w", err)
@@ -57,15 +57,15 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 	return tp, nil
 }
 
-// downgrade reports whether want is an older version than current, by what the
-// strategy finds in each. A value with no version in it is not judged.
-func downgrade(s Strategy, current, want string) bool {
-	cv, ok := s.Version(current)
-	if !ok {
-		return false
-	}
-	wv, ok := s.Version(want)
-	return ok && semver.Compare(cv, wv) > 0
+// remoteTree reads files of the consumer at one commit from the host.
+type remoteTree struct {
+	ws     Workspace
+	slug   string
+	commit string
+}
+
+func (t remoteTree) ReadFile(ctx context.Context, path string) ([]byte, error) {
+	return t.ws.UpstreamFile(ctx, t.slug, t.commit, path)
 }
 
 // findBranch returns the branch of the name and the commit at its head.
@@ -76,24 +76,4 @@ func findBranch(refs git.Refs, name string) (Target, bool) {
 		}
 	}
 	return Target{}, false
-}
-
-// steps returns the commands that run around the edit of a branch, in the order
-// they run: the method's pre-edit steps, the edge's pre-edit steps, then (after
-// the edit) the edge's post-edit steps and, last, the method's. The consumer's
-// steps surround the producer's, so its post-edit regenerates what the
-// producer's steps touched. Only steps whose range holds the branch's line run.
-func (r resolution) steps(branch string) []config.Step {
-	line := r.link.Consumer.LineOfBranch(branch)
-	var out []config.Step
-	for _, group := range [][]config.Step{
-		r.link.Method.PreEdit, r.link.Edge.PreEdit, r.link.Edge.PostEdit, r.link.Method.PostEdit,
-	} {
-		for _, s := range group {
-			if s.AppliesTo(line) {
-				out = append(out, s)
-			}
-		}
-	}
-	return out
 }

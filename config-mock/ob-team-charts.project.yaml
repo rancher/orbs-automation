@@ -9,3 +9,8 @@ spec:
   repo:
     name: rancher/ob-team-charts
     owned: true
+  downstream:
+    - to: rancher-charts
+      method: charts-package-bump
+      params:
+        package: "<tbd>"        # illustrative; mechanism not reviewed

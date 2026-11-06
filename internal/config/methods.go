@@ -1,7 +1,5 @@
 package config
 
-import "strings"
-
 // IsRequired reports whether a producer must pass the param: when it says so,
 // else unless the param has a default.
 func (p AllowedParam) IsRequired() bool {
@@ -52,30 +50,4 @@ func (p Project) Method(name string) (UpdateMethod, bool) {
 		}
 	}
 	return UpdateMethod{}, false
-}
-
-// Link is one producer-to-consumer route: the edge, the consumer project and the
-// method it names.
-type Link struct {
-	Edge     Edge
-	Consumer Project
-	Method   UpdateMethod
-}
-
-// Links returns the routes out of the producer, one for each downstream edge
-// whose consumer and method exist, in config order.
-func (c Config) Links(producer Project) []Link {
-	var out []Link
-	for _, e := range producer.Downstream {
-		for _, p := range c.Projects {
-			if p.Name != e.To && !strings.EqualFold(p.Repo.Name, e.To) {
-				continue
-			}
-			if method, ok := p.Method(e.Method); ok {
-				out = append(out, Link{Edge: e, Consumer: p, Method: method})
-			}
-			break
-		}
-	}
-	return out
 }

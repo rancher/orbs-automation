@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,23 +23,33 @@ type fakeWorkspace struct {
 	files map[string]string
 }
 
-func (f *fakeWorkspace) Links(string) (config.Project, []config.Link, error) {
-	if f.err != nil {
-		return config.Project{}, nil, f.err
-	}
-	producer := config.Project{
+func sccProducer() config.Project {
+	return config.Project{
 		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}, Release: config.Release{TagPattern: "v*"},
+		Downstream: []config.Edge{{
+			To: "rancher", Method: "build-yaml-bump",
+			Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"},
+		}},
 	}
-	link := config.Link{
-		Consumer: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}},
-		Method: config.UpdateMethod{
+}
+
+func (f *fakeWorkspace) Project(string) (config.Project, error) {
+	if f.err != nil {
+		return config.Project{}, f.err
+	}
+	return sccProducer(), nil
+}
+
+func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
+	rancher := config.Project{
+		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
+		UpdateMethods: []config.UpdateMethod{{
 			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
 			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
 			Accept:        config.Accept{When: config.AcceptStable},
-		},
-		Edge: config.Edge{To: "rancher", Method: "build-yaml-bump", Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"}},
+		}},
 	}
-	return producer, []config.Link{link}, nil
+	return updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: []config.Project{sccProducer(), rancher}})
 }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {

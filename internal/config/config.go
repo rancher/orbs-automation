@@ -35,7 +35,6 @@ type Project struct {
 	// Downstream are the projects it ships to, with which of their methods.
 	UpdateMethods []UpdateMethod `yaml:"updateMethods"`
 	Downstream    []Edge         `yaml:"downstream"`
-	Sources       []Source       `yaml:"sources"`
 }
 
 // Repo identifies the project's repository.
@@ -139,24 +138,9 @@ func (c *Command) UnmarshalYAML(unmarshal func(any) error) error {
 	return nil
 }
 
-// Source is a project this one takes updates from.
-type Source struct {
-	From   string `yaml:"from"`
-	Accept Accept `yaml:"accept"`
-	Update Update `yaml:"update"`
-}
-
-// Accept says which of a source's releases are taken.
+// Accept says which of a producer's releases a method takes.
 type Accept struct {
-	When  string `yaml:"when"`  // stable or all
-	Lines string `yaml:"lines"` // all or universal
-}
-
-// Update says how a source's release is applied.
-type Update struct {
-	Strategy string            `yaml:"strategy"`
-	Params   map[string]string `yaml:"params"`
-	PostEdit []string          `yaml:"postEdit"`
+	When string `yaml:"when"` // stable or all
 }
 
 // RancherLines is the set of Rancher lines and facts about each.

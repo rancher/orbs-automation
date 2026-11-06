@@ -24,15 +24,20 @@ spec:
       - line: v2.13
         version: "9.x"
         branch: release/v9.x
-  sources:
-    - from: kuberlr-kubectl
-      # accept defaults: when stable, lines all
-      update:
-        strategy: yamlKeyBump   # named, idempotent code in gero
-        params:
-          file: charts/rancher-backup/values.yaml
-          key: global.kubectl.tag
-          # charts/rancher-backup/tests/kubectl-image_test.yaml also hardcodes the default tag.
-          # That is not bumped here: unit tests for dynamic values should set the input and
-          # assert the same value, so a default change cannot break them (see
-          # docs/IMPLEMENTATION.md, "Standards for Target Repos").
+  updateMethods:
+    - name: kubectl-tag-bump
+      strategy: yamlBump
+      with:
+        file: charts/rancher-backup/values.yaml
+      allowedParams:
+        - key: updateKey
+          description: "The key of values.yaml that holds the kubectl tag"
+      # charts/rancher-backup/tests/kubectl-image_test.yaml also hardcodes the default tag.
+      # That is not bumped here: unit tests for dynamic values should set the input and
+      # assert the same value, so a default change cannot break them (see
+      # docs/IMPLEMENTATION.md, "Standards for Target Repos").
+  downstream:
+    - to: rancher-charts
+      method: charts-package-bump
+      params:
+        package: rancher-backup

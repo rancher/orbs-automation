@@ -21,18 +21,16 @@ spec:
   pullRequests:
     title: "[{branch}] {package} {chartVersion} {action}"   # action: bump (prerelease) | UnRC (stable)
     branchPrefix: "bot/{source}-"                           # deterministic, no epoch suffix
-  sources:
-    - from: backup-restore-operator
+  updateMethods:
+    - name: charts-package-bump
+      strategy: chartsPackageBump   # one shared implementation: package.yaml, release.yaml, make steps (not built yet)
+      allowedParams:
+        - key: package
+          description: "The chart package to bump"
       accept:
-        when: all               # RC bumps and stable "UnRC" bumps both
-      update:
-        strategy: chartsPackageBump   # one shared implementation: package.yaml, release.yaml, make steps
-        params:
-          package: rancher-backup
-    - from: ob-team-charts      # illustrative; mechanism not reviewed
-      accept:
-        when: all               # a universal source lands in every line's branch
-      update:
-        strategy: chartsPackageBump
-        params:
-          package: "<tbd>"
+        when: all                   # RC bumps and stable "UnRC" bumps both
+  downstream:
+    - to: rancher-rancher
+      method: build-yaml-bump-all
+      params:
+        updateKey: webhookVersion   # key varies per chart

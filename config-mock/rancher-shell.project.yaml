@@ -21,4 +21,9 @@ spec:
       - line: v2.13
         version: "0.6.x"
         branch: release/v2.13
-  # No sources: nothing upstream is bumped into this repo by gero.
+  downstream:
+    - to: rancher-rancher
+      method: build-yaml-bump
+      # lines: derived. The producer has lines, so a release goes to rancher's branch for its line.
+      params:
+        updateKey: defaultShellVersion

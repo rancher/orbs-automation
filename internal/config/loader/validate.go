@@ -32,7 +32,7 @@ func ValidateAt(c config.Config, now time.Time) error {
 		v.lines(c.Lines, now, phases)
 	}
 	for _, p := range c.Projects {
-		v.project(p, projects, phases, c.Lines != nil)
+		v.project(p, phases, c.Lines != nil)
 	}
 	for _, x := range c.Externals {
 		v.external(x, projects)
@@ -122,7 +122,7 @@ func (v *validator) images(where string, p config.Project, phases map[string]str
 	}
 }
 
-func (v *validator) project(p config.Project, projects map[string]bool, phases map[string]string, haveLines bool) {
+func (v *validator) project(p config.Project, phases map[string]string, haveLines bool) {
 	where := fmt.Sprintf("Project %q", p.Name)
 	v.repo(where, p.Repo)
 	v.oneOf(where, "release.branches", p.Release.Branches, config.BranchesSingle, config.BranchesPerLine)
@@ -134,9 +134,6 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 	v.methods(where, p, phases, haveLines)
 	v.edges(where, p, phases, haveLines)
 	textVars := slices.Clone(templates.TextVars)
-	for _, s := range p.Sources {
-		textVars = append(textVars, templates.StrategyVars[s.Update.Strategy]...)
-	}
 	for _, m := range p.UpdateMethods {
 		textVars = append(textVars, templates.StrategyVars[m.Strategy]...)
 	}
@@ -170,24 +167,6 @@ func (v *validator) project(p config.Project, projects map[string]bool, phases m
 		}
 	}
 
-	for i, s := range p.Sources {
-		at := fmt.Sprintf("%s: sources[%d]", where, i)
-		switch {
-		case s.From == "":
-			v.add("%s: from is required", at)
-		case s.From == p.Name:
-			v.add("%s: from %q is the project itself", at, s.From)
-		case !projects[s.From]:
-			v.add("%s: from %q is not a Project", at, s.From)
-		}
-		v.oneOf(at, "accept.when", s.Accept.When, config.AcceptStable, config.AcceptAll)
-		if s.Accept.Lines != "" { // omitted is derived from the producer (Source.AcceptLines)
-			v.oneOf(at, "accept.lines", s.Accept.Lines, config.AcceptLinesAll, config.AcceptLinesUniversal)
-		}
-		if s.Update.Strategy == "" {
-			v.add("%s: update.strategy is required", at)
-		}
-	}
 }
 
 func (v *validator) external(x config.External, projects map[string]bool) {

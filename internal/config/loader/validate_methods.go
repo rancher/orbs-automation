@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/strategyspec"
 )
 
-// methods checks the update methods of a project: each has a name, a known
-// strategy, fixed values and offered params that the strategy knows, and steps
-// with real lines.
+// methods checks the structure of a project's update methods: each has a name
+// and a strategy, offered params have unique keys, and steps name real lines. What
+// depends on the strategy itself (that it exists, that its `with` values fit it,
+// that the method offers the inputs it needs) is checked by the update
+// dispatcher's engine, which has the strategies.
 func (v *validator) methods(where string, p config.Project, phases map[string]string, haveLines bool) {
 	names := map[string]bool{}
 	for i, m := range p.UpdateMethods {
@@ -23,59 +24,34 @@ func (v *validator) methods(where string, p config.Project, phases map[string]st
 			v.add("%s: method %q is listed twice", at, m.Name)
 		}
 		names[m.Name] = true
+		if m.Strategy == "" {
+			v.add("%s: strategy is required", at)
+		}
 		v.oneOf(at, "accept.when", m.Accept.When, config.AcceptStable, config.AcceptAll)
-
-		spec, ok := strategyspec.Lookup(m.Strategy)
-		if !ok {
-			v.add("%s: strategy %q is not known: use one of %s", at, m.Strategy, strings.Join(strategyspec.Names(), ", "))
-		} else {
-			v.methodParams(at, m, spec)
+		offered := map[string]bool{}
+		for j, ap := range m.AllowedParams {
+			pat := fmt.Sprintf("%s: allowedParams[%d]", at, j)
+			switch {
+			case ap.Key == "":
+				v.add("%s: key is required", pat)
+				continue
+			case offered[ap.Key]:
+				v.add("%s: param %q is listed twice", pat, ap.Key)
+			}
+			offered[ap.Key] = true
+			if _, fixed := m.With[ap.Key]; fixed {
+				v.add("%s: %q is both fixed under with and offered to producers", pat, ap.Key)
+			}
 		}
 		v.steps(at, "preEdit", m.PreEdit, false, false, phases, haveLines)
 		v.steps(at, "postEdit", m.PostEdit, false, false, phases, haveLines)
 	}
 }
 
-// methodParams checks the fixed values and the offered params of a method
-// against what its strategy takes: only known names are fixed, offered params
-// are named once and not fixed too, a consumer-only param is never offered, and
-// every param the strategy needs is either fixed or offered.
-func (v *validator) methodParams(at string, m config.UpdateMethod, spec strategyspec.Spec) {
-	for key := range m.With {
-		if _, ok := spec.Param(key); !ok {
-			v.add("%s: with %q is not a param of %s", at, key, spec.Name)
-		}
-	}
-	offered := map[string]bool{}
-	for i, ap := range m.AllowedParams {
-		pat := fmt.Sprintf("%s: allowedParams[%d]", at, i)
-		switch {
-		case ap.Key == "":
-			v.add("%s: key is required", pat)
-			continue
-		case offered[ap.Key]:
-			v.add("%s: param %q is listed twice", pat, ap.Key)
-		}
-		offered[ap.Key] = true
-		if sp, ok := spec.Param(ap.Key); ok && sp.ConsumerOnly {
-			v.add("%s: %q is consumer-only for %s, so a producer cannot pass it: fix it under with", pat, ap.Key, spec.Name)
-		}
-		if _, fixed := m.With[ap.Key]; fixed {
-			v.add("%s: %q is both fixed under with and offered to producers", pat, ap.Key)
-		}
-	}
-	for _, sp := range spec.Params {
-		_, fixed := m.With[sp.Key]
-		if !fixed && !offered[sp.Key] && sp.Required && sp.Default == "" {
-			v.add("%s: %s needs the param %q, which is required: fix it under with or offer it under allowedParams", at, spec.Name, sp.Key)
-		}
-	}
-}
-
-// edges checks the downstream edges of a project: each names a consumer that
-// exists, one of its methods, params the method allows with every required one
-// present, lines that mean something, and steps with real lines and a program
-// the producer may use.
+// edges checks the structure of a project's downstream edges: each names a
+// consumer that exists and one of its methods, lines that mean something, and
+// steps with real lines and a program the producer may use. The params an edge
+// passes are checked against the method by the update dispatcher.
 func (v *validator) edges(where string, p config.Project, phases map[string]string, haveLines bool) {
 	for i, e := range p.Downstream {
 		at := fmt.Sprintf("%s: downstream[%d]", where, i)
@@ -92,40 +68,19 @@ func (v *validator) edges(where string, p config.Project, phases map[string]stri
 		case consumer.Name == p.Name:
 			v.add("%s: to %q is the project itself", at, e.To)
 		default:
-			v.edgeMethod(at, e, *consumer)
+			if _, ok := consumer.Method(e.Method); !ok {
+				names := make([]string, len(consumer.UpdateMethods))
+				for k, m := range consumer.UpdateMethods {
+					names[k] = m.Name
+				}
+				v.add("%s: method %q is not a method of %s: it has %s", at, e.Method, consumer.Name, strings.Join(names, ", "))
+			}
 		}
 		if e.Lines != "" {
 			v.oneOf(at, "lines", e.Lines, config.AcceptLinesAll, config.AcceptLinesUniversal)
 		}
 		v.steps(at, "preEdit", e.PreEdit, true, p.Repo.Owned, phases, haveLines)
 		v.steps(at, "postEdit", e.PostEdit, true, p.Repo.Owned, phases, haveLines)
-	}
-}
-
-// edgeMethod checks an edge against the method of the consumer it names.
-func (v *validator) edgeMethod(at string, e config.Edge, consumer config.Project) {
-	method, ok := consumer.Method(e.Method)
-	if !ok {
-		names := make([]string, len(consumer.UpdateMethods))
-		for i, m := range consumer.UpdateMethods {
-			names[i] = m.Name
-		}
-		v.add("%s: method %q is not a method of %s: it has %s", at, e.Method, consumer.Name, strings.Join(names, ", "))
-		return
-	}
-	allowed := map[string]config.AllowedParam{}
-	for _, ap := range method.AllowedParams {
-		allowed[ap.Key] = ap
-	}
-	for key := range e.Params {
-		if _, ok := allowed[key]; !ok {
-			v.add("%s: params %q is not allowed by method %s of %s", at, key, method.Name, consumer.Name)
-		}
-	}
-	for _, ap := range method.AllowedParams {
-		if _, given := e.Params[ap.Key]; !given && ap.IsRequired() {
-			v.add("%s: param %q is required by method %s of %s", at, ap.Key, method.Name, consumer.Name)
-		}
 	}
 }
 

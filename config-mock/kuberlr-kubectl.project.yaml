@@ -23,3 +23,8 @@ spec:
       - line: v2.13
         version: "6.x"
         branch: release/v6.x
+  downstream:
+    - to: backup-restore-operator
+      method: kubectl-tag-bump
+      params:
+        updateKey: global.kubectl.tag

@@ -30,7 +30,6 @@ var fieldClasses = map[string]string{
 	"Project.Images":        "resolved:Project.EffectiveImages",
 	"Project.UpdateMethods": "plain",
 	"Project.Downstream":    "plain",
-	"Project.Sources":       "plain",
 
 	"Repo.Name":          "plain",
 	"Repo.Owned":         "plain",
@@ -78,16 +77,7 @@ var fieldClasses = map[string]string{
 	"PullRequests.BranchPrefix": "layered:the branchPrefix user setting replaces it whole",
 	"PullRequests.Labels":       "plain",
 
-	"Source.From":   "plain",
-	"Source.Accept": "plain",
-	"Source.Update": "plain",
-
-	"Accept.When":  "default",
-	"Accept.Lines": "resolved:Source.AcceptLines",
-
-	"Update.Strategy": "plain",
-	"Update.Params":   "plain",
-	"Update.PostEdit": "plain",
+	"Accept.When": "default",
 
 	"RancherLines.Name":  "plain",
 	"RancherLines.Lines": "plain",
@@ -115,8 +105,7 @@ var fieldClasses = map[string]string{
 func TestEveryConfigFieldIsClassified(t *testing.T) {
 	types := []reflect.Type{
 		reflect.TypeFor[Project](), reflect.TypeFor[Image](), reflect.TypeFor[UpdateMethod](), reflect.TypeFor[AllowedParam](), reflect.TypeFor[Edge](), reflect.TypeFor[Step](), reflect.TypeFor[Repo](), reflect.TypeFor[Release](),
-		reflect.TypeFor[ProjectLine](), reflect.TypeFor[PullRequests](), reflect.TypeFor[Source](),
-		reflect.TypeFor[Accept](), reflect.TypeFor[Update](), reflect.TypeFor[RancherLines](),
+		reflect.TypeFor[ProjectLine](), reflect.TypeFor[PullRequests](), reflect.TypeFor[Accept](), reflect.TypeFor[RancherLines](),
 		reflect.TypeFor[Line](), reflect.TypeFor[Dates](), reflect.TypeFor[KubernetesRange](),
 		reflect.TypeFor[External](), reflect.TypeFor[Relationship](),
 	}

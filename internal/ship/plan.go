@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 var (
@@ -29,9 +30,13 @@ var (
 // Workspace is what the state check needs from the invocation's workspace. It
 // is defined here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	// Links returns the producer and the routes out of it: each downstream edge
-	// with the consumer project and the update method it names.
-	Links(key string) (config.Project, []config.Link, error)
+	// Project returns the project of a config name or slug, or the one the working
+	// directory is in when the key is empty.
+	Project(key string) (config.Project, error)
+	// Updates builds the update dispatcher's engine for the central config. It
+	// may return an engine along with an error about methods or edges that are
+	// not usable.
+	Updates() (*updatedispatcher.Engine, error)
 	// UpstreamRefs lists the tags and branch heads of a repository on its host.
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// UpstreamFile reads a file of a repository at a commit from its host.
@@ -82,6 +87,8 @@ type Target struct {
 type TargetPlan struct {
 	Target
 	Current   string   `json:"current"` // what the consumer holds now
+	File      string   `json:"-"`       // the file the method edits; the plan carries it once
+	Want      string   `json:"-"`       // what it should hold; the same for every branch
 	Status    Status   `json:"status"`
 	Downgrade bool     `json:"downgrade,omitempty"` // the release is older than what the consumer holds
 	Blockers  []string `json:"blockers,omitempty"`
@@ -123,8 +130,8 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 		return Plan{}, err
 	}
 	plan := Plan{
-		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.link.Consumer.Repo.Name,
-		Method: res.link.Method.Name, Strategy: res.link.Method.Strategy, File: res.file, Want: res.want, DryRun: in.DryRun,
+		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.route.Consumer.Repo.Name,
+		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun,
 	}
 	needsPR := false
 	for _, branch := range branches {
@@ -138,6 +145,9 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 			tp = TargetPlan{Target: Target{Branch: branch}, Status: StatusFailed, Error: err.Error()}
 		}
 		needsPR = needsPR || tp.Status == StatusReady
+		if plan.Want == "" {
+			plan.File, plan.Want = tp.File, tp.Want // the same for every branch
+		}
 		plan.Targets = append(plan.Targets, tp)
 	}
 	if needsPR {

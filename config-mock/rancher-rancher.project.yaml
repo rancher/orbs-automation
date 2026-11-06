@@ -22,35 +22,37 @@ spec:
     branchPrefix: "bot/{source}-"
     labels:
       - status/auto-created
-  sources:
-    - from: rancher-charts
+  # How rancher takes an update, written once: the producers below only say which
+  # key they own. Two methods, since what a method accepts is the consumer's call.
+  updateMethods:
+    - name: build-yaml-bump
+      strategy: yamlBump
+      with:
+        file: build.yaml
+      allowedParams:
+        - key: updateKey
+          description: "The key of build.yaml to read and set"
+        - key: value
+          description: "What to write: {image}, {tag}, {version} and {sourceRepo} are available"
+          default: "{tag}"
+      accept:
+        when: stable            # accept default
+      postEdit:
+        - run: scripts/generate-buildconfig
+          since: v2.16
+        - run: [go, generate, ./pkg/...]
+          until: v2.15
+    - name: build-yaml-bump-all
+      strategy: yamlBump        # the same code, taking release candidates too
+      with:
+        file: build.yaml
+      allowedParams:
+        - key: updateKey
+          description: "The key of build.yaml to read and set"
       accept:
         when: all
-      update:
-        strategy: buildYamlBump
-        params:
-          file: build.yaml
-          key: webhookVersion   # key varies per chart
-        postEdit:
-          - go generate ./...
-
-    - from: rancher-shell
-      # accept default: when stable (illustrative; today's behavior needs checking)
-      update:
-        strategy: buildYamlBump
-        params:
-          file: build.yaml
-          key: defaultShellVersion
-        postEdit:
-          - go generate ./...
-
-    - from: scc-operator
-      # accept defaults: when stable, lines all. A universal source, so every active
-      # line gets a PR, with per-target status.
-      update:
-        strategy: buildYamlBump
-        params:
-          file: build.yaml
-          key: defaultSccOperatorImage
-        postEdit:
-          - go generate ./...
+      postEdit:
+        - run: scripts/generate-buildconfig
+          since: v2.16
+        - run: [go, generate, ./pkg/...]
+          until: v2.15

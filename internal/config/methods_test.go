@@ -81,30 +81,6 @@ func TestProjectMethod(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestConfigLinks(t *testing.T) {
-	rancher := Project{Name: "rancher", Repo: Repo{Name: "rancher/rancher"}, UpdateMethods: []UpdateMethod{{Name: "build-yaml", Strategy: "yamlBump"}}}
-	charts := Project{Name: "charts", Repo: Repo{Name: "rancher/charts"}, UpdateMethods: []UpdateMethod{{Name: "pkg"}}}
-	scc := Project{Name: "scc-operator", Downstream: []Edge{
-		{To: "rancher", Method: "build-yaml", Params: map[string]string{"updateKey": "k"}},
-		{To: "rancher/charts", Method: "pkg"}, // by slug
-		{To: "nobody", Method: "x"},           // no such consumer: validation rejects it, Links skips it
-		{To: "rancher", Method: "missing"},    // no such method
-	}}
-	cfg := Config{Projects: []Project{scc, rancher, charts}}
-
-	got := cfg.Links(scc)
-
-	assert.Len(t, got, 2)
-	assert.Equal(t, "rancher", got[0].Consumer.Name)
-	assert.Equal(t, "yamlBump", got[0].Method.Strategy)
-	assert.Equal(t, "k", got[0].Edge.Params["updateKey"])
-	assert.Equal(t, "charts", got[1].Consumer.Name, "an edge may name its consumer by slug")
-}
-
-func TestConfigLinksOfAProjectThatShipsNowhere(t *testing.T) {
-	assert.Empty(t, Config{Projects: []Project{{Name: "a"}}}.Links(Project{Name: "a"}))
-}
-
 func TestCompareLines(t *testing.T) {
 	order, ok := CompareLines("v2.16", "v2.15")
 	assert.True(t, ok)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/ship/templates"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // Preview is the text a bump would write: the branch, the PR's title, labels and
@@ -23,16 +24,12 @@ type Preview struct {
 // previewInput is everything the texts are made from.
 type previewInput struct {
 	producer   config.Project
-	link       config.Link // the consumer project and the method it uses
-	params     Params
-	steps      []config.Step // the commands that run around the edit for this branch, in order
+	consumer   config.Project
 	release    Release
 	target     Target
-	strategy   Strategy
-	file       string
-	current    string
-	want       string
-	userPrefix string // the user's branchPrefix setting, which replaces the project's whole
+	check      updatedispatcher.Check // what the strategy found: the file, the old and new values and the change
+	steps      []config.Step          // the commands that run around the edit for this branch, in order
+	userPrefix string                 // the user's branchPrefix setting, which replaces the project's whole
 }
 
 // renderPreview fills the texts. The branch name is a prefix, then the tag and
@@ -41,11 +38,11 @@ type previewInput struct {
 // the project's pullRequests.title, else the default. An unknown placeholder in
 // either is an error, though config validation rejects it sooner.
 func renderPreview(in previewInput) (Preview, error) {
-	prs := in.link.Consumer.PullRequests
+	prs := in.consumer.PullRequests
 	tag := in.release.Tag
 	branchLabel := strings.TrimPrefix(in.target.Branch, "release/")
 	marker := Marker{
-		Source: in.producer.Repo.Name, Consumer: in.link.Consumer.Repo.Name,
+		Source: in.producer.Repo.Name, Consumer: in.consumer.Repo.Name,
 		Target: in.target.Branch, Version: tag,
 	}
 	vars := map[string]string{
@@ -56,11 +53,11 @@ func renderPreview(in previewInput) (Preview, error) {
 		"version":          strings.TrimPrefix(tag, "v"),
 		"branch":           branchLabel,
 		"targetBranch":     in.target.Branch,
-		"consumer":         in.link.Consumer.Repo.Name,
+		"consumer":         in.consumer.Repo.Name,
 		"sourceReleaseURL": "https://github.com/" + in.producer.Repo.Name + "/releases/tag/" + tag,
-		"file":             in.file,
-		"from":             in.current,
-		"to":               in.want,
+		"file":             in.check.Change.Path,
+		"from":             in.check.Current,
+		"to":               in.check.Want,
 		"changes":          changes(in),
 		"marker":           marker.String(),
 	}
@@ -92,7 +89,7 @@ func renderPreview(in previewInput) (Preview, error) {
 // changes lists what a bump changes, from what the strategy did and the
 // post-edit commands that run, one bullet each.
 func changes(in previewInput) string {
-	lines := []string{"- " + in.strategy.Describe(in.params, in.current, in.want)}
+	lines := []string{"- " + in.check.Change.Description}
 	for _, step := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(step.Run, " ")+"`")
 	}

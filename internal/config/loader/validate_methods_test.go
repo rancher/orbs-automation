@@ -39,24 +39,18 @@ func TestValidateMethodAndEdgeProblems(t *testing.T) {
 		mutate func(*config.Config)
 		want   []string
 	}{
-		{"unknown strategy", func(c *config.Config) { method(c).Strategy = "buildYamlBump" }, []string{"updateMethods[0]", "strategy", "buildYamlBump", "yamlBump"}},
-		{"no strategy", func(c *config.Config) { method(c).Strategy = "" }, []string{"strategy"}},
+		{"no strategy", func(c *config.Config) { method(c).Strategy = "" }, []string{"updateMethods[0]", "strategy is required"}},
 		{"no name", func(c *config.Config) { method(c).Name = "" }, []string{"updateMethods[0]", "name is required"}},
 		{"duplicate name", func(c *config.Config) {
 			c.Projects[0].UpdateMethods = append(c.Projects[0].UpdateMethods, *method(c))
 		}, []string{"updateMethods[1]", "listed twice"}},
-		{"with names a param the strategy lacks", func(c *config.Config) { method(c).With["nope"] = "x" }, []string{"with", "nope"}},
 		{"an allowed param with no key", func(c *config.Config) { method(c).AllowedParams[0].Key = "" }, []string{"allowedParams[0]", "key is required"}},
 		{"an allowed param listed twice", func(c *config.Config) {
 			method(c).AllowedParams = append(method(c).AllowedParams, method(c).AllowedParams[0])
 		}, []string{"allowedParams[1]", "listed twice"}},
-		{"a consumer-only param offered to producers", func(c *config.Config) {
-			method(c).AllowedParams = append(method(c).AllowedParams, config.AllowedParam{Key: "file", Default: "x"})
-		}, []string{"allowedParams", "file", "consumer"}},
 		{"a param both fixed and allowed", func(c *config.Config) {
 			method(c).With["updateKey"] = "k"
 		}, []string{"updateKey", "both"}},
-		{"a required strategy param nobody supplies", func(c *config.Config) { delete(method(c).With, "file") }, []string{"file", "required"}},
 		{"an unknown accept.when", func(c *config.Config) { method(c).Accept.When = "rc" }, []string{"accept.when", `"rc"`}},
 		{"a step with no command", func(c *config.Config) { method(c).PostEdit[0].Run = nil }, []string{"postEdit[0]", "run"}},
 		{"a step since an unknown line", func(c *config.Config) { method(c).PostEdit[0].Since = "v9.9" }, []string{"postEdit[0]", "since", "v9.9"}},
@@ -69,8 +63,6 @@ func TestValidateMethodAndEdgeProblems(t *testing.T) {
 		{"an edge to no project", func(c *config.Config) { edge(c).To = "nobody" }, []string{"downstream[0]", "to", `"nobody"`}},
 		{"an edge to itself", func(c *config.Config) { edge(c).To = "b" }, []string{"downstream[0]", "itself"}},
 		{"an edge to a method the consumer lacks", func(c *config.Config) { edge(c).Method = "missing" }, []string{"downstream[0]", "method", "missing", "build-yaml"}},
-		{"an edge param the method does not allow", func(c *config.Config) { edge(c).Params["nope"] = "x" }, []string{"downstream[0]", "params", "nope"}},
-		{"a required param the edge omits", func(c *config.Config) { edge(c).Params = nil }, []string{"downstream[0]", "updateKey", "required"}},
 		{"unknown lines", func(c *config.Config) { edge(c).Lines = "some" }, []string{"downstream[0]", "lines", `"some"`}},
 		{"an edge step from nowhere", func(c *config.Config) {
 			edge(c).PostEdit = []config.Step{{Run: config.Command{"x"}, From: "nowhere"}}
@@ -96,21 +88,6 @@ func TestValidateMethodAndEdgeProblems(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestValidateAnEdgeMayLeaveOutAnOptionalParam(t *testing.T) {
-	c := withMethods()
-	c.Projects[0].UpdateMethods[0].AllowedParams = append(c.Projects[0].UpdateMethods[0].AllowedParams,
-		config.AllowedParam{Key: "value", Default: "{tag}"}, config.AllowedParam{Key: "reviewers"})
-	c.Projects[0].UpdateMethods[0].AllowedParams[2].Required = func() *bool { b := false; return &b }()
-	assert.NoError(t, Validate(WithDefaults(c)), "value has a default, and reviewers says it is optional")
-}
-
-func TestValidateAMethodMayAddParamsForItsSteps(t *testing.T) {
-	c := withMethods()
-	c.Projects[0].UpdateMethods[0].AllowedParams = append(c.Projects[0].UpdateMethods[0].AllowedParams,
-		config.AllowedParam{Key: "reviewers", Description: "passed to the steps", Default: "orbs"})
-	assert.NoError(t, Validate(WithDefaults(c)))
 }
 
 func TestValidateEdgeStepsFromTheProducerOrTheCentralRepo(t *testing.T) {

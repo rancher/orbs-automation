@@ -7,90 +7,63 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/strategyspec"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // resolution is everything about a run that is the same for every target branch:
-// who ships to whom, how the consumer keeps the value, which release, and what
-// the value should become.
+// who ships to whom, how the consumer keeps the value, which release, and the
+// consumer's refs.
 type resolution struct {
 	producer     config.Project
-	link         config.Link // the edge, the consumer and the update method
-	strategy     Strategy
-	params       Params // the strategy's params, bound from the method and the edge
-	file         string
+	route        updatedispatcher.Route
+	invocation   updatedispatcher.Invocation
 	release      Release
-	want         string
+	rel          updatedispatcher.Release // what the strategy makes the value from
 	consumerRefs git.Refs
 }
 
-// resolve finds the producer, picks the consumer, looks up the strategy and
-// resolves the release from the producer's tags on the host.
+// resolve finds the producer, picks the route to ship down, binds the edge's
+// params to the consumer's method and resolves the release from the producer's
+// tags on the host.
 func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
-	producer, links, err := ws.Links(in.Project)
+	producer, err := ws.Project(in.Project)
 	if err != nil {
 		return resolution{}, err
 	}
-	link, err := pickLink(producer, links, in.To, in.Method)
+	engine, engineErr := ws.Updates()
+	if engine == nil {
+		return resolution{}, engineErr
+	}
+	routes := engine.RoutesFrom(producer)
+	if len(routes) == 0 && engineErr != nil {
+		return resolution{}, engineErr // a method of the route is not usable; say why
+	}
+	route, err := pickRoute(producer, routes, in.To, in.Method)
 	if err != nil {
 		return resolution{}, err
 	}
-	res := resolution{producer: producer, link: link, params: bindParams(link)}
-	strategyName := link.Method.Strategy
-	if res.strategy, err = LookupStrategy(strategyName); err != nil {
-		return resolution{}, fmt.Errorf("method %s: %w", link.Method.Name, err)
+	inv, err := engine.Invoke(route)
+	if err != nil {
+		return resolution{}, err
 	}
-	if res.file, err = res.strategy.File(res.params); err != nil {
-		return resolution{}, fmt.Errorf("method %s: %w", link.Method.Name, err)
-	}
+	res := resolution{producer: producer, route: route, invocation: inv}
 
 	producerRefs, err := ws.UpstreamRefs(ctx, producer.Repo.Name)
 	if err != nil {
 		return resolution{}, fmt.Errorf("read the tags of %s: %w", producer.Repo.Name, err)
 	}
-	if res.release, err = ResolveRelease(producer, producerRefs.Tags, in.Arg, in.Prerelease, link.Method.Accept.When); err != nil {
+	if res.release, err = ResolveRelease(producer, producerRefs.Tags, in.Arg, in.Prerelease, route.Method.Accept); err != nil {
 		return resolution{}, err
 	}
-	if res.want, err = res.strategy.Value(res.params, map[string]string{
-		"image":      producer.EffectiveImages()[0].Name,
-		"tag":        res.release.Tag,
-		"version":    strings.TrimPrefix(res.release.Tag, "v"),
-		"sourceRepo": producer.Repo.Name,
-	}); err != nil {
-		return resolution{}, fmt.Errorf("method %s: %w", link.Method.Name, err)
+	res.rel = updatedispatcher.Release{
+		Tag: res.release.Tag, Version: strings.TrimPrefix(res.release.Tag, "v"),
+		Image: producer.EffectiveImages()[0].Name, SourceRepo: producer.Repo.Name,
 	}
-
-	consumerSlug := link.Consumer.Repo.Name
+	consumerSlug := route.Consumer.Repo.Name
 	if res.consumerRefs, err = ws.UpstreamRefs(ctx, consumerSlug); err != nil {
 		return resolution{}, fmt.Errorf("read the branches of %s: %w", consumerSlug, err)
 	}
 	return res, nil
-}
-
-// bindParams gathers what a strategy and the steps see: the strategy's own
-// defaults, then the defaults of the params the method offers, then the values
-// the method fixes, then what the producer's edge passes. A producer cannot
-// override a fixed value; validation already rejects an edge that tries.
-func bindParams(link config.Link) Params {
-	params := Params{}
-	spec, _ := strategyspec.Lookup(link.Method.Strategy)
-	for _, sp := range spec.Params {
-		if sp.Default != "" {
-			params[sp.Key] = sp.Default
-		}
-	}
-	for _, ap := range link.Method.AllowedParams {
-		if ap.Default != "" {
-			params[ap.Key] = ap.Default
-		}
-	}
-	for key, value := range link.Edge.Params {
-		params[key] = value
-	}
-	for key, value := range link.Method.With {
-		params[key] = value
-	}
-	return params
 }
 
 // branches returns the consumer branches to check, and whether the user named
@@ -102,8 +75,8 @@ func (r resolution) branches(in Input) (branches []string, named bool, err error
 	if in.Branch != "" {
 		return []string{in.Branch}, true, nil
 	}
-	consumer := r.link.Consumer
-	if r.link.Edge.AcceptLines(r.producer) == config.AcceptLinesUniversal {
+	consumer := r.route.Consumer
+	if r.route.Edge.AcceptLines(r.producer) == config.AcceptLinesUniversal {
 		if branches = consumer.ReleaseBranches(); len(branches) == 0 {
 			return nil, false, fmt.Errorf("%w: %s has no release branches; name one with --branch", ErrNoTargets, consumer.Repo.Name)
 		}
@@ -124,22 +97,22 @@ func (r resolution) branches(in Input) (branches []string, named bool, err error
 		ErrNoTargets, consumer.Repo.Name, line, r.release.Tag)
 }
 
-// pickLink chooses the route to ship down: the one to the consumer named by to
+// pickRoute chooses the route to ship down: the one to the consumer named by to
 // (a config name or a slug), and with the method named by method when the
 // producer uses several of one consumer; the only route when there is just one.
-func pickLink(producer config.Project, links []config.Link, to, method string) (config.Link, error) {
-	var matches []config.Link
-	for _, l := range links {
-		toOK := to == "" || strings.EqualFold(l.Consumer.Name, to) || strings.EqualFold(l.Consumer.Repo.Name, to)
-		methodOK := method == "" || l.Method.Name == method
+func pickRoute(producer config.Project, routes []updatedispatcher.Route, to, method string) (updatedispatcher.Route, error) {
+	var matches []updatedispatcher.Route
+	for _, r := range routes {
+		toOK := to == "" || strings.EqualFold(r.Consumer.Name, to) || strings.EqualFold(r.Consumer.Repo.Name, to)
+		methodOK := method == "" || r.Method.Name == method
 		if toOK && methodOK {
-			matches = append(matches, l)
+			matches = append(matches, r)
 		}
 	}
-	describe := func(ls []config.Link) string {
-		out := make([]string, len(ls))
-		for i, l := range ls {
-			out[i] = l.Consumer.Name + " (" + l.Method.Name + ")"
+	describe := func(rs []updatedispatcher.Route) string {
+		out := make([]string, len(rs))
+		for i, r := range rs {
+			out[i] = r.Consumer.Name + " (" + r.Method.Name + ")"
 		}
 		return strings.Join(out, ", ")
 	}
@@ -147,10 +120,10 @@ func pickLink(producer config.Project, links []config.Link, to, method string) (
 	case 1:
 		return matches[0], nil
 	case 0:
-		if len(links) == 0 {
-			return config.Link{}, fmt.Errorf("%w: %s ships to no project: it has no downstream edges", ErrNoConsumer, producer.Name)
+		if len(routes) == 0 {
+			return updatedispatcher.Route{}, fmt.Errorf("%w: %s ships to no project: it has no downstream edges", ErrNoConsumer, producer.Name)
 		}
-		return config.Link{}, fmt.Errorf("%w: %s has no route to %q: it ships to %s", ErrNoConsumer, producer.Name, to+" "+method, describe(links))
+		return updatedispatcher.Route{}, fmt.Errorf("%w: %s has no route to %q: it ships to %s", ErrNoConsumer, producer.Name, strings.TrimSpace(to+" "+method), describe(routes))
 	}
-	return config.Link{}, fmt.Errorf("%w for %s: %s; choose with --to and --method", ErrAmbiguousConsumer, producer.Name, describe(matches))
+	return updatedispatcher.Route{}, fmt.Errorf("%w for %s: %s; choose with --to and --method", ErrAmbiguousConsumer, producer.Name, describe(matches))
 }

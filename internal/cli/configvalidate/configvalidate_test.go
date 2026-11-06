@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,10 +20,15 @@ type fakeWorkspace struct {
 	dirErr error
 	cfg    config.Config
 	cfgErr error
+	// updatesErr is what the update dispatcher's engine finds wrong.
+	updatesErr error
 }
 
 func (f fakeWorkspace) ConfigDir() (workspace.ConfigDir, error) { return f.dir, f.dirErr }
 func (f fakeWorkspace) Config() (config.Config, error)          { return f.cfg, f.cfgErr }
+func (f fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
+	return nil, f.updatesErr
+}
 
 func TestRunSummarizesAValidConfig(t *testing.T) {
 	ws := fakeWorkspace{
@@ -90,4 +96,14 @@ func TestRunWithoutCentralCheckout(t *testing.T) {
 	_, err := Run(clicfg.Settings{}, t.TempDir())
 
 	assert.ErrorIs(t, err, workspace.ErrNotFound)
+}
+
+func TestRunReturnsWhatTheUpdateDispatcherFinds(t *testing.T) {
+	problem := errors.New(`Project "rancher": method "build-yaml-bump": strategy "nope" is not known: use one of yamlBump`)
+	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfg: config.Config{}, updatesErr: problem}
+
+	out, err := run(ws)
+
+	assert.ErrorIs(t, err, problem, "a method or an edge that cannot work is a config problem, like any other")
+	assert.Empty(t, out)
 }

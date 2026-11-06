@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -16,6 +17,9 @@ import (
 type Workspace interface {
 	ConfigDir() (workspace.ConfigDir, error)
 	Config() (config.Config, error)
+	// Updates builds the update dispatcher's engine, which finds what depends on
+	// a strategy: a method that cannot work, or an edge that does not fit its method.
+	Updates() (*updatedispatcher.Engine, error)
 }
 
 // Run validates the central config found from s and the working directory cwd.
@@ -32,6 +36,9 @@ func run(ws Workspace) (string, error) {
 	}
 	cfg, err := ws.Config()
 	if err != nil {
+		return "", err
+	}
+	if _, err := ws.Updates(); err != nil {
 		return "", err
 	}
 	lines := 0
