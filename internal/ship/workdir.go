@@ -58,6 +58,10 @@ type Git interface {
 	Commit(ctx context.Context, dir string, c GitCommit) (commit string, err error)
 	Discard(ctx context.Context, dir string, created []string) error
 	Push(ctx context.Context, dir, remote, branch string) error
+	MergeBase(ctx context.Context, dir, a, b string) (string, error)
+	CommitsSince(ctx context.Context, dir, base, tip string) ([]BranchCommit, error)
+	// Config is what git uses for key in the clone: user.email is the actor's.
+	Config(ctx context.Context, dir, key string) (string, error)
 }
 
 // GitCLI is Git through the git binary (internal/git/gitcli).
@@ -108,6 +112,23 @@ func (GitCLI) Commit(ctx context.Context, dir string, c GitCommit) (string, erro
 	})
 }
 
+func (GitCLI) MergeBase(ctx context.Context, dir, a, b string) (string, error) {
+	return gitcli.MergeBase(ctx, dir, a, b)
+}
+
+func (GitCLI) CommitsSince(ctx context.Context, dir, base, tip string) ([]BranchCommit, error) {
+	facts, err := gitcli.CommitsSince(ctx, dir, base, tip)
+	out := make([]BranchCommit, len(facts))
+	for i, f := range facts {
+		out[i] = BranchCommit{Hash: f.Hash, AuthorEmail: f.AuthorEmail, Message: f.Message}
+	}
+	return out, err
+}
+
+func (GitCLI) Config(ctx context.Context, dir, key string) (string, error) {
+	return gitcli.ConfigIn(ctx, dir, key)
+}
+
 func (GitCLI) Push(ctx context.Context, dir, remote, branch string) error {
 	return gitcli.Push(ctx, dir, remote, branch)
 }
@@ -125,6 +146,10 @@ type PrepareRequest struct {
 	Branch   string // the new branch to create
 	DryRun   bool   // never move the checkout
 	TempDir  string // where a worktree goes
+	// Rebuild builds the branch again even when one of ours is there and current.
+	//
+	// STUB: not used until a later commit.
+	Rebuild bool
 }
 
 // Work is a branch prepared for an edit.
@@ -135,6 +160,12 @@ type Work struct {
 	// was not in place.
 	Place  Place
 	Reason string
+	// Reused says the branch already existed, was ours and was current, so it was
+	// not built again: Existing are its commits.
+	//
+	// STUB: never set until a later commit.
+	Reused   bool
+	Existing []CommitInfo
 
 	g         Git
 	clone     string   // the engineer's clone

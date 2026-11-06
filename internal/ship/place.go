@@ -12,6 +12,9 @@ const (
 	// Worktree is a temporary worktree of the same repository, which leaves the
 	// engineer's checkout alone.
 	Worktree Place = "worktree"
+	// Existing is a branch of ours that was already there and current, so no work
+	// was done for it.
+	Existing Place = "existing branch"
 )
 
 // CloneState is what the choice of Place needs to know about the engineer's
