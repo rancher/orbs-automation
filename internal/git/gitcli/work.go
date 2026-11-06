@@ -1,0 +1,311 @@
+package gitcli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/rancher/orbs-automation/internal/execx"
+)
+
+// The functions in this file prepare a branch of a local clone, change it and
+// commit, for gero ship. Each is the git command the push-to-rancher script
+// (scc-operator's create-prs.sh) runs for the same step, run the same way
+// (git -C <dir> ...), with the differences that script's own steps need
+// recorded where they are. Why not go-git: it cannot create linked worktrees or
+// switch a checkout the way git does, and the commit must run the engineer's
+// hooks and signing settings, which only git applies.
+
+// ErrNothingToCommit is returned by Commit when staging leaves no change.
+var ErrNothingToCommit = errors.New("nothing to commit")
+
+// inDir runs git in dir and returns stdout. A failure carries the last of what
+// git said, since that is where the cause is.
+func inDir(ctx context.Context, dir string, args ...string) (string, error) {
+	res, err := runGit(ctx, append([]string{"-C", dir}, args...)...)
+	if err != nil {
+		var exit *execx.ExitError
+		if errors.As(err, &exit) {
+			if msg := strings.TrimSpace(string(res.Stderr)); msg != "" {
+				return "", fmt.Errorf("git %s: %w: %s", args[0], err, lastLine(msg))
+			}
+		}
+		return "", wrap(err, "git "+args[0])
+	}
+	return string(res.Stdout), nil
+}
+
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
+}
+
+// exitCode returns the exit code of a git failure, or -1 for anything else.
+func exitCode(err error) int {
+	var exit *execx.ExitError
+	if errors.As(err, &exit) {
+		return exit.ExitCode
+	}
+	return -1
+}
+
+// Fetch fetches one branch of remote into the clone in dir and returns the
+// commit it is at. This is the script's `git fetch $RANCHER_REMOTE $BRANCH`:
+// it adds objects and updates remote/branch, and moves no local branch and
+// nothing in the working tree.
+func Fetch(ctx context.Context, dir, remote, branch string) (string, error) {
+	if _, err := inDir(ctx, dir, "fetch", remote, branch); err != nil {
+		return "", err
+	}
+	out, err := inDir(ctx, dir, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// HasCommit reports whether the clone holds the commit.
+func HasCommit(ctx context.Context, dir, commit string) (bool, error) {
+	_, err := inDir(ctx, dir, "cat-file", "-e", commit+"^{commit}")
+	if exitCode(err) == 1 || exitCode(err) == 128 {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// BranchCommit returns the commit a local branch is at, and false when there is
+// no such branch.
+func BranchCommit(ctx context.Context, dir, branch string) (string, bool, error) {
+	out, err := inDir(ctx, dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch+"^{commit}")
+	if exitCode(err) == 1 {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(out), true, nil
+}
+
+// State is what a clone is in, as far as starting a branch in it is concerned.
+type State struct {
+	// Branch is the checked-out branch, or "" when HEAD is detached.
+	Branch string
+	// InProgress names an unfinished operation (merge, rebase, cherry-pick,
+	// revert, bisect), or is "".
+	InProgress string
+	// Tracked lists tracked paths that are staged, modified or deleted.
+	Tracked []string
+	// Untracked lists paths git does not track and does not ignore, a file at a
+	// time.
+	Untracked []string
+}
+
+// Clean reports whether the clone can be worked in directly: on a branch, with
+// no operation in progress and no change to a tracked file. Untracked files do
+// not make it unclean; Collisions says when one still gets in the way.
+func (s State) Clean() bool {
+	return s.Branch != "" && s.InProgress == "" && len(s.Tracked) == 0
+}
+
+// inProgress maps the file git leaves in its directory to the operation.
+var inProgress = []struct{ file, name string }{
+	{"MERGE_HEAD", "merge"}, {"rebase-merge", "rebase"}, {"rebase-apply", "rebase"},
+	{"CHERRY_PICK_HEAD", "cherry-pick"}, {"REVERT_HEAD", "revert"}, {"BISECT_LOG", "bisect"},
+}
+
+// Status reads the state of the clone in dir. It is the script's `git diff
+// --quiet` and `git status --porcelain` checks, kept apart: what is tracked and
+// changed, and what is untracked.
+func Status(ctx context.Context, dir string) (State, error) {
+	var st State
+	out, err := inDir(ctx, dir, "symbolic-ref", "--quiet", "--short", "HEAD")
+	switch {
+	case err == nil:
+		st.Branch = strings.TrimSpace(out)
+	case exitCode(err) != 1: // 1 is a detached HEAD
+		return State{}, err
+	}
+	porcelain, err := inDir(ctx, dir, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return State{}, err
+	}
+	fields := strings.Split(porcelain, "\x00")
+	for i := 0; i < len(fields); i++ {
+		f := fields[i]
+		if len(f) < 4 {
+			continue
+		}
+		xy, path := f[:2], f[3:]
+		if xy == "??" {
+			st.Untracked = append(st.Untracked, path)
+			continue
+		}
+		st.Tracked = append(st.Tracked, path)
+		if xy[0] == 'R' || xy[0] == 'C' || xy[1] == 'R' || xy[1] == 'C' {
+			i++ // a rename or copy is followed by the path it came from
+		}
+	}
+	for _, p := range inProgress {
+		gitPath, err := inDir(ctx, dir, "rev-parse", "--git-path", p.file)
+		if err != nil {
+			return State{}, err
+		}
+		gitPath = strings.TrimSpace(gitPath)
+		if !filepath.IsAbs(gitPath) {
+			gitPath = filepath.Join(dir, gitPath)
+		}
+		if _, err := os.Stat(gitPath); err == nil {
+			st.InProgress = p.name
+			break
+		}
+	}
+	return st, nil
+}
+
+// Collisions returns the paths of untracked that checking out commit would
+// overwrite: the commit has a file at that path, or anything below it (the path
+// would have to be a directory), or has a file where one of its parent
+// directories would be. git refuses such a checkout, so the caller works
+// elsewhere.
+func Collisions(ctx context.Context, dir, commit string, untracked []string) ([]string, error) {
+	var collisions []string
+	for _, path := range untracked {
+		hit, err := collides(ctx, dir, commit, path)
+		if err != nil {
+			return nil, err
+		}
+		if hit {
+			collisions = append(collisions, path)
+		}
+	}
+	return collisions, nil
+}
+
+func collides(ctx context.Context, dir, commit, path string) (bool, error) {
+	out, err := inDir(ctx, dir, "ls-tree", "-r", "--name-only", commit, "--", path)
+	if err != nil {
+		return false, err
+	}
+	if strings.TrimSpace(out) != "" {
+		return true, nil
+	}
+	for parent := filepath.Dir(path); parent != "." && parent != "/"; parent = filepath.Dir(parent) {
+		out, err := inDir(ctx, dir, "ls-tree", commit, "--", parent)
+		if err != nil {
+			return false, err
+		}
+		for _, line := range strings.Split(out, "\n") {
+			if fields := strings.Fields(line); len(fields) >= 2 && fields[1] != "tree" {
+				return true, nil // a file where the directory would be
+			}
+		}
+	}
+	return false, nil
+}
+
+// StartBranch creates branch at commit and checks it out in the clone in dir:
+// the script's `git checkout -b $BRANCH_NAME`, but at the commit that was
+// fetched and checked, never by first resetting a local branch to it (the
+// script's `checkout -B`). An existing branch is an error.
+func StartBranch(ctx context.Context, dir, branch, commit string) error {
+	_, err := inDir(ctx, dir, "checkout", "--quiet", "-b", branch, commit)
+	return err
+}
+
+// Checkout checks out an existing branch, as the script's `git checkout
+// $TARGET_BRANCH` does to return, but without its -f: nothing is discarded.
+func Checkout(ctx context.Context, dir, branch string) error {
+	_, err := inDir(ctx, dir, "checkout", "--quiet", branch)
+	return err
+}
+
+// DeleteBranch deletes a local branch whatever it holds: the script's
+// `git branch -D $BRANCH_NAME`.
+func DeleteBranch(ctx context.Context, dir, branch string) error {
+	_, err := inDir(ctx, dir, "branch", "--quiet", "-D", branch)
+	return err
+}
+
+// AddWorktree creates a worktree of the clone in dir at path, on a new branch at
+// commit. The script has no equivalent: it edits the engineer's checkout.
+func AddWorktree(ctx context.Context, dir, path, branch, commit string) error {
+	_, err := inDir(ctx, dir, "worktree", "add", "--quiet", "-b", branch, path, commit)
+	return err
+}
+
+// RemoveWorktree removes a worktree made by AddWorktree, with whatever it holds.
+func RemoveWorktree(ctx context.Context, dir, path string) error {
+	_, err := inDir(ctx, dir, "worktree", "remove", "--force", path)
+	return err
+}
+
+// Commit is one commit to make.
+type Commit struct {
+	// Message is the whole commit message.
+	Message string
+	// Stage lists untracked paths the run created and that belong in the commit.
+	// Tracked changes are always staged, and no other untracked path is.
+	Stage []string
+	// Name and Email are the author and committer, or both empty for the git
+	// configuration of the clone, which is what the script's local runs use.
+	Name, Email string
+	// Sign makes git sign the commit with the engineer's own configuration.
+	// Otherwise the commit is unsigned whatever the configuration says.
+	Sign bool
+}
+
+// CommitChanges stages and commits in the clone in dir, and returns the new
+// commit. The script's `git add .` and `git commit -m` differ in what they
+// stage: `add .` takes every untracked file in the checkout, including the
+// engineer's own, so here it is the tracked changes (`add -u`) and the paths in
+// Stage. The commit runs hooks, as the script's does. It is ErrNothingToCommit
+// when staging leaves no change.
+func CommitChanges(ctx context.Context, dir string, c Commit) (string, error) {
+	if _, err := inDir(ctx, dir, "add", "-u"); err != nil {
+		return "", err
+	}
+	if len(c.Stage) > 0 {
+		if _, err := inDir(ctx, dir, append([]string{"add", "--"}, c.Stage...)...); err != nil {
+			return "", err
+		}
+	}
+	_, err := inDir(ctx, dir, "diff", "--cached", "--quiet")
+	if err == nil {
+		return "", ErrNothingToCommit
+	}
+	if exitCode(err) != 1 {
+		return "", err
+	}
+	var args []string
+	if c.Name != "" || c.Email != "" {
+		args = append(args, "-c", "user.name="+c.Name, "-c", "user.email="+c.Email)
+	}
+	args = append(args, "commit", "--quiet", "-m", c.Message)
+	if c.Sign {
+		args = append(args, "--gpg-sign")
+	} else {
+		args = append(args, "--no-gpg-sign")
+	}
+	if _, err := inDir(ctx, dir, args...); err != nil {
+		return "", err
+	}
+	out, err := inDir(ctx, dir, "rev-parse", "HEAD")
+	return strings.TrimSpace(out), err
+}
+
+// Discard undoes a run in a clone that was clean when it started: tracked files
+// go back to HEAD, and the untracked paths the run created are removed. It is
+// what the script's `git checkout -f` is for, narrowed to what the run made.
+func Discard(ctx context.Context, dir string, created []string) error {
+	if _, err := inDir(ctx, dir, "reset", "--hard", "--quiet", "HEAD"); err != nil {
+		return err
+	}
+	if len(created) == 0 {
+		return nil
+	}
+	_, err := inDir(ctx, dir, append([]string{"clean", "--force", "--quiet", "--"}, created...)...)
+	return err
+}
