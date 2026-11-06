@@ -129,6 +129,7 @@ func TestLoadFileOnlyKeys(t *testing.T) {
 fork: origin
 githubUser: danpock
 branchPrefix: dan/
+pushTo: fork
 repos:
   search:
     - /work/suse
@@ -137,17 +138,20 @@ repos:
   overrides:
     rancher/scc-operator:
       upstream: rancher
+      pushTo: upstream
 `)})
 
 	require.NoError(t, err)
 	assert.Equal(t, "origin", s.Fork)
 	assert.Equal(t, "danpock", s.GitHubUser)
 	assert.Equal(t, "dan/", s.BranchPrefix)
+	assert.Equal(t, "fork", s.PushTo)
+	assert.Equal(t, SourceFile, s.Source("pushTo"))
 	assert.Equal(t, SourceFile, s.Source("fork"))
 	assert.Equal(t, SourceDefault, s.Source("nonexistent"))
 	assert.Equal(t, []string{"/work/suse"}, s.Repos.Search)
 	assert.Equal(t, map[string]string{"rancher/rancher": "/work/suse/rancher-src"}, s.Repos.Paths)
-	assert.Equal(t, map[string]RepoOverride{"rancher/scc-operator": {Upstream: "rancher"}}, s.Repos.Overrides)
+	assert.Equal(t, map[string]RepoOverride{"rancher/scc-operator": {Upstream: "rancher", PushTo: "upstream"}}, s.Repos.Overrides)
 }
 
 func TestLoadEmptyFile(t *testing.T) {
@@ -172,6 +176,8 @@ func TestLoadFileErrors(t *testing.T) {
 		{"relative repo path", "repos:\n  paths:\n    rancher/rancher: rel\n", "repos.paths.rancher/rancher"},
 		{"bad slug in paths", "repos:\n  paths:\n    rancher: /x\n", "owner/name"},
 		{"bad slug in overrides", "repos:\n  overrides:\n    rancher:\n      upstream: u\n", "owner/name"},
+		{"pushTo that is neither role", "pushTo: forks\n", "pushTo"},
+		{"per-repo pushTo that is neither role", "repos:\n  overrides:\n    rancher/rancher:\n      pushTo: origin\n", "repos.overrides.rancher/rancher.pushTo"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
