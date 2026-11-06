@@ -117,6 +117,28 @@ Until the push is built, a run with neither flag stops after the state check and
 * **Finding a PR does not use the name**, because the prefix differs by actor. Every PR body carries a hidden, versioned marker (additive fields) naming `source`, `consumer`, `target` and `version`. The **overlap key** is source, consumer and target: two PRs with the same key are one bump at two versions. The lookup lists the consumer's open PRs for the base branch and reads the markers. Labels are the configured ones and are not used for lookup.
 * **A newer version supersedes.** A new version is a new branch and a new PR, and the old one is commented and closed. The branch is never updated or force-pushed. A closed, unmerged PR for the same marker is not reopened and does not block a new one, and a merged one ends the branch as up to date.
 
+## Where the branch is pushed
+
+A push goes to one of two places, named by role and not by remote: the **fork** (the remote in `fork`, where the engineer has their own copy) or the **upstream** (the real repository). Which is a choice that varies with the environment, so it is layered, the nearest to the run winning:
+
+1. the `--push-to fork|upstream` flag;
+2. the user's per-repo setting, `repos.overrides.<slug>.pushTo`;
+3. the consumer Project's `pullRequests.pushTo`, for a repository that is only ever pushed to one way;
+4. the user's own default, `pushTo` in the user file;
+5. else the fork when one is set, and the upstream when it is not.
+
+So an engineer with a fork set pushes to it without saying so, and a repository that does not take PRs from forks can say so once in its Project. The role is resolved to a remote name from the settings (`fork`, and `upstream` with its per-repo override, [WORKSPACE](WORKSPACE.md)), and a role with no remote set is an error that says which setting to make. The PR's head follows the role: `<githubUser>:<branch>` for the fork and the bare branch for the upstream. In CI the role is always the upstream, with the workflow's token.
+
+## The PR service
+
+Creating, finding and closing PRs, and commenting and labelling them, is one service in `internal/github`, and `ship` is its first user and not its only one: the reconciler's tracking issues need the same calls (a comment, a label, closing) on issues, which GitHub treats as the same kind of item as a PR. So the service speaks in plain types of its own (go-github's stay inside), and each user declares the narrow interface it needs, as with every other consumer.
+
+* **Finding.** The open PRs of a repository for one base branch, each with its number, URL, head, body and labels. `ship` reads the marker of each ([Branches and PR identity](#branches-and-pr-identity)); the service does not know what a marker is.
+* **Creating.** A PR from a head to a base with a title and body. Labels are not part of creating it.
+* **Labels are a separate step** ([METADATA](METADATA.md#applying-labels)): the repository's labels are read once per run, the configured labels that exist are applied after the PR exists, and one that is missing is a warning and not a failure. A label failure never fails the PR.
+* **Commenting and closing** work on a PR by number, so the same calls close a superseded PR and, later, a tracking issue.
+* **Outcomes.** A PR with the same marker and version is **already open** and the run stops. An older version is **superseded**: the new PR is created first, and then the old one gets a comment linking it and is closed, so a failure leaves the old PR open and not nothing. A newer version already open is a blocker that names it, since this release is the older one.
+
 ## Commits and the audit trail
 
 * **Templates are compiled in.** The commit message, body and trailers are generic templates in `internal/ship/templates`, written with `{name}` placeholders from a closed set (`templates.TextVars`). The body's `{changes}` is generated from what the strategy and the steps did, so it never claims a step that did not run. An unknown placeholder is a config error. Project-specific and bundle-shipped templates ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) are not designed until a project needs one.
@@ -138,12 +160,12 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
-* The check for open PRs the new one would supersede.
+* The PR service in `internal/github`, the check for open PRs the new one would supersede, and the push-target layers above (only the `fork` setting and `gitcli.Push` exist).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
 ## Open questions
 
-* Whether engineers push to a fork or straight to the upstream today. The design supports both through `fork` and `upstream`; the default for a target is a config decision.
+* The names of the push-target settings (`pushTo`, `repos.overrides.<slug>.pushTo`, `pullRequests.pushTo`) and of the flag are proposals until they are built.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
 * The shape of `gero ci:ship` (above).
 * Whether a clean clone with untracked files should be worked in place when none collide, as designed here, or sent to a worktree whenever there are any.
