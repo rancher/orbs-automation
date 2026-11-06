@@ -312,6 +312,16 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	}
 	result.Place, result.Reason = w.Place, w.Reason
 	emit(sink, Event{Kind: EventTargetStarted, Branch: tp.Branch, Place: w.Place, Reason: w.Reason})
+	if w.Reused {
+		// The branch is one of ours that is current, so nothing is built: what it
+		// holds is what is published.
+		result.Commits = w.Existing
+		result.Status = ResultCommitted
+		if in.DryRun {
+			result.Status = ResultWouldCommit
+		}
+		return result
+	}
 
 	applied, err := Apply{
 		Invocation: r.invocation, Release: r.rel, Branch: tp.Branch,

@@ -147,8 +147,6 @@ type PrepareRequest struct {
 	DryRun   bool   // never move the checkout
 	TempDir  string // where a worktree goes
 	// Rebuild builds the branch again even when one of ours is there and current.
-	//
-	// STUB: not used until a later commit.
 	Rebuild bool
 }
 
@@ -162,8 +160,6 @@ type Work struct {
 	Reason string
 	// Reused says the branch already existed, was ours and was current, so it was
 	// not built again: Existing are its commits.
-	//
-	// STUB: never set until a later commit.
 	Reused   bool
 	Existing []CommitInfo
 
@@ -195,12 +191,12 @@ func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
 	if commit, found, err := g.BranchCommit(ctx, req.CloneDir, req.Branch); err != nil {
 		return nil, err
 	} else if found {
-		if commit != req.Base {
-			return nil, fmt.Errorf("%w: %s is at %s, not at %s: delete it or keep it, it is yours", ErrBranchExists, req.Branch, short(commit), short(req.Base))
-		}
-		// Identical to where the new branch would start, so nothing is lost.
-		if err := g.DeleteBranch(ctx, req.CloneDir, req.Branch); err != nil {
+		reused, err := settleExisting(ctx, g, req, commit)
+		if err != nil {
 			return nil, err
+		}
+		if reused != nil {
+			return reused, nil
 		}
 	}
 	collisions, err := g.Collisions(ctx, req.CloneDir, req.Base, st.Untracked)
@@ -222,6 +218,47 @@ func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
 		}
 	}
 	return w, nil
+}
+
+// settleExisting decides what to do about a branch of the name that is already
+// there, at commit. One that is at the base itself holds nothing, and goes. One
+// whose commits are all ours (see commitsAreOurs) is the actor's own earlier work:
+// when it is based on the current head of the target it is reused as it is, which
+// is also how a run whose push failed is resumed, and otherwise, or when a rebuild
+// was asked for, it goes and is built again. One with a commit that is not ours is
+// an error, since those commits are somebody's to keep. A nil Work with no error
+// says to go on and build.
+func settleExisting(ctx context.Context, g Git, req PrepareRequest, commit string) (*Work, error) {
+	if commit != req.Base {
+		mergeBase, err := g.MergeBase(ctx, req.CloneDir, req.Base, commit)
+		if err != nil {
+			return nil, fmt.Errorf("compare the branch %s with %s: %w", req.Branch, req.Target, err)
+		}
+		facts, err := g.CommitsSince(ctx, req.CloneDir, mergeBase, commit)
+		if err != nil {
+			return nil, err
+		}
+		email, err := g.Config(ctx, req.CloneDir, "user.email")
+		if err != nil {
+			return nil, err
+		}
+		if ours, why := commitsAreOurs(facts, email); !ours {
+			return nil, fmt.Errorf("%w: %s is at %s, and %s: delete it or keep it, it is not ours to change", ErrBranchExists, req.Branch, short(commit), why)
+		}
+		if mergeBase == req.Base && !req.Rebuild {
+			existing := make([]CommitInfo, len(facts))
+			for i, f := range facts {
+				subject, _, _ := strings.Cut(f.Message, "\n")
+				existing[i] = CommitInfo{Hash: f.Hash, Subject: subject}
+			}
+			return &Work{Place: Existing, Reused: true, Existing: existing, g: g, clone: req.CloneDir, branch: req.Branch}, nil
+		}
+	}
+	// At the base, or ours and out of date, or to be rebuilt: nothing is lost.
+	if err := g.DeleteBranch(ctx, req.CloneDir, req.Branch); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 // short abbreviates a commit for a message.
@@ -257,6 +294,9 @@ func (w *Work) Commit(ctx context.Context, c GitCommit) (string, error) {
 // on; a worktree is removed. The new branch is kept when keep is set, and
 // deleted otherwise. Every step is tried, and the errors are joined.
 func (w *Work) Finish(ctx context.Context, keep bool) error {
+	if w.Reused {
+		return nil // the branch was there before, and is not ours to remove now
+	}
 	var errs []error
 	if w.Place == InPlace {
 		errs = append(errs, w.g.Checkout(ctx, w.clone, w.start))
@@ -272,6 +312,9 @@ func (w *Work) Finish(ctx context.Context, keep bool) error {
 // Abort ends the work after a failure: whatever the run changed in the clone is
 // undone, and the branch is not kept.
 func (w *Work) Abort(ctx context.Context) error {
+	if w.Reused {
+		return nil
+	}
 	var errs []error
 	if w.Place == InPlace {
 		created, err := w.created(ctx)
