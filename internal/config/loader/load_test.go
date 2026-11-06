@@ -31,6 +31,9 @@ func TestLoadDecodesProject(t *testing.T) {
     title: "[{branch}] bump"
     labels:
       - status/auto-created
+    botLabels:
+      - origin/bot
+    pushTo: upstream
   updateMethods:
     - name: package-bump
       strategy: chartsPackageBump
@@ -55,7 +58,9 @@ func TestLoadDecodesProject(t *testing.T) {
 				{Line: "v2.15", Branch: "dev-v2.15"},
 			},
 		},
-		PullRequests: config.PullRequests{Title: "[{branch}] bump", Labels: []string{"status/auto-created"}},
+		PullRequests: config.PullRequests{
+			Title: "[{branch}] bump", Labels: []string{"status/auto-created"}, BotLabels: []string{"origin/bot"}, PushTo: "upstream",
+		},
 		UpdateMethods: []config.UpdateMethod{{
 			Name:     "package-bump",
 			Strategy: "chartsPackageBump",

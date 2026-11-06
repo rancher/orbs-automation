@@ -136,6 +136,11 @@ func TestValidateProblems(t *testing.T) {
 			func(c *config.Config) { c.Projects[0].PullRequests.BranchPrefix = "bot/{nope}-" },
 			[]string{"pullRequests.branchPrefix", "nope"},
 		},
+		{
+			"pushTo that is neither role",
+			func(c *config.Config) { c.Projects[0].PullRequests.PushTo = "forks" },
+			[]string{"pullRequests.pushTo", "fork, upstream", `"forks"`},
+		},
 		{"external repo name", func(c *config.Config) { c.Externals[0].Repo.Name = "x" }, []string{`External "x"`, "repo.name"}},
 		{
 			"relationship to unknown project",
@@ -176,6 +181,16 @@ func TestValidateProblems(t *testing.T) {
 				assert.Contains(t, err.Error(), w)
 			}
 		})
+	}
+}
+
+func TestValidateAcceptsPushToAndBotLabels(t *testing.T) {
+	for _, role := range []string{"", "fork", "upstream"} {
+		c := valid()
+		c.Projects[0].PullRequests.PushTo = role
+		c.Projects[0].PullRequests.BotLabels = []string{"origin/bot"}
+
+		assert.NoError(t, Validate(c), "pushTo %q", role)
 	}
 }
 
