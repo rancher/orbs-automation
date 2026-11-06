@@ -33,6 +33,7 @@ One function in `internal/clicfg` decides, once, and the result is `Settings.CI`
 | Actor identity | The engineer | The bot | this spec |
 | Push target and credentials | The engineer's fork | The upstream, with the workflow's token | [PUSH_TO_REPO](PUSH_TO_REPO.md) |
 | Branch prefix | The engineer's `branchPrefix` | `bot/` | [PUSH_TO_REPO](PUSH_TO_REPO.md) |
+| Labels | The consumer's `pullRequests.labels` | `labels` and `botLabels`, such as `origin/bot` | [METADATA](METADATA.md#label-classes) |
 | Run record in the PR | The engineer's login | The workflow run URL | [PUSH_TO_REPO](PUSH_TO_REPO.md) |
 | Commit signing | Optional, opt-in | None | this spec |
 

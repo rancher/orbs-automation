@@ -19,7 +19,7 @@ How `gero` tags the PRs and issues it writes, so people and tools can find and r
 
 Two classes of label, by who owns the name:
 
-* **Configured labels** belong to the consumer, such as `dependencies`, `area/charts` or `origin/bot`, which shared repositories use for bot-made PRs and which can be set up in every ORBS repository. They come from the consumer's `pullRequests` block and follow the labels the teams already use. The tool applies them **once, when it creates the PR or issue**, and never reconciles them afterwards. A person may change them freely.
+* **Configured labels** belong to the consumer, such as `dependencies`, `area/charts` or `origin/bot`, which shared repositories use for bot-made PRs and which can be set up in every ORBS repository. A label that says who made the item is not for every run: `pullRequests.botLabels` are applied only when the bot is the actor (CI), and never to a PR an engineer opened from a workstation, while `pullRequests.labels` are applied for both. They come from the consumer's `pullRequests` block and follow the labels the teams already use. The tool applies them **once, when it creates the PR or issue**, and never reconciles them afterwards. A person may change them freely.
 * **Gero-owned labels** live in the reserved `gero/` namespace, such as `gero/stale` or `gero/superseded`. The tool applies and removes them, and they are recomputed from the marker.
 
 ## Repo classes
