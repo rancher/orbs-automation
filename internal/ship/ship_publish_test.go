@@ -322,3 +322,73 @@ func TestShipAPRWithNoKnownHeadIsNotAskedAbout(t *testing.T) {
 	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
 	assert.False(t, lg.has("behind"))
 }
+
+func TestShipFindsMyPRByItsHeadWhenTheListingDoesNotReachIt(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	inTheList := mine()
+	inTheList.HeadOwner = "rancher"           // pushed to the upstream
+	remote.open = pulls.Open{Truncated: true} // the newest 100 did not include it
+	remote.byHead = map[string][]pulls.PR{"rancher:" + botV215: {inTheList}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status, "found by the exact head, whatever the listing reached")
+	assert.True(t, lg.has("open head rancher/rancher rancher:"+botV215))
+	assert.False(t, lg.has("create"))
+	assert.False(t, branchExistsIn(t, clone, botV215))
+}
+
+func TestShipLooksForTheHeadInTheForkWhenPushingThere(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	withFork(t, ws, clone)
+	remote.byHead = map[string][]pulls.PR{"danpock:" + botV215: {mine()}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
+	assert.True(t, lg.has("open head rancher/rancher danpock:"+botV215))
+}
+
+func TestShipAPRInBothTheListingAndTheHeadLookupIsOnePR(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	p := mine()
+	p.HeadOwner = "rancher"
+	remote.open = pulls.Open{PRs: []pulls.PR{p}}
+	remote.byHead = map[string][]pulls.PR{"rancher:" + botV215: {p}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.False(t, lg.has("close #104"), "it is not its own duplicate")
+	assert.Empty(t, res.Superseded)
+}
+
+func TestShipAFailedLookupByHeadIsAWarningAndTheListingStillDecides(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.headErr = errors.New("rate limited")
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "rate limited")
+	assert.Contains(t, res.Warnings[0], botV215)
+}
+
+func TestShipANoPushRunDoesNotLookForAHead(t *testing.T) {
+	ws, _, ex, _, lg := publishing(t)
+	in := realRun()
+	in.NoPush = true
+
+	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	assert.False(t, lg.has("open head"))
+}
