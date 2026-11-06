@@ -65,6 +65,11 @@ func (w *realWorkspace) UpstreamRefs(c context.Context, slug string) (git.Refs, 
 }
 
 func (w *realWorkspace) UpstreamFile(_ context.Context, _, ref, path string) ([]byte, error) {
+	for branch, claimed := range w.stale {
+		if ref == claimed {
+			ref = branch // the file is read as it is now, whatever the refs claimed
+		}
+	}
 	return []byte(runGit(w.t, w.up, "show", ref+":"+path) + "\n"), nil
 }
 

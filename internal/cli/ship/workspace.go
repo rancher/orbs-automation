@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -18,7 +17,7 @@ type shipWorkspace struct{ *workspace.Workspace }
 func (w shipWorkspace) CloneDir(slug string) (string, error) {
 	rp, err := w.RepoPath(slug)
 	if err != nil {
-		return "", fmt.Errorf("%w: %s: clone it under a repos.search directory, or set repos.paths.%s (%v)", domain.ErrNoClone, slug, slug, err)
+		return "", fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
 	}
 	return rp.Path, nil
 }
