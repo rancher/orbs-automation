@@ -20,6 +20,12 @@ type Latest struct {
 	Prerelease *Tag
 }
 
+// TODO(release-state): this answers "what is newest" for one line or project.
+// Release-in-progress detection and consumer tracing in gero repo status also
+// need the tags between two releases (what has shipped since a version) and the
+// highest tag of each series at once. When a second caller needs them, return a
+// per-series index from one pass over the tags and not a call per line.
+
 // LatestReleases finds the highest stable and the highest prerelease tag among
 // tags whose name matches the glob pattern (release.tagPattern, such as "v*") and read
 // as a version. The highest is by version precedence, not by date, so a patch

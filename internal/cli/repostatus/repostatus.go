@@ -33,6 +33,10 @@ type Workspace interface {
 	// UpstreamRefs lists the tags and branch heads of slug as its host reports
 	// them.
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
+	// TODO(release-state): consumer tracing adds UpstreamFile(ctx, slug, ref,
+	// path) here (workspace.Workspace has it) and the Project's downstream
+	// consumers, which come from the updates config. Keep it a separate
+	// interface if the fakes in the tests grow past a few methods.
 }
 
 // Clone is what Status reads from a local clone.
@@ -64,6 +68,12 @@ type Status struct {
 }
 
 // Target is one release branch and where its releases stand.
+//
+// TODO(release-state): Target is a flat row of facts. Per-line state
+// resolution wants a derived, named state on top of them (see the TODOs on
+// fill), and a Consumers field for the trace of who has picked the tags up.
+// Expect Target to split into the facts read (host, clone) and a State computed
+// from them by a function with no I/O, so the rules are table-tested.
 type Target struct {
 	// Line and Series are set for a project with a branch per line.
 	Line   string `json:"line,omitempty"`
@@ -160,6 +170,31 @@ func targets(p config.Project) []Target {
 
 // fill reads the latest tags and the head of t from refs, and compares them
 // with the clone, which may be nil.
+//
+// TODO(release-state): three things to build on this, in this order.
+//
+//  1. Release in progress. A line has one when it has a pre-release newer than
+//     the latest stable tag (what LatestPrerelease already means), or commits
+//     past the latest tag (Unreleased > 0). Name the states (nothing
+//     released, released and quiet, work since release, pre-release open) and
+//     compute them from the facts here, not in the renderer.
+//  2. What comes next, from SemVer alone. The newest tag decides: a stable tag
+//     means the next tag is a pre-release of a higher version (patch, minor
+//     or major is the engineer's call, so list the candidates); a pre-release
+//     means the next is another iteration of the same pre-release (rc.N+1) or
+//     the stable of that version. This belongs in internal/semver next to
+//     Compare (a Next(v) that returns the allowed successors), not here, and
+//     needs the project's requiresPrerelease: a project that requires a
+//     pre-release before every stable has no direct stable successor to a
+//     stable tag.
+//  3. Consumers. For each downstream the project ships to (the updates
+//     config, see internal/updatedispatcher), read the pinned version at the
+//     consumer's release branch (Workspace.UpstreamFile does this for a file
+//     on the host) and compare it with the latest stable and, when it
+//     differs, the latest pre-release: up to date, one behind, or no pin
+//     found. A consumer on a pre-release of a version that is now stable is
+//     behind. This is the costly tier (a request per consumer and branch), so
+//     it runs only when asked for (see the spec: tiers behind flags).
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 	tags := refs.Tags
 	if t.Series != "" {
