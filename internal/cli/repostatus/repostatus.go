@@ -180,15 +180,15 @@ func targets(p config.Project) []Target {
 //     past the latest tag (Unreleased > 0). Name the states (nothing
 //     released, released and quiet, work since release, pre-release open) and
 //     compute them from the facts here, not in the renderer.
-//  2. What comes next, from SemVer alone. The newest tag decides: a stable tag
-//     means the next tag is a pre-release of a higher version (patch, minor
-//     or major is the engineer's call, so list the candidates); a pre-release
-//     means the next is another iteration of the same pre-release (rc.N+1) or
-//     the stable of that version. This belongs in internal/semver next to
-//     Compare (a Next(v) that returns the allowed successors), not here, and
-//     needs the project's requiresPrerelease: a project that requires a
-//     pre-release before every stable has no direct stable successor to a
-//     stable tag.
+//  2. What comes next, from SemVer alone. The newest tag decides, through
+//     semver.Version.NextStable and NextPrerelease (internal/semver), which
+//     answer for a stable or a prerelease tag alike: after a stable tag the
+//     next is a prerelease of a higher version (patch, minor or major is the
+//     engineer's call, so list the candidates); after a prerelease it is
+//     another iteration (rc.N+1) or the stable of that version. Those know
+//     nothing of projects. What is allowed is decided here, with the project's
+//     requiresPrerelease: a project that requires a pre-release before every
+//     stable has no direct stable successor to a stable tag.
 //  3. Consumers. For each downstream the project ships to (Engine.RoutesFrom
 //     of the updates engine, internal/updatedispatcher), take the consumer
 //     branches a line goes to (Route.BranchesFor), look up each head commit
