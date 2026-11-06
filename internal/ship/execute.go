@@ -76,6 +76,8 @@ type Executor struct {
 	Git     Git
 	Runner  updatedispatcher.StepRunner
 	TempDir string // where worktrees go
+	// Sign makes git sign every commit with the engineer's own key (signCommits).
+	Sign bool
 	// Publish, when set, finds the open PRs of each target before making anything,
 	// and with it a run that is not --no-push or --dry-run pushes and opens the
 	// PRs. Without it a run stops at the commits.
