@@ -110,9 +110,9 @@ func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, e
 }
 
 // runTo checks the state and, with an executor, makes the commits; nil is a
-// check only. The events of the run are also logged to log, when it is not nil.
-//
-// STUB: log is not used until a later commit.
+// check only. The events of the run are also logged to log, when it is not nil,
+// whatever the format, so a JSON handler on stderr gives machine-readable
+// progress beside either report.
 // The report is written to w as the run goes in text, and as one
 // document at the end in json. Errors that come after the check (no clone, a
 // failed target, a blocked release) are returned after the report is written.
@@ -122,13 +122,16 @@ func runTo(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspa
 	}
 	var (
 		stream *ui.Stream
-		sink   domain.Sink
+		fan    sinks
 	)
 	if format == clicfg.OutputText {
 		stream = ui.NewStream(w)
-		sink = newHumanSink(stream, full)
+		fan = append(fan, newHumanSink(stream, full))
 	}
-	plan, err := domain.Ship(ctx, ws, prober, in, ex, sink)
+	if log != nil {
+		fan = append(fan, logSink{log})
+	}
+	plan, err := domain.Ship(ctx, ws, prober, in, ex, fan)
 	if stream != nil {
 		stream.Flush()
 	}
