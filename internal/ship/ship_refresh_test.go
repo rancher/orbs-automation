@@ -225,6 +225,26 @@ func TestRefreshOfABranchThatDiffersReplacesItAndRecordsIt(t *testing.T) {
 	_ = remote
 }
 
+func TestRefreshReplacesABranchThatIsCheckedOutInTheClone(t *testing.T) {
+	ws, clone, ex, _, _, in := refreshing(t)
+	runGit(t, clone, "checkout", "--quiet", botV215) // the engineer is on it
+	oldTip := runGit(t, ws.up, "rev-parse", botV215)
+	withGenerate(ws)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	require.Equal(t, ResultRefreshed, res.Status, "error: %s", res.Error)
+	newTip := runGit(t, ws.up, "rev-parse", botV215)
+	assert.NotEqual(t, oldTip, newTip)
+	assert.Equal(t, res.Tip(), newTip, "the remote has the rebuilt commit")
+	assert.Equal(t, oldTip, runGit(t, clone, "rev-parse", botV215), "the checked-out branch is not moved under them")
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "checked out")
+	assert.False(t, branchExistsIn(t, clone, scratchV215))
+}
+
 func TestRefreshEditsTheOneCommentInPlaceAndDoesNotAddAnother(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
 	remote.comments = []pulls.Comment{

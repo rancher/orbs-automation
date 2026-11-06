@@ -229,3 +229,26 @@ func TestPushReplacingUsesTheSameEnvironmentAsPush(t *testing.T) {
 	assert.NotContains(t, string(data), "secret-token")
 	assert.Contains(t, string(data), "GIT_TERMINAL_PROMPT=0")
 }
+
+func TestPushCommitReplacingPutsACommitOverTheBranchWhateverTheLocalBranchHolds(t *testing.T) {
+	dir, bare, old := pushedFork(t)
+	fresh := rebuilt(t, dir)
+	run(t, dir, "branch", "--force", "scratch", fresh)
+	run(t, dir, "reset", "--quiet", "--hard", old) // bot/x, which is checked out, is not the commit
+
+	err := PushCommitReplacing(ctx, dir, "fork", "bot/x", fresh, old)
+
+	require.NoError(t, err)
+	assert.Equal(t, fresh, run(t, bare, "rev-parse", "refs/heads/bot/x"))
+	assert.Equal(t, old, run(t, dir, "rev-parse", "bot/x"), "the local branch is not moved")
+}
+
+func TestPushCommitReplacingIsRejectedWhenTheRemoteMovedSinceItWasSeen(t *testing.T) {
+	dir, bare, old := pushedFork(t)
+	fresh := rebuilt(t, dir)
+
+	err := PushCommitReplacing(ctx, dir, "fork", "bot/x", fresh, strings.Repeat("a", 40))
+
+	require.ErrorIs(t, err, ErrPushRejected)
+	assert.Equal(t, old, run(t, bare, "rev-parse", "refs/heads/bot/x"), "nothing was replaced")
+}
