@@ -5,6 +5,8 @@ package tags
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	gogithub "github.com/google/go-github/v93/github"
 	"github.com/rancher/orbs-automation/internal/github"
@@ -28,6 +30,23 @@ func New(c github.Credentials, opts ...gogithub.ClientOptionsFunc) (*Service, er
 // Create makes the lightweight tag name at commit in the repository slug
 // (owner/name): a ref, with no tag object and so no tagger and no message. It
 // fails when the tag exists, and never moves one.
-//
-// STUB: makes nothing until a later commit.
-func (s *Service) Create(ctx context.Context, slug, name, commit string) error { return nil }
+func (s *Service) Create(ctx context.Context, slug, name, commit string) error {
+	owner, repo, err := split(slug)
+	if err != nil {
+		return err
+	}
+	ref := "refs/tags/" + name
+	if _, _, err := s.client.Git.CreateRef(ctx, owner, repo, gogithub.CreateRef{Ref: ref, SHA: commit}); err != nil {
+		return fmt.Errorf("make the tag %s at %s in %s: %w", name, commit, slug, err)
+	}
+	return nil
+}
+
+// split turns owner/name into its parts.
+func split(slug string) (owner, name string, err error) {
+	owner, name, ok := strings.Cut(slug, "/")
+	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+		return "", "", fmt.Errorf("%q is not an owner/name repository", slug)
+	}
+	return owner, name, nil
+}
