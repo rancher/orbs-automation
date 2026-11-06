@@ -101,6 +101,11 @@ type Confirmation struct {
 	// Refreshes are the target branches whose open PR will be rebuilt, and its
 	// branch replaced if it differs: a force push, with a lease.
 	Refreshes []string
+	// MayReplace says a branch an earlier attempt left on the remote, if it is
+	// ours, will be replaced to open the new PRs: --refresh was given.
+	//
+	// STUB: never set until a later commit.
+	MayReplace bool
 }
 
 // ErrDeclined is returned by Ship, with the plan, when the confirmation was
