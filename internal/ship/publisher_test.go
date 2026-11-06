@@ -113,7 +113,7 @@ func newPublishCase() *publishCase {
 }
 
 func (c *publishCase) run(dec Publish) {
-	c.pub.publish(context.Background(), "rancher/rancher", c.tp, bump("v0.5.4"), dec, c.res)
+	c.pub.publish(context.Background(), "rancher/rancher", c.tp, bump("v0.5.4"), dec, c.res, nil)
 }
 
 func old(numbers ...int) Publish {

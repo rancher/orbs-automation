@@ -42,8 +42,10 @@ type Publisher struct {
 // the labels that exist, and then comments on and closes each superseded PR, in
 // that order, so a failure leaves the older PRs as they were. res is updated: a
 // failure to push or to open the PR fails the target, and one to label or to close
-// an older PR is a warning.
-func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, m Marker, dec Publish, res *TargetResult) {
+// an older PR is a warning. Each step is reported to sink as it is done.
+//
+// The events are STUBBED until a later commit: none are emitted yet.
+func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, m Marker, dec Publish, res *TargetResult, sink Sink) {
 	branch := tp.Preview.Branch
 	if err := p.Git.Push(ctx, p.Clone, p.Push.Remote, branch); err != nil {
 		res.Status, res.Error = ResultFailed, fmt.Sprintf("push %s to %s: %v", branch, p.Push.Remote, err)

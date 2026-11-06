@@ -21,6 +21,17 @@ const (
 	EventTargetStarted EventKind = "target started"
 	// EventCommit: a commit was made for the branch. Commit is it.
 	EventCommit EventKind = "commit"
+	// EventDecided: what to do about the PR of a branch is known: open one, one
+	// is already open, or a newer one blocks it. Decision is it.
+	//
+	// STUB: not emitted until a later commit.
+	EventDecided EventKind = "decided"
+	// EventPushed: the branch is on the remote, named in Remote.
+	EventPushed EventKind = "pushed"
+	// EventPROpened: the PR was opened. PR is it.
+	EventPROpened EventKind = "pr opened"
+	// EventSuperseded: an older PR was commented on and closed. PR is it.
+	EventSuperseded EventKind = "superseded"
 	// EventTargetDone: the work for one branch has ended, with Result.
 	EventTargetDone EventKind = "target done"
 	// EventDone: the run has ended. Plan is the whole of it.
@@ -33,13 +44,16 @@ type Event struct {
 	Kind   EventKind
 	Branch string // the consumer branch, for the events about one
 
-	Plan   *Plan            // Resolved: the header. Done: everything
-	Target *TargetPlan      // TargetChecked
-	Images *registry.Report // ImagesChecked
-	Place  Place            // TargetStarted: where the work is done
-	Reason string           // TargetStarted: why that was a worktree
-	Commit *CommitInfo      // Commit
-	Result *TargetResult    // TargetDone
+	Plan     *Plan            // Resolved: the header. Done: everything
+	Target   *TargetPlan      // TargetChecked
+	Images   *registry.Report // ImagesChecked
+	Place    Place            // TargetStarted: where the work is done
+	Reason   string           // TargetStarted: why that was a worktree
+	Commit   *CommitInfo      // Commit
+	Decision *Publish         // Decided
+	Remote   string           // Pushed: the remote's name
+	PR       *PRRef           // PROpened, Superseded
+	Result   *TargetResult    // TargetDone
 }
 
 // Sink receives the events of a run as they happen, on the goroutine that runs
