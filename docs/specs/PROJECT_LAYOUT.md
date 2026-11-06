@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** implemented, except the prompt side of `internal/ui`, two of the tasks in `internal/task/`, and `test/integration/` (see Not built yet).
+**Status:** implemented, except the prompt side of `internal/ui`, the standalone commands for the tasks, and a task for closing superseded PRs, and `test/integration/` (see Not built yet).
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -24,7 +24,7 @@ internal/config/     application config types, their effective getters and the e
 internal/config/loader/  application config loader: YAML decoding, defaults, validation (workspace only)
 internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (WORKSPACE)
 internal/ui/         output and prompt seam, plain-text implementation first: Output and Stream exist, prompts do not yet   (CLI_OUTPUT)
-internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr and createbranch are built
+internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch and bumpcommit are built
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/repo/   local repository access with go-git; the only importer of go-git
 internal/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
@@ -53,7 +53,7 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ### Tasks: single actions that compose
 
-**Status: `pushbranch`, `createpr` and `createbranch` are built and `ship` uses them. The other tasks are planned.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
+**Status: `pushbranch`, `createpr`, `createbranch` and `bumpcommit` are built and `ship` uses them. No command runs one alone yet, and closing superseded PRs is not a task.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
 
 * `createbranch`: a new branch for a project and release line, based on the upstream branch, made in the engineer's clone or in a temporary worktree of it, or an earlier branch of ours reused when it is current.
 * `bumpcommit`: apply one change set and make its commits. The change and its commits are never separated.
@@ -64,7 +64,7 @@ Package names beyond these are decided with the code that needs them. A package 
 **Shape.** Every task has the same three parts, and nothing else is exported that a caller must know about:
 
 * An `Input` of plain values: strings, bools, small structs. No cobra, no `Settings`, no config types the task does not read.
-* An `Output` of plain, serializable values: what the next step needs and what a report shows (the branch name, the commits made, the PR URL). The `Output` of one task is meant to be the `Input` of the next, and is what `--json` prints for a task run on its own. The one exception is a branch being worked on: `createbranch` returns a `*workdir.Work`, a handle that the tasks which commit to it and end the work take back, from `internal/workdir`. It is shared, not serialized, so that pair is chained in Go only.
+* An `Output` of plain, serializable values: what the next step needs and what a report shows (the branch name, the commits made, the PR URL). The `Output` of one task is meant to be the `Input` of the next, and is what `--json` prints for a task run on its own. The one exception is a branch being worked on: `createbranch` returns a `*workdir.Work` from `internal/workdir`, and `bumpcommit` takes it back in its `Input`, with the caller ending the work. It is a handle, shared and not serialized, so that pair is chained in Go only.
 * A `Run(ctx, deps, in) (Output, error)` with `deps` a small interface the task defines for what it calls, so a task is tested with a hand-written fake of that interface and nothing wider ([TESTING](TESTING.md)). A task reports progress through an optional event sink and never prints.
 
 **Who composes.** A task never calls another task. `internal/cli/<cmd>/` does, in two shapes. A *gadget* command (`gero branch create`, `gero pr create`) builds the deps, calls one task and renders its `Output`. A *conveyor* command (`gero ship`) calls several in order, passing each `Output` to the next `Input`, and owns what the tasks must not: the loops over targets, the decision whether to run a step, the one confirmation question and the final report. A conveyor's logic that is worth a test stays in its own domain package (`internal/ship`); the tasks are what it calls.
@@ -135,7 +135,8 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 ## Not built yet
 
 * The prompt side of `internal/ui` ([CLI_OUTPUT](CLI_OUTPUT.md)). `Output` and `Stream` are built.
-* The other tasks, `bumpcommit` and a task for closing superseded PRs, extracted from `internal/ship` one action at a time, and the standalone commands that run a task alone. `pushbranch`, `createpr` and `createbranch` are built, and have no command of their own yet.
+* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and the standalone commands that run a task alone. `pushbranch`, `createpr`, `createbranch` and `bumpcommit` are built, and have no command of their own yet.
+* Narrowing `ship.Git` and `ship.Remote` now that the tasks define what they call: both still carry every method any task needs.
 * `test/integration/` ([TESTING](TESTING.md)).
 
 ## Open questions

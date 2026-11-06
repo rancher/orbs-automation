@@ -7,7 +7,10 @@ package bumpcommit
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
+	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workdir"
 )
@@ -48,7 +51,53 @@ func (o Output) Tip() string {
 	return o.Commits[len(o.Commits)-1].Hash
 }
 
-// Run applies the change. TODO: the stub does nothing yet.
-func Run(_ context.Context, _ updatedispatcher.StepRunner, _ Input) (Output, error) {
-	return Output{}, nil
+// Run runs the dispatcher's lifecycle in the work directory (the pre-edit steps,
+// the edit and the post-edit steps) and commits after each of them that changed
+// files: the edit with Message, a step with StepMessage. A unit that changes
+// nothing makes no commit. A step that fails is the dispatcher's *StepError, and
+// the caller aborts the work, which removes the commits made so far. A run in
+// which nothing changed is ErrNothingChanged.
+func Run(ctx context.Context, runner updatedispatcher.StepRunner, in Input) (Output, error) {
+	w := in.Work
+	var commits []workdir.CommitInfo
+	after := func(ctx context.Context, u updatedispatcher.Unit) error {
+		message := in.Message
+		if u.Kind == updatedispatcher.UnitStep {
+			var err error
+			if message, err = messageFor(in, u); err != nil {
+				return fmt.Errorf("the commit message for %s: %w", strings.Join(u.Run, " "), err)
+			}
+		}
+		hash, err := w.Commit(ctx, workdir.GitCommit{Message: message, Name: in.Name, Email: in.Email, Sign: in.Sign})
+		if errors.Is(err, gitcli.ErrNothingToCommit) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		subject, _, _ := strings.Cut(message, "\n")
+		commit := workdir.CommitInfo{Hash: hash, Subject: subject}
+		commits = append(commits, commit)
+		if in.OnCommit != nil {
+			in.OnCommit(commit)
+		}
+		return nil
+	}
+	res, err := in.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), runner, in.Release, in.Branch, w.Dir, after)
+	if err != nil {
+		return Output{}, err
+	}
+	if len(commits) == 0 {
+		return Output{}, ErrNothingChanged
+	}
+	return Output{Commits: commits, Changes: res.Changes}, nil
+}
+
+// messageFor is the commit message of a step, from StepMessage or, when there
+// is none, just what ran.
+func messageFor(in Input, u updatedispatcher.Unit) (string, error) {
+	if in.StepMessage == nil {
+		return "Run `" + strings.Join(u.Run, " ") + "`", nil
+	}
+	return in.StepMessage(u)
 }
