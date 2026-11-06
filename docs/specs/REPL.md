@@ -50,7 +50,7 @@ The working directory is what the REPL carries between lines, and commands read 
 
 Because the directory changes, `workspace.Open(settings, cwd)` runs for each line with the current directory, not once at startup. `Open` does no I/O ([WORKSPACE](WORKSPACE.md#one-door)), so this costs nothing and cannot go stale. No other state is kept between lines.
 
-**Single-action commands fit without change.** `gero branch create`, `gero pr create` and the other commands that run one task ([CLI_FRAMEWORK](CLI_FRAMEWORK.md#2-command-tree-and-global-flags), [PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)) are commands in the same tree, so the REPL runs them as it runs any other, and `cd <project>` supplies their project. There are no pipes, so a line hands nothing to the next: the branch one line made is named on the next line's command. A "last result" the REPL remembers would be new session state beyond the working directory, and is not part of this spec.
+**Single-action commands fit without change.** `gero repo branch`, `gero pr create` and the other commands that run one task ([TASK_COMMANDS](TASK_COMMANDS.md)) ([CLI_FRAMEWORK](CLI_FRAMEWORK.md#2-command-tree-and-global-flags), [PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)) are commands in the same tree, so the REPL runs them as it runs any other, and `cd <project>` supplies their project. There are no pipes, so a line hands nothing to the next: the branch one line made is named on the next line's command. A "last result" the REPL remembers would be new session state beyond the working directory, and is not part of this spec.
 
 ## Running a line
 

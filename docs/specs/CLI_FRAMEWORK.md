@@ -42,7 +42,10 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero repo images exist [name|owner/name] <tag>` | either | Read-only, needs the network; port of `validate_image_exists`. Checks that each image a Project publishes exists in the required registries ([IMAGES_EXIST](IMAGES_EXIST.md)). Prints its rows before exiting 1 when an image is missing or unreachable. `--json` supported |
 | `gero repo branch-tags` | either | Read-only; port of the shared `branch-tags.sh` script. Emits env-style output |
 | `gero ship [project] [tag|line]` | workstation | Writes; honors `--dry-run`. Downstream PRs: resolves the tag, checks the state of each consumer branch the release goes to (`--branch` for one), then edits, commits, pushes and opens a PR for each, superseding an older one ([PUSH_TO_REPO](PUSH_TO_REPO.md)). Works in the engineer's own clone of the consumer. Asks once, commits, then pushes and opens the PR for each target and closes the actor's own older PRs; `--yes` skips the question, `--push-to fork|upstream` picks where, `--refresh` rebuilds an open PR of the actor's and replaces its branch only if it differs, `--no-push` stops after the commits and never contacts GitHub `--json` supported |
-| `gero branch create`, `gero branch bump`, `gero branch push`, `gero pr create` **(leaning)** | workstation | The steps of `gero ship` as commands of their own: a branch off the upstream for a project and release line, one change set applied with its commits, a branch pushed, a PR opened from a branch. Write commands, so `--dry-run`, the one confirmation and `--json` as for `ship`. Each runs one task and `ship` chains the same tasks; names and flags are decided when each is built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)) |
+| `gero repo branch [project] <line> <name>` **(leaning)** | workstation | Writes; honors `--dry-run`. Makes a branch off the upstream branch of a release line and leaves the checkout alone ([TASK_COMMANDS](TASK_COMMANDS.md)) |
+| `gero repo push [project] [--branch <name>]` **(leaning)** | workstation | Writes; honors `--dry-run`. Pushes a branch, never forced ([TASK_COMMANDS](TASK_COMMANDS.md)) |
+| `gero pr create [project] [--head <branch>] [--base <line\|branch>]` **(leaning)** | workstation | Writes; honors `--dry-run`. Opens a PR for a pushed branch, the checked-out one unless named ([TASK_COMMANDS](TASK_COMMANDS.md)) |
+| `gero ship bump` **(leaning)** | workstation | Writes. The step of `ship` that applies a change set and commits it; a bare `gero ship` still runs the whole process ([TASK_COMMANDS](TASK_COMMANDS.md)) |
 | `gero ci:ship` | CI-only | The same bump as the bot, from a workflow; not designed yet ([PUSH_TO_REPO](PUSH_TO_REPO.md#the-ci-variant)) |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
@@ -92,6 +95,7 @@ One helper maps errors to codes so commands return errors and never call `os.Exi
 * The rest of the command tree beyond the commands in the table that do something today; the others are stubs.
 * `--color` and `--no-color`, context gating and the exit-code helper. Until the helper exists, a usage or validation error exits 1, not 2.
 * `--json` for `config validate`, and `--output env` for `auth status`.
+* The rename of `gero repo branch-tags` to `gero repo current-tags`, which keeps its behavior and its `--output env` keys ([BRANCH_TAGS](BRANCH_TAGS.md)).
 
 ## Open questions
 
