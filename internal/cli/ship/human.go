@@ -286,7 +286,7 @@ func (h *humanSink) done(e domain.Event) {
 // is, how to review it, the state of the whole, and what was and was not done.
 func (h *humanSink) summary(p *domain.Plan) {
 	if hasResults(*p) {
-		h.commits(p)
+		h.results(p)
 	}
 	h.out.Line("")
 	if !h.wantShown && p.Want != "" {
@@ -331,17 +331,38 @@ func (h *humanSink) links(p *domain.Plan) {
 	h.out.EndTable()
 }
 
-// commits is the table of what was done for each branch, why a worktree was used
-// and what failed, each grouped over the branches it applies to, and how to
-// review the branches that were kept.
-func (h *humanSink) commits(p *domain.Plan) {
+// results is the table of what came of each target, with where the work was done
+// when any was, then why a worktree was used and what failed, each grouped over
+// the targets it applies to, and how to review the branches that were kept.
+func (h *humanSink) results(p *domain.Plan) {
 	h.out.Line("")
-	h.out.Line("Commits")
-	h.out.BeginTable("LINE", "RESULT", "WHERE", "NEW BRANCH")
+	h.out.Line("Results")
+	// Where the work was done is only worth a column when some target had work done.
+	anyPlace := false
 	for _, t := range p.Targets {
-		if r := t.Result; r != nil {
-			h.out.Row(t.Key(), string(r.Status), string(r.Place), r.Branch)
+		if r := t.Result; r != nil && r.Place != "" {
+			anyPlace = true
 		}
+	}
+	header := []string{"LINE", "RESULT", "BRANCH"}
+	if anyPlace {
+		header = []string{"LINE", "RESULT", "WHERE", "BRANCH"}
+	}
+	h.out.BeginTable(header...)
+	for _, t := range p.Targets {
+		r := t.Result
+		if r == nil {
+			continue
+		}
+		row := []string{t.Key(), string(r.Status), r.Branch}
+		if anyPlace {
+			where := string(r.Place)
+			if where == "" {
+				where = "-"
+			}
+			row = []string{t.Key(), string(r.Status), where, r.Branch}
+		}
+		h.out.Row(row...)
 	}
 	h.out.EndTable()
 	text := func(field func(*domain.TargetResult) string) func(domain.TargetPlan) []string {
