@@ -58,8 +58,13 @@ var ErrNoClone = errors.New("no local clone of the consumer")
 // returned with every error that comes after the check, so it can be reported.
 func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, ex *Executor, sink Sink) (Plan, error) {
 	plan, res, err := check(ctx, ws, prober, in, sink)
-	if err != nil || ex == nil || len(plan.Blockers) > 0 {
+	if err != nil {
 		return plan, err
+	}
+	// The run is over whichever way it ends from here, and the plan is whole.
+	defer func() { emit(sink, Event{Kind: EventDone, Plan: &plan}) }()
+	if ex == nil || len(plan.Blockers) > 0 {
+		return plan, nil
 	}
 	var ready []int
 	for i, tp := range plan.Targets {
@@ -81,14 +86,15 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 	}
 	plan.Clone, plan.Remote = clone, remote
 	for _, i := range ready {
-		plan.Targets[i].Result = res.commitTarget(ctx, ex, clone, remote, in, plan.Targets[i])
+		plan.Targets[i].Result = res.commitTarget(ctx, ex, clone, remote, in, plan.Targets[i], sink)
+		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Result: plan.Targets[i].Result})
 	}
 	return plan, nil
 }
 
 // commitTarget makes the commit for one target and ends the work, whatever
 // happened, so the clone is as it was found apart from the branch it keeps.
-func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remote string, in Input, tp TargetPlan) *TargetResult {
+func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remote string, in Input, tp TargetPlan, sink Sink) *TargetResult {
 	result := &TargetResult{Branch: tp.Preview.Branch}
 	fail := func(err error) *TargetResult {
 		result.Status, result.Error = ResultFailed, err.Error()
@@ -105,10 +111,12 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 		return fail(err)
 	}
 	result.Place, result.Reason = w.Place, w.Reason
+	emit(sink, Event{Kind: EventTargetStarted, Branch: tp.Branch, Place: w.Place, Reason: w.Reason})
 
 	applied, err := Apply{
 		Invocation: r.invocation, Release: r.rel, Branch: tp.Branch,
 		Message: tp.Preview.CommitMessage, Runner: ex.Runner,
+		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Commit: &c}) },
 		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: r.release, target: tp.Target}),
 	}.Run(ctx, w)
 	if errors.Is(err, ErrNothingChanged) {

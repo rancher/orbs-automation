@@ -157,6 +157,8 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.route.Consumer.Repo.Name,
 		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun,
 	}
+	header := plan
+	emit(sink, Event{Kind: EventResolved, Plan: &header})
 	needsPR := false
 	for _, branch := range branches {
 		tp, err := res.checkTarget(ctx, ws, branch, in)
@@ -173,6 +175,8 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 			plan.File, plan.Want = tp.File, tp.Want // the same for every branch
 		}
 		plan.Targets = append(plan.Targets, tp)
+		checked := tp
+		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Target: &checked})
 	}
 	if needsPR {
 		images := registry.CheckProject(ctx, res.producer, prober, res.release.Tag)
@@ -180,6 +184,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		if images.Failed() {
 			plan.Blockers = append(plan.Blockers, "images: the release is not fully published")
 		}
+		emit(sink, Event{Kind: EventImagesChecked, Images: &images})
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil

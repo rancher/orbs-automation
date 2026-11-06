@@ -21,6 +21,8 @@ type Apply struct {
 	Release    updatedispatcher.Release    // what the value is made from
 	Branch     string                      // the consumer branch, for the steps' line ranges
 	Message    string                      // the commit message, as the preview showed it
+	// OnCommit, when set, is called with each commit as it is made.
+	OnCommit func(CommitInfo)
 	// StepMessage is the commit message for a step that changed files.
 	StepMessage func(updatedispatcher.Unit) (string, error)
 	Runner      updatedispatcher.StepRunner // runs the steps
@@ -75,7 +77,11 @@ func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
 			return err
 		}
 		subject, _, _ := strings.Cut(message, "\n")
-		commits = append(commits, CommitInfo{Hash: hash, Subject: subject})
+		commit := CommitInfo{Hash: hash, Subject: subject}
+		commits = append(commits, commit)
+		if a.OnCommit != nil {
+			a.OnCommit(commit)
+		}
 		return nil
 	}
 	res, err := a.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), a.Runner, a.Release, a.Branch, w.Dir, after)
