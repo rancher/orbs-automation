@@ -19,8 +19,9 @@ import (
 )
 
 type fakeWorkspace struct {
-	err   error
-	files map[string]string
+	err      error
+	files    map[string]string
+	cloneErr error // for CloneDir
 }
 
 func sccProducer() config.Project {
@@ -63,7 +64,7 @@ func (f *fakeWorkspace) UpstreamFile(context.Context, string, string, string) ([
 	return []byte(f.files["build.yaml"]), nil
 }
 
-func (f *fakeWorkspace) CloneDir(string) (string, error) { return "/clone", nil }
+func (f *fakeWorkspace) CloneDir(string) (string, error) { return "/clone", f.cloneErr }
 
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
@@ -447,4 +448,37 @@ func TestRunPassesNoPushToThePlanExceptInADryRun(t *testing.T) {
 		assert.Equal(t, tc.want, got.NoPush, "dry run %v: with both, it is a dry run", tc.dry)
 		assert.Equal(t, tc.dry, got.DryRun)
 	}
+}
+
+func TestWantsCommitsOnlyForNoPushAndDryRun(t *testing.T) {
+	assert.False(t, wantsCommits(false, Options{}), "a plain run only checks until the push is built")
+	assert.True(t, wantsCommits(false, Options{NoPush: true}))
+	assert.True(t, wantsCommits(true, Options{}))
+	assert.True(t, wantsCommits(true, Options{NoPush: true}))
+}
+
+func TestRunWithAnExecutorAndNoCloneReportsThePlanAndTheError(t *testing.T) {
+	ws := readyWorkspace()
+	ws.cloneErr = errors.New("rancher/rancher: clone it under a repos.search directory")
+	opts := in
+	opts.NoPush = true
+
+	out, err := runWith(context.Background(), ws, fakeProber{result: registry.Result{Status: registry.Found}},
+		&domain.Executor{}, clicfg.OutputText, opts, false)
+
+	require.ErrorIs(t, err, domain.ErrNoClone)
+	assert.Contains(t, err.Error(), "repos.search")
+	assert.Contains(t, out, "ready", "the report is still written")
+	assert.Contains(t, out, "bot/scc-operator-v0.5.3-main")
+}
+
+func TestRunWithoutAnExecutorOnlyChecks(t *testing.T) {
+	ws := readyWorkspace()
+	ws.cloneErr = errors.New("never asked")
+
+	out, err := runWith(context.Background(), ws, fakeProber{result: registry.Result{Status: registry.Found}},
+		nil, clicfg.OutputText, in, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "Nothing was written")
 }

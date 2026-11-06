@@ -83,7 +83,21 @@ func checkFormat(format string) error {
 	return nil
 }
 
+// wantsCommits reports whether the run is to make commits: it does with
+// --no-push, and with --dry-run, which makes them in a worktree and removes
+// them. A plain run only checks until the push is built.
+//
+// STUB: never until a later commit.
+func wantsCommits(dryRun bool, opts Options) bool { return false }
+
 func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, format string, in domain.Input, full bool) (string, error) {
+	return runWith(ctx, ws, prober, nil, format, in, full)
+}
+
+// runWith is run with the executor that makes the commits, nil for a check only.
+//
+// STUB: ignores the executor until a later commit.
+func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) (string, error) {
 	if err := checkFormat(format); err != nil {
 		return "", err
 	}
