@@ -34,9 +34,11 @@ type Workspace interface {
 	// them.
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// TODO(release-state): consumer tracing adds UpstreamFile(ctx, slug, ref,
-	// path) here (workspace.Workspace has it) and the Project's downstream
-	// consumers, which come from the updates config. Keep it a separate
-	// interface if the fakes in the tests grow past a few methods.
+	// path) here (workspace.Workspace has it) and Updates(), the engine of the
+	// updates config. Do not read a pin here by hand: gero ship reads what a
+	// consumer holds with the same pieces, so use them (see the TODO on fill).
+	// Keep it a separate interface if the fakes in the tests grow past a few
+	// methods.
 }
 
 // Clone is what Status reads from a local clone.
@@ -187,12 +189,15 @@ func targets(p config.Project) []Target {
 //     needs the project's requiresPrerelease: a project that requires a
 //     pre-release before every stable has no direct stable successor to a
 //     stable tag.
-//  3. Consumers. For each downstream the project ships to (the updates
-//     config, see internal/updatedispatcher), read the pinned version at the
-//     consumer's release branch (Workspace.UpstreamFile does this for a file
-//     on the host) and compare it with the latest stable and, when it
-//     differs, the latest pre-release: up to date, one behind, or no pin
-//     found. A consumer on a pre-release of a version that is now stable is
+//  3. Consumers. For each downstream the project ships to (Engine.RoutesFrom
+//     of the updates engine, internal/updatedispatcher), take the consumer
+//     branches a line goes to (Route.BranchesFor), look up each head commit
+//     (git.Refs.Branch of the consumer's UpstreamRefs) and read the pinned
+//     value there with the route's Invocation.Check over
+//     updatedispatcher.HostTree, which is exactly what gero ship does. Check
+//     with the latest stable as the release says up to date, behind or ahead
+//     (Check.Relation), and with the latest pre-release when it differs; a
+//     strategy that finds no pin is an error to report as "no pin found". A consumer on a pre-release of a version that is now stable is
 //     behind. This is the costly tier (a request per consumer and branch), so
 //     it runs only when asked for (see the spec: tiers behind flags).
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {

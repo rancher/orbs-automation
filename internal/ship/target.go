@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
@@ -15,11 +14,12 @@ import (
 // branch or its file cannot be read.
 func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string, in Input) (TargetPlan, error) {
 	consumerSlug := r.route.Consumer.Repo.Name
-	target, ok := findBranch(r.consumerRefs, branch)
+	head, ok := r.consumerRefs.Branch(branch)
 	if !ok {
 		return TargetPlan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, branch)
 	}
-	chk, err := r.invocation.Check(ctx, remoteTree{ws: ws, slug: consumerSlug, commit: target.Commit}, r.rel)
+	target := Target{Branch: head.Name, Commit: head.Commit}
+	chk, err := r.invocation.Check(ctx, updatedispatcher.HostTree(ws, consumerSlug, target.Commit), r.rel)
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("read %s of %s: %w", target.Branch, consumerSlug, err)
 	}
@@ -55,25 +55,4 @@ func (r resolution) checkTarget(ctx context.Context, ws Workspace, branch string
 	}
 	tp.Preview = &preview
 	return tp, nil
-}
-
-// remoteTree reads files of the consumer at one commit from the host.
-type remoteTree struct {
-	ws     Workspace
-	slug   string
-	commit string
-}
-
-func (t remoteTree) ReadFile(ctx context.Context, path string) ([]byte, error) {
-	return t.ws.UpstreamFile(ctx, t.slug, t.commit, path)
-}
-
-// findBranch returns the branch of the name and the commit at its head.
-func findBranch(refs git.Refs, name string) (Target, bool) {
-	for _, b := range refs.Branches {
-		if b.Name == name {
-			return Target{Branch: b.Name, Commit: b.Commit}, true
-		}
-	}
-	return Target{}, false
 }
