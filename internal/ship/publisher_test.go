@@ -63,12 +63,12 @@ func (f *fakeRemote) Create(_ context.Context, slug string, in pulls.NewPR) (pul
 	return pulls.PR{Number: 104, URL: "https://github.com/" + slug + "/pull/104"}, nil
 }
 
-func (f *fakeRemote) Comment(_ context.Context, slug string, n int, body string) error {
+func (f *fakeRemote) Comment(_ context.Context, _ string, n int, body string) error {
 	f.log.add("comment #%d %s", n, body)
 	return f.commentOn[n]
 }
 
-func (f *fakeRemote) Close(_ context.Context, slug string, n int) error {
+func (f *fakeRemote) Close(_ context.Context, _ string, n int) error {
 	f.log.add("close #%d", n)
 	return f.closeOn[n]
 }
