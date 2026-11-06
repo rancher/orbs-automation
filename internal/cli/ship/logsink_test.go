@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/stretchr/testify/assert"
@@ -127,4 +128,52 @@ func TestSinksSendEachEventToEverySinkInOrderAndSkipNil(t *testing.T) {
 
 	assert.Equal(t, 2, a.n)
 	assert.Equal(t, 1, b.n)
+}
+
+func TestLogSinkRecordsTheDecisionAndEachStepOfPublishing(t *testing.T) {
+	recs := logged(t, slog.LevelInfo,
+		domain.Event{Kind: domain.EventDecided, Branch: "release/v2.15", Decision: &domain.Publish{
+			Action: domain.PublishCreate, Supersede: []pulls.PR{{Number: 101}, {Number: 90}},
+		}},
+		domain.Event{Kind: domain.EventPushed, Branch: "release/v2.15", Remote: "origin"},
+		domain.Event{Kind: domain.EventPROpened, Branch: "release/v2.15", PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}},
+		domain.Event{Kind: domain.EventSuperseded, Branch: "release/v2.15", PR: &domain.PRRef{Number: 101}},
+	)
+
+	require.Len(t, recs, 4)
+	assert.Equal(t, "decided", recs[0]["msg"])
+	assert.Equal(t, "create", recs[0]["action"])
+	assert.EqualValues(t, 2, recs[0]["supersede"])
+	assert.Equal(t, "pushed", recs[1]["msg"])
+	assert.Equal(t, "origin", recs[1]["remote"])
+	assert.Equal(t, "pr opened", recs[2]["msg"])
+	assert.EqualValues(t, 104, recs[2]["pr"])
+	assert.Equal(t, "https://github.com/rancher/rancher/pull/104", recs[2]["url"])
+	assert.Equal(t, "superseded", recs[3]["msg"])
+	assert.EqualValues(t, 101, recs[3]["pr"])
+	for _, rec := range recs {
+		assert.Equal(t, "INFO", rec["level"])
+		assert.Equal(t, "release/v2.15", rec["branch"])
+	}
+}
+
+func TestLogSinkABlockedDecisionIsAWarning(t *testing.T) {
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventDecided, Branch: "release/v2.15", Decision: &domain.Publish{
+		Action: domain.PublishBlocked, Newer: &pulls.PR{Number: 110},
+	}})
+
+	require.Len(t, recs, 1)
+	assert.Equal(t, "WARN", recs[0]["level"])
+	assert.Equal(t, "blocked", recs[0]["action"])
+	assert.EqualValues(t, 110, recs[0]["newer"])
+}
+
+func TestLogSinkATargetDoneRecordsThePRAndTheWarnings(t *testing.T) {
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventTargetDone, Branch: "release/v2.15", Result: &domain.TargetResult{
+		Status: domain.ResultOpened, Branch: "bot/x", PR: &domain.PRRef{Number: 104}, Warnings: []string{"a", "b"},
+	}})
+
+	require.Len(t, recs, 1)
+	assert.EqualValues(t, 104, recs[0]["pr"])
+	assert.EqualValues(t, 2, recs[0]["warnings"])
 }
