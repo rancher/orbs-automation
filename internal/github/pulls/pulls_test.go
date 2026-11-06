@@ -313,3 +313,74 @@ func TestMeWithABadTokenIsAnError(t *testing.T) {
 
 	require.ErrorIs(t, err, github.ErrBadCredentials)
 }
+
+func TestBehindByAsksHowFarTheHeadIsBehindTheBase(t *testing.T) {
+	s := always(200, `{"ahead_by":2,"behind_by":7,"status":"diverged"}`)
+
+	n, err := service(t, s).BehindBy(bg, "rancher/rancher", "release/v2.15", "danpock:bot/x")
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, n)
+	assert.Equal(t, "/repos/rancher/rancher/compare/release/v2.15...danpock:bot/x", s.req(t).URL.Path)
+}
+
+func TestBehindByAnErrorNamesTheRepositoryAndTheBranches(t *testing.T) {
+	_, err := service(t, always(404, `{"message":"Not Found"}`)).BehindBy(bg, "rancher/rancher", "main", "danpock:gone")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rancher/rancher")
+	assert.Contains(t, err.Error(), "danpock:gone")
+}
+
+func TestUpdateBodyReplacesTheTitleAndBodyOfThePR(t *testing.T) {
+	s := always(200, prJSON)
+
+	err := service(t, s).UpdateBody(bg, "rancher/rancher", 7, "[v2.15] Update scc-operator to v0.5.3", "the new body")
+
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPatch, s.req(t).Method)
+	assert.Equal(t, "/repos/rancher/rancher/pulls/7", s.req(t).URL.Path)
+	assert.Contains(t, s.body(t), `"title":"[v2.15] Update scc-operator to v0.5.3"`)
+	assert.Contains(t, s.body(t), `"body":"the new body"`)
+}
+
+func TestCommentsListsThemOldestFirstWithTheirIDsAndAuthors(t *testing.T) {
+	s := always(200, `[{"id":11,"body":"first","user":{"login":"dan"}},{"id":12,"body":"second <!-- gero -->","user":{"login":"rancher-bot[bot]"}}]`)
+
+	got, err := service(t, s).Comments(bg, "rancher/rancher", 7, 0)
+
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/rancher/rancher/issues/7/comments", s.req(t).URL.Path)
+	assert.Equal(t, []Comment{{ID: 11, Body: "first", Author: "dan"}, {ID: 12, Body: "second <!-- gero -->", Author: "rancher-bot[bot]"}}, got)
+}
+
+func TestCommentsFollowsPagesUpToTheLimit(t *testing.T) {
+	s := &stub{handle: func(r *http.Request) reply {
+		if r.URL.Query().Get("page") == "2" {
+			return reply{status: 200, body: `[{"id":3,"body":"c","user":{"login":"x"}}]`}
+		}
+		return reply{status: 200, body: `[{"id":1,"body":"a","user":{"login":"x"}},{"id":2,"body":"b","user":{"login":"x"}}]`,
+			link: `<https://api.github.com/repos/rancher/rancher/issues/7/comments?page=2>; rel="next"`}
+	}}
+
+	all, err := service(t, s).Comments(bg, "rancher/rancher", 7, 10)
+	require.NoError(t, err)
+	assert.Len(t, all, 3)
+
+	s2 := &stub{handle: s.handle}
+	cut, err := service(t, s2).Comments(bg, "rancher/rancher", 7, 2)
+	require.NoError(t, err)
+	assert.Len(t, cut, 2)
+	assert.Len(t, s2.reqs, 1, "the second page was not needed")
+}
+
+func TestEditCommentReplacesItsBody(t *testing.T) {
+	s := always(200, `{"id":12}`)
+
+	err := service(t, s).EditComment(bg, "rancher/rancher", 12, "the new text")
+
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPatch, s.req(t).Method)
+	assert.Equal(t, "/repos/rancher/rancher/issues/comments/12", s.req(t).URL.Path)
+	assert.Contains(t, s.body(t), `"body":"the new text"`)
+}
