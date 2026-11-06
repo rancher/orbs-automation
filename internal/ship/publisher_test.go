@@ -289,3 +289,47 @@ func TestPublishFailingToCommentLeavesThatPROpen(t *testing.T) {
 	assert.Contains(t, c.res.Warnings[0], "#101")
 	assert.Empty(t, c.res.Superseded)
 }
+
+func (c *publishCase) runWith(dec Publish, sink Sink) {
+	c.pub.publish(context.Background(), "rancher/rancher", c.tp, bump("v0.5.4"), dec, c.res, sink)
+}
+
+func TestPublishEmitsAnEventForEachStepAsItIsDone(t *testing.T) {
+	c := newPublishCase()
+	rec := &recording{}
+
+	c.runWith(old(101, 90), rec)
+
+	assert.Equal(t, []EventKind{EventPushed, EventPROpened, EventSuperseded, EventSuperseded}, rec.kinds())
+	pushed := rec.first(t, EventPushed)
+	assert.Equal(t, "origin", pushed.Remote)
+	assert.Equal(t, "release/v2.15", pushed.Branch)
+	opened := rec.first(t, EventPROpened)
+	require.NotNil(t, opened.PR)
+	assert.Equal(t, 104, opened.PR.Number)
+	closed := rec.of(EventSuperseded)
+	require.Len(t, closed, 2)
+	require.NotNil(t, closed[0].PR)
+	assert.Equal(t, 101, closed[0].PR.Number)
+	assert.Equal(t, 90, closed[1].PR.Number)
+}
+
+func TestPublishAFailedPushEmitsNoEvent(t *testing.T) {
+	c := newPublishCase()
+	c.pub.Git = pushOnly{log: c.lg, err: errors.New("no")}
+	rec := &recording{}
+
+	c.runWith(old(101), rec)
+
+	assert.Empty(t, rec.events)
+}
+
+func TestPublishAnOlderPRThatWasNotClosedEmitsNoEvent(t *testing.T) {
+	c := newPublishCase()
+	c.remote.closeOn = map[int]error{101: errors.New("403")}
+	rec := &recording{}
+
+	c.runWith(old(101), rec)
+
+	assert.Equal(t, []EventKind{EventPushed, EventPROpened}, rec.kinds())
+}
