@@ -238,8 +238,11 @@ func Load(in Inputs) (Settings, error) {
 		s.sources["dryRun"] = SourceEnv
 	}
 
-	s.Fork, s.GitHubUser, s.BranchPrefix = fc.Fork, fc.GitHubUser, fc.BranchPrefix
-	for key, v := range map[string]string{"fork": fc.Fork, "githubUser": fc.GitHubUser, "branchPrefix": fc.BranchPrefix} {
+	s.Fork, s.GitHubUser, s.BranchPrefix, s.PushTo = fc.Fork, fc.GitHubUser, fc.BranchPrefix, fc.PushTo
+	if err := checkRole("pushTo", fc.PushTo); err != nil {
+		return Settings{}, fmt.Errorf("%s: %w", label, err)
+	}
+	for key, v := range map[string]string{"fork": fc.Fork, "githubUser": fc.GitHubUser, "branchPrefix": fc.BranchPrefix, "pushTo": fc.PushTo} {
 		if v != "" {
 			s.sources[key] = SourceFile
 		}
@@ -288,6 +291,14 @@ func where(key string, src Source, fileLabel string) string {
 	return fmt.Sprintf("%s (from %s)", key, src)
 }
 
+// checkRole accepts an unset push target, and fork and upstream.
+func checkRole(key, value string) error {
+	if value != "" && value != "fork" && value != "upstream" {
+		return fmt.Errorf("%s: %q is not fork or upstream", key, value)
+	}
+	return nil
+}
+
 var slugRE = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
 
 func resolveRepos(r fileRepos, home string, getenv func(string) string) (Repos, error) {
@@ -313,7 +324,10 @@ func resolveRepos(r fileRepos, home string, getenv func(string) string) (Repos, 
 		if !slugRE.MatchString(slug) {
 			return Repos{}, fmt.Errorf("repos.overrides: %q is not an owner/name slug", slug)
 		}
-		out.Overrides[slug] = RepoOverride{Upstream: o.Upstream}
+		if err := checkRole("repos.overrides."+slug+".pushTo", o.PushTo); err != nil {
+			return Repos{}, err
+		}
+		out.Overrides[slug] = RepoOverride{Upstream: o.Upstream, PushTo: o.PushTo}
 	}
 	return out, nil
 }
