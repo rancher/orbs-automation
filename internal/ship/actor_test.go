@@ -75,14 +75,18 @@ func TestShipFailsBeforeWritingAnythingWhenItCannotSayWhoItIs(t *testing.T) {
 
 func TestShipDoesNotAskWhoItIsWhenThereIsNothingToDo(t *testing.T) {
 	ws, _, ex := newShip(t)
-	withDevLine(ws.fakeWorkspace)
+	runGit(t, ws.up, "checkout", "--quiet", "release/v2.15")
+	put(t, ws.up, "build.yaml", newImage)
+	runGit(t, ws.up, "commit", "--quiet", "-am", "already there")
 	asked := false
 	ex.Identify = func(context.Context, string) (Identity, error) { asked = true; return dan, nil }
 
-	_, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.16"), ex, nil) // main is up to date
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
 	require.NoError(t, err)
+	assert.Equal(t, StatusUpToDate, plan.Status)
 	assert.False(t, asked)
+	assert.Nil(t, plan.Actor)
 }
 
 func TestShipInCICommitsAsTheBotNotAsWhateverGitHas(t *testing.T) {

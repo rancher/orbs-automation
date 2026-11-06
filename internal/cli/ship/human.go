@@ -45,6 +45,10 @@ func (h *humanSink) Event(e domain.Event) {
 		h.endTargets()
 		h.images(e.Release, e.Images)
 		h.pr()
+	case domain.EventActor:
+		h.endTargets()
+		h.pr()
+		h.actor(e.Actor)
 	case domain.EventDecided:
 		h.endTargets()
 		h.pr()
@@ -168,6 +172,21 @@ func (h *humanSink) images(release string, r *registry.Report) {
 		h.out.Line("")
 		h.out.Line("Warning: " + w)
 	}
+}
+
+// actor says who the run acts as, before anything is written: the identity of
+// its commits, whether they are signed, and the account the PRs are opened by.
+func (h *humanSink) actor(a *domain.Actor) {
+	signing := "commits not signed"
+	if a.Signing {
+		signing = "commits signed"
+	}
+	line := fmt.Sprintf("  acting as  %s <%s>, %s", a.Name, a.Email, signing)
+	if a.Login != "" {
+		line += ", PRs by " + a.Login
+	}
+	h.out.Line("")
+	h.out.Line(line)
 }
 
 // pr shows what the PR of each branch that needs one would be, once.

@@ -203,6 +203,19 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 			return plan, fmt.Errorf("%w: %v", ErrNoRemote, err)
 		}
 	}
+	if ex.Identify != nil {
+		id, err := ex.Identify(ctx, clone)
+		if err != nil {
+			return plan, fmt.Errorf("commit identity: %w", err)
+		}
+		plan.Actor = &Actor{Identity: id, Login: me, Signing: ex.Sign}
+		emit(sink, Event{Kind: EventActor, Actor: plan.Actor})
+		if in.CI {
+			// The bot has no git config in a fresh clone to read. A workstation's
+			// commits take theirs from git, which is what was just read.
+			res.committer = id
+		}
+	}
 	// Decide every target first, reading only, so that the one question before
 	// anything is written can say what will be done.
 	states := make([]targetState, len(ready))
@@ -396,6 +409,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	applied, err := Apply{
 		Invocation: r.invocation, Release: r.relOf(release), Branch: tp.Branch,
 		Message: tp.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign,
+		Name: r.committer.Name, Email: r.committer.Email,
 		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Line: tp.Line, Commit: &c}) },
 		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}),
 	}.Run(ctx, w)

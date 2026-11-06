@@ -23,6 +23,16 @@ func Resolve(ctx context.Context, s clicfg.Settings) (actor.Identity, error) {
 	})
 }
 
+// ResolveIn is Resolve for commits made in the clone in dir: on a workstation the
+// identity is what git reads there, so a user.email set in that clone alone is the
+// one a commit made in it would carry. In CI it is the bot's, as for Resolve.
+func ResolveIn(ctx context.Context, s clicfg.Settings, dir string) (actor.Identity, error) {
+	git := func(ctx context.Context, key string) (string, error) { return gitcli.ConfigIn(ctx, dir, key) }
+	return resolve(ctx, s, github.GoGh{}, git, func(ctx context.Context, c github.Credentials, login string) (int64, error) {
+		return github.UserID(ctx, c, login)
+	})
+}
+
 func resolve(ctx context.Context, s clicfg.Settings, a github.Auth, git actor.ConfigFunc, lookup userLookup) (actor.Identity, error) {
 	return actor.Resolve(ctx, actor.Inputs{
 		CI:      s.CI,

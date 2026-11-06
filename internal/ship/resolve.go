@@ -16,10 +16,13 @@ import (
 // consumer's refs. Which release goes to which branch is not here: with a
 // producer that has release lines, each line has its own (specs).
 type resolution struct {
-	producer     config.Project
-	route        updatedispatcher.Route
-	invocation   updatedispatcher.Invocation
-	tags         []git.Tag // the producer's, from the host
+	producer   config.Project
+	route      updatedispatcher.Route
+	invocation updatedispatcher.Invocation
+	tags       []git.Tag // the producer's, from the host
+	// committer is who the commits are made as when git's own configuration is not
+	// to decide: the bot's, in CI. Empty leaves it to git.
+	committer    Identity
 	consumerRefs git.Refs
 }
 

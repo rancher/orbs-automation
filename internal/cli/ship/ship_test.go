@@ -1210,3 +1210,37 @@ func TestRenderTextOfASingleReleasePlanIsAsItWas(t *testing.T) {
 	assert.NotContains(t, out, "WANT")
 	assert.NotContains(t, out, "Images (")
 }
+
+func actingPlan(signing bool, login string) domain.Plan {
+	p := previewPlan()
+	p.Actor = &domain.Actor{Identity: domain.Identity{Name: "Dan Pock", Email: "dan@example.com"}, Login: login, Signing: signing}
+	return p
+}
+
+func TestRenderTextSaysWhoTheRunActsAsAfterWhatItWillOpenAndBeforeTheWork(t *testing.T) {
+	p := actingPlan(false, "danpock")
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "  acting as  Dan Pock <dan@example.com>, commits not signed, PRs by danpock\n")
+	assert.Less(t, strings.Index(out, "\nPR\n"), strings.Index(out, "acting as"))
+	assert.Less(t, strings.Index(out, "acting as"), strings.Index(out, "Working"))
+}
+
+func TestRenderTextOfASignedRunWithNoLoginSaysSoAndLeavesOutThePRAuthor(t *testing.T) {
+	out := renderText(actingPlan(true, ""), false)
+
+	assert.Contains(t, out, "acting as  Dan Pock <dan@example.com>, commits signed\n")
+	assert.NotContains(t, out, "PRs by")
+}
+
+func TestRenderTextOfAPlanWithNoActorHasNoSuchLine(t *testing.T) {
+	assert.NotContains(t, renderText(previewPlan(), false), "acting as")
+}
+
+func TestReplayOfAPlanWithAnActorHasTheEvent(t *testing.T) {
+	events := replay(actingPlan(false, "danpock"))
+
+	assert.Contains(t, kinds(events), domain.EventActor)
+}

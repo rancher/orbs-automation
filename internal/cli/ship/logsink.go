@@ -41,6 +41,10 @@ func (l logSink) Event(e domain.Event) {
 			attrs = append(attrs, slog.String("reason", e.Reason))
 		}
 		l.log.LogAttrs(ctx, slog.LevelInfo, "target started", attrs...)
+	case domain.EventActor:
+		l.log.LogAttrs(ctx, slog.LevelInfo, "acting as",
+			slog.String("name", e.Actor.Name), slog.String("email", e.Actor.Email),
+			slog.String("login", e.Actor.Login), slog.Bool("signing", e.Actor.Signing))
 	case domain.EventDecided:
 		level := slog.LevelInfo
 		attrs := about(e, slog.String("action", string(e.Decision.Action)), slog.Int("supersede", len(e.Decision.Supersede)))

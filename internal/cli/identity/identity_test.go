@@ -2,6 +2,7 @@ package identity
 
 import (
 	"context"
+	"os/exec"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/actor"
@@ -73,4 +74,19 @@ func TestCIWithoutATokenSaysSo(t *testing.T) {
 
 	require.ErrorIs(t, err, github.ErrNoToken)
 	assert.Zero(t, calls)
+}
+
+func TestResolveInReadsTheCloneOwnConfigOnAWorkstation(t *testing.T) {
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "--quiet"}, {"config", "user.name", "Clone Only"}, {"config", "user.email", "clone@example.com"},
+	} {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
+
+	got, err := ResolveIn(t.Context(), clicfg.Settings{}, dir)
+
+	require.NoError(t, err)
+	assert.Equal(t, actor.Identity{Name: "Clone Only", Email: "clone@example.com"}, got)
 }

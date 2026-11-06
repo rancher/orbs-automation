@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/rancher/orbs-automation/internal/cli/identity"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -93,7 +94,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 		return fmt.Errorf("make a directory for worktrees: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp, Sign: s.SignCommits}
+	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp, Sign: s.SignCommits, Identify: identify(s)}
 	if !opts.NoPush {
 		creds, err := github.Resolve(github.GoGh{}, "")
 		switch {
@@ -276,4 +277,13 @@ func renderJSON(p domain.Plan) (string, error) {
 		return "", err
 	}
 	return string(b) + "\n", nil
+}
+
+// identify says who the commits are made as in the clone: the engineer's git
+// identity there on a workstation, the bot's in CI.
+func identify(s clicfg.Settings) func(context.Context, string) (domain.Identity, error) {
+	return func(ctx context.Context, clone string) (domain.Identity, error) {
+		id, err := identity.ResolveIn(ctx, s, clone)
+		return domain.Identity{Name: id.Name, Email: id.Email}, err
+	}
 }

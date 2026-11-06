@@ -186,3 +186,15 @@ func TestLogSinkRecordsARefresh(t *testing.T) {
 	assert.EqualValues(t, 104, recs[0]["pr"])
 	assert.Equal(t, "release/v2.15", recs[0]["branch"])
 }
+
+func TestLogSinkRecordsWhoTheRunActsAs(t *testing.T) {
+	a := &domain.Actor{Identity: domain.Identity{Name: "Dan Pock", Email: "dan@example.com"}, Login: "danpock", Signing: true}
+
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventActor, Actor: a})
+
+	require.Len(t, recs, 1)
+	assert.Equal(t, "acting as", recs[0]["msg"])
+	assert.Equal(t, "dan@example.com", recs[0]["email"])
+	assert.Equal(t, "danpock", recs[0]["login"])
+	assert.Equal(t, true, recs[0]["signing"])
+}

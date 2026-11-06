@@ -25,12 +25,14 @@
 
 * **The run record.** The PR body and the refresh comment record the workflow run URL, where `gero ship` records the engineer's login ([PUSH_TO_REPO](PUSH_TO_REPO.md)).
 * **Steps `from: producer` and `from: central`.** A workflow has the producer's own checkout and the central bundle at hand, so steps that run a script of the producer's, or one shipped in the bundle, are possible here. They are not for a workstation run, which has neither ([APP_CONFIG](APP_CONFIG.md), [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
+* **The bot's commit identity.** The fresh clone has no git configuration, so the commits are made as the bot explicitly: `internal/ship` passes the identity resolved from `GERO_BOT_USER` (`identity.ResolveIn`, which looks up the bot's numeric id) to every commit when it runs in CI, and a run in CI without `GERO_BOT_USER` fails before it writes ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)).
 * **The token check.** A write to another repository refuses the default `GITHUB_TOKEN` before any write ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)).
 * **Inputs from the trigger.** A workflow runs it after the producer's tag is pushed, or from a dispatch of the tracker or the reconciler ([ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md)). The arguments are those of `gero ship`: the producer, a tag or line, and `--line`.
 
 ## Not built yet
 
 * The command, its `cmd/` registration (CI-only, [CLI_FRAMEWORK](CLI_FRAMEWORK.md)) and its loop.
+* Resolving the bot's identity in a real workflow: the domain passes it to the commits (tested with a fake), and `GERO_BOT_USER` with the id lookup is exercised only by tests of `identity`.
 * The temporary clone as a `Workspace`, and the token as a one-shot credential for the push (`gitcli.Push` takes the engineer's own today).
 * The markdown step summary, and the workflow run URL in the PR body.
 * `from: producer` and `from: central` for steps.
