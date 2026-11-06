@@ -827,3 +827,17 @@ func TestRunToAnErrorBeforeAnyPlanIsJustTheError(t *testing.T) {
 	require.Error(t, err)
 	assert.Empty(t, out.String(), "no document for a run that never made a plan")
 }
+
+func TestAResultThatIsBlockedMakesTheRunBlocked(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultBlocked, Branch: "b", Error: "#110 is newer"})
+
+	assert.ErrorIs(t, failedErr(p), ErrBlocked)
+
+	p.Targets[0].Result.Status = domain.ResultFailed
+	assert.ErrorIs(t, failedErr(p), ErrFailed, "a failure outranks")
+	p.Targets[0].Result.Status = domain.ResultAlreadyOpen
+	assert.NoError(t, failedErr(p), "already open is fine")
+	p.Targets[0].Result.Status = domain.ResultOpened
+	assert.NoError(t, failedErr(p))
+}
