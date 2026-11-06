@@ -491,14 +491,19 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
 	p.Warnings = []string{"image rancher/x is not on Prime production"}
 	p.Targets[0].Warnings = []string{"this is a downgrade"}
-	p.Images = &registry.Report{Rows: []registry.Row{{Image: "rancher/scc-operator", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/scc-operator:v0.5.3"}}}
+	p.Images = &registry.Report{
+		Rows:     []registry.Row{{Image: "rancher/scc-operator", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/scc-operator:v0.5.3"}},
+		Warnings: p.Warnings,
+	}
 	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
 
 	out := renderText(p, false)
 
+	// A warning is shown where it is found: the branch's with its branch, and the
+	// images' with the images.
 	order := []string{
-		"Ship rancher/scc-operator", "Targets", "Warning: image rancher/x", "Warning (release/v2.15): this is a downgrade",
-		"Images", "\nPR\n", "Commits", "Review:", "No push: the commits are on branches",
+		"Ship rancher/scc-operator", "Targets", "Warning (release/v2.15): this is a downgrade",
+		"Images", "Warning: image rancher/x", "\nPR\n", "Commits", "Review:", "No push: the commits are on branches",
 	}
 	last := -1
 	for _, section := range order {

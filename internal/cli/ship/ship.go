@@ -5,6 +5,7 @@
 package ship
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/steprun"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -146,6 +148,19 @@ func failedErr(p domain.Plan) error {
 }
 
 func renderText(p domain.Plan, full bool) string {
+	var buf bytes.Buffer
+	stream := ui.NewStream(&buf)
+	sink := newHumanSink(stream, full)
+	for _, e := range replay(p) {
+		sink.Event(e)
+	}
+	stream.Flush()
+	return buf.String()
+}
+
+// renderTextBuilt is the report as it was built in one piece, kept until the
+// human sink replaces it.
+func renderTextBuilt(p domain.Plan, full bool) string {
 	var b strings.Builder
 	kind := "stable"
 	if !p.Release.Stable {
