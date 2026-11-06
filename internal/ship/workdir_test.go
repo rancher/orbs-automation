@@ -82,9 +82,9 @@ func request(t *testing.T, up, clone string) PrepareRequest {
 
 func current(t *testing.T, dir string) string { return runGit(t, dir, "branch", "--show-current") }
 
-func branchExists(t *testing.T, dir, name string) bool {
+func branchExists(t *testing.T, dir string) bool {
 	t.Helper()
-	return runGit(t, dir, "branch", "--list", name) != ""
+	return runGit(t, dir, "branch", "--list", "bot/x-v1") != ""
 }
 
 func TestPrepareWorksInPlaceInACleanClone(t *testing.T) {
@@ -137,7 +137,7 @@ func TestPrepareDryRunAlwaysUsesAWorktreeAndFinishRemovesBoth(t *testing.T) {
 	require.NoError(t, w.Finish(bg, false))
 
 	assert.NoDirExists(t, w.Dir)
-	assert.False(t, branchExists(t, clone, "bot/x-v1"))
+	assert.False(t, branchExists(t, clone))
 	assert.Equal(t, "main", current(t, clone))
 }
 
@@ -180,7 +180,7 @@ func TestPrepareFailsWhenTheTargetMovedSinceItWasChecked(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrBaseMoved)
 	assert.Nil(t, w)
-	assert.False(t, branchExists(t, clone, "bot/x-v1"), "nothing was created")
+	assert.False(t, branchExists(t, clone), "nothing was created")
 	assert.Equal(t, "main", current(t, clone))
 }
 
@@ -302,7 +302,7 @@ func TestFinishInPlaceReturnsToTheStartingBranchAndKeepsOrDeletesTheNewOne(t *te
 		require.NoError(t, w.Finish(bg, keep))
 
 		assert.Equal(t, "main", current(t, clone), "keep %v", keep)
-		assert.Equal(t, keep, branchExists(t, clone, "bot/x-v1"), "keep %v", keep)
+		assert.Equal(t, keep, branchExists(t, clone), "keep %v", keep)
 		assert.Equal(t, "image: old\n", slurp(t, filepath.Join(clone, "build.yaml")))
 	}
 }
@@ -334,7 +334,7 @@ func TestAbortInPlaceUndoesTheRunAndNothingOfTheEngineers(t *testing.T) {
 	require.NoError(t, w.Abort(bg))
 
 	assert.Equal(t, "main", current(t, clone))
-	assert.False(t, branchExists(t, clone, "bot/x-v1"))
+	assert.False(t, branchExists(t, clone))
 	assert.Equal(t, "image: old\n", slurp(t, filepath.Join(clone, "build.yaml")))
 	assert.NoFileExists(t, filepath.Join(clone, "generated", "out.go"))
 	assert.Equal(t, "engineer's own", slurp(t, filepath.Join(clone, "notes.txt")))
@@ -350,7 +350,7 @@ func TestAbortAWorktreeRemovesItAndTheBranch(t *testing.T) {
 	require.NoError(t, w.Abort(bg))
 
 	assert.NoDirExists(t, w.Dir)
-	assert.False(t, branchExists(t, clone, "bot/x-v1"))
+	assert.False(t, branchExists(t, clone))
 	assert.Equal(t, "image: mine\n", slurp(t, filepath.Join(clone, "build.yaml")))
 }
 
