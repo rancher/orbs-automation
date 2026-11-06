@@ -17,7 +17,7 @@ func init() {
 	}
 
 	initCmd := &cobra.Command{
-		Use:   "init <bash|zsh>",
+		Use:   "init <bash|zsh|fish|powershell>",
 		Short: "Print the shell script for completion and the gero function",
 		Long: `Print what a shell needs to complete gero commands and to run gero cd: the
 completion script, then a gero function that handles gero cd itself, since a
@@ -29,15 +29,20 @@ changes the script without the profile being edited again. To do it by hand:
 
   eval "$(gero shell init zsh)"`,
 		Args:      cobra.ExactArgs(1),
-		ValidArgs: []string{"bash", "zsh"},
+		ValidArgs: []string{"bash", "zsh", "fish", "powershell"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			root := cmd.Root()
 			out, err := shellsetup.Init(args[0], func(shell string) (string, error) {
 				var buf bytes.Buffer
 				var err error
-				if shell == "zsh" {
+				switch shell {
+				case "zsh":
 					err = root.GenZshCompletion(&buf)
-				} else {
+				case "fish":
+					err = root.GenFishCompletion(&buf, true)
+				case "powershell":
+					err = root.GenPowerShellCompletionWithDesc(&buf)
+				default:
 					err = root.GenBashCompletionV2(&buf, true)
 				}
 				return buf.String(), err
@@ -73,7 +78,7 @@ changes the script without the profile being edited again. To do it by hand:
 		Long: `Add a marked block to your shell's profile (.zshrc, or for bash .bashrc, or
 .bash_profile on macOS) that sets up completion and a gero function, so that
 gero cd <project> moves your shell into the project's clone. The shell is
-detected from $SHELL; bash and zsh are supported.
+detected from $SHELL; bash, zsh, fish and powershell (named with --shell, as it is not a login shell) are supported.
 
 The block is shown and you are asked before anything is written. It sits
 between "# >>> gero shell >>>" and "# <<< gero shell <<<" lines, and running

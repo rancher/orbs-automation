@@ -1,6 +1,7 @@
 package shellenv
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,13 +13,14 @@ func env(m map[string]string) func(string) string { return func(k string) string
 
 func TestParse(t *testing.T) {
 	for in, want := range map[string]Shell{
-		"zsh": Zsh, "/bin/zsh": Zsh, "/usr/local/bin/bash": Bash, "-zsh": Zsh, " bash\n": Bash,
+		"zsh": Zsh, "/bin/zsh": Zsh, "/usr/local/bin/bash": Bash, "-zsh": Zsh, " bash\n": Bash, "/usr/bin/fish": Fish, "pwsh": PowerShell,
+		"powershell": PowerShell, "pwsh.exe": PowerShell, "PowerShell.EXE": PowerShell,
 	} {
 		got, err := Parse(in)
 		require.NoError(t, err, in)
 		assert.Equal(t, want, got, in)
 	}
-	for _, in := range []string{"", "/usr/bin/fish", "tcsh"} {
+	for _, in := range []string{"", "nu", "tcsh"} {
 		_, err := Parse(in)
 		require.ErrorIs(t, err, ErrUnsupportedShell, in)
 	}
@@ -60,6 +62,11 @@ func TestProfile(t *testing.T) {
 		{"bash on macOS with a .bash_profile", Bash, "darwin", home, has("/home/me/.bash_profile", "/home/me/.bashrc"), "/home/me/.bash_profile"},
 		{"bash on macOS with only a .bashrc", Bash, "darwin", home, has("/home/me/.bashrc"), "/home/me/.bashrc"},
 		{"bash on macOS with neither", Bash, "darwin", home, has(), "/home/me/.bash_profile"},
+		{"fish", Fish, "linux", home, has(), "/home/me/.config/fish/config.fish"},
+		{"fish honors XDG_CONFIG_HOME", Fish, "darwin", map[string]string{"HOME": "/home/me", "XDG_CONFIG_HOME": "/xdg"}, has(), "/xdg/fish/config.fish"},
+		{"powershell on macOS and Linux", PowerShell, "darwin", home, has(), "/home/me/.config/powershell/Microsoft.PowerShell_profile.ps1"},
+		{"powershell honors XDG_CONFIG_HOME", PowerShell, "linux", map[string]string{"XDG_CONFIG_HOME": "/xdg"}, has(), "/xdg/powershell/Microsoft.PowerShell_profile.ps1"},
+		{"powershell on Windows", PowerShell, "windows", map[string]string{"USERPROFILE": "C:\\Users\\me"}, has(), filepath.Join("C:\\Users\\me", "Documents", "PowerShell", "Microsoft.PowerShell_profile.ps1")},
 	}
 	for _, c := range cases {
 		got, err := Profile(c.shell, c.goos, env(c.env), c.exists)
@@ -71,7 +78,7 @@ func TestProfile(t *testing.T) {
 	assert.ErrorContains(t, err, "--profile")
 	_, err = Profile(Zsh, "linux", env(nil), has())
 	assert.ErrorContains(t, err, "--profile")
-	_, err = Profile("fish", "linux", env(home), has())
+	_, err = Profile("tcsh", "linux", env(home), has())
 	assert.ErrorIs(t, err, ErrUnsupportedShell)
 }
 
@@ -86,15 +93,33 @@ func TestBlockAsksTheInstalledGeroAndIsSafeWithoutIt(t *testing.T) {
 }
 
 func TestInitHasCompletionThenTheWrapper(t *testing.T) {
-	for _, shell := range Shells {
+	// per shell: how the function starts, how it goes to the directory, and how
+	// everything else reaches the binary
+	cases := map[Shell][3]string{
+		Bash:       {"gero() {", `builtin cd -- "$dir"`, `command gero "$@"`},
+		Zsh:        {"gero() {", `builtin cd -- "$dir"`, `command gero "$@"`},
+		Fish:       {"function gero", `builtin cd -- $dir`, `command gero $argv`},
+		PowerShell: {"function gero {", `Set-Location -LiteralPath $dir`, `& $exe @args`},
+	}
+	require.Len(t, cases, len(Shells), "every shell is covered")
+	for shell, want := range cases {
 		out, err := Init(shell, "# completion\n")
 
 		require.NoError(t, err)
 		assert.Contains(t, out, "# completion\n", string(shell))
-		assert.Less(t, strings.Index(out, "# completion"), strings.Index(out, "gero() {"), string(shell))
-		assert.Contains(t, out, `command gero cd "$2"`)
-		assert.Contains(t, out, `builtin cd -- "$dir"`)
-		assert.Contains(t, out, `command gero "$@"`, "everything else goes to the binary")
+		assert.Less(t, strings.Index(out, "# completion"), strings.Index(out, want[0]), string(shell))
+		assert.Contains(t, out, want[1], string(shell))
+		assert.Contains(t, out, want[2], string(shell)+": everything else goes to the binary")
+	}
+}
+
+func TestEveryBlockIsOneCommentedRegionThatLoadsThatShellsScript(t *testing.T) {
+	for _, shell := range Shells {
+		b := Block(shell)
+
+		assert.True(t, strings.HasPrefix(b, BlockStart+"\n"), string(shell))
+		assert.True(t, strings.HasSuffix(b, BlockEnd+"\n"), string(shell))
+		assert.Contains(t, b, "gero shell init "+string(shell), string(shell))
 	}
 }
 
@@ -108,7 +133,7 @@ func TestInitZshLoadsCompletionSystemOnlyWhenMissing(t *testing.T) {
 }
 
 func TestInitRejectsOtherShells(t *testing.T) {
-	_, err := Init("fish", "")
+	_, err := Init("tcsh", "")
 
 	require.ErrorIs(t, err, ErrUnsupportedShell)
 }

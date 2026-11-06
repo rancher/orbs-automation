@@ -182,7 +182,7 @@ func TestTheShellAndProfileAreDetectedWhenNotGiven(t *testing.T) {
 
 func TestAnUnsupportedShellIsAnError(t *testing.T) {
 	o, _, _ := opts(t, "y\n")
-	o.Shell = "fish"
+	o.Shell = "tcsh"
 
 	_, err := Install(o)
 
@@ -203,10 +203,21 @@ func TestInitAsksForTheCompletionOfThatShell(t *testing.T) {
 }
 
 func TestInitRefusesAnUnsupportedShellWithoutGeneratingAnything(t *testing.T) {
-	_, err := Init("fish", func(string) (string, error) {
+	_, err := Init("tcsh", func(string) (string, error) {
 		t.Fatal("no completion should be generated")
 		return "", nil
 	})
 
 	require.ErrorIs(t, err, shellenv.ErrUnsupportedShell)
+}
+
+func TestInstallCreatesTheProfilesDirectory(t *testing.T) {
+	o, _, _ := opts(t, "y\n")
+	o.Shell = "fish"
+	o.Profile = filepath.Join(t.TempDir(), "fish", "config.fish")
+
+	_, err := Install(o)
+
+	require.NoError(t, err)
+	assert.Contains(t, read(t, o.Profile), "gero shell init fish")
 }

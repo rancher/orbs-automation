@@ -11,17 +11,18 @@ import (
 
 // Wiring only: the logic is tested in internal/shellenv and internal/cli/shellsetup.
 func TestShellInitPrintsCompletionAndTheWrapper(t *testing.T) {
-	for _, shell := range []string{"bash", "zsh"} {
+	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		stdout, _, err := execRoot(t, "shell", "init", shell)
 
 		require.NoError(t, err, shell)
 		assert.Contains(t, stdout, "_gero", shell+": the cobra completion")
-		assert.Contains(t, stdout, "gero() {", shell)
+		assert.Contains(t, stdout, "gero", shell)
+		assert.Contains(t, stdout, "cd", shell)
 	}
 }
 
 func TestShellInitRejectsAShellWeDoNotSupport(t *testing.T) {
-	_, _, err := execRoot(t, "shell", "init", "fish")
+	_, _, err := execRoot(t, "shell", "init", "tcsh")
 
 	require.Error(t, err)
 }
