@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
+	"github.com/rancher/orbs-automation/internal/workdir"
 )
 
 // ErrNothingChanged is returned by Apply.Run when the edit and the steps left
@@ -32,10 +33,7 @@ type Apply struct {
 }
 
 // CommitInfo is a commit a run made.
-type CommitInfo struct {
-	Hash    string `json:"commit"`
-	Subject string `json:"subject"`
-}
+type CommitInfo = workdir.CommitInfo
 
 // ApplyResult is what a run did.
 type ApplyResult struct {

@@ -5,11 +5,29 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/workdir"
+)
+
+// The work directory a run edits and commits in lives in internal/workdir.
+type (
+	// Work is a branch prepared for an edit.
+	Work = workdir.Work
+	// Place is where the branch for one target is prepared.
+	Place = workdir.Place
+	// GitState is what the clone in a directory is in.
+	GitState = workdir.GitState
+	// GitCommit is one commit to make.
+	GitCommit = workdir.GitCommit
+)
+
+const (
+	InPlace  = workdir.InPlace
+	Worktree = workdir.Worktree
+	Existing = workdir.Existing
 )
 
 // BranchCommit is a commit on a branch, as far as telling whose it is.
@@ -28,22 +46,6 @@ var (
 	// moved away from.
 	ErrBranchCheckedOut = errors.New("the branch is checked out in the clone")
 )
-
-// GitState is what the clone in a directory is in.
-type GitState struct {
-	Branch     string   // the checked-out branch, "" when HEAD is detached
-	InProgress string   // an unfinished merge, rebase, cherry-pick, revert or bisect
-	Tracked    []string // tracked files that are staged, modified or deleted
-	Untracked  []string // untracked files, one at a time, ignored ones left out
-}
-
-// GitCommit is one commit to make.
-type GitCommit struct {
-	Message     string
-	Stage       []string // untracked files the run created, to include
-	Name, Email string   // empty for the clone's own git configuration
-	Sign        bool
-}
 
 // Git is what preparing, committing in and cleaning up a work directory needs
 // from git. Every operation names the directory it runs in: the engineer's
@@ -173,26 +175,6 @@ type PrepareRequest struct {
 	Rebuild bool
 }
 
-// Work is a branch prepared for an edit.
-type Work struct {
-	// Dir is where to edit and run steps: the clone, or a worktree of it.
-	Dir string
-	// Place is where the branch was prepared and Reason, for a worktree, why it
-	// was not in place.
-	Place  Place
-	Reason string
-	// Reused says the branch already existed, was ours and was current, so it was
-	// not built again: Existing are its commits.
-	Reused   bool
-	Existing []CommitInfo
-
-	g         Git
-	clone     string   // the engineer's clone
-	branch    string   // the new branch
-	start     string   // the branch the clone was on, to go back to in place
-	untracked []string // the untracked files the engineer already had, in place
-}
-
 // Prepare fetches the target branch and creates the new branch at the commit
 // the state check read, in place or in a worktree as ChoosePlace says. It
 // creates nothing when it fails.
@@ -226,19 +208,20 @@ func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
 	if err != nil {
 		return nil, err
 	}
-	choice := ChoosePlace(CloneState{Branch: st.Branch, InProgress: st.InProgress, Tracked: st.Tracked, Collisions: collisions}, req.DryRun)
-	w := &Work{Place: choice.Place, Reason: choice.Reason, g: g, clone: req.CloneDir, branch: req.Branch}
+	choice := workdir.ChoosePlace(workdir.CloneState{Branch: st.Branch, InProgress: st.InProgress, Tracked: st.Tracked, Collisions: collisions}, req.DryRun)
+	var w *Work
 	switch choice.Place {
 	case InPlace:
 		if err := g.StartBranch(ctx, req.CloneDir, req.Branch, req.Base); err != nil {
 			return nil, err
 		}
-		w.Dir, w.start, w.untracked = req.CloneDir, st.Branch, st.Untracked
+		w = workdir.NewInPlace(g, req.CloneDir, req.Branch, st.Branch, st.Untracked)
 	default:
-		w.Dir = filepath.Join(req.TempDir, strings.ReplaceAll(req.Branch, "/", "-"))
-		if err := g.AddWorktree(ctx, req.CloneDir, w.Dir, req.Branch, req.Base); err != nil {
+		dir := filepath.Join(req.TempDir, strings.ReplaceAll(req.Branch, "/", "-"))
+		if err := g.AddWorktree(ctx, req.CloneDir, dir, req.Branch, req.Base); err != nil {
 			return nil, err
 		}
+		w = workdir.NewInWorktree(g, req.CloneDir, dir, req.Branch, choice.Reason)
 	}
 	return w, nil
 }
@@ -274,7 +257,7 @@ func settleExisting(ctx context.Context, g Git, req PrepareRequest, commit strin
 				subject, _, _ := strings.Cut(f.Message, "\n")
 				existing[i] = CommitInfo{Hash: f.Hash, Subject: subject}
 			}
-			return &Work{Place: Existing, Reused: true, Existing: existing, g: g, clone: req.CloneDir, branch: req.Branch}, nil
+			return workdir.NewExisting(g, req.CloneDir, req.Branch, existing), nil
 		}
 	}
 	// At the base, or ours and out of date, or to be rebuilt: nothing is lost.
@@ -290,61 +273,4 @@ func short(commit string) string {
 		return commit[:8]
 	}
 	return commit
-}
-
-// created lists the untracked files in Dir the run made: the ones that were not
-// there when the work began.
-func (w *Work) created(ctx context.Context) ([]string, error) {
-	st, err := w.g.State(ctx, w.Dir)
-	if err != nil {
-		return nil, fmt.Errorf("read the state of %s: %w", w.Dir, err)
-	}
-	return slices.DeleteFunc(st.Untracked, func(p string) bool { return slices.Contains(w.untracked, p) }), nil
-}
-
-// Commit commits what the edit and the steps changed in Dir: the tracked files,
-// and the untracked ones the run created, never the engineer's own.
-func (w *Work) Commit(ctx context.Context, c GitCommit) (string, error) {
-	created, err := w.created(ctx)
-	if err != nil {
-		return "", err
-	}
-	c.Stage = created
-	return w.g.Commit(ctx, w.Dir, c)
-}
-
-// Finish ends the work. In place the clone goes back to the branch it started
-// on; a worktree is removed. The new branch is kept when keep is set, and
-// deleted otherwise. Every step is tried, and the errors are joined.
-func (w *Work) Finish(ctx context.Context, keep bool) error {
-	if w.Reused {
-		return nil // the branch was there before, and is not ours to remove now
-	}
-	var errs []error
-	if w.Place == InPlace {
-		errs = append(errs, w.g.Checkout(ctx, w.clone, w.start))
-	} else {
-		errs = append(errs, w.g.RemoveWorktree(ctx, w.clone, w.Dir))
-	}
-	if !keep {
-		errs = append(errs, w.g.DeleteBranch(ctx, w.clone, w.branch))
-	}
-	return errors.Join(errs...)
-}
-
-// Abort ends the work after a failure: whatever the run changed in the clone is
-// undone, and the branch is not kept.
-func (w *Work) Abort(ctx context.Context) error {
-	if w.Reused {
-		return nil
-	}
-	var errs []error
-	if w.Place == InPlace {
-		created, err := w.created(ctx)
-		if err == nil {
-			err = w.g.Discard(ctx, w.Dir, created)
-		}
-		errs = append(errs, err)
-	}
-	return errors.Join(append(errs, w.Finish(ctx, false))...)
 }
