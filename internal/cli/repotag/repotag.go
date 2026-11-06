@@ -33,12 +33,20 @@ var ErrDeclined = errors.New("declined: nothing was tagged")
 // ErrNoTag is returned when no tag was named. Choosing one is not built yet.
 var ErrNoTag = errors.New("name the tag to make: choosing one is not built yet")
 
+// ErrTagAndChoice is returned when a tag is named and so is how to choose one.
+var ErrTagAndChoice = errors.New("name the tag, or ask for one to be chosen with --stable, --minor or --major, and not both")
+
 // Options is what the user asked for; the command fills it from its arguments
 // and flags.
 type Options struct {
 	Project string // by config name or slug, "" for the working directory's
 	Line    string // the release line, or a branch of the project
-	Tag     string // the tag to make
+	Tag     string // the tag to make; "" to have one chosen
+	// Stable and Bump say what to choose when no tag is named: a stable tag and not
+	// a prerelease, and how much a new version rises after a stable tag. They are
+	// not used with a tag.
+	Stable bool
+	Bump   semver.Bump
 	Yes     bool   // go on without asking
 	// Interactive says In is a terminal that the question can be asked on.
 	Interactive bool
