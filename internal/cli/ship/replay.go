@@ -13,6 +13,7 @@ func replay(plan domain.Plan) []domain.Event {
 		t := plan.Targets[i]
 		events = append(events, domain.Event{Kind: domain.EventTargetChecked, Branch: t.Branch, Target: &t})
 	}
+	events = append(events, domain.Event{Kind: domain.EventTargetsChecked})
 	if plan.Images != nil {
 		events = append(events, domain.Event{Kind: domain.EventImagesChecked, Images: plan.Images})
 	}

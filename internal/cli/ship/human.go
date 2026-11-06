@@ -37,6 +37,8 @@ func (h *humanSink) Event(e domain.Event) {
 		h.resolved(e.Plan)
 	case domain.EventTargetChecked:
 		h.targetChecked(e.Target)
+	case domain.EventTargetsChecked:
+		h.endTargets()
 	case domain.EventImagesChecked:
 		h.endTargets()
 		h.images(e.Images)

@@ -178,6 +178,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		checked := tp
 		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Target: &checked})
 	}
+	emit(sink, Event{Kind: EventTargetsChecked})
 	if needsPR {
 		images := registry.CheckProject(ctx, res.producer, prober, res.release.Tag)
 		plan.Images, plan.Warnings = &images, images.Warnings
