@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -381,4 +382,9 @@ func TestInfoUnreadableWorkTree(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "status failed", got.Local.Error)
 	assert.False(t, got.Local.Dirty)
+}
+
+// What the Workspace offers is all repo info can ask of the host: nothing.
+func TestInfoNeedsNothingFromTheHost(t *testing.T) {
+	assert.Equal(t, 2, reflect.TypeFor[Workspace]().NumMethod(), "Project and RepoPath only")
 }
