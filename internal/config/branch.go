@@ -62,3 +62,20 @@ func (p Project) LineOf(tag string) string {
 	}
 	return ""
 }
+
+// BranchOfLine returns the branch the Project keeps a Rancher line on, and
+// whether it has the line. The line may be written without the v. For release
+// branches perLine it is the line's own branch, or the default branch for a line
+// with none; for single it is the default branch, whatever the line says, as
+// ReleaseBranches does.
+//
+// STUB: the line's own branch, ignoring the single layout and the missing v.
+func (p Project) BranchOfLine(line string) (branch string, ok bool) {
+	for _, l := range p.Release.Lines {
+		if l.Line == line {
+			b, _ := p.Branch(l)
+			return b, true
+		}
+	}
+	return "", false
+}
