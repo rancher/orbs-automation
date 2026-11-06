@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
@@ -19,16 +20,36 @@ type Apply struct {
 	Release    updatedispatcher.Release    // what the value is made from
 	Branch     string                      // the consumer branch, for the steps' line ranges
 	Message    string                      // the commit message, as the preview showed it
-	Runner     updatedispatcher.StepRunner // runs the steps
-	Name       string                      // the commit's author and committer, or empty for the clone's git config
-	Email      string
-	Sign       bool
+	// StepMessage is the commit message for a step that changed files.
+	//
+	// STUB: not used until a later commit.
+	StepMessage func(updatedispatcher.Unit) (string, error)
+	Runner      updatedispatcher.StepRunner // runs the steps
+	Name        string                      // the commit's author and committer, or empty for the clone's git config
+	Email       string
+	Sign        bool
+}
+
+// CommitInfo is a commit a run made.
+type CommitInfo struct {
+	Hash    string `json:"commit"`
+	Subject string `json:"subject"`
 }
 
 // ApplyResult is what a run did.
 type ApplyResult struct {
-	Commit  string                    // the new commit
+	Commits []CommitInfo              // the commits made, oldest first
 	Changes []updatedispatcher.Change // what the strategy changed
+}
+
+// Tip is the newest commit, or "" when there is none.
+func (r ApplyResult) Tip() string { return tip(r.Commits) }
+
+func tip(commits []CommitInfo) string {
+	if len(commits) == 0 {
+		return ""
+	}
+	return commits[len(commits)-1].Hash
 }
 
 // Run runs the dispatcher's lifecycle in w.Dir (the pre-edit steps, the edit and
@@ -47,5 +68,6 @@ func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
 	if err != nil {
 		return ApplyResult{}, err
 	}
-	return ApplyResult{Commit: commit, Changes: res.Changes}, nil
+	subject, _, _ := strings.Cut(a.Message, "\n")
+	return ApplyResult{Commits: []CommitInfo{{Hash: commit, Subject: subject}}, Changes: res.Changes}, nil
 }

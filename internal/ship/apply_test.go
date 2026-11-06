@@ -87,7 +87,7 @@ func TestApplyEditsTheFileAndCommitsItWithTheMessage(t *testing.T) {
 	res, err := applyFor(invocationFor(t, nil)).Run(bg, w)
 
 	require.NoError(t, err)
-	assert.Equal(t, res.Commit, runGit(t, w.Dir, "rev-parse", "HEAD"))
+	assert.Equal(t, res.Tip(), runGit(t, w.Dir, "rev-parse", "HEAD"))
 	assert.Equal(t, "image: rancher/scc-operator:v0.5.3\n", slurp(t, filepath.Join(w.Dir, "build.yaml")))
 	assert.Equal(t, "Update to v0.5.3\n\nbody", runGit(t, w.Dir, "log", "-1", "--format=%B"))
 	assert.Equal(t, []string{"build.yaml"}, strings.Fields(runGit(t, w.Dir, "show", "--name-only", "--format=", "HEAD")))
@@ -140,7 +140,7 @@ func TestApplyWhenTheFileAlreadyHoldsTheValueChangesNothing(t *testing.T) {
 	res, err := applyFor(invocationFor(t, nil)).Run(bg, w)
 
 	require.ErrorIs(t, err, ErrNothingChanged)
-	assert.Empty(t, res.Commit)
+	assert.Empty(t, res.Commits)
 	assert.Equal(t, before, runGit(t, w.Dir, "rev-parse", "HEAD"), "no commit was made")
 }
 

@@ -28,7 +28,7 @@ const (
 type TargetResult struct {
 	Status  ResultStatus `json:"status"`
 	Branch  string       `json:"branch"`            // the new branch
-	Commit  string       `json:"commit,omitempty"`  // the commit made
+	Commits []CommitInfo `json:"commits,omitempty"` // the commits made, oldest first
 	Place   Place        `json:"place,omitempty"`   // where it was made
 	Reason  string       `json:"reason,omitempty"`  // why that was a worktree
 	Changes []string     `json:"changes,omitempty"` // what the strategy changed, in words
@@ -41,6 +41,9 @@ type Executor struct {
 	Runner  updatedispatcher.StepRunner
 	TempDir string // where worktrees go
 }
+
+// Tip is the newest commit of the result, or "" when there is none.
+func (r TargetResult) Tip() string { return tip(r.Commits) }
 
 // ErrNoClone is returned by Ship when there are commits to make and the
 // engineer has no clone of the consumer to make them in.
@@ -114,7 +117,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	if err != nil {
 		return fail(errors.Join(err, w.Abort(ctx)))
 	}
-	result.Commit = applied.Commit
+	result.Commits = applied.Commits
 	for _, c := range applied.Changes {
 		result.Changes = append(result.Changes, c.Description)
 	}

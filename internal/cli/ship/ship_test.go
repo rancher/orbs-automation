@@ -344,7 +344,7 @@ func withResults(p domain.Plan, results ...*domain.TargetResult) domain.Plan {
 }
 
 func committed(branch, commit string, place domain.Place, reason string) *domain.TargetResult {
-	return &domain.TargetResult{Status: domain.ResultCommitted, Branch: branch, Commit: commit, Place: place, Reason: reason}
+	return &domain.TargetResult{Status: domain.ResultCommitted, Branch: branch, Commits: []domain.CommitInfo{{Hash: commit, Subject: "s"}}, Place: place, Reason: reason}
 }
 
 func TestRenderTextShowsTheCommitsAndHowToReviewThem(t *testing.T) {

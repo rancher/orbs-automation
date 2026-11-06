@@ -246,7 +246,7 @@ func writeCommits(b *strings.Builder, p domain.Plan) {
 	fmt.Fprintln(w, "  BRANCH\tRESULT\tWHERE\tCOMMIT\tNEW BRANCH")
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil {
-			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", t.Branch, r.Status, r.Place, git.Short(r.Commit), r.Branch)
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", t.Branch, r.Status, r.Place, git.Short(r.Tip()), r.Branch)
 		}
 	}
 	_ = w.Flush()
