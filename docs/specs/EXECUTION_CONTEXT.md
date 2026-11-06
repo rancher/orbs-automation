@@ -6,6 +6,8 @@ How one `gero` command behaves on an engineer's workstation and in CI, and who i
 
 ## Principle
 
+**A write command may be two commands.** `gero ship` is the workstation command and `gero ci:ship` the CI one ([PUSH_TO_REPO](PUSH_TO_REPO.md#the-ci-variant)), over shared backends, so the setup that only CI needs stays out of the local command's loop. The rest of this spec is what the two have in common, and the principle below still holds inside each backend.
+
 **One code path, two actors.** A command never branches on "am I in CI" to decide what to do. The context chooses who acts and where inputs come from. It does not choose what the command does. Everything the context changes is listed once, below, so a reader can see all of it in one place.
 
 ## Detecting the context
@@ -72,7 +74,7 @@ Every command that writes to git or GitHub follows these rules in both contexts.
 
 1. **Preflight line.** Before the first write, the command prints who it acts as and where it writes: token login (or "installation token"), commit identity, push target, signing on or off. `--dry-run` prints the same line.
 2. **`--dry-run` parity.** A dry run computes and prints everything, including the branch names and PR titles, and changes nothing remote. It takes the same path as a real run up to the first write.
-3. **Never touch the engineer's checkout.** Edits happen in a throwaway clone or worktree under the temp directory, in both contexts. A `gero` run leaves the clones it found exactly as they were, including after a dry run or a failure.
+3. **Never lose the engineer's work.** A checkout with uncommitted changes is never touched: the edit happens in a temporary worktree of the same repository. A clean checkout may be switched to the work branch and is put back on the branch it started on. A dry run always uses a worktree, and a `gero` run leaves the clones it found as it found them, including after a failure ([PUSH_TO_REPO](PUSH_TO_REPO.md#preparing-the-branch)). In CI there is no engineer's checkout, and the edit happens in a temporary clone.
 4. **Per-target results.** A fan-out reports each target and tolerates partial failure ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)), so exit code and output do not depend on the context.
 5. **One confirmation per command, and a flag to skip it.** Before a command starts writing it prints the preflight line and asks once, "proceed?", in both contexts. `--non-interactive` (alias `--yes`, env `GERO_NON_INTERACTIVE`) answers yes and never prompts, which is how a workflow, or a script, runs the same command. Without the flag and without a TTY the command fails before any write, with a message naming the flag, so a forgotten flag in CI is a loud failure and not a hang or a silent yes. A forced CI context that shows workstation signs (see [Detecting the context](#detecting-the-context)) adds a warning line naming them to the preflight line. `--dry-run` writes nothing and so never asks. `--dry-run` stays opt-in: making it the default would mean every real run needs `--dry-run=false`, so the confirmation is the safety instead.
 
@@ -84,7 +86,7 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 * Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`) but only `gero doctor` (the `commit-identity` check) calls it so far. The cross-repo token check (`cigate.RequireCrossRepoToken`), the workstation-signs detection (`clicfg.WorkstationSigns`) and the `auth status` fallback for installation tokens exist too, and likewise wait for a command to call them. The fallback treats a 403 from `GET /user` as an installation token and is unverified against a real one.
 * The `gitcli` push, the `signCommits` key and signing through `git`.
-* The write-command contract: preflight line, throwaway clone, the confirmation and `--non-interactive`.
+* The write-command contract: preflight line, the work branch or worktree, the confirmation and `--non-interactive`.
 * Any write command at all. These are the rules the first one is built against.
 
 ## Decided

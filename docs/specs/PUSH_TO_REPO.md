@@ -1,8 +1,10 @@
 # Ship (push to repo)
 
-**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`, and so is the update dispatcher it uses. The throwaway clone, the commit, the push and the PR are not built.
+**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`, and so is the update dispatcher it uses, and the step runner (`internal/steprun`). Preparing the branch, the commit, the push and the PR are not built.
 
-`gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md). It runs in both contexts and acts as the engineer locally and as the bot in CI ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)).
+`gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md).
+
+**`gero ship` is the workstation command.** It works in the engineer's own clone of the consumer and acts as the engineer. CI gets its own command, `gero ci:ship` (see [The CI variant](#the-ci-variant)), so that nothing CI-specific is in `ship`'s loop. The two share their backends: the state check, the dispatcher, the step runner, the templates and the PR identity and marker logic.
 
 What a consumer edits, and how, is the consumer's update methods and the producer's downstream edges ([APP_CONFIG](APP_CONFIG.md#update-methods-and-downstream-edges)); the code that applies them is the update dispatcher (`internal/updatedispatcher`). This spec is the command around them.
 
@@ -15,7 +17,7 @@ What a consumer edits, and how, is the consumer's update methods and the produce
 * `--prerelease` lets prereleases count: when resolving a line, and for a prerelease tag that the consumer's method would refuse (`accept.when` is `stable`).
 * The routes out of the producer are its `downstream` edges. `--to <consumer>` picks one consumer when there are several, and `--method` one method when it uses several of the same consumer's.
 * **Which branches.** Without `--branch`, every branch of the consumer that the release goes to is checked, in config order, newest first. The edge's `lines` decides which, and an omitted one is worked out from the producer: a **universal** edge (the default for a producer that lists no `release.lines`, since its releases belong to no line) goes to every release branch of the consumer, and one that **follows lines** (the default for a producer with lines) goes to the consumer's branch for the line the release is in. A release in no line of the producer, or a line the consumer lacks, has no branch to go to, and the error says to name one. `--branch <target>` limits the run to that one branch, which may be any branch the consumer has.
-* `--allow-downgrade` ships a release older than what a branch holds. `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` (`--non-interactive`) skips the one confirmation.
+* `--allow-downgrade` ships a release older than what a branch holds. `--preview` prints the commit message and PR body as well as the branch, title and labels, and `--json` always carries them. `--yes` skips the one confirmation.
 
 ## The state check
 
@@ -47,9 +49,8 @@ A faithful account of `push-to-rancher`, so the differences below are visible. F
 |---|---|---|
 | One remote fetches the base and receives the push | Fetch from `upstream`, push to the push target | A fork as the only remote means a stale base, or pushing to the upstream by necessity |
 | `gh pr create --head <branch>` | Head is `<githubUser>:<branch>` for a fork, the bare branch for the upstream | A head without an owner cannot resolve to a fork |
-| Edits in the engineer's clone (`checkout -B` resets their branches, `checkout -f` discards uncommitted work, a dry run leaves branches behind) | A throwaway clone | A tool must not destroy local work |
-| The workflow pre-clones the target and persists credentials | `gero` clones with the token | One credential path in both contexts |
-| `bot/` prefix and an epoch suffix everywhere | Prefix follows the actor, deterministic suffix | Ownership is visible, and a rerun finds its own branch |
+| Edits in the engineer's clone (`checkout -B` resets their branches, `checkout -f` discards uncommitted work, a dry run leaves branches behind) | A work branch in a clean clone, else a temporary worktree, always a worktree for a dry run | A tool must not destroy local work or leave debris |
+| `bot/` prefix and an epoch suffix everywhere | The engineer's prefix locally (`bot/` in CI), deterministic suffix | Ownership is visible, and a rerun finds its own branch |
 | `eval` of a line read from the target's `generate.go` | Steps declared in config, run as an argument list | Nothing executable is read from a downstream repo or run through a shell |
 | `yq`, with the key and image written in the script | A strategy that edits the value in place, configured by the consumer | The script's file, key and wording become config |
 | `docker manifest inspect` | An anonymous registry check inside `gero` | No `docker` needed on a runner or a laptop |
@@ -60,14 +61,35 @@ A faithful account of `push-to-rancher`, so the differences below are visible. F
 Per target branch, newest first:
 
 1. **Preconditions.** The state check above. A missing artifact stops the whole fan-out before any write, and a branch problem skips only that branch.
-2. **Clone.** One throwaway clone of the consumer per run, shared by the branches, with a worktree each. Objects come from a local reference to the engineer's clone where there is one, else a shallow clone.
-3. **Edit.** The lifecycle above. Nothing to change ends the branch as **already up to date**: no branch, no PR.
-4. **Commit.** Through go-git, or through `git` when the engineer has signing on ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)).
-5. **Push.** To the push target, never forced. Fetching is from `upstream`.
+2. **Prepare the branch** in the engineer's clone ([below](#preparing-the-branch)).
+3. **Edit.** The lifecycle above, in that branch's directory. Nothing to change ends the branch as **already up to date**: no PR.
+4. **Commit** through `git`, so the engineer's hooks, identity and signing settings apply ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)).
+5. **Push** to the push target, never forced. Fetching is from `upstream`.
 6. **PR.** Find open PRs with the same key. The same version is **already open** and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking it and is closed.
 7. **Report.** One line per branch: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
 
-`--dry-run` runs steps 1 to 4 and prints what 5 and 6 would do. It never pushes a branch or opens a PR; whatever it clones, edits and commits is in a throwaway directory that is removed afterwards. The report says it was a dry run.
+`--dry-run` runs steps 1 to 4 in a temporary worktree and prints what 5 and 6 would do. It never pushes a branch or opens a PR, and it never moves the engineer's checkout. The worktree and its branch are removed afterwards. The report says it was a dry run.
+
+## Preparing the branch
+
+The consumer's clone is found as for every command ([WORKSPACE](WORKSPACE.md#resolving-repo-paths)). With none, the command fails and says to clone it or set `repos.paths.<slug>`; it never clones for itself. Each target branch is prepared the same way:
+
+1. **Fetch** the one upstream branch the state check read: objects only, so no local branch and nothing in the working tree moves. The new branch starts at the commit the state check read. If the branch has moved since, the check is read again before anything is written.
+2. **Pick where to work**, once per run from the state the clone is in:
+   * **In place**, when the clone is clean and this is not a dry run: `git switch -c <branch> <commit>` in the engineer's own checkout.
+   * **A temporary worktree** otherwise: `git worktree add -b <branch> <dir> <commit>` under the temp directory. The engineer's checkout is not touched at all. A dry run always works here.
+3. **Clean** means: HEAD is a branch (not detached), no merge, rebase, cherry-pick or bisect is in progress, and no tracked file is staged, modified or deleted. Untracked files are allowed, unless one would be overwritten by the target branch's tree, which sends the run to a worktree instead.
+4. **The commit holds only what the run changed.** Staging is every tracked file the edit and the steps changed, plus untracked files that appeared during the run, never the engineer's own untracked files.
+5. **Afterwards, in place:** the branch the engineer started on is checked out again, and the new branch stays in the repository, since it is what gets pushed. A worktree is removed whatever happened.
+6. **On a failure** only what the run changed is undone: its edits, the files it created, and the new branch when it holds no commit.
+
+**A rerun** finds the branch name already in use, because the name is deterministic. A branch identical to the commit it would start from is reused. One with commits of its own is an error that names it, since those are the engineer's to keep or delete.
+
+go-git cannot create linked worktrees or switch a checkout the way `git` does, so this part goes through `internal/git/gitcli`, with the reason recorded next to the code.
+
+## The CI variant
+
+`gero ci:ship` is the same bump from a workflow, as the bot. Its shape is not decided on purpose. Either `gero` does the work itself (makes a shallow temporary clone with the workflow's token, resolves the bot identity, pushes to the upstream), or workflow steps do the setup first and hand `gero` the environment and config to work in. Both use the same backends, and only the loop and the setup differ. The decision waits until the local command works, and the differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## Branches and PR identity
 
@@ -92,7 +114,8 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* The throwaway clone, the real step runner, the commit, the push, the PR and superseding an older one, with `--yes` and the confirmation.
+* Preparing the branch, the commit, the push, the PR and superseding an older one, with `--yes` and the confirmation.
+* `gero ci:ship`.
 * The check for open PRs the new one would supersede.
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
@@ -100,5 +123,6 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 * Whether engineers push to a fork or straight to the upstream today. The design supports both through `fork` and `upstream`; the default for a target is a config decision.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
-* Whether the throwaway clone should be shallow in CI when a strategy needs history.
+* The shape of `gero ci:ship` (above).
+* Whether a clean clone with untracked files should be worked in place when none collide, as designed here, or sent to a worktree whenever there are any.
 * How a strategy that is not `yamlBump` reads its value for the downgrade check. Each defines it, and `chartsPackageBump` is not built.
