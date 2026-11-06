@@ -135,7 +135,7 @@ func TestRunJSONWhenBlocked(t *testing.T) {
 func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	_, err := runWith(context.Background(), readyWorkspace(), fakeProber{}, nil, clicfg.OutputEnv, in)
 	assert.ErrorContains(t, err, "not supported by ship")
-	err = Run(context.Background(), io.Discard, clicfg.Settings{Output: clicfg.OutputEnv}, t.TempDir(), Options{Project: "scc-operator"})
+	err = Run(context.Background(), io.Discard, nil, clicfg.Settings{Output: clicfg.OutputEnv}, t.TempDir(), Options{Project: "scc-operator"})
 	assert.ErrorContains(t, err, "not supported by ship")
 }
 
@@ -562,7 +562,7 @@ func TestRunToShowsTheBranchesBeforeTheSlowImageCheck(t *testing.T) {
 	var out bytes.Buffer
 	var seen string
 
-	err := runTo(context.Background(), &out, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputText, in, false)
+	err := runTo(context.Background(), &out, nil, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputText, in, false)
 
 	require.NoError(t, err)
 	assert.Contains(t, seen, "Ship rancher/scc-operator", "the title was already written")
@@ -576,7 +576,7 @@ func TestRunToTextIsTheReportRunWithReturns(t *testing.T) {
 	ws, prober := readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, ws, prober, nil, clicfg.OutputText, in, false)
+	err := runTo(context.Background(), &out, nil, ws, prober, nil, clicfg.OutputText, in, false)
 	want, wantErr := runWith(context.Background(), ws, prober, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
@@ -588,7 +588,7 @@ func TestRunToJSONIsOneDocumentAtTheEnd(t *testing.T) {
 	var out bytes.Buffer
 	var seen string
 
-	err := runTo(context.Background(), &out, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputJSON, in, false)
+	err := runTo(context.Background(), &out, nil, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputJSON, in, false)
 
 	require.NoError(t, err)
 	assert.Empty(t, seen, "nothing was written while the run was going")
@@ -600,7 +600,7 @@ func TestRunToJSONIsOneDocumentAtTheEnd(t *testing.T) {
 func TestRunToReturnsTheErrorAfterTheReport(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in, false)
+	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in, false)
 
 	require.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out.String(), "status  blocked", "the report was written first")

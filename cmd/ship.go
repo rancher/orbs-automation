@@ -57,7 +57,7 @@ afterwards; with both flags it is a dry run.`,
 				ctx = context.Background()
 			}
 			in.Project, in.Arg = ship.ParseArgs(args)
-			return ship.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, in)
+			return ship.Run(ctx, cmd.OutOrStdout(), nil, settingsFrom(cmd), cwd, in)
 		},
 	}
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
