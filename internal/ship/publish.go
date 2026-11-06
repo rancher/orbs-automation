@@ -49,15 +49,15 @@ func decidePublish(open []pulls.PR, me string, m Marker) Publish {
 		if !ok || !found.SameBump(m) {
 			continue
 		}
-		order, comparable := compareVersions(found.Version, m.Version)
+		order, ordered := compareVersions(found.Version, m.Version)
 		if p.Author != me {
-			if comparable && order >= 0 || !comparable && found.Version == m.Version {
+			if ordered && order >= 0 || !ordered && found.Version == m.Version {
 				out.Also = append(out.Also, p)
 			}
 			continue
 		}
 		switch {
-		case !comparable && found.Version != m.Version:
+		case !ordered && found.Version != m.Version:
 			// Not ordered against this release, so not closed on a guess.
 		case order > 0:
 			if out.Newer == nil {
