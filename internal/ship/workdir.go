@@ -57,6 +57,7 @@ type Git interface {
 	RemoveWorktree(ctx context.Context, dir, path string) error
 	Commit(ctx context.Context, dir string, c GitCommit) (commit string, err error)
 	Discard(ctx context.Context, dir string, created []string) error
+	Push(ctx context.Context, dir, remote, branch string) error
 }
 
 // GitCLI is Git through the git binary (internal/git/gitcli).
@@ -105,6 +106,10 @@ func (GitCLI) Commit(ctx context.Context, dir string, c GitCommit) (string, erro
 	return gitcli.CommitChanges(ctx, dir, gitcli.Commit{
 		Message: c.Message, Stage: c.Stage, Name: c.Name, Email: c.Email, Sign: c.Sign,
 	})
+}
+
+func (GitCLI) Push(ctx context.Context, dir, remote, branch string) error {
+	return gitcli.Push(ctx, dir, remote, branch)
 }
 
 func (GitCLI) Discard(ctx context.Context, dir string, created []string) error {

@@ -22,6 +22,8 @@ const (
 	ResultUpToDate ResultStatus = "already up to date"
 	// ResultFailed: preparing the branch, a step or the commit failed.
 	ResultFailed ResultStatus = "failed"
+	// ResultOpened: the branch was pushed and the PR opened.
+	ResultOpened ResultStatus = "opened"
 )
 
 // TargetResult is what a run did for one target that needed a PR.
@@ -33,6 +35,18 @@ type TargetResult struct {
 	Reason  string       `json:"reason,omitempty"`  // why that was a worktree
 	Changes []string     `json:"changes,omitempty"` // what the strategy changed, in words
 	Error   string       `json:"error,omitempty"`   // why it failed
+
+	// What publishing did, set only by a run that publishes.
+	Pushed     string   `json:"pushed,omitempty"`     // the remote the branch was pushed to
+	PR         *PRRef   `json:"pr,omitempty"`         // the PR that was opened
+	Superseded []PRRef  `json:"superseded,omitempty"` // the older PRs that were closed
+	Warnings   []string `json:"warnings,omitempty"`   // what went wrong that did not fail the target
+}
+
+// PRRef is a PR, by number and where to see it.
+type PRRef struct {
+	Number int    `json:"number"`
+	URL    string `json:"url,omitempty"`
 }
 
 // Executor is what a run needs to make commits.
