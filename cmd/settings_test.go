@@ -173,3 +173,21 @@ func TestShipsYesFlagsAndTheEnvAreOneSettingThatSkipsTheQuestion(t *testing.T) {
 		})
 	}
 }
+
+func TestRepoTagsYesFlagsAreTheSameSettingAsShips(t *testing.T) {
+	tag, _, err := rootCmd.Find([]string{"repo", "tag"})
+	require.NoError(t, err)
+	require.Equal(t, "tag", tag.Name())
+	for _, args := range [][]string{{"-y"}, {"--yes"}, {"--non-interactive"}} {
+		require.NoError(t, tag.Flags().Parse(args))
+
+		s, err := clicfg.Load(clicfg.Inputs{Flags: flagLookup(tag), Getenv: env(nil)})
+
+		require.NoError(t, err)
+		assert.True(t, s.NonInteractive, "%v", args)
+		for _, f := range []string{"yes", "non-interactive"} {
+			_ = tag.Flags().Set(f, "false")
+			tag.Flags().Lookup(f).Changed = false
+		}
+	}
+}

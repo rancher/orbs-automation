@@ -1,13 +1,13 @@
 # Task commands
 
-**Status:** draft. `gero repo branch` is built, and so are the version functions `gero repo tag` will use; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+**Status:** draft. `gero repo branch` is built, and so is `gero repo tag` with a named tag; choosing the tag and the promotion are not, nor is the rest. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 
 The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an engineer who wants one part of the process and not the whole. Each runs one task and `ship` chains the same tasks, so a step behaves the same alone and inside `ship`. They are workstation commands: they act as the engineer, in the engineer's own clone, and read the same settings as `ship`.
 
 | Command | Task | Does |
 |---|---|---|
 | `gero repo branch [project] <line> <name>` | `createbranch` | Makes a branch off the upstream branch of a release line |
-| `gero repo tag [project] <line> [tag]` **(leaning)** | `createtag` | Tags the head of a release line's upstream branch |
+| `gero repo tag [project] <line> [tag]` | `createtag` | Tags the head of a release line's upstream branch |
 | `gero repo push [project] [--branch <name>]` | `pushbranch` | Pushes a branch, never forced |
 | `gero pr create [project] [--head <branch>] [--base <line\|branch>]` | `createpr` | Opens a PR for a branch that is already pushed, and labels it |
 | `gero ship bump …` **(leaning)** | `bumpcommit` | Applies one change set to a branch and commits it |
@@ -40,9 +40,9 @@ Would create my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
 
 An optional `--from <ref>` for cutting the branch off something other than the head of the line, a branch or a tag, is **(leaning)** and not decided.
 
-## `gero repo tag [project] <line> [tag]` **(leaning)**
+## `gero repo tag [project] <line> [tag]`
 
-Makes the tag `<tag>` on the head of the upstream branch of the release line `<line>`, found as `repo branch` finds it. The head is read from the host when the command runs, never from a local branch, so a tag is always on what is live. With two arguments they are the line and the tag, with one the line, and with three the project comes first.
+Makes the tag `<tag>` on the head of the upstream branch of the release line `<line>`, found as `repo branch` finds it: a line (`v2.15` or `2.15`), or a branch of the project (`release/v2.15`, or `main` for a project with no lines), which has the series of the line it is the branch of. The head is read from the host when the command runs, never from a local branch, so a tag is always on what is live. A tag is a full version and a project or a line never is, which tells two arguments apart: with a version second they are the line and the tag, else the project and the line.
 
 **The tag is made on the host**, through the API, as a lightweight tag: a ref at that commit. Nothing is pushed from the machine and no clone is needed, so an engineer and a workflow run the same task. The tags of these repositories are lightweight, bar a few that people made by hand with `git tag -a`, and the producer's release workflow runs on `push: tags: "*"`. A tag made with the workflow's default `GITHUB_TOKEN` does not start workflows, so the token has to be a person's or an App's ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)).
 
@@ -57,7 +57,7 @@ Makes the tag `<tag>` on the head of the upstream branch of the release line `<l
 
 * **Prereleases are written with a dot, `rc.1`,** as SemVer has it and as the team's repositories already do. A legacy prerelease with no dot (`rc1`) is continued in its own style (`rc2`), since `rc.2` sorts below `rc1` and would be a tag older than the one before it. A new prerelease is always dotted.
 * **A promotion, the "unRC", is never the default.** It needs `--stable`, always asks, and says what it is: `Tag v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head has commits since that RC it refuses and says how many, since a stable tag is made from a commit that already has an RC (`requiresPrerelease`, [IMPLEMENTATION](../IMPLEMENTATION.md)). `--yes` skips the question, as everywhere.
-* **A tag asks once.** Tags are hard to undo, so a plain prerelease asks too, and `--yes`, `GERO_NON_INTERACTIVE` and `--dry-run` work as for `ship`. A dry run says which tag, on which commit and in which repository, and sends nothing.
+* **A tag asks once.** Tags are hard to undo, so a plain prerelease asks too, and `--yes`, `GERO_NON_INTERACTIVE` and `--dry-run` work as for `ship`. A dry run says which tag, on which commit and in which repository, and sends nothing, and needs no token. What is asked is settled first, so a tag the line cannot have is an error and not a question. `--json` is for a program and never asks: it needs `--yes`.
 
 ```
 $ gero repo tag shell v2.15
@@ -108,13 +108,12 @@ Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds t
 
 ## Not built yet
 
-* `gero repo tag` (its version functions are built), `gero repo push`, `gero pr create` and `gero ship bump`.
+* `gero repo tag` choosing the tag when none is named, and `--stable` with its promotion rules and `requiresPrerelease` (the version functions are built, `NextStable` and `NextPrerelease`). `gero repo push`, `gero pr create` and `gero ship bump`.
 
 ## Open questions
 
 * What `ship bump` commits onto, and how it picks the consumer and method (above).
 * Whether `repo branch` gets `--from <ref>`.
 * For `repo tag`: whether the default bump after a stable is always a patch with `--minor` and `--major` for the rest, and the name `--stable` for the promotion. Whether an annotated or signed tag is ever wanted, which the API does not make.
-* For `repo tag`: whether the line may be given as a branch, as `repo branch` accepts, since a tag is only meaningful on a line's own series.
 * Whether a later token such as `@` should stand for the checked-out branch where a branch is a positional, which none is now.
 * Whether `repo push` and `pr create` share one `--push-to` resolution call or each repeats it. A shared one belongs in `internal/ship` with `resolvePushTarget` until a task needs it, then in a domain package.

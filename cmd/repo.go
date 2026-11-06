@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repobranch"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
+	"github.com/rancher/orbs-automation/internal/cli/repotag"
 	"github.com/spf13/cobra"
 )
 
@@ -113,6 +114,46 @@ the repository you are in is used.`,
 		},
 	}
 	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
+	var yes, nonInteractive bool
+	tagCmd := &cobra.Command{
+		Use:   "tag [project] <line> <tag>",
+		Short: "Tag the head of the upstream branch of a release line",
+		Long: `Make the tag <tag> on the head of the upstream branch of a release line,
+as the host has it now, and not on anything in your clone. The line is one of
+the Project's release lines (v2.15, or 2.15), or a branch of it (release/v2.15,
+main). The tag is made on GitHub, as a lightweight tag, so it needs a token that
+may write to the repository and, for the release workflow to start, that is a
+person's or an App's and not the workflow's default token.
+
+The tag is checked first: it must be a version that matches the Project's tag
+pattern, is in the line's series (0.8.x for a line whose versions are 0.8.x), and
+is newer than the line's newest tag. A tag that is already on that commit is
+reported as done, and a tag that is on another commit is an error: a tag is never
+moved. It asks once before it makes the tag; --yes and GERO_NON_INTERACTIVE skip
+the question, and --dry-run says what would be tagged without a token.
+
+With two arguments, a version second is the line and the tag, and anything else
+is the Project and the line. Naming the tag is required for now.`,
+		Args: cobra.RangeArgs(1, 3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			s := settingsFrom(cmd)
+			project, line, tag := repotag.ParseArgs(args)
+			return repotag.Run(ctx, cmd.OutOrStdout(), s, cwd, repotag.Options{
+				Project: project, Line: line, Tag: tag, Yes: s.NonInteractive,
+				In: cmd.InOrStdin(), Interactive: isTerminal(os.Stdin),
+			})
+		},
+	}
+	tagCmd.Flags().BoolVarP(&yes, "yes", "y", false, "go on without asking before the tag is made")
+	tagCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "the same as --yes: never ask")
 	imagesCmd := &cobra.Command{
 		Use:   "images",
 		Short: "Check the images a repository publishes",
@@ -156,6 +197,7 @@ is not found or a registry could not be reached.`,
 		infoCmd,
 		statusCmd,
 		branchCmd,
+		tagCmd,
 		&cobra.Command{
 			Use:     "build-tags",
 			Aliases: []string{"current-tags"}, // its first name, which a workflow may still use
