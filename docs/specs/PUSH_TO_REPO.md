@@ -96,7 +96,7 @@ go-git cannot create linked worktrees or switch a checkout the way `git` does, s
 
 ## The CI variant
 
-`gero ci:ship` is the same bump from a workflow, as the bot. Its shape is not decided on purpose. Either `gero` does the work itself (makes a shallow temporary clone with the workflow's token, resolves the bot identity, pushes to the upstream), or workflow steps do the setup first and hand `gero` the environment and config to work in. Both use the same backends, and only the loop and the setup differ. The decision waits until the local command works, and the differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
+`gero ci:ship` is the same bump from a workflow, as the bot, over the same backends. What it shares, what CI adds and the setup that is still open are in [CI_SHIP](CI_SHIP.md), and the context differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## What a run reports
 
@@ -182,7 +182,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 * A run against real GitHub: the push spike, and a first PR on a scratch repository. The same goes for `--refresh`, whose forced push has only been tried against local repositories.
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The files a commit changed in the report.
-* `gero ci:ship`.
+* `gero ci:ship` ([CI_SHIP](CI_SHIP.md)).
 * The sequence above as chained tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
@@ -190,6 +190,6 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 * Whether the default PR title should carry something that identifies the tooling. Identity is the marker, the author and, in shared repositories, a label such as `origin/bot`; a title is a project's own convention, and matching on it is fragile.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
-* The shape of `gero ci:ship` (above).
+* The shape of `gero ci:ship`, in [CI_SHIP](CI_SHIP.md#open-questions).
 * Whether a clean clone with untracked files should be worked in place when none collide, as designed here, or sent to a worktree whenever there are any.
 * How a strategy that is not `yamlBump` reads its value for the downgrade check. Each defines it, and `chartsPackageBump` is not built.

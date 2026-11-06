@@ -46,7 +46,7 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero repo push [project] [--branch <name>]` **(leaning)** | workstation | Writes; honors `--dry-run`. Pushes a branch, never forced ([TASK_COMMANDS](TASK_COMMANDS.md)) |
 | `gero pr create [project] [--head <branch>] [--base <line\|branch>]` **(leaning)** | workstation | Writes; honors `--dry-run`. Opens a PR for a pushed branch, the checked-out one unless named ([TASK_COMMANDS](TASK_COMMANDS.md)) |
 | `gero ship bump` **(leaning)** | workstation | Writes. The step of `ship` that applies a change set and commits it; a bare `gero ship` still runs the whole process ([TASK_COMMANDS](TASK_COMMANDS.md)) |
-| `gero ci:ship` | CI-only | The same bump as the bot, from a workflow; not designed yet ([PUSH_TO_REPO](PUSH_TO_REPO.md#the-ci-variant)) |
+| `gero ci:ship` | CI-only | The same bump as the bot, from a workflow ([CI_SHIP](CI_SHIP.md)) |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
 | `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |

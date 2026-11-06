@@ -6,7 +6,7 @@ How one `gero` command behaves on an engineer's workstation and in CI, and who i
 
 ## Principle
 
-**A write command may be two commands.** `gero ship` is the workstation command and `gero ci:ship` the CI one ([PUSH_TO_REPO](PUSH_TO_REPO.md#the-ci-variant)), over shared backends, so the setup that only CI needs stays out of the local command's loop. The rest of this spec is what the two have in common, and the principle below still holds inside each backend.
+**A write command may be two commands.** `gero ship` is the workstation command and `gero ci:ship` the CI one ([CI_SHIP](CI_SHIP.md)), over shared backends, so the setup that only CI needs stays out of the local command's loop. The rest of this spec is what the two have in common, and the principle below still holds inside each backend.
 
 **One code path, two actors.** A command never branches on "am I in CI" to decide what to do. The context chooses who acts and where inputs come from. It does not choose what the command does. Everything the context changes is listed once, below, so a reader can see all of it in one place.
 
