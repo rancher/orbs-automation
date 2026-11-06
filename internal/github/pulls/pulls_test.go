@@ -287,3 +287,29 @@ func TestARepositoryThatIsNotOwnerSlashNameIsAnErrorAndMakesNoRequest(t *testing
 
 	assert.Empty(t, s.reqs)
 }
+
+func TestMeIsTheLoginTheTokenBelongsTo(t *testing.T) {
+	s := always(200, `{"login":"danpock"}`)
+
+	me, err := service(t, s).Me(bg)
+
+	require.NoError(t, err)
+	assert.Equal(t, "danpock", me)
+	assert.Equal(t, "/user", s.req(t).URL.Path)
+}
+
+func TestMeAsTheBotIsTheBotWithoutAskingGitHub(t *testing.T) {
+	s := always(200, `{"login":"someone-else"}`)
+
+	me, err := service(t, s).AsBot("rancher-scc-bot[bot]").Me(bg)
+
+	require.NoError(t, err)
+	assert.Equal(t, "rancher-scc-bot[bot]", me, "an installation token has no user to ask about")
+	assert.Empty(t, s.reqs)
+}
+
+func TestMeWithABadTokenIsAnError(t *testing.T) {
+	_, err := service(t, always(401, `{"message":"Bad credentials"}`)).Me(bg)
+
+	require.ErrorIs(t, err, github.ErrBadCredentials)
+}
