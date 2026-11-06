@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"slices"
@@ -128,6 +129,18 @@ func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, e
 		return out, ErrBlocked
 	}
 	return out, failedErr(plan)
+}
+
+// runTo is runWith, writing the report to w as the run goes: each stage when it
+// is done, and not all of it at the end.
+//
+// STUB: writes the whole report at the end until a later commit.
+func runTo(ctx context.Context, w io.Writer, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) error {
+	out, err := runWith(ctx, ws, prober, ex, format, in, full)
+	if _, werr := io.WriteString(w, out); werr != nil && err == nil {
+		err = werr
+	}
+	return err
 }
 
 // ErrFailed is returned, with the report still written, when a commit for a
