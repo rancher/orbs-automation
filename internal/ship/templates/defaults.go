@@ -35,3 +35,9 @@ func CommitMessage() string { return text("commit.txt") + "\n" }
 
 // Body is the PR body of a bump.
 func Body() string { return text("body.md") + "\n" }
+
+// StepCommitMessage is the commit message of a step that changed files: what
+// ran, where it fits in the bump, and the trailers. It may use StepCommitVars.
+//
+// STUB: empty until a later commit.
+func StepCommitMessage() string { return "" }

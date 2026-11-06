@@ -153,3 +153,13 @@ func Render(text string, vars map[string]string) (string, error) {
 	}
 	return out.String(), nil
 }
+
+// StepCommitVars are the variables of the commit message of a step: the ones that
+// say what the bump is, and which step this is.
+//
+//	command  the step's command, as written
+//	phase    where the step runs, such as "method postEdit"
+var StepCommitVars = []string{
+	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
+	"consumer", "sourceReleaseURL", "command", "phase",
+}

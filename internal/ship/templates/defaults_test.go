@@ -43,3 +43,18 @@ func TestDefaultsAreTrimmedOfTheFileEnding(t *testing.T) {
 	assert.False(t, strings.HasSuffix(DefaultTitle(), "\n"))
 	assert.False(t, strings.HasSuffix(DefaultBranchPrefix(), "\n"))
 }
+
+func TestStepCommitMessageOnlyUsesItsVariables(t *testing.T) {
+	require.NotEmpty(t, StepCommitMessage())
+	assert.NoError(t, Validate(StepCommitMessage(), StepCommitVars))
+}
+
+func TestStepCommitMessageNamesTheCommandAndKeepsTheTrailers(t *testing.T) {
+	lines := strings.Split(strings.TrimRight(StepCommitMessage(), "\n"), "\n")
+	require.GreaterOrEqual(t, len(lines), 3)
+	assert.Equal(t, "Run `{command}`", lines[0])
+	assert.Empty(t, lines[1], "a blank line after the subject")
+	assert.Contains(t, StepCommitMessage(), "{phase}")
+	assert.Contains(t, StepCommitMessage(), "{source} to {tag}")
+	assert.Equal(t, "Automation: gero ship", lines[len(lines)-1], "the same trailers as the edit's commit")
+}
