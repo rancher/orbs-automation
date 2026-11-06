@@ -350,3 +350,35 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	_, err := Run(ctx, s, t.TempDir(), nil, Options{})
 	assert.ErrorContains(t, err, "not supported by repo info")
 }
+
+func TestInfoDirtyClone(t *testing.T) {
+	c := cloneOnMain
+	c.dirty = true
+	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
+	require.NoError(t, err)
+	assert.True(t, got.Local.Dirty)
+	assert.Contains(t, renderText(got), "changes or an operation in progress")
+
+	got, err = gather(ctx, fixture(), opener(cloneOnMain, nil), nil, Options{Offline: true})
+	require.NoError(t, err)
+	assert.False(t, got.Local.Dirty)
+	assert.Contains(t, renderText(got), "clean")
+}
+
+func TestInfoDetachedHeadIsNotDirty(t *testing.T) {
+	c := cloneOnMain
+	c.ref, c.headErr = "", workspace.ErrDetachedHead
+	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
+	require.NoError(t, err)
+	assert.False(t, got.Local.Dirty, "a detached HEAD alone is not a change")
+	assert.NotContains(t, renderText(got), "changes or an operation in progress")
+}
+
+func TestInfoUnreadableWorkTree(t *testing.T) {
+	c := cloneOnMain
+	c.cleanErr = errors.New("status failed")
+	got, err := gather(ctx, fixture(), opener(c, nil), nil, Options{Offline: true})
+	require.NoError(t, err)
+	assert.Equal(t, "status failed", got.Local.Error)
+	assert.False(t, got.Local.Dirty)
+}
