@@ -1,6 +1,6 @@
 # Ship (push to repo)
 
-**Status:** draft, built for the workstation. `gero ship` checks the state, makes the commits (one per unit of work), asks once, pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub, and **not yet against real GitHub**: the push spike (`TestPushSpikeToARealRemote`) and a trial on a scratch repository are still to be run. The CI variant is not built.
+**Status:** draft, built for the workstation. `gero ship` checks the state, asks once, makes the commits (one per unit of work), pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub, and **not yet against real GitHub**: the push spike (`TestPushSpikeToARealRemote`) and a trial on a scratch repository are still to be run. The CI variant is not built.
 
 `gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md).
 
@@ -65,15 +65,16 @@ A faithful account of `push-to-rancher`, so the differences below are visible. F
 Per target branch, newest first:
 
 1. **Preconditions.** The state check above. A missing artifact stops the whole fan-out before any write, and a branch problem skips only that branch.
-2. **Prepare the branch** in the engineer's clone ([below](#preparing-the-branch)).
-3. **Edit and commit.** The lifecycle above, in that branch's directory, with a commit after each unit that changed files, made through `git` so the engineer's hooks, identity and signing settings apply ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). No unit changing anything ends the branch as **already up to date**: no commit and no PR.
+2. **Confirm, once** for the whole run, before anything is written and only when something will be pushed or closed: a plain yes/no listing the PRs to open, close and refresh (`--yes` skips it). A dry run and `--no-push` ask nothing, since nothing leaves the machine.
+3. **Prepare the branch** in the engineer's clone ([below](#preparing-the-branch)).
+4. **Edit and commit.** The lifecycle above, in that branch's directory, with a commit after each unit that changed files, made through `git` so the engineer's hooks, identity and signing settings apply ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). No unit changing anything ends the branch as **already up to date**: no commit and no PR.
 5. **Push** to the push target, never forced. Fetching is from `upstream`.
 6. **PR.** Find open PRs with the same key. The same version is **already open** and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking it and is closed.
 7. **Report.** One line per branch: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
 
-`--dry-run` runs steps 1 to 4 in a temporary worktree and prints what 5 and 6 would do. It never pushes a branch or opens a PR, and it never moves the engineer's checkout. The worktree and its branch are removed afterwards. The report says it was a dry run.
+`--dry-run` runs steps 1, 3 and 4 in a temporary worktree and prints what 5 and 6 would do. It never pushes a branch or opens a PR, and it never moves the engineer's checkout. The worktree and its branch are removed afterwards. The report says it was a dry run.
 
-`--no-push` runs steps 1 to 4 for real and stops, so the engineer can review the commit and push it later. The branch is kept, whichever place it was prepared in, and the report names it and the command to see the change (`git diff <upstream>/<target>...<branch>`). A dirty clone still gets a worktree, which is removed while the branch stays. `--no-push` with `--dry-run` is a dry run.
+`--no-push` runs steps 1, 3 and 4 for real and stops, so the engineer can review the commit and push it later. The branch is kept, whichever place it was prepared in, and the report names it and the command to see the change (`git diff <upstream>/<target>...<branch>`). A dirty clone still gets a worktree, which is removed while the branch stays. `--no-push` with `--dry-run` is a dry run.
 
 ## Preparing the branch
 
@@ -108,8 +109,6 @@ After the state check, each target that needs a PR gets a result, shown under th
 | `failed` | Preparing the branch, a step or the commit failed, with the reason and the step's phase and position. The work is aborted and the clone is as it was found |
 
 A failure in one target does not stop the others, and the exit code is 1 when any target failed or was blocked. A branch that moved since the check is a failure that says to run again.
-
-Until the push is built, a run with neither flag stops after the state check and says so. The one confirmation of the write-command contract comes with the push, since until then nothing leaves the machine.
 
 ## Branches and PR identity
 
@@ -180,6 +179,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
+* The sequence above as chained tasks. It works today inside `internal/ship`; moving each action to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 * `GERO_NON_INTERACTIVE` as an alias of `--yes` (the flags `--yes` and `--non-interactive` exist).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 

@@ -10,7 +10,7 @@ How `gero` talks to the user: command output, logging, and the seam for interact
 * Commands whose results feed shell or GitHub Actions (`gero semver check`, `gero repo branch-tags`) also support `--output env`: `KEY=value` lines on stdout, one per line, safe to append to `$GITHUB_OUTPUT` or `$GITHUB_ENV`. Key names are documented next to the command.
 * Human output uses `text/tabwriter` and plain lines. No table or styling library.
 * Every command that emits data supports `--json` through `encoding/json`, with a stable field naming scheme documented next to the command. JSON output is never interleaved with human text.
-* Color is off when `NO_COLOR` is set, `--no-color` is passed, or stdout is not a TTY. No color library until output needs more than a few escape codes.
+* Color follows `--color auto|always|never` (`--no-color` is `--color never`). With `auto`, the default, it is off when `NO_COLOR` is set or stdout is not a TTY. `--json` and `--output env` are never styled, whatever the setting. No color library until output needs more than a few escape codes.
 
 ## 2. Logging
 
@@ -31,6 +31,15 @@ Deferred. Nothing in v0.x or v1.0.0 needs prompts beyond handing off to `gh auth
 * `gero repl` is the one command that is interactive by nature: a prompt that runs the other commands. It stays outside the core commands' rule above, they are the same commands and remain scriptable, and it refuses to start without a TTY ([REPL](REPL.md)). Its line editor sits behind `internal/ui` like any prompt.
 * Interactive behavior is automatically disabled when stdin or stdout is not a TTY, or when running in CI. The one prompt the core commands have is the confirmation before a write ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)), a plain yes/no through `internal/ui`, skipped with `--non-interactive`.
 * The likely future stack is the Charm libraries (bubbletea, huh, lipgloss). No dependency is added until a feature needs it, and the addition then gets an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md). The web dashboard (ARCHITECTURE_DESIGN §6) is a separate, later surface.
+
+### Terminal capabilities
+
+What the terminal can do is decided once and handed to everything that writes, so no command and no library looks at the environment itself **(leaning)**.
+
+* **One value.** `internal/clicfg` works it out next to the context signs and carries it in the settings: whether stdin and stdout are TTYs, the color profile (none, 16 colors, 256, truecolor), whether the terminal can do cursor control (`TERM` unset or `dumb` cannot), and its width when it is a TTY. Inputs, in precedence order: the `color` setting when it is `always` or `never` (`--color` or `--no-color`, then `GERO_COLOR`, then the user file, as every setting), then, for `auto`, `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and the TTY check. So an explicit `--color always` beats `NO_COLOR`, and `always` writes escapes to a pipe as `ls --color=always` does. The depth of color, when it is on, comes from `TERM` and `COLORTERM`. The order is written down once, here, and tested as a table like any other setting. The value is `clicfg.Terminal`, carried as `Settings.Terminal`, which `internal/ui` reads.
+* **Commands never ask.** A command writes through `ui.Output`, which picks a renderer from that value: the plain one, or a styled one. A command does not test for color, and no code writes a rendered string to `cmd.OutOrStdout()` around the writer (see the lipgloss v2 note below).
+* **Gate for styling the other commands.** lipgloss is not added to general output until this seam exists, since in v2 `Style.Render` always produces escapes and only the writer strips them. `--color never` (and `--no-color`) is how a user selects the none profile in our own code.
+* **The REPL is the first user that needs more than color.** It reads the cursor-control and TTY parts to decide whether it can start at all, and refuses when the terminal cannot support it ([REPL](REPL.md#boundaries)).
 
 ### Library research for the confirmation, color and tables
 

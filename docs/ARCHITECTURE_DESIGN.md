@@ -45,7 +45,7 @@ The system uses a **Hybrid Workflow Model** combining central reusable workflows
 * **CLI Sync (`gero workflows sync`):** Reads the target repo's config, pulls down canonical templates from the central repository, renders `.github/workflows/` YAML files, shows a dry-run diff, and opens a PR or commits changes. A `verify` command checks rendered files for drift.
 
 ### C. CLI Layer
-The CLI is built on **cobra** with a small custom loader for CLI config (no viper). `cmd/` is the only place that imports cobra: it holds the command tree, flags and help text, and a short `RunE` per command. Each command's logic lives in its own framework-free `internal/cli/<cmd>/` package, which calls into domain packages under `internal/`. *CLI config* (how an invocation behaves) is kept separate from *application config* (the YAML in section 3):
+The CLI is built on **cobra** with a small custom loader for CLI config (no viper). `cmd/` is the only place that imports cobra: it holds the command tree, flags and help text, and a short `RunE` per command. Each command's logic lives in its own framework-free `internal/cli/<cmd>/` package, which calls into domain packages under `internal/`, and for the actions that compose (create a branch, bump and commit, push, open a PR) into single-purpose task packages under `internal/task/`, which a command runs alone or chains. *CLI config* (how an invocation behaves) is kept separate from *application config* (the YAML in section 3):
 
 ```
  flags  >  GERO_* env  >  user file (~/.config/gero/config.yaml)  >  defaults

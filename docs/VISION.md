@@ -6,7 +6,7 @@ This repository serves as the central command center for engineering tooling, de
 ## Core Pillars
 
 ### 1. Unified Go CLI (`gh` Companion)
-* **Philosophy:** Retain the modular, "unix-style" composability of our past scripts, but implement them cleanly in Go.
+* **Philosophy:** Retain the modular, "unix-style" composability of our past scripts, but implement them cleanly in Go: small single-action tasks that a command runs alone or a higher-order one such as `gero ship` chains, composed in Go rather than through a shell ([PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 * **Integration:** A standalone CLI (`gero`) that works well beside the GitHub CLI (`gh`), reusing existing authentication (`GH_TOKEN` or the local `gh` session) and command idioms (cobra noun-verb commands, `--json` output, `gh`-style flags), without requiring `gh` to run. See [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md).
 * **Scope:** Handles repo-local workflow generation, GHA-only release operations (such as binary and image signing, which always run on GitHub runners using keyless signing), and developer productivity tasks.
 * **Execution Contexts:** Commands are either CI-only (require GHA-provided tokens and fail fast outside GHA) or work in either context (developer workstation or CI).

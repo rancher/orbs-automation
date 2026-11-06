@@ -71,6 +71,7 @@ Names are not final **(leaning)**.
 | `configDir` | `GERO_CONFIG_DIR` | `--config-dir` | Where the central application config is |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
+| `color` | `GERO_COLOR` | `--color`, `--no-color` | `auto` (default), `always` or `never`. `auto` defers to `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and TTY detection ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) |
 | (none) | `GERO_DRY_RUN` | `--dry-run` | `true` or `false` (default). **Not a user-file key**: a file that turned it on would silence every write |
 | n/a | `GERO_NON_INTERACTIVE` | `--non-interactive`, `--yes` | `true` skips the confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). No user-file key |
 | n/a | `GERO_BOT_USER` | n/a | The bot's login in CI, for example `rancher-scc-bot[bot]`, supplied by the workflow with the token. Names the commit identity ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)). Recorded as `Settings.BotUser`; no flag, no user-file key |
