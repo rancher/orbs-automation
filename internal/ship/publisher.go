@@ -66,19 +66,26 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 	emit(sink, Event{Kind: EventPROpened, Branch: tp.Branch, PR: res.PR})
 
 	p.label(ctx, consumer, created.Number, tp.Preview.Labels, res)
-	for _, older := range dec.Supersede {
-		note := fmt.Sprintf("Superseded by #%d (%s %s).", created.Number, m.Source, m.Version)
-		if err := p.Remote.Comment(ctx, consumer, older.Number, note); err != nil {
-			res.Warnings = append(res.Warnings, fmt.Sprintf("could not comment on #%d, so it was left open: %v", older.Number, err))
+	p.supersede(ctx, consumer, created.Number, m, tp.Branch, dec.Supersede, res, sink)
+}
+
+// supersede tells each older PR that the one numbered by is its replacement, and
+// closes it, in that order: a PR that could not be told is left open. A failure
+// is a warning, and only what was closed is recorded.
+func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Marker, branch string, older []pulls.PR, res *TargetResult, sink Sink) {
+	for _, old := range older {
+		note := fmt.Sprintf("Superseded by #%d (%s %s).", by, m.Source, m.Version)
+		if err := p.Remote.Comment(ctx, consumer, old.Number, note); err != nil {
+			res.Warnings = append(res.Warnings, fmt.Sprintf("could not comment on #%d, so it was left open: %v", old.Number, err))
 			continue
 		}
-		if err := p.Remote.Close(ctx, consumer, older.Number); err != nil {
-			res.Warnings = append(res.Warnings, fmt.Sprintf("could not close #%d: %v", older.Number, err))
+		if err := p.Remote.Close(ctx, consumer, old.Number); err != nil {
+			res.Warnings = append(res.Warnings, fmt.Sprintf("could not close #%d: %v", old.Number, err))
 			continue
 		}
-		ref := PRRef{Number: older.Number, URL: older.URL}
+		ref := PRRef{Number: old.Number, URL: old.URL}
 		res.Superseded = append(res.Superseded, ref)
-		emit(sink, Event{Kind: EventSuperseded, Branch: tp.Branch, PR: &ref})
+		emit(sink, Event{Kind: EventSuperseded, Branch: branch, PR: &ref})
 	}
 }
 
