@@ -113,9 +113,14 @@ func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, forma
 var ErrFailed = errors.New("some targets failed")
 
 // failedErr is ErrFailed when any target's result is a failure.
-//
-// STUB: never fails until a later commit.
-func failedErr(domain.Plan) error { return nil }
+func failedErr(p domain.Plan) error {
+	for _, t := range p.Targets {
+		if t.Result != nil && t.Result.Status == domain.ResultFailed {
+			return ErrFailed
+		}
+	}
+	return nil
+}
 
 func renderText(p domain.Plan, full bool) string {
 	var b strings.Builder
@@ -164,6 +169,7 @@ func renderText(p domain.Plan, full bool) string {
 			}
 		}
 	}
+	writeCommits(&b, p)
 	if p.Images != nil && len(p.Images.Rows) > 0 {
 		b.WriteString("\nImages\n")
 		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
@@ -182,16 +188,71 @@ func renderText(p domain.Plan, full bool) string {
 	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
 		fmt.Fprintf(&b, "\nWarning (%s): %s\n", strings.Join(g.branches, ", "), g.text)
 	}
-	if p.DryRun {
+	switch {
+	case p.DryRun && hasResults(p):
+		b.WriteString("\nDry run: the commits were made in temporary worktrees and removed. Nothing was pushed, and no branch or PR was created.\n")
+	case p.DryRun:
 		b.WriteString("\nDry run: nothing was written, and no branch or PR was created.\n")
-	} else if p.NoPush {
-		b.WriteString("\nNo push: the commit will be left on a branch in your clone for review, with nothing pushed and no PR created.\nNothing was written: creating the branches is not built yet.\n")
-	} else {
+	case p.NoPush && hasResults(p):
+		b.WriteString("\nNo push: the commits are on branches in your clone, with nothing pushed and no PR created.\n")
+	case p.NoPush:
+		b.WriteString("\nNo push: no commit was made.\n")
+	default:
 		// Creating the branches and PRs is not built yet, so nothing is written
 		// without --dry-run either.
 		b.WriteString("\nNothing was written: creating the branches and PRs is not built yet.\n")
 	}
 	return b.String()
+}
+
+// hasResults reports whether a run made, or tried to make, any commit.
+func hasResults(p domain.Plan) bool {
+	return slices.ContainsFunc(p.Targets, func(t domain.TargetPlan) bool { return t.Result != nil })
+}
+
+// writeCommits lists what a run did for each target that needed a PR: the result,
+// where the commit was made, the commit and the new branch; then why a worktree
+// was used and what failed, each grouped over the branches it applies to; then
+// how to review the commits that are on branches.
+func writeCommits(b *strings.Builder, p domain.Plan) {
+	if !hasResults(p) {
+		return
+	}
+	b.WriteString("\nCommits\n")
+	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "  BRANCH\tRESULT\tWHERE\tCOMMIT\tNEW BRANCH")
+	for _, t := range p.Targets {
+		if r := t.Result; r != nil {
+			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", t.Branch, r.Status, r.Place, git.Short(r.Commit), r.Branch)
+		}
+	}
+	_ = w.Flush()
+	result := func(text func(*domain.TargetResult) string) func(domain.TargetPlan) []string {
+		return func(t domain.TargetPlan) []string {
+			if t.Result == nil || text(t.Result) == "" {
+				return nil
+			}
+			return []string{text(t.Result)}
+		}
+	}
+	for _, g := range groupTargets(p.Targets, result(func(r *domain.TargetResult) string { return r.Reason })) {
+		fmt.Fprintf(b, "  worktree (%s): %s\n", strings.Join(g.branches, ", "), g.text)
+	}
+	for _, g := range groupTargets(p.Targets, result(func(r *domain.TargetResult) string { return r.Error })) {
+		fmt.Fprintf(b, "  failed (%s): %s\n", strings.Join(g.branches, ", "), g.text)
+	}
+	if p.DryRun {
+		return // the branches were removed, so there is nothing to review
+	}
+	var review []string
+	for _, t := range p.Targets {
+		if r := t.Result; r != nil && r.Status == domain.ResultCommitted {
+			review = append(review, fmt.Sprintf("  git -C %s diff %s/%s...%s\n", p.Clone, p.Remote, t.Branch, r.Branch))
+		}
+	}
+	if len(review) > 0 {
+		b.WriteString("Review:\n" + strings.Join(review, ""))
+	}
 }
 
 // group is one text and the branches it applies to.
