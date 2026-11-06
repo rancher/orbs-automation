@@ -423,6 +423,7 @@ func ConfigIn(ctx context.Context, dir, key string) (string, error) {
 // ForceBranch makes the branch name point at commit, creating it or moving it,
 // whatever it held. It is `git branch -f`, which refuses for the branch that is
 // checked out, so a working tree is never changed under anyone.
-//
-// STUB: does nothing until a later commit.
-func ForceBranch(ctx context.Context, dir, name, commit string) error { return nil }
+func ForceBranch(ctx context.Context, dir, name, commit string) error {
+	_, err := inDir(ctx, dir, "branch", "--quiet", "--force", name, commit)
+	return err
+}
