@@ -17,10 +17,8 @@ func publishing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *
 	ws, clone, ex := newShip(t)
 	lg := &log{}
 	remote := &fakeRemote{log: lg, labels: []string{"status/auto-created", "team/orbs"}}
-	ex.Publish = &Publisher{
-		Git: GitCLI{}, Remote: remote,
-		Push: PushTarget{Role: RoleUpstream, Remote: "upstream"},
-	}
+	ws.push = PushSettings{Upstream: "upstream"} // no fork, so the upstream is where it goes
+	ex.Publish = &Publisher{Git: GitCLI{}, Remote: remote}
 	return ws, clone, ex, remote, lg
 }
 
