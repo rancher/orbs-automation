@@ -834,3 +834,24 @@ func TestAResultThatIsBlockedMakesTheRunBlocked(t *testing.T) {
 	p.Targets[0].Result.Status = domain.ResultOpened
 	assert.NoError(t, failedErr(p))
 }
+
+func TestRenderTextAnAlreadyOpenPRThatIsBehindSaysSoAndHowToRebuildIt(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{
+		Status: domain.ResultAlreadyOpen, Branch: "bot/x", BehindBy: 7,
+		PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
+	})
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: already open #104 https://github.com/rancher/rancher/pull/104 (behind release/v2.15 by 7; --refresh to rebuild)")
+}
+
+func TestRenderTextAnAlreadyOpenPRThatIsCurrentHasNoBehindNote(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104}})
+
+	out := renderText(p, false)
+
+	assert.NotContains(t, out, "behind")
+}
