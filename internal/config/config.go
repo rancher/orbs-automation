@@ -72,6 +72,13 @@ type PullRequests struct {
 	Title        string   `yaml:"title"`
 	BranchPrefix string   `yaml:"branchPrefix"`
 	Labels       []string `yaml:"labels"`
+	// BotLabels are applied only to a PR the bot opens, such as origin/bot, and
+	// never to one an engineer opened from a workstation.
+	BotLabels []string `yaml:"botLabels"`
+	// PushTo is where a branch for this project is pushed, fork or upstream, for a
+	// repository that is only ever pushed to one way. The user's settings and the
+	// --push-to flag come before it.
+	PushTo string `yaml:"pushTo"`
 }
 
 // UpdateMethod is a named way a project takes an update. The consumer owns it:

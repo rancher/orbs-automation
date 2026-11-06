@@ -76,6 +76,8 @@ var fieldClasses = map[string]string{
 	"PullRequests.Title":        "plain",
 	"PullRequests.BranchPrefix": "layered:the branchPrefix user setting replaces it whole",
 	"PullRequests.Labels":       "plain",
+	"PullRequests.BotLabels":    "plain",
+	"PullRequests.PushTo":       "layered:the --push-to flag and the user's pushTo settings come before it",
 
 	"Accept.When": "default",
 
