@@ -692,3 +692,97 @@ func TestCheckSeveralLinesAreEachATargetOnceInTheOrderGiven(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.14", "release/v2.15"}, branchesOf(got))
 }
+
+// laned is a producer with a series for each of two lines, taking its releases to
+// the consumer's branch for each: kuberlr, 9.x for v2.16 and 8.x for v2.15.
+func laned(t *testing.T, tagNames ...string) *fakeWorkspace {
+	t.Helper()
+	ws := linedLoop(t)
+	ws.refs["rancher/kuberlr"] = git.Refs{Tags: tags(tagNames...)}
+	ws.files["rancher/rancher@sha-main:build.yaml"] = "defaultSccOperatorImage: rancher/kuberlr:v8.9.0\n"
+	return ws
+}
+
+func releasesOf(p Plan) []string {
+	out := make([]string, len(p.Targets))
+	for i, t := range p.Targets {
+		out[i] = t.Release
+	}
+	return out
+}
+
+func TestCheckALinedProducerWithNoReleaseGivesEachLineTheLatestOfItsOwnSeries(t *testing.T) {
+	ws := laned(t, "v8.0.9", "v8.1.0", "v9.0.0", "v9.0.1-rc.1", "v7.0.0")
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"main", "release/v2.15"}, branchesOf(got), "the lines both have, in the producer's order")
+	assert.Equal(t, []string{"v9.0.0", "v8.1.0"}, releasesOf(got), "the latest stable of each series")
+	require.Len(t, got.Targets, 2)
+	assert.Equal(t, "rancher/kuberlr:v9.0.0", got.Targets[0].Want)
+	assert.Equal(t, "rancher/kuberlr:v8.1.0", got.Targets[1].Want)
+	assert.False(t, got.Uniform())
+	assert.Empty(t, got.Want, "there is no one value they are all to hold")
+	assert.Len(t, got.Images, 2, "each release's images are checked")
+}
+
+func TestCheckALinedProducerWithPrereleaseTakesEachSeriesLatestOfAnyKind(t *testing.T) {
+	ws := laned(t, "v8.1.0", "v9.0.0", "v9.0.1-rc.1")
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Prerelease: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"v9.0.1-rc.1", "v8.1.0"}, releasesOf(got), "a series with no prerelease gets its stable one")
+}
+
+func TestCheckALinedProducerWithNamedLinesGivesEachItsOwnRelease(t *testing.T) {
+	ws := laned(t, "v8.0.9", "v8.1.0", "v9.0.0")
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Lines: []string{"v2.15"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got))
+	assert.Equal(t, []string{"v8.1.0"}, releasesOf(got))
+	assert.True(t, got.Uniform())
+}
+
+func TestCheckALinedProducerSkipsALineWithNoReleaseButNamingItIsAnError(t *testing.T) {
+	ws := laned(t, "v8.1.0")
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got), "nothing to ship to v2.16")
+
+	_, err = Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Lines: []string{"v2.16"}})
+	require.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorContains(t, err, "v2.16")
+}
+
+func TestCheckATagIsOnlyShippedToTheLineItIsIn(t *testing.T) {
+	ws := laned(t, "v8.1.0", "v9.0.0")
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0", Lines: []string{"v2.15"}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got))
+
+	_, err = Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0", Lines: []string{"v2.16"}})
+	require.ErrorIs(t, err, ErrLineMismatch)
+	assert.ErrorContains(t, err, "v8.1.0 is in v2.15, not v2.16")
+}
+
+func TestCheckALineOfTheProducerIsOnlyShippedToTheSameLine(t *testing.T) {
+	ws := laned(t, "v8.1.0", "v9.0.0")
+
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v2.15", Lines: []string{"v2.16"}})
+
+	require.ErrorIs(t, err, ErrLineMismatch)
+}
+
+func TestCheckAUniversalProducerShipsOneReleaseToWhateverLinesAreNamed(t *testing.T) {
+	got, err := Check(ctx, loopFixture(), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.3", Lines: []string{"v2.14", "v2.15"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"v0.5.3", "v0.5.3"}, releasesOf(got))
+	assert.True(t, got.Uniform())
+}
