@@ -508,3 +508,33 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 		last = at
 	}
 }
+
+func TestRenderTextListsEachCommitUnderItsBranchWithItsSubject(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
+	r.Commits = []domain.CommitInfo{
+		{Hash: "abcdef0123456789", Subject: "Update scc-operator to v0.5.3"},
+		{Hash: "1234567890abcdef", Subject: "Run `./scripts/generate-buildconfig`"},
+	}
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "abcdef0  Update scc-operator to v0.5.3")
+	assert.Contains(t, out, "1234567  Run `./scripts/generate-buildconfig`")
+	assert.Less(t, strings.Index(out, "abcdef0  Update"), strings.Index(out, "1234567  Run"), "oldest first")
+	assert.Contains(t, out, "git -C /src/rancher log --oneline upstream/release/v2.15..bot/scc-operator-v0.5.3-v2.15",
+		"the series, as well as the combined diff")
+	assert.Contains(t, out, "git -C /src/rancher diff upstream/release/v2.15...bot/scc-operator-v0.5.3-v2.15")
+}
+
+func TestRenderTextACommitlessResultListsNoCommits(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	p = withResults(p, &domain.TargetResult{Status: domain.ResultUpToDate, Branch: "bot/x"})
+
+	out := renderText(p, false)
+
+	assert.NotContains(t, out, "log --oneline")
+}
