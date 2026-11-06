@@ -51,7 +51,12 @@ type Open struct {
 const DefaultMax = 100
 
 // Service talks to one GitHub host with one token.
-type Service struct{ client *gogithub.Client }
+type Service struct {
+	client *gogithub.Client
+	creds  github.Credentials
+	opts   []gogithub.ClientOptionsFunc
+	bot    string // the login to answer Me with, when the token is an installation's
+}
 
 // New returns a Service for the resolved credentials. Extra options (a transport
 // for tests) are applied last.
@@ -60,8 +65,21 @@ func New(c github.Credentials, opts ...gogithub.ClientOptionsFunc) (*Service, er
 	if err != nil {
 		return nil, err
 	}
-	return &Service{client: client}, nil
+	return &Service{client: client, creds: c, opts: opts}, nil
 }
+
+// AsBot returns the service for a token that belongs to an installation and not
+// a user, such as the bot's in CI: Me is then login, because there is no user to
+// ask GitHub about.
+//
+// STUB: returns the service unchanged until a later commit.
+func (s *Service) AsBot(login string) *Service { return s }
+
+// Me is the login whose PRs are the actor's own: the one the token belongs to,
+// asked of GitHub, or the bot's when the service is AsBot.
+//
+// STUB: nobody until a later commit.
+func (s *Service) Me(ctx context.Context) (string, error) { return "", nil }
 
 // split turns owner/name into its parts.
 func split(slug string) (owner, name string, err error) {
