@@ -81,14 +81,6 @@ func allDigits(s string) bool {
 	return s != ""
 }
 
-// TODO(release-state): add Next(v Version) (successors), the tags SemVer allows
-// after v, for gero repo status to say what a line's next tag can be: after a
-// stable tag, a pre-release of a higher patch, minor or major version; after a
-// pre-release, its next iteration (rc.N+1) or the stable of the same version.
-// Whether a stable may follow a stable directly is the project's
-// release.requiresPrerelease, so Next takes it as an argument and does not read
-// config. Table-test it beside Compare.
-
 // Compare orders a and b by SemVer precedence, returning -1, 0 or 1. A version
 // with a prerelease is lower than the same version without one. Prerelease
 // identifiers compare one by one: numbers numerically and lower than text, text
