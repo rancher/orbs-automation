@@ -251,7 +251,11 @@ func (h *humanSink) done(e domain.Event) {
 	case domain.ResultBlocked:
 		h.out.Line(fmt.Sprintf("  %s: blocked: %s", e.Branch, r.Error))
 	case domain.ResultAlreadyOpen:
-		h.out.Line(fmt.Sprintf("  %s: already open #%d %s", e.Branch, r.PR.Number, r.PR.URL))
+		behind := ""
+		if r.BehindBy > 0 {
+			behind = fmt.Sprintf(" (behind %s by %d; --refresh to rebuild)", e.Branch, r.BehindBy)
+		}
+		h.out.Line(fmt.Sprintf("  %s: already open #%d %s%s", e.Branch, r.PR.Number, r.PR.URL, behind))
 	default:
 		h.out.Line(fmt.Sprintf("  %s: %s", e.Branch, r.Status))
 	}
