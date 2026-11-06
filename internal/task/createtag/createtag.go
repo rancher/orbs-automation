@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strconv"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/semver"
@@ -109,6 +111,9 @@ func Check(in Input) (Decision, error) {
 	if in.Series != "" && !git.InSeries(in.Tag, in.Series) {
 		return Decision{}, fmt.Errorf("%w: %s is not in %s", ErrNotInSeries, in.Tag, in.Series)
 	}
+	if in.RequiresPrerelease && !v.IsPrerelease() && !hasPrereleaseOf(v, in) {
+		return Decision{}, fmt.Errorf("%w: %s has none of %s on %s", ErrNeedsPrerelease, in.Tag, base(v), short(in.Commit))
+	}
 	newest := newestOf(in)
 	if newest != nil {
 		if nv, _ := semver.Parse(newest.Name); semver.Compare(v, nv) <= 0 {
@@ -187,5 +192,109 @@ type Chosen struct {
 // internal/semver doing the arithmetic. It is the policy that semver does not
 // have: which tag may follow which.
 //
-// STUB: picks nothing until a later commit.
-func Choose(c Choice) (Chosen, error) { return Chosen{}, nil }
+// Without Stable it is a prerelease: the next iteration of the one under way, or
+// after a stable tag the first of the next version. With Stable after a
+// prerelease it is the promotion of that prerelease, which only a head that is
+// still on the prerelease's commit may have, and after a stable tag it is the
+// next stable, unless the project requires a prerelease first. A commit that
+// already has the line's newest tag gets no new one. The tag is written with the
+// "v" the line's tags have, and with the project's pattern when there are none.
+func Choose(c Choice) (Chosen, error) {
+	newest := newestOf(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	if newest == nil {
+		return first(c)
+	}
+	prefix := ""
+	if strings.HasPrefix(newest.Name, "v") {
+		prefix = "v"
+	}
+	v, _ := semver.Parse(newest.Name)
+	switch {
+	case !c.Stable:
+		if newest.Commit == c.Commit {
+			return Chosen{}, fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
+		}
+		label := "rc"
+		if v.IsPrerelease() {
+			label = "" // the one under way keeps its name
+		}
+		next, err := v.NextPrerelease(c.Bump, label)
+		if err != nil {
+			return Chosen{}, err
+		}
+		return Chosen{Tag: prefix + next.String()}, nil
+	case v.IsPrerelease():
+		if newest.Commit != c.Commit {
+			return Chosen{}, fmt.Errorf("%w: %s is on %s and the branch is at %s, so the commits after it have no prerelease: make another",
+				ErrMovedSincePrerelease, newest.Name, short(newest.Commit), short(c.Commit))
+		}
+		return Chosen{Tag: prefix + v.NextStable(c.Bump).String(), Promotes: newest}, nil
+	case newest.Commit == c.Commit:
+		return Chosen{}, fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
+	case c.RequiresPrerelease:
+		return Chosen{}, fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
+	}
+	return Chosen{Tag: prefix + v.NextStable(c.Bump).String()}, nil
+}
+
+// first is the first tag of a line that has none, from the start of its series.
+func first(c Choice) (Chosen, error) {
+	start, ok := seriesStart(c.Series)
+	if !ok {
+		return Chosen{}, fmt.Errorf("%w: name the tag", ErrNoBase)
+	}
+	prefix := ""
+	if strings.HasPrefix(c.Pattern, "v") {
+		prefix = "v"
+	}
+	if !c.Stable {
+		start.Prerelease = "rc.1"
+		return Chosen{Tag: prefix + start.String()}, nil
+	}
+	if c.RequiresPrerelease {
+		return Chosen{}, fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
+	}
+	return Chosen{Tag: prefix + start.String()}, nil
+}
+
+// seriesStart is the lowest version of a series: 0.8.x is 0.8.0, 9.x is 9.0.0 and
+// v2.15 is 2.15.0. It is false for no series, or one that is not numbers and x.
+func seriesStart(series string) (semver.Version, bool) {
+	if series == "" {
+		return semver.Version{}, false
+	}
+	parts := strings.Split(strings.TrimPrefix(series, "v"), ".")
+	if len(parts) > 3 {
+		return semver.Version{}, false
+	}
+	var n [3]uint64
+	for i, part := range parts {
+		if part == "x" {
+			continue
+		}
+		num, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			return semver.Version{}, false
+		}
+		n[i] = num
+	}
+	return semver.Version{Major: n[0], Minor: n[1], Patch: n[2]}, true
+}
+
+// hasPrereleaseOf reports whether the commit has a prerelease tag of the version
+// v, which is stable: the tag that the stable one is the promotion of.
+func hasPrereleaseOf(v semver.Version, in Input) bool {
+	for _, t := range in.Tags {
+		if t.Commit != in.Commit {
+			continue
+		}
+		pv, ok := semver.Parse(t.Name)
+		if ok && pv.IsPrerelease() && pv.Major == v.Major && pv.Minor == v.Minor && pv.Patch == v.Patch {
+			return true
+		}
+	}
+	return false
+}
+
+// base is a version without its prerelease, as a prerelease tag of it reads.
+func base(v semver.Version) string { return v.String() + "-*" }
