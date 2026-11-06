@@ -76,6 +76,7 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 	if err != nil {
 		return plan, err
 	}
+	plan.Clone, plan.Remote = clone, remote
 	for _, i := range ready {
 		plan.Targets[i].Result = res.commitTarget(ctx, ex, clone, remote, in, plan.Targets[i])
 	}
