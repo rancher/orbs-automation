@@ -329,3 +329,34 @@ func lines(line string) []string {
 	}
 	return []string{line}
 }
+
+// brokenSigning makes git's signing fail, as an engineer with no usable key has
+// it, so a commit that is asked to be signed cannot be made.
+func brokenSigning(t *testing.T, clone string) {
+	t.Helper()
+	runGit(t, clone, "config", "gpg.program", "false")
+	runGit(t, clone, "config", "user.signingkey", "no-such-key")
+}
+
+func TestShipSignsTheCommitsWhenAskedAndFailsWhenItCannot(t *testing.T) {
+	ws, clone, ex := newShip(t)
+	brokenSigning(t, clone)
+	ex.Sign = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultFailed, res.Status, "asked for signed, so never an unsigned one instead")
+	assert.False(t, branchExistsIn(t, clone, botV215), "and nothing is left behind")
+}
+
+func TestShipDoesNotSignByDefault(t *testing.T) {
+	ws, clone, ex := newShip(t)
+	brokenSigning(t, clone)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+}
