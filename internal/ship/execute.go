@@ -72,6 +72,12 @@ type Executor struct {
 // Tip is the newest commit of the result, or "" when there is none.
 func (r TargetResult) Tip() string { return tip(r.Commits) }
 
+// ErrNoRemote is returned by Ship when it is to publish and cannot tell who is
+// running, so it does not know whose PRs are its own.
+//
+// STUB: not returned until a later commit.
+var ErrNoRemote = errors.New("could not tell who is running on GitHub")
+
 // ErrNoClone is returned by Ship when there are commits to make and the
 // engineer has no clone of the consumer to make them in.
 var ErrNoClone = errors.New("no local clone of the consumer")

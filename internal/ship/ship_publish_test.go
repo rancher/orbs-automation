@@ -1,0 +1,213 @@
+package ship
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// publishing is a real run, as an engineer would make it, with the fake GitHub:
+// the branch is pushed to the clone's upstream remote, which is a repository on
+// disk.
+func publishing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *log) {
+	t.Helper()
+	ws, clone, ex := newShip(t)
+	lg := &log{}
+	remote := &fakeRemote{log: lg, labels: []string{"status/auto-created", "team/orbs"}}
+	ex.Publish = &Publisher{
+		Git: GitCLI{}, Remote: remote,
+		Push: PushTarget{Role: RoleUpstream, Remote: "upstream"},
+	}
+	return ws, clone, ex, remote, lg
+}
+
+func realRun() Input { return Input{Project: "scc-operator", Branch: "release/v2.15"} }
+
+// mine and others' PRs for the bump that the fixture ships, v0.5.3 to release/v2.15.
+func existing(number int, author, version string) pulls.PR {
+	return pr(number, author, Marker{
+		Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: "release/v2.15", Version: version,
+	})
+}
+
+func TestShipPublishesAPlainRunAndClosesMyOlderPR(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	require.NotNil(t, res.PR)
+	assert.Equal(t, 104, res.PR.Number)
+	assert.Equal(t, "upstream", res.Pushed)
+	assert.Equal(t, []PRRef{{101, "https://github.com/rancher/rancher/pull/101"}}, withoutURL(res.Superseded, "https://github.com/rancher/rancher/pull/101"))
+	assert.Equal(t, res.Tip(), runGit(t, ws.up, "rev-parse", botV215), "the branch is on the remote")
+	assert.Equal(t, "main", current(t, clone))
+	assert.Less(t, lg.index("open rancher/rancher release/v2.15"), lg.index("create "), "the open PRs are looked at before one is made")
+	assert.Less(t, lg.index("create "), lg.index("comment #101"))
+	assert.Less(t, lg.index("comment #101"), lg.index("close #101"))
+}
+
+// withoutURL fills in the url of a reference, which the fake derives from the number.
+func withoutURL(refs []PRRef, url string) []PRRef {
+	out := make([]PRRef, len(refs))
+	for i, r := range refs {
+		out[i] = PRRef{Number: r.Number, URL: url}
+	}
+	return out
+}
+
+func TestShipAnAlreadyOpenPRMakesNothingAndClosesTheOlderOnes(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3"), existing(101, "danpock", "v0.5.2")}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	require.NotNil(t, res.PR)
+	assert.Equal(t, 104, res.PR.Number)
+	assert.False(t, branchExistsIn(t, clone, botV215), "no branch was made")
+	assert.False(t, lg.has("create"))
+	assert.False(t, lg.has("push"))
+	assert.True(t, lg.has("comment #101 Superseded by #104"), "the older one is told the open one supersedes it")
+	assert.True(t, lg.has("close #101"))
+	assert.Empty(t, res.Commits)
+}
+
+func TestShipANewerPROfMineBlocksOnlyThatTarget(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(110, "danpock", "v0.5.4")}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultBlocked, res.Status)
+	assert.Contains(t, res.Error, "#110")
+	assert.Contains(t, res.Error, "v0.5.4")
+	assert.False(t, branchExistsIn(t, clone, botV215))
+	assert.False(t, lg.has("create"))
+	assert.False(t, lg.has("close"))
+}
+
+func TestShipAnotherAuthorsPRIsLeftAloneAndReported(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(120, "rancher-bot[bot]", "v0.5.3"), existing(101, "danpock", "v0.5.2")}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status, "it does not block")
+	assert.False(t, lg.has("close #120"))
+	assert.False(t, lg.has("comment #120"))
+	assert.True(t, lg.has("close #101"))
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "#120")
+	assert.Contains(t, res.Warnings[0], "rancher-bot[bot]")
+}
+
+func TestShipANoPushRunNeverLooksAtGitHub(t *testing.T) {
+	ws, clone, ex, _, lg := publishing(t)
+	in := realRun()
+	in.NoPush = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+	assert.Empty(t, lg.calls, "nothing was asked of GitHub and nothing was pushed")
+	assert.True(t, branchExistsIn(t, clone, botV215))
+}
+
+func TestShipADryRunLooksButChangesNothingAndSaysWhatItWouldClose(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
+	in := realRun()
+	in.DryRun = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultWouldCommit, res.Status)
+	require.Len(t, res.WouldSupersede, 1)
+	assert.Equal(t, 101, res.WouldSupersede[0].Number)
+	assert.True(t, lg.has("open rancher/rancher release/v2.15"), "reading is allowed")
+	for _, write := range []string{"create", "comment", "close", "add labels", "push"} {
+		assert.False(t, lg.has(write), "a dry run does not %s", write)
+	}
+	assert.False(t, branchExistsIn(t, clone, botV215))
+	_, pushed := gitBranchOnRemote(t, ws.up, botV215)
+	assert.False(t, pushed)
+}
+
+// gitBranchOnRemote reports whether the repository on disk has the branch.
+func gitBranchOnRemote(t *testing.T, repo, branch string) (string, bool) {
+	t.Helper()
+	out := runGit(t, repo, "branch", "--list", branch)
+	return out, out != ""
+}
+
+func TestShipNotKnowingWhoIsRunningStopsBeforeAnyWork(t *testing.T) {
+	ws, clone, ex, remote, _ := publishing(t)
+	remote.meErr = errors.New("bad credentials")
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.ErrorIs(t, err, ErrNoRemote)
+	assert.Contains(t, err.Error(), "bad credentials")
+	assert.Equal(t, StatusReady, plan.Status, "the plan is still returned")
+	assert.False(t, branchExistsIn(t, clone, botV215))
+}
+
+func TestShipAFailedLookupOfOpenPRsFailsThatTargetBeforeAnyWork(t *testing.T) {
+	ws, clone, ex, remote, lg := publishing(t)
+	remote.openErr = errors.New("rate limited")
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultFailed, res.Status)
+	assert.Contains(t, res.Error, "rate limited")
+	assert.False(t, branchExistsIn(t, clone, botV215))
+	assert.False(t, lg.has("push"))
+}
+
+func TestShipAListingThatWasCutShortIsAWarning(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.open = pulls.Open{Truncated: true}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "newest")
+}
+
+func TestShipEmitsTheStepsOfPublishingInOrder(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	remote.open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
+	rec := &recording{}
+
+	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, rec)
+
+	require.NoError(t, err)
+	assert.Equal(t, []EventKind{
+		EventResolved, EventTargetChecked, EventTargetsChecked, EventImagesChecked,
+		EventDecided, EventTargetStarted, EventCommit, EventPushed, EventPROpened, EventSuperseded, EventTargetDone, EventDone,
+	}, rec.kinds())
+	decided := rec.first(t, EventDecided)
+	require.NotNil(t, decided.Decision)
+	assert.Equal(t, PublishCreate, decided.Decision.Action)
+}

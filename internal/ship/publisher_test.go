@@ -19,6 +19,16 @@ func (l *log) add(format string, args ...any) {
 	l.calls = append(l.calls, fmt.Sprintf(format, args...))
 }
 
+// index is the position of the first call that starts with prefix, or -1.
+func (l *log) index(prefix string) int {
+	for i, c := range l.calls {
+		if strings.HasPrefix(c, prefix) {
+			return i
+		}
+	}
+	return -1
+}
+
 func (l *log) has(prefix string) bool {
 	for _, c := range l.calls {
 		if strings.HasPrefix(c, prefix) {
@@ -47,12 +57,19 @@ type fakeRemote struct {
 	createErr error
 	commentOn map[int]error
 	closeOn   map[int]error
+	open      pulls.Open // what OpenForBase finds
+	openErr   error
+	meErr     error
 }
 
-func (f *fakeRemote) Me(context.Context) (string, error) { return "danpock", nil }
+func (f *fakeRemote) Me(context.Context) (string, error) {
+	f.log.add("me")
+	return "danpock", f.meErr
+}
 
-func (f *fakeRemote) OpenForBase(context.Context, string, string, int) (pulls.Open, error) {
-	return pulls.Open{}, nil
+func (f *fakeRemote) OpenForBase(_ context.Context, slug, base string, _ int) (pulls.Open, error) {
+	f.log.add("open %s %s", slug, base)
+	return f.open, f.openErr
 }
 
 func (f *fakeRemote) Create(_ context.Context, slug string, in pulls.NewPR) (pulls.PR, error) {
