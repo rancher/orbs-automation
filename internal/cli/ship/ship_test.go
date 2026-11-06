@@ -79,7 +79,7 @@ func readyWorkspace() *fakeWorkspace {
 }
 
 func TestRunReady(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, clicfg.OutputText, in, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false)
 
 	require.NoError(t, err)
 	for _, want := range []string{
@@ -94,14 +94,14 @@ func TestRunReady(t *testing.T) {
 
 func TestRunAlreadyUpToDate(t *testing.T) {
 	ws := &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.5.3\n"}}
-	out, err := run(context.Background(), ws, fakeProber{}, clicfg.OutputText, in, false)
+	out, err := runWith(context.Background(), ws, fakeProber{}, nil, clicfg.OutputText, in, false)
 	require.NoError(t, err)
 	assert.Contains(t, out, "already up to date")
 	assert.NotContains(t, out, "Images", "the images were not checked")
 }
 
 func TestRunBlockedKeepsTheReport(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, clicfg.OutputText, in, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in, false)
 	assert.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out, "blocked")
 	assert.Contains(t, out, "not found", "the missing images are listed")
@@ -109,13 +109,13 @@ func TestRunBlockedKeepsTheReport(t *testing.T) {
 
 func TestRunErrorsPrintNothing(t *testing.T) {
 	boom := errors.New("boom")
-	out, err := run(context.Background(), &fakeWorkspace{err: boom}, fakeProber{}, clicfg.OutputText, in, false)
+	out, err := runWith(context.Background(), &fakeWorkspace{err: boom}, fakeProber{}, nil, clicfg.OutputText, in, false)
 	assert.ErrorIs(t, err, boom)
 	assert.Empty(t, out)
 }
 
 func TestRunJSON(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, clicfg.OutputJSON, in, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in, false)
 	require.NoError(t, err)
 	var got domain.Plan
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -125,13 +125,13 @@ func TestRunJSON(t *testing.T) {
 }
 
 func TestRunJSONWhenBlocked(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, clicfg.OutputJSON, in, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputJSON, in, false)
 	assert.ErrorIs(t, err, ErrBlocked)
 	assert.True(t, json.Valid([]byte(out)))
 }
 
 func TestRunRejectsOtherOutputFormats(t *testing.T) {
-	_, err := run(context.Background(), readyWorkspace(), fakeProber{}, clicfg.OutputEnv, in, false)
+	_, err := runWith(context.Background(), readyWorkspace(), fakeProber{}, nil, clicfg.OutputEnv, in, false)
 	assert.ErrorContains(t, err, "not supported by ship")
 	_, err = Run(context.Background(), clicfg.Settings{Output: clicfg.OutputEnv}, t.TempDir(), Options{Project: "scc-operator"})
 	assert.ErrorContains(t, err, "not supported by ship")
@@ -182,15 +182,15 @@ func TestRenderTextHasNoPreviewWhenThereIsNone(t *testing.T) {
 }
 
 func TestRunShowsThePreviewFromTheDomain(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-		clicfg.OutputText, in, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		nil, clicfg.OutputText, in, false)
 	require.NoError(t, err)
 	assert.Contains(t, out, "bot/scc-operator-v0.5.3-main")
 }
 
 func TestRunJSONHasTheFullPreview(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-		clicfg.OutputJSON, in, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		nil, clicfg.OutputJSON, in, false)
 	require.NoError(t, err)
 	var got domain.Plan
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -227,7 +227,7 @@ func TestParseArgs(t *testing.T) {
 }
 
 func TestRunNotInAProjectSaysToNameOne(t *testing.T) {
-	_, err := run(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, clicfg.OutputText, domain.Input{Branch: "main"}, false)
+	_, err := runWith(context.Background(), &fakeWorkspace{err: workspace.ErrNotProject}, fakeProber{}, nil, clicfg.OutputText, domain.Input{Branch: "main"}, false)
 	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.ErrorContains(t, err, "name the project")
 }
@@ -236,7 +236,7 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 	ws := &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.9.0\n"}}
 	prober := fakeProber{result: registry.Result{Status: registry.Found}}
 
-	out, err := run(context.Background(), ws, prober, clicfg.OutputText, in, false)
+	out, err := runWith(context.Background(), ws, prober, nil, clicfg.OutputText, in, false)
 	assert.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out, "downgrade: the release is older")
 	assert.Contains(t, out, "--allow-downgrade")
@@ -245,15 +245,15 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 
 	allowed := in
 	allowed.AllowDowngrade = true
-	out, err = run(context.Background(), ws, prober, clicfg.OutputText, allowed, false)
+	out, err = runWith(context.Background(), ws, prober, nil, clicfg.OutputText, allowed, false)
 	require.NoError(t, err)
 	assert.Contains(t, out, "this is a downgrade")
 	assert.Contains(t, out, "Images", "allowed, the check goes on")
 }
 
 func TestRunWithNoBranchChecksTheBranchesTheReleaseGoesTo(t *testing.T) {
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-		clicfg.OutputText, domain.Input{Project: "scc-operator"}, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		nil, clicfg.OutputText, domain.Input{Project: "scc-operator"}, false)
 	require.NoError(t, err)
 	assert.Contains(t, out, "Targets")
 	assert.Contains(t, out, "main", "the consumer's one branch, since it is not tied to release lines")
@@ -317,8 +317,8 @@ func TestRenderTextSaysWhetherItWasADryRun(t *testing.T) {
 func TestRunPassesADryRunToThePlan(t *testing.T) {
 	dry := in
 	dry.DryRun = true
-	out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-		clicfg.OutputJSON, dry, false)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		nil, clicfg.OutputJSON, dry, false)
 	require.NoError(t, err)
 	var got domain.Plan
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -440,8 +440,8 @@ func TestRunPassesNoPushToThePlanExceptInADryRun(t *testing.T) {
 	for _, tc := range []struct{ dry, want bool }{{false, true}, {true, false}} {
 		opts := in
 		opts.NoPush, opts.DryRun = true, tc.dry
-		out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-			clicfg.OutputJSON, opts, false)
+		out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+			nil, clicfg.OutputJSON, opts, false)
 		require.NoError(t, err)
 		var got domain.Plan
 		require.NoError(t, json.Unmarshal([]byte(out), &got))

@@ -38,13 +38,15 @@ the consumer holds (--allow-downgrade ships it anyway). A consumer that already
 has the release is reported as already up to date.
 
 It shows the branch, title and labels the PR would have; --preview adds the
-commit message and body. This only checks for now: it writes nothing and
-creates no PR yet.
+commit message and body.
 
---no-push is for reviewing before anything leaves your machine: it does everything
-up to and including the commit, keeps the branch in your clone, and stops before
-the push and the PR. It is not --dry-run, which writes nothing; with both, it is
-a dry run.`,
+A plain run only checks for now: pushing and opening the PR are not built.
+--no-push and --dry-run go further and make the commit for each branch that
+needs one, in your own clone of the consumer (found as gero cd finds it): on a
+new branch when the clone is clean and on a branch, else in a temporary
+worktree that leaves your checkout alone. --no-push keeps the branch for you to
+review. --dry-run always uses a worktree and removes it and the branch
+afterwards; with both flags it is a dry run.`,
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()

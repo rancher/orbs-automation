@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/steprun"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -70,7 +72,16 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	if err := checkFormat(s.Output); err != nil {
 		return "", err
 	}
-	return run(ctx, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, s.Output, domain.Input{
+	var ex *domain.Executor
+	if wantsCommits(s.DryRun, opts) {
+		tmp, err := os.MkdirTemp("", "gero-ship-")
+		if err != nil {
+			return "", fmt.Errorf("make a directory for worktrees: %w", err)
+		}
+		defer func() { _ = os.RemoveAll(tmp) }()
+		ex = &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp}
+	}
+	return runWith(ctx, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
 	}, opts.Preview)
@@ -86,26 +97,21 @@ func checkFormat(format string) error {
 // wantsCommits reports whether the run is to make commits: it does with
 // --no-push, and with --dry-run, which makes them in a worktree and removes
 // them. A plain run only checks until the push is built.
-//
-// STUB: never until a later commit.
-func wantsCommits(dryRun bool, opts Options) bool { return false }
+func wantsCommits(dryRun bool, opts Options) bool { return dryRun || opts.NoPush }
 
-func run(ctx context.Context, ws domain.Workspace, prober registry.Prober, format string, in domain.Input, full bool) (string, error) {
-	return runWith(ctx, ws, prober, nil, format, in, full)
-}
-
-// runWith is run with the executor that makes the commits, nil for a check only.
-//
-// STUB: ignores the executor until a later commit.
+// runWith checks the state and, with an executor, makes the commits; nil is a
+// check only. The report is returned with the errors that come after the check (no clone,
+// a failed target, a blocked release), so it can be shown first.
 func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) (string, error) {
 	if err := checkFormat(format); err != nil {
 		return "", err
 	}
-	plan, err := domain.Check(ctx, ws, prober, in)
+	plan, err := domain.Ship(ctx, ws, prober, in, ex)
 	if errors.Is(err, workspace.ErrNotProject) {
 		return "", fmt.Errorf("%w: name the project to ship as the first argument", err)
 	}
-	if err != nil {
+	afterCheck := errors.Is(err, domain.ErrNoClone) // the plan was made, and is shown
+	if err != nil && !afterCheck {
 		return "", err
 	}
 	var out string
@@ -116,10 +122,13 @@ func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, e
 	} else {
 		out = renderText(plan, full)
 	}
-	if plan.Status == domain.StatusBlocked {
+	switch {
+	case afterCheck:
+		return out, err
+	case plan.Status == domain.StatusBlocked:
 		return out, ErrBlocked
 	}
-	return out, nil
+	return out, failedErr(plan)
 }
 
 // ErrFailed is returned, with the report still written, when a commit for a
