@@ -54,6 +54,9 @@ type Input struct {
 	// DryRun is the invocation's --dry-run: compute and report, and create no
 	// branch or PR. It is carried into the plan so the report says which it is.
 	DryRun bool
+	// NoPush stops after the commit: the branch is left in the clone for review,
+	// and nothing is pushed and no PR is created. With DryRun it is a dry run.
+	NoPush bool
 	// AllowDowngrade ships a release older than what the consumer holds, which is
 	// otherwise a blocker.
 	AllowDowngrade bool
@@ -109,6 +112,7 @@ type Plan struct {
 	File     string           `json:"file"`     // the consumer's file the strategy edits
 	Want     string           `json:"want"`     // what the consumer should hold for the release
 	DryRun   bool             `json:"dryRun"`   // the run was a dry run: no branch or PR is created
+	NoPush   bool             `json:"noPush"`   // the run stops after the commit, with the branch left in the clone; never set with DryRun
 	Status   Status           `json:"status"`   // blocked if any target is blocked or failed or the release has a blocker, else ready if any target needs a PR
 	Targets  []TargetPlan     `json:"targets"`
 	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
@@ -131,7 +135,7 @@ func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) 
 	}
 	plan := Plan{
 		Producer: res.producer.Repo.Name, Release: res.release, Consumer: res.route.Consumer.Repo.Name,
-		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun,
+		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun,
 	}
 	needsPR := false
 	for _, branch := range branches {

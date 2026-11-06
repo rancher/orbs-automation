@@ -37,6 +37,8 @@ type Options struct {
 	Preview    bool   // print the commit message and PR body too, not only the branch and title
 	// AllowDowngrade ships a release older than what the consumer holds.
 	AllowDowngrade bool
+	// NoPush stops after the commit, leaving the branch in the clone for review.
+	NoPush bool
 }
 
 // ParseArgs reads the positional arguments of gero ship: [project] [tag|line].
@@ -70,7 +72,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, opts Options) (stri
 	}
 	return run(ctx, workspace.Open(s, cwd), registry.Checker{}, s.Output, domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
-		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun,
+		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
 	}, opts.Preview)
 }
 
@@ -173,6 +175,8 @@ func renderText(p domain.Plan, full bool) string {
 	}
 	if p.DryRun {
 		b.WriteString("\nDry run: nothing was written, and no branch or PR was created.\n")
+	} else if p.NoPush {
+		b.WriteString("\nNo push: the commit will be left on a branch in your clone for review, with nothing pushed and no PR created.\nNothing was written: creating the branches is not built yet.\n")
 	} else {
 		// Creating the branches and PRs is not built yet, so nothing is written
 		// without --dry-run either.

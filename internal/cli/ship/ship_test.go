@@ -319,3 +319,27 @@ func TestRunPassesADryRunToThePlan(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
 	assert.True(t, got.DryRun)
 }
+
+func TestRenderTextSaysWhatNoPushWillDo(t *testing.T) {
+	p := previewPlan()
+	p.NoPush = true
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "No push: the commit will be left on a branch in your clone for review")
+	assert.NotContains(t, out, "Dry run")
+}
+
+func TestRunPassesNoPushToThePlanExceptInADryRun(t *testing.T) {
+	for _, tc := range []struct{ dry, want bool }{{false, true}, {true, false}} {
+		opts := in
+		opts.NoPush, opts.DryRun = true, tc.dry
+		out, err := run(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+			clicfg.OutputJSON, opts, false)
+		require.NoError(t, err)
+		var got domain.Plan
+		require.NoError(t, json.Unmarshal([]byte(out), &got))
+		assert.Equal(t, tc.want, got.NoPush, "dry run %v: with both, it is a dry run", tc.dry)
+		assert.Equal(t, tc.dry, got.DryRun)
+	}
+}

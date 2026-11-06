@@ -39,7 +39,12 @@ has the release is reported as already up to date.
 
 It shows the branch, title and labels the PR would have; --preview adds the
 commit message and body. This only checks for now: it writes nothing and
-creates no PR yet.`,
+creates no PR yet.
+
+--no-push is for reviewing before anything leaves your machine: it does everything
+up to and including the commit, keeps the branch in your clone, and stops before
+the push and the PR. It is not --dry-run, which writes nothing; with both, it is
+a dry run.`,
 		Args: cobra.MaximumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -64,5 +69,6 @@ creates no PR yet.`,
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")
+	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
 	rootCmd.AddCommand(shipCmd)
 }
