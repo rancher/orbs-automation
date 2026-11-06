@@ -88,7 +88,7 @@ The consumer's clone is found as for every command ([WORKSPACE](WORKSPACE.md#res
 5. **Afterwards, in place:** the branch the engineer started on is checked out again, and the new branch stays in the repository, since it is what gets pushed. A worktree is removed whatever happened.
 6. **On a failure** only what the run changed is undone: its edits, the files it created, and the new branch when it holds no commit.
 
-**A rerun** finds the branch name already in use, because the name is deterministic. A branch identical to the commit it would start from is reused. One with commits of its own is an error that names it, since those are the engineer's to keep or delete.
+**A rerun** finds the branch name already in use, because the name is deterministic and a branch is kept after it is published. What to do depends on whose commits are on it ([Existing branches and PRs](#existing-branches-and-prs)).
 
 go-git cannot create linked worktrees or switch a checkout the way `git` does, so this part goes through `internal/git/gitcli`, with the reason recorded next to the code.
 
@@ -121,6 +121,20 @@ Until the push is built, a run with neither flag stops after the state check and
   * An eligible PR at the same version: **already open**. No push, no PR. Eligible PRs at older versions are still closed, each with a comment naming the open one.
   * An eligible PR at a newer version: **blocked** for that target, naming it, since this release is the older one. Other targets go on.
   * Eligible PRs at older versions only: **superseded**. The PR is created first, then each older PR gets a comment linking it, then is closed. The comment is made only when the new PR was created, so a failure leaves the old PRs as they were.
+
+## Existing branches and PRs
+
+A branch or a PR for the bump may already exist, from an earlier run of this machine's or from a half-finished one. The rules are the same for the local branch and the remote one, and they turn on one question: are all of its commits **ours**?
+
+* **Ours** means a commit has the `Automation: gero ship` trailer **and** an author email equal to the actor's (the commit identity the clone gives, or the bot's in CI). Every commit between the branch and its merge-base with the target must be ours. A branch with a commit that is not ours is never replaced, rewritten or force-pushed, and the run says whose commit it found.
+* **A local branch that is ours** no longer fails a rerun. If it is based on the current head of the target it is reused, which also resumes a run whose push failed. If the target has moved on, it is rebuilt from the new head and replaces the old one. Only a local branch with commits that are not ours is an error, as before.
+* **An open PR of the actor's at this version** is still "already open" and nothing is rebuilt by default. The report says whether it is behind its base, which GitHub tells with one read and no build: `already open #104 (behind release/v2.15; --refresh to rebuild)`.
+* **`--refresh`** rebuilds it, and only when it is eligible: the PR is open, is the actor's, has its head in the repository the branch is pushed to, and every commit on the branch is ours. The branch is built again from the current head of the target in a scratch branch, running the edit and the steps as usual, and the result is compared with the existing branch. They are compared by the change each makes and not by their trees, since the trees differ wherever the target has moved: a fingerprint of each side's diff against its own base, with the hunk positions and the blob ids left out.
+  * **Identical:** nothing is pushed. The report says `already open, identical`.
+  * **Different, or behind:** the new branch is pushed over the old with `--force-with-lease` naming the exact commit that was seen, so a push made since is never overwritten. The PR is the same PR. Its body is refreshed, and the refresh is recorded.
+  * **Not eligible:** the run says which condition failed, and changes nothing.
+* **The refresh is recorded in one comment**, which gero edits in place and finds by a hidden marker, and not a new comment each time. Each refresh that changed something adds a line to it (what the branch was rebuilt on, and when). A refresh that found nothing to change leaves it alone.
+* `--refresh` takes no value. It applies to every eligible target of the run, and `--branch` already says which targets there are.
 
 ## Where the branch is pushed
 
@@ -171,7 +185,6 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Open questions
 
-* Whether a PR that is open at the same version but out of date (its base has moved on) should be refreshed: rebuilt from the latest head of the target and pushed with `--force-with-lease`. That is an exception to never forcing, so it would be explicit (a flag), limited to the actor's own branch and to a branch that has only our commits. Not designed.
 * Whether the default PR title should carry something that identifies the tooling. Identity is the marker, the author and, in shared repositories, a label such as `origin/bot`; a title is a project's own convention, and matching on it is fragile.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
 * The shape of `gero ci:ship` (above).
