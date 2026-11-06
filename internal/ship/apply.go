@@ -3,6 +3,7 @@ package ship
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
@@ -21,8 +22,6 @@ type Apply struct {
 	Branch     string                      // the consumer branch, for the steps' line ranges
 	Message    string                      // the commit message, as the preview showed it
 	// StepMessage is the commit message for a step that changed files.
-	//
-	// STUB: not used until a later commit.
 	StepMessage func(updatedispatcher.Unit) (string, error)
 	Runner      updatedispatcher.StepRunner // runs the steps
 	Name        string                      // the commit's author and committer, or empty for the clone's git config
@@ -53,21 +52,47 @@ func tip(commits []CommitInfo) string {
 }
 
 // Run runs the dispatcher's lifecycle in w.Dir (the pre-edit steps, the edit and
-// the post-edit steps) and commits what changed. A step that fails is the
-// dispatcher's *StepError, and the caller aborts the work. A run that changes
-// nothing is ErrNothingChanged.
+// the post-edit steps) and commits after each of them that changed files: the
+// edit with Message, a step with StepMessage. A unit that changes nothing makes
+// no commit. A step that fails is the dispatcher's *StepError, and the caller
+// aborts the work, which removes the commits made so far. A run in which nothing
+// changed is ErrNothingChanged.
 func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
-	res, err := a.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), a.Runner, a.Release, a.Branch, w.Dir, nil)
+	var commits []CommitInfo
+	after := func(ctx context.Context, u updatedispatcher.Unit) error {
+		message := a.Message
+		if u.Kind == updatedispatcher.UnitStep {
+			var err error
+			if message, err = a.stepMessage(u); err != nil {
+				return fmt.Errorf("the commit message for %s: %w", strings.Join(u.Run, " "), err)
+			}
+		}
+		hash, err := w.Commit(ctx, GitCommit{Message: message, Name: a.Name, Email: a.Email, Sign: a.Sign})
+		if errors.Is(err, gitcli.ErrNothingToCommit) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		subject, _, _ := strings.Cut(message, "\n")
+		commits = append(commits, CommitInfo{Hash: hash, Subject: subject})
+		return nil
+	}
+	res, err := a.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), a.Runner, a.Release, a.Branch, w.Dir, after)
 	if err != nil {
 		return ApplyResult{}, err
 	}
-	commit, err := w.Commit(ctx, GitCommit{Message: a.Message, Name: a.Name, Email: a.Email, Sign: a.Sign})
-	if errors.Is(err, gitcli.ErrNothingToCommit) {
+	if len(commits) == 0 {
 		return ApplyResult{}, ErrNothingChanged
 	}
-	if err != nil {
-		return ApplyResult{}, err
+	return ApplyResult{Commits: commits, Changes: res.Changes}, nil
+}
+
+// stepMessage is the commit message of a step, from StepMessage or, when there
+// is none, just what ran.
+func (a Apply) stepMessage(u updatedispatcher.Unit) (string, error) {
+	if a.StepMessage == nil {
+		return "Run `" + strings.Join(u.Run, " ") + "`", nil
 	}
-	subject, _, _ := strings.Cut(a.Message, "\n")
-	return ApplyResult{Commits: []CommitInfo{{Hash: commit, Subject: subject}}, Changes: res.Changes}, nil
+	return a.StepMessage(u)
 }

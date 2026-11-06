@@ -45,22 +45,9 @@ func renderPreview(in previewInput) (Preview, error) {
 		Source: in.producer.Repo.Name, Consumer: in.consumer.Repo.Name,
 		Target: in.target.Branch, Version: tag,
 	}
-	vars := map[string]string{
-		"project":          in.producer.Name,
-		"source":           in.producer.Name,
-		"sourceRepo":       in.producer.Repo.Name,
-		"tag":              tag,
-		"version":          strings.TrimPrefix(tag, "v"),
-		"branch":           branchLabel,
-		"targetBranch":     in.target.Branch,
-		"consumer":         in.consumer.Repo.Name,
-		"sourceReleaseURL": "https://github.com/" + in.producer.Repo.Name + "/releases/tag/" + tag,
-		"file":             in.check.Change.Path,
-		"from":             in.check.Current,
-		"to":               in.check.Want,
-		"changes":          changes(in),
-		"marker":           marker.String(),
-	}
+	vars := textVars(in)
+	vars["changes"] = changes(in)
+	vars["marker"] = marker.String()
 
 	prefix := firstNonEmpty(in.userPrefix, prs.BranchPrefix, templates.DefaultBranchPrefix())
 	renderedPrefix, err := templates.Render(prefix, vars)
@@ -84,6 +71,42 @@ func renderPreview(in previewInput) (Preview, error) {
 		Branch: renderedPrefix + tag + "-" + branchLabel, Title: title, Labels: prs.Labels,
 		CommitMessage: commit, Body: body,
 	}, nil
+}
+
+// textVars are the variables of the texts that only need to know what the bump
+// is: the producer, the consumer, the release and the target.
+func textVars(in previewInput) map[string]string {
+	return map[string]string{
+		"project":          in.producer.Name,
+		"source":           in.producer.Name,
+		"sourceRepo":       in.producer.Repo.Name,
+		"tag":              in.release.Tag,
+		"version":          strings.TrimPrefix(in.release.Tag, "v"),
+		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
+		"targetBranch":     in.target.Branch,
+		"consumer":         in.consumer.Repo.Name,
+		"sourceReleaseURL": "https://github.com/" + in.producer.Repo.Name + "/releases/tag/" + in.release.Tag,
+		"file":             in.check.Change.Path,
+		"from":             in.check.Current,
+		"to":               in.check.Want,
+	}
+}
+
+// stepMessage returns the function that makes the commit message of a step that
+// changed files: what ran and where it fits in the bump, from the embedded
+// template.
+//
+// TODO(step-commits): the preview shows the edit's commit message only. The
+// commits of the steps are known once the steps have run, and what a step will
+// change is not known before, so they are not previewed; the preview could say
+// "then one commit per step that changes files" and list the steps.
+func stepMessage(in previewInput) func(updatedispatcher.Unit) (string, error) {
+	return func(u updatedispatcher.Unit) (string, error) {
+		vars := textVars(in)
+		vars["command"] = strings.Join(u.Run, " ")
+		vars["phase"] = string(u.Phase)
+		return templates.Render(templates.StepCommitMessage(), vars)
+	}
 }
 
 // changes lists what a bump changes, from what the strategy did and the

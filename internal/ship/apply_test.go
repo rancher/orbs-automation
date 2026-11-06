@@ -76,12 +76,12 @@ var applyRelease = updatedispatcher.Release{
 func applyFor(inv updatedispatcher.Invocation) Apply {
 	return Apply{
 		Invocation: inv, Release: applyRelease, Branch: "main", Message: "Update to v0.5.3\n\nbody",
-		Runner: steprun.Runner{}, StepMessage: stepMessage,
+		Runner: steprun.Runner{}, StepMessage: testStepMessage,
 	}
 }
 
-// stepMessage is the commit message of a step, as the real one is made.
-func stepMessage(u updatedispatcher.Unit) (string, error) {
+// testStepMessage is the commit message of a step, as the real one is made.
+func testStepMessage(u updatedispatcher.Unit) (string, error) {
 	return "Run `" + strings.Join(u.Run, " ") + "`\n\nAutomation: gero ship", nil
 }
 
@@ -135,11 +135,12 @@ func TestApplyRunsThePostEditStepsInTheWorkDirectoryAndCommitsWhatTheyMake(t *te
 	require.Equal(t, InPlace, w.Place)
 	inv := invocationFor(t, []config.Step{{Run: config.Command{"./scripts/gen.sh"}}})
 
-	_, err := applyFor(inv).Run(bg, w)
+	res, err := applyFor(inv).Run(bg, w)
 
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"build.yaml", "generated/tag.txt"},
-		strings.Fields(runGit(t, w.Dir, "show", "--name-only", "--format=", "HEAD")))
+	require.Len(t, res.Commits, 2)
+	assert.Equal(t, []string{"build.yaml"}, filesOf(t, w.Dir, res.Commits[0].Hash))
+	assert.Equal(t, []string{"generated/tag.txt"}, filesOf(t, w.Dir, res.Commits[1].Hash), "what the step made is its own commit")
 	assert.Equal(t, "v0.5.3", slurp(t, filepath.Join(w.Dir, "generated", "tag.txt")), "the step saw GERO_TAG")
 	st, err := gitcli.Status(bg, clone)
 	require.NoError(t, err)
@@ -175,11 +176,10 @@ func TestApplyWhenTheFileAlreadyHoldsTheValueChangesNothing(t *testing.T) {
 	assert.Equal(t, before, runGit(t, w.Dir, "rev-parse", "HEAD"), "no commit was made")
 }
 
-func TestApplyAFailingStepIsAStepErrorAndCommitsNothing(t *testing.T) {
+func TestApplyAFailingStepIsAStepErrorAndAbortUndoesTheRun(t *testing.T) {
 	up := applyRemote(t)
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, false)
-	before := runGit(t, w.Dir, "rev-parse", "HEAD")
 	inv := invocationFor(t, []config.Step{{Run: config.Command{"false"}}})
 
 	_, err := applyFor(inv).Run(bg, w)
@@ -188,10 +188,10 @@ func TestApplyAFailingStepIsAStepErrorAndCommitsNothing(t *testing.T) {
 	require.True(t, errors.As(err, &stepErr), "got %v", err)
 	assert.Equal(t, updatedispatcher.MethodPostEdit, stepErr.Phase)
 	assert.Equal(t, []string{"false"}, stepErr.Run)
-	assert.Equal(t, before, runGit(t, w.Dir, "rev-parse", "HEAD"), "no commit was made")
 
 	require.NoError(t, w.Abort(bg))
 	assert.Equal(t, "main", current(t, clone))
+	assert.False(t, branchExistsIn(t, clone, applyBranch), "the edit's commit is gone with the branch")
 	assert.Equal(t, "image: rancher/scc-operator:v0.5.2\n", slurp(t, filepath.Join(clone, "build.yaml")), "the edit was undone")
 }
 

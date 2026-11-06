@@ -109,6 +109,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	applied, err := Apply{
 		Invocation: r.invocation, Release: r.rel, Branch: tp.Branch,
 		Message: tp.Preview.CommitMessage, Runner: ex.Runner,
+		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: r.release, target: tp.Target}),
 	}.Run(ctx, w)
 	if errors.Is(err, ErrNothingChanged) {
 		result.Status = ResultUpToDate
