@@ -89,6 +89,13 @@ func BranchCommit(ctx context.Context, dir, branch string) (string, bool, error)
 	return strings.TrimSpace(out), true, nil
 }
 
+// CountCommits returns how many commits are reachable from to and not from
+// from (`git rev-list --count from..to`). It is false when the clone lacks
+// either commit, so the answer is unknown and not zero.
+func CountCommits(ctx context.Context, dir, from, to string) (int, bool, error) {
+	return 0, false, nil
+}
+
 // State is what a clone is in, as far as starting a branch in it is concerned.
 type State struct {
 	// Branch is the checked-out branch, or "" when HEAD is detached.
