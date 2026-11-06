@@ -74,7 +74,7 @@ func TestCheckRefusesWhatTheLineCannotHave(t *testing.T) {
 		want error
 	}{
 		{"not a version", shell("v0.8.x"), ErrNotAVersion},
-		{"not a version at all", shell("latest"), ErrNotAVersion},
+		{"not a version at all", shell("vlatest"), ErrNotAVersion},
 		{"does not match the pattern", shell("0.8.4"), ErrPattern},
 		{"another series", shell("v0.9.1", tagsAt("aaa", "v0.8.3")...), ErrNotInSeries},
 		{"older than the newest", shell("v0.8.2", tagsAt("aaa", "v0.8.3")...), ErrNotNewer},
