@@ -99,7 +99,7 @@ func TestRefreshOfABranchThatDiffersReplacesItAndRecordsIt(t *testing.T) {
 	assert.Equal(t, newTip, runGit(t, clone, "rev-parse", botV215), "and so is the local one")
 	assert.False(t, branchExistsIn(t, clone, scratchV215))
 	assert.Equal(t, "2", runGit(t, ws.up, "rev-list", "--count", "release/v2.15.."+botV215))
-	assert.True(t, lg.has(`update #104 title="[v2.15] Update scc-operator to 0.5.3"`), "the title and body are refreshed")
+	assert.True(t, lg.has(`update #104 title="[v2.15] Update scc-operator to v0.5.3"`), "the title and body are refreshed")
 	assert.Contains(t, rec.kinds(), EventRefreshed)
 	assert.Contains(t, rec.kinds(), EventPushed)
 	require.True(t, lg.has("comment #104 "), "recorded in a comment")
