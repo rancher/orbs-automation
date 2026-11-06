@@ -121,6 +121,20 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 		p := *ex.Publish
 		p.Clone = clone
 		pub = &p
+		consumer := res.route.Consumer
+		settings := ws.PushSettings(plan.Consumer)
+		target, err := resolvePushTarget(
+			PushChoice{Flag: in.PushTo, UserRepo: settings.UserRepo, Project: consumer.PullRequests.PushTo, UserDefault: settings.UserDefault},
+			PushRemotes{Fork: settings.Fork, Upstream: settings.Upstream}, in.CI)
+		if err != nil {
+			return plan, err
+		}
+		if target.Role == RoleFork && settings.GitHubUser == "" {
+			return plan, errors.New("pushing to the fork needs githubUser in the user file: the PR's head is the fork's owner and the branch")
+		}
+		pub.Push, pub.HeadOwner = target, settings.GitHubUser
+		pub.IsBot, pub.BotLabels = in.CI, consumer.PullRequests.BotLabels
+		plan.Push = &target
 		if me, err = pub.Remote.Me(ctx); err != nil {
 			return plan, fmt.Errorf("%w: %v", ErrNoRemote, err)
 		}

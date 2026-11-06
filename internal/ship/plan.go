@@ -74,8 +74,6 @@ type Input struct {
 	// branch or PR. It is carried into the plan so the report says which it is.
 	DryRun bool
 	// PushTo is --push-to: fork or upstream, or "" to let the settings decide.
-	//
-	// STUB: not used until a later commit.
 	PushTo string
 	// CI says the actor is the bot, in CI: it always pushes to the upstream and
 	// the bot's labels are added.
