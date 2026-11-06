@@ -71,15 +71,20 @@ func New(c github.Credentials, opts ...gogithub.ClientOptionsFunc) (*Service, er
 // AsBot returns the service for a token that belongs to an installation and not
 // a user, such as the bot's in CI: Me is then login, because there is no user to
 // ask GitHub about.
-//
-// STUB: returns the service unchanged until a later commit.
-func (s *Service) AsBot(login string) *Service { return s }
+func (s *Service) AsBot(login string) *Service {
+	bot := *s
+	bot.bot = login
+	return &bot
+}
 
 // Me is the login whose PRs are the actor's own: the one the token belongs to,
 // asked of GitHub, or the bot's when the service is AsBot.
-//
-// STUB: nobody until a later commit.
-func (s *Service) Me(ctx context.Context) (string, error) { return "", nil }
+func (s *Service) Me(ctx context.Context) (string, error) {
+	if s.bot != "" {
+		return s.bot, nil
+	}
+	return github.Login(ctx, s.creds, s.opts...)
+}
 
 // split turns owner/name into its parts.
 func split(slug string) (owner, name string, err error) {
