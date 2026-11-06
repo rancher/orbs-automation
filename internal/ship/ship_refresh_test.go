@@ -255,3 +255,15 @@ func TestRefreshIsPartOfWhatTheConfirmationAsksAbout(t *testing.T) {
 	assert.Equal(t, []string{"v2.15"}, q.got[0].Refreshes, "named by line, as the report names it")
 	assert.Empty(t, q.got[0].Opens)
 }
+
+func TestShipThePlanSaysWhetherRefreshWasAsked(t *testing.T) {
+	ws, _, ex, _, _, in := refreshing(t)
+
+	asked, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+	require.NoError(t, err)
+	plain, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+	require.NoError(t, err)
+
+	assert.True(t, asked.Refresh)
+	assert.False(t, plain.Refresh)
+}

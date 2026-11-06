@@ -1106,3 +1106,31 @@ func TestLogSinkRecordsTheLineAndWhatWasPushed(t *testing.T) {
 	_, hasLine := recs[1]["line"]
 	assert.False(t, hasLine, "no line attribute for a branch in no line")
 }
+
+func behind() *domain.TargetResult {
+	return &domain.TargetResult{
+		Status: domain.ResultAlreadyOpen, Branch: "bot/x", BehindBy: 7,
+		PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
+	}
+}
+
+func TestRenderTextDoesNotSuggestRefreshWhenItWasGiven(t *testing.T) {
+	p := onLines()
+	p.Refresh = true
+	r := behind()
+	r.Note = "identical to a fresh build"
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "v2.15: already open #104 https://github.com/rancher/rancher/pull/104 (behind release/v2.15 by 7) (identical to a fresh build)",
+		"how far behind is still a fact worth showing")
+	assert.NotContains(t, out, "--refresh")
+}
+
+func TestRenderTextStillSuggestsRefreshWhenItWasNotGiven(t *testing.T) {
+	p := onLines()
+	p = withResults(p, behind())
+
+	assert.Contains(t, renderText(p, false), "(behind release/v2.15 by 7; --refresh to rebuild)")
+}
