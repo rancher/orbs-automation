@@ -1,6 +1,12 @@
 package updatedispatcher
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrOutsideTree is returned for a path that leaves the directory of a DirTree.
+var ErrOutsideTree = errors.New("the path is outside the directory")
 
 // DirTree is a WritableTree of the files below a directory: a clone, or a
 // worktree of one. A path that leaves the directory is an error.
