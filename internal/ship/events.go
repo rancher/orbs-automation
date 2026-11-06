@@ -21,6 +21,9 @@ const (
 	EventTargetStarted EventKind = "target started"
 	// EventCommit: a commit was made for the branch. Commit is it.
 	EventCommit EventKind = "commit"
+	// EventActor: who the run acts as is known, before anything is written. Actor
+	// is it.
+	EventActor EventKind = "actor"
 	// EventDecided: what to do about the PR of a branch is known: open one, one
 	// is already open, or a newer one blocks it. Decision is it.
 	EventDecided EventKind = "decided"
@@ -55,6 +58,7 @@ type Event struct {
 	Place    Place            // TargetStarted: where the work is done
 	Reason   string           // TargetStarted: why that was a worktree
 	Commit   *CommitInfo      // Commit
+	Actor    *Actor           // Actor
 	Decision *Publish         // Decided
 	Remote   string           // Pushed: the remote's name
 	PR       *PRRef           // PROpened, Superseded

@@ -179,6 +179,8 @@ type Plan struct {
 	// Push is where the branches are pushed, or would be, set when the run looks
 	// at the open PRs.
 	Push *PushTarget `json:"push,omitempty"`
+	// Actor is who the run acts as, set by Ship before any work.
+	Actor *Actor `json:"actor,omitempty"`
 }
 
 // ReleaseImages is the check of the images of one release.

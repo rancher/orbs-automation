@@ -78,6 +78,9 @@ type Executor struct {
 	TempDir string // where worktrees go
 	// Sign makes git sign every commit with the engineer's own key (signCommits).
 	Sign bool
+	// Identify says who the commits are made as, in the clone: git's own answer on
+	// a workstation, the bot's in CI. Not set means it is not asked.
+	Identify func(ctx context.Context, clone string) (Identity, error)
 	// Publish, when set, finds the open PRs of each target before making anything,
 	// and with it a run that is not --no-push or --dry-run pushes and opens the
 	// PRs. Without it a run stops at the commits.
@@ -89,6 +92,21 @@ type Executor struct {
 	Confirm func(ctx context.Context, c Confirmation) (bool, error)
 	// Now is the time, for the line a refresh records. Not set is time.Now.
 	Now func() time.Time
+}
+
+// Identity is the author and committer of the commits of a run.
+type Identity struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// Actor is who a run acts as, shown before anything is written: the identity its
+// commits carry, the GitHub account its PRs are opened by (when it opens any), and
+// whether the commits are signed.
+type Actor struct {
+	Identity
+	Login   string `json:"login,omitempty"`
+	Signing bool   `json:"signing"`
 }
 
 // Confirmation is what a run is about to do, for the one question before it
