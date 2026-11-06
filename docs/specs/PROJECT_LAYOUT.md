@@ -29,6 +29,7 @@ internal/git/repo/   local repository access with go-git; the only importer of g
 internal/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
 internal/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
+internal/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
 internal/ship/      one downstream PR: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO)
 internal/ship/templates/  the embedded commit, body and title templates and their placeholder renderer
 internal/updatedispatcher/  applies a bump: strategies claimed by name, the engine built from config, and the step lifecycle around the edit; starts no process   (PUSH_TO_REPO)

@@ -133,7 +133,8 @@ So an engineer with a fork set pushes to it without saying so, and a repository 
 
 Creating, finding and closing PRs, and commenting and labelling them, is one service in `internal/github`, and `ship` is its first user and not its only one: the reconciler's tracking issues need the same calls (a comment, a label, closing) on issues, which GitHub treats as the same kind of item as a PR. So the service speaks in plain types of its own (go-github's stay inside), and each user declares the narrow interface it needs, as with every other consumer.
 
-* **Finding.** The open PRs of a repository for one base branch, each with its number, URL, head, body and labels. `ship` reads the marker of each ([Branches and PR identity](#branches-and-pr-identity)); the service does not know what a marker is.
+* **Package.** `internal/github/pulls`, inside the one place go-github may be imported, with its own plain types (`PR`, `NewPR`, `Open`).
+* **Finding, without listing everything.** A repository can have hundreds of open PRs, so a lookup reads as few as it can. `OpenForHead` asks for one head with one request, which finds the PR of a branch whose name is known. `OpenForBase` lists the open PRs of a base branch newest first and stops at a limit (one page of 100 by default), saying `Truncated` when there were more; a bump's PR is recent, so the newest are the ones to read, and a run that was cut short says so in its report. `ship` reads the marker of each ([Branches and PR identity](#branches-and-pr-identity)); the service does not know what a marker is.
 * **Creating.** A PR from a head to a base with a title and body. Labels are not part of creating it.
 * **Labels are a separate step** ([METADATA](METADATA.md#applying-labels)): the repository's labels are read once per run, the configured labels that exist are applied after the PR exists, and one that is missing is a warning and not a failure. A label failure never fails the PR.
 * **Commenting and closing** work on a PR by number, so the same calls close a superseded PR and, later, a tracking issue.
@@ -160,7 +161,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
-* The PR service in `internal/github`, the check for open PRs the new one would supersede, and the push-target layers above (only the `fork` setting and `gitcli.Push` exist).
+* The use of the PR service by `ship` (the service itself is built), the check for open PRs the new one would supersede, and the push-target layers above (only the `fork` setting and `gitcli.Push` exist).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
 ## Open questions
