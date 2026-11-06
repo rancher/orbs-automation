@@ -70,8 +70,6 @@ type Executor struct {
 	// going to publish something: it is given what will be done and says whether
 	// to go on. It is not asked for a dry run, a --no-push run, or when nothing
 	// would be written. Not set means go on.
-	//
-	// STUB: not asked until a later commit.
 	Confirm func(ctx context.Context, c Confirmation) (bool, error)
 }
 
@@ -163,61 +161,124 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 			return plan, fmt.Errorf("%w: %v", ErrNoRemote, err)
 		}
 	}
-	for _, i := range ready {
-		plan.Targets[i].Result = res.shipTarget(ctx, ex, pub, me, clone, remote, in, plan, plan.Targets[i], sink)
+	// Decide every target first, reading only, so that the one question before
+	// anything is written can say what will be done.
+	states := make([]targetState, len(ready))
+	for k, i := range ready {
+		states[k] = res.decideTarget(ctx, pub, me, plan, plan.Targets[i], sink)
+	}
+	if pub != nil && !in.DryRun && ex.Confirm != nil {
+		if c, writes := confirmation(plan, states); writes {
+			ok, err := ex.Confirm(ctx, c)
+			if err != nil {
+				return plan, err
+			}
+			if !ok {
+				return plan, ErrDeclined
+			}
+		}
+	}
+	for k, i := range ready {
+		plan.Targets[i].Result = res.workTarget(ctx, ex, pub, clone, remote, in, plan, states[k], sink)
 		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Result: plan.Targets[i].Result})
 	}
 	return plan, nil
 }
 
-// shipTarget does the work for one target. With a publisher it first looks at
-// the open PRs of the branch and decides: a PR of the actor's own at a newer
-// version blocks the target, and one at this version is already open, so nothing
-// is made, and only the older ones are closed. Otherwise it makes the commits
-// and, unless this is a dry run, publishes them. A dry run reads the open PRs and
-// says what it would close, and writes nothing.
-func (r resolution) shipTarget(ctx context.Context, ex *Executor, pub *Publisher, me, clone, remote string, in Input, plan Plan, tp TargetPlan, sink Sink) *TargetResult {
-	m := Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: plan.Release.Tag}
-	var dec Publish
-	var warnings []string
-	if pub != nil {
-		open, err := pub.Remote.OpenForBase(ctx, plan.Consumer, tp.Branch, 0)
-		if err != nil {
-			return &TargetResult{Status: ResultFailed, Branch: tp.Preview.Branch,
-				Error: fmt.Sprintf("look for the open PRs of %s: %v", plan.Consumer, err)}
+// targetState is what was found out about one target before any work: the
+// decision about its PR, what to warn about, and, for a target that needs no
+// work, its result.
+type targetState struct {
+	tp       TargetPlan
+	m        Marker
+	dec      Publish
+	warnings []string
+	done     *TargetResult // set when there is nothing to make: blocked, or the lookup failed
+}
+
+// decideTarget looks at the open PRs of a target's branch, when there is a
+// publisher, and decides what to do about them. A PR of the actor's own at a newer
+// version blocks the target, and a failed lookup fails it, each before any work.
+// It only reads.
+func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string, plan Plan, tp TargetPlan, sink Sink) targetState {
+	st := targetState{tp: tp, m: Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: plan.Release.Tag}}
+	if pub == nil {
+		return st
+	}
+	open, err := pub.Remote.OpenForBase(ctx, plan.Consumer, tp.Branch, 0)
+	if err != nil {
+		st.done = &TargetResult{Status: ResultFailed, Branch: tp.Preview.Branch,
+			Error: fmt.Sprintf("look for the open PRs of %s: %v", plan.Consumer, err)}
+		return st
+	}
+	st.dec = decidePublish(open.PRs, me, st.m)
+	emit(sink, Event{Kind: EventDecided, Branch: tp.Branch, Decision: &st.dec})
+	if open.Truncated {
+		st.warnings = append(st.warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this bump may have been missed", len(open.PRs), plan.Consumer))
+	}
+	for _, a := range st.dec.Also {
+		st.warnings = append(st.warnings, fmt.Sprintf("also open: #%d by %s (%s)", a.Number, a.Author, a.URL))
+	}
+	if st.dec.Action == PublishBlocked {
+		newer, _ := ParseMarker(st.dec.Newer.Body)
+		st.done = &TargetResult{Status: ResultBlocked, Branch: tp.Preview.Branch, Warnings: st.warnings,
+			Error: fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", st.dec.Newer.Number, newer.Version, tp.Branch, plan.Release.Tag)}
+	}
+	return st
+}
+
+// confirmation is what the run is about to do, and whether that is anything
+// that writes: a PR to open, or an older one to close.
+func confirmation(plan Plan, states []targetState) (Confirmation, bool) {
+	c := Confirmation{Consumer: plan.Consumer, Release: plan.Release.Tag}
+	if plan.Push != nil {
+		c.Push = *plan.Push
+	}
+	for _, st := range states {
+		if st.done != nil && st.dec.Action != PublishBlocked {
+			continue // the lookup failed: nothing is decided for it
 		}
-		dec = decidePublish(open.PRs, me, m)
-		emit(sink, Event{Kind: EventDecided, Branch: tp.Branch, Decision: &dec})
-		if open.Truncated {
-			warnings = append(warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this bump may have been missed", len(open.PRs), plan.Consumer))
-		}
-		for _, a := range dec.Also {
-			warnings = append(warnings, fmt.Sprintf("also open: #%d by %s (%s)", a.Number, a.Author, a.URL))
-		}
-		switch dec.Action {
+		switch st.dec.Action {
 		case PublishBlocked:
-			newer, _ := ParseMarker(dec.Newer.Body)
-			return &TargetResult{Status: ResultBlocked, Branch: tp.Preview.Branch, Warnings: warnings,
-				Error: fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", dec.Newer.Number, newer.Version, tp.Branch, plan.Release.Tag)}
+			c.Blocked = append(c.Blocked, st.tp.Branch)
 		case PublishAlreadyOpen:
-			result := &TargetResult{Status: ResultAlreadyOpen, Branch: tp.Preview.Branch, Warnings: warnings,
-				PR: &PRRef{Number: dec.Open.Number, URL: dec.Open.URL}}
-			if in.DryRun {
-				result.WouldSupersede = refs(dec.Supersede)
-			} else {
-				pub.supersede(ctx, plan.Consumer, dec.Open.Number, m, tp.Branch, dec.Supersede, result, sink)
-			}
-			return result
+			c.Already = append(c.Already, st.tp.Branch)
+			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
+		default:
+			c.Opens = append(c.Opens, st.tp.Branch)
+			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
 		}
 	}
+	return c, len(c.Opens)+len(c.Closes) > 0
+}
+
+// workTarget does the work for one target that was decided. One that needs none
+// is its own result. One whose PR is already open only has its older PRs closed
+// (or listed, in a dry run). Otherwise it makes the commits and, unless this is a
+// dry run, publishes them.
+func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher, clone, remote string, in Input, plan Plan, st targetState, sink Sink) *TargetResult {
+	if st.done != nil {
+		return st.done
+	}
+	tp := st.tp
+	if pub != nil && st.dec.Action == PublishAlreadyOpen {
+		result := &TargetResult{Status: ResultAlreadyOpen, Branch: tp.Preview.Branch, Warnings: st.warnings,
+			PR: &PRRef{Number: st.dec.Open.Number, URL: st.dec.Open.URL}}
+		if in.DryRun {
+			result.WouldSupersede = refs(st.dec.Supersede)
+		} else {
+			pub.supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp.Branch, st.dec.Supersede, result, sink)
+		}
+		return result
+	}
 	result := r.commitTarget(ctx, ex, clone, remote, in, tp, sink)
-	result.Warnings = append(result.Warnings, warnings...)
+	result.Warnings = append(result.Warnings, st.warnings...)
 	switch {
 	case pub == nil:
 	case in.DryRun:
-		result.WouldSupersede = refs(dec.Supersede)
+		result.WouldSupersede = refs(st.dec.Supersede)
 	case result.Status == ResultCommitted:
-		pub.publish(ctx, plan.Consumer, tp, m, dec, result, sink)
+		pub.publish(ctx, plan.Consumer, tp, st.m, st.dec, result, sink)
 	}
 	return result
 }
