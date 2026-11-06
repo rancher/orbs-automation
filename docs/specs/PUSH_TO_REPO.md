@@ -181,10 +181,9 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 * A run against real GitHub: the push spike, and a first PR on a scratch repository. The same goes for `--refresh`, whose forced push has only been tried against local repositories.
 * The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
-* The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
+* The files a commit changed in the report.
 * `gero ci:ship`.
 * The sequence above as chained tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
-* `GERO_NON_INTERACTIVE` as an alias of `--yes` (the flags `--yes` and `--non-interactive` exist).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 
 ## Open questions

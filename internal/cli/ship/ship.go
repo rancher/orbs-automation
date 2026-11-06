@@ -93,7 +93,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 		return fmt.Errorf("make a directory for worktrees: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp}
+	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp, Sign: s.SignCommits}
 	if !opts.NoPush {
 		creds, err := github.Resolve(github.GoGh{}, "")
 		switch {

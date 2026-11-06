@@ -144,3 +144,32 @@ func TestLoadSettingsDryRun(t *testing.T) {
 	require.NoError(t, loadSettings(env(nil), t.TempDir())(cmd, nil))
 	assert.False(t, settingsFrom(cmd).DryRun, "off unless asked for")
 }
+
+func TestShipsYesFlagsAndTheEnvAreOneSettingThatSkipsTheQuestion(t *testing.T) {
+	for name, tt := range map[string]struct {
+		args []string
+		env  map[string]string
+	}{
+		"--yes":             {args: []string{"--yes"}},
+		"-y":                {args: []string{"-y"}},
+		"--non-interactive": {args: []string{"--non-interactive"}},
+		"the env":           {env: map[string]string{"GERO_NON_INTERACTIVE": "true"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ship, _, err := rootCmd.Find([]string{"ship"})
+			require.NoError(t, err)
+			require.NoError(t, ship.Flags().Parse(tt.args))
+			t.Cleanup(func() {
+				for _, f := range []string{"yes", "non-interactive"} {
+					_ = ship.Flags().Set(f, "false")
+					ship.Flags().Lookup(f).Changed = false
+				}
+			})
+
+			s, err := clicfg.Load(clicfg.Inputs{Flags: flagLookup(ship), Getenv: env(tt.env)})
+
+			require.NoError(t, err)
+			assert.True(t, s.NonInteractive)
+		})
+	}
+}

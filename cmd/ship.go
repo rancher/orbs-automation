@@ -81,6 +81,7 @@ with both flags it is a dry run.`,
 			}
 			in.Project, in.Arg = ship.ParseArgs(args)
 			s := settingsFrom(cmd)
+			in.Yes = s.NonInteractive // --yes and --non-interactive, or GERO_NON_INTERACTIVE
 			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
 			in.In, in.Interactive = cmd.InOrStdin(), isTerminal(os.Stdin)
 			return ship.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)

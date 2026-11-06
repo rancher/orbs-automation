@@ -377,7 +377,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 
 	applied, err := Apply{
 		Invocation: r.invocation, Release: r.relOf(release), Branch: tp.Branch,
-		Message: tp.Preview.CommitMessage, Runner: ex.Runner,
+		Message: tp.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign,
 		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Line: tp.Line, Commit: &c}) },
 		StepMessage: stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}),
 	}.Run(ctx, w)

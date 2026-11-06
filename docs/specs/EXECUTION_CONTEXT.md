@@ -64,7 +64,7 @@ The actor is who the commits and the PRs are attributed to. It is two things tha
 
 **What is built and what is not.** `gitcli.Push` is the script's `git push -u <remote> <branch>`, never forced, with prompts off (`GIT_TERMINAL_PROMPT=0`) so a missing credential fails at once. On a workstation git does the authenticating itself, with the engineer's SSH agent, `~/.ssh/config` and credential helpers; `execx` scrubs the environment, so `Push` passes on only the variables that reach them (`SSH_AUTH_SOCK`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_ASKPASS`, `SSH_ASKPASS` and the `GIT_CONFIG_*` file variables) and never a token. That is tested against local bare repositories, including that a diverged remote is rejected and left alone and that the environment is what is described. **(unverified)** against a real remote: `TestPushSpikeToARealRemote` pushes a throwaway branch and deletes it, and runs only when `GERO_SPIKE_PUSH_URL` names a scratch repository. The CI path, a token as a one-shot credential over HTTPS, is not built and is part of `gero ci:ship`.
 
-**Signing is off by default and opt-in for humans.** Signed commits are not required by the target repositories. An engineer who wants them sets `signCommits: true` in the user file (or `GERO_SIGN_COMMITS=true`) **(leaning)**.
+**Signing is off by default and opt-in for humans.** Signed commits are not required by the target repositories. An engineer who wants them sets `signCommits: true` in the user file (or `GERO_SIGN_COMMITS=true`, which beats the file). `gero ship` signs every commit it makes when it is on.
 
 * The signature is made by `git` with the engineer's own `gpg.*` and `user.signingkey` configuration, so `gero` holds no key and never reads one. With signing on, the commit is created through `gitcli`, not go-git.
 * If signing is requested and fails (no key, agent locked), the command fails. It never falls back to an unsigned commit, because the engineer asked for the opposite.
@@ -89,8 +89,7 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 ## Not built yet
 
 * Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`) but only `gero doctor` (the `commit-identity` check) calls it so far. The cross-repo token check (`cigate.RequireCrossRepoToken`), the workstation-signs detection (`clicfg.WorkstationSigns`) and the `auth status` fallback for installation tokens exist too, and likewise wait for a command to call them. The fallback treats a 403 from `GET /user` as an installation token and is unverified against a real one.
-* The `signCommits` key, and the push as a step of `ship` (`gitcli.Push` exists). Signing through `git` is in `gitcli.CommitChanges` (its `Sign` option) and waits for the key.
-* The write-command contract: preflight line, the work branch or worktree, the confirmation and `--non-interactive`.
+* The write-command contract is built for `gero ship`, with the work branch or worktree, the one confirmation, and `--non-interactive`/`--yes` or `GERO_NON_INTERACTIVE`. Not yet: the preflight line that names workstation signs under a forced CI context.
 * Any write command at all. These are the rules the first one is built against.
 
 ## Decided
