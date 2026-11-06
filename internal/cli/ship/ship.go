@@ -147,9 +147,8 @@ func runTo(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspa
 	if errors.Is(err, workspace.ErrNotProject) {
 		return fmt.Errorf("%w: name the project to ship as the first argument", err)
 	}
-	afterCheck := errors.Is(err, domain.ErrNoClone) // the plan was made, and is shown
-	if err != nil && !afterCheck {
-		return err
+	if err != nil && plan.Producer == "" {
+		return err // the check never made a plan: there is nothing to show
 	}
 	if format == clicfg.OutputJSON {
 		out, err := renderJSON(plan)
@@ -163,8 +162,8 @@ func runTo(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspa
 		return err
 	}
 	switch {
-	case afterCheck:
-		return err
+	case err != nil:
+		return err // after the check: no clone, declined, no one to act as
 	case plan.Status == domain.StatusBlocked:
 		return ErrBlocked
 	}
