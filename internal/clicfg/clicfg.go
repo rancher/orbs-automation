@@ -102,6 +102,13 @@ type Settings struct {
 	// prints what it would do, and changes nothing. There is no user-file key, so
 	// it is never on without being asked for in the invocation.
 	DryRun bool
+	// NonInteractive is --non-interactive (or --yes) or GERO_NON_INTERACTIVE: a
+	// write command goes on without asking its one question. There is no
+	// user-file key, so it is never on without being asked for in the invocation.
+	NonInteractive bool
+	// SignCommits is signCommits in the user file or GERO_SIGN_COMMITS: the
+	// commits a command makes are signed by git, with the engineer's own key.
+	SignCommits bool
 	// DefaultToken is true when the token in the environment is the workflow's
 	// default GITHUB_TOKEN: GITHUB_TOKEN is set and GH_TOKEN is unset or equal
 	// to it. Only the fact is kept, never a token.
