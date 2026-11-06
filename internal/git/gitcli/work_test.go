@@ -107,6 +107,7 @@ func TestStatusOfACleanClone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, State{Branch: "main"}, st)
 	assert.True(t, st.Clean())
+	assert.True(t, st.CleanOnBranch())
 }
 
 func TestStatusSeparatesTrackedChangesFromUntrackedFiles(t *testing.T) {
@@ -120,6 +121,7 @@ func TestStatusSeparatesTrackedChangesFromUntrackedFiles(t *testing.T) {
 	assert.Equal(t, []string{"build.yaml"}, st.Tracked)
 	assert.Equal(t, []string{"notes/todo.txt"}, st.Untracked, "a file at a time, not the directory")
 	assert.False(t, st.Clean())
+	assert.False(t, st.CleanOnBranch())
 }
 
 func TestStatusUntrackedFilesAloneKeepItClean(t *testing.T) {
@@ -130,6 +132,7 @@ func TestStatusUntrackedFilesAloneKeepItClean(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.True(t, st.Clean())
+	assert.True(t, st.CleanOnBranch())
 	assert.Equal(t, []string{"scratch.txt"}, st.Untracked)
 }
 
@@ -144,7 +147,7 @@ func TestStatusStagedAndDeletedAndRenamedAreTracked(t *testing.T) {
 	assert.False(t, st.Clean())
 }
 
-func TestStatusDetachedHeadIsNotClean(t *testing.T) {
+func TestStatusDetachedHeadIsCleanButNotOnABranch(t *testing.T) {
 	dir := clone(t, upstream(t))
 	run(t, dir, "checkout", "--quiet", "--detach")
 
@@ -152,7 +155,8 @@ func TestStatusDetachedHeadIsNotClean(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Empty(t, st.Branch)
-	assert.False(t, st.Clean())
+	assert.True(t, st.Clean(), "Clean is about changes, as Repo.Clean was")
+	assert.False(t, st.CleanOnBranch(), "a branch cannot be started in place from a detached HEAD")
 }
 
 func TestStatusNamesAnOperationInProgress(t *testing.T) {
@@ -171,6 +175,7 @@ func TestStatusNamesAnOperationInProgress(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "merge", st.InProgress)
 	assert.False(t, st.Clean())
+	assert.False(t, st.CleanOnBranch())
 }
 
 func TestCollisions(t *testing.T) {
