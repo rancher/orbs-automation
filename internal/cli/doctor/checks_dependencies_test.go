@@ -219,7 +219,7 @@ func TestGitCheckMissingFailsAndSaysWhyItMatters(t *testing.T) {
 	assert.Equal(t, StatusFail, got.Status)
 	assert.Equal(t, "git not found on PATH", got.Message)
 	assert.Contains(t, got.Remediation, "https://git-scm.com")
-	assert.Contains(t, got.Remediation, "gero repo branch-tags")
+	assert.Contains(t, got.Remediation, "gero repo current-tags")
 	assert.Empty(t, g.asked, "no point asking a missing git for its config")
 }
 
