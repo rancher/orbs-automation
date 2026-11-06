@@ -85,3 +85,25 @@ func TestConfirmerAsksOnTheTerminalAndOnlyYesIsYes(t *testing.T) {
 		assert.Contains(t, out.String(), "[y/N]", "the question was shown")
 	}
 }
+
+func TestQuestionSaysWhichPRsWillBeRebuilt(t *testing.T) {
+	c := opening()
+	c.Refreshes = []string{"release/v2.15", "main"}
+
+	q := question(c)
+
+	assert.Contains(t, q, "Rebuild the branches for release/v2.15, main")
+	assert.Contains(t, q, "origin", "where the replacing branch is pushed")
+	assert.Contains(t, q, "if they differ")
+	assert.Contains(t, q, "[y/N]")
+}
+
+func TestQuestionWithAnOpenAndARefreshAsksAboutBoth(t *testing.T) {
+	c := opening("main")
+	c.Refreshes = []string{"release/v2.15"}
+
+	q := question(c)
+
+	assert.Contains(t, q, "open 1 PR")
+	assert.Contains(t, q, "rebuild the branch for release/v2.15")
+}

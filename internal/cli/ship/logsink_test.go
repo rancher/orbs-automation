@@ -177,3 +177,12 @@ func TestLogSinkATargetDoneRecordsThePRAndTheWarnings(t *testing.T) {
 	assert.EqualValues(t, 104, recs[0]["pr"])
 	assert.EqualValues(t, 2, recs[0]["warnings"])
 }
+
+func TestLogSinkRecordsARefresh(t *testing.T) {
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventRefreshed, Branch: "release/v2.15", PR: &domain.PRRef{Number: 104, URL: "u"}})
+
+	require.Len(t, recs, 1)
+	assert.Equal(t, "refreshed", recs[0]["msg"])
+	assert.EqualValues(t, 104, recs[0]["pr"])
+	assert.Equal(t, "release/v2.15", recs[0]["branch"])
+}

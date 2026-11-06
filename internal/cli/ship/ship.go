@@ -45,6 +45,11 @@ type Options struct {
 	NoPush bool
 	// PushTo is --push-to: fork or upstream, to override the settings.
 	PushTo string
+	// Refresh is --refresh: rebuild an open PR of yours and replace its branch if
+	// it differs.
+	//
+	// STUB: not carried until a later commit.
+	Refresh bool
 	// Yes is --yes: go on without asking. Interactive says In is a terminal that
 	// the question can be asked on; without it and without Yes a run that writes
 	// is an error.

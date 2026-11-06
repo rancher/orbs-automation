@@ -855,3 +855,67 @@ func TestRenderTextAnAlreadyOpenPRThatIsCurrentHasNoBehindNote(t *testing.T) {
 
 	assert.NotContains(t, out, "behind")
 }
+
+func TestInputFromCarriesRefresh(t *testing.T) {
+	assert.True(t, inputFrom(clicfg.Settings{}, Options{Refresh: true}).Refresh)
+	assert.False(t, inputFrom(clicfg.Settings{}, Options{}).Refresh)
+}
+
+func refreshed() *domain.TargetResult {
+	return &domain.TargetResult{
+		Status: domain.ResultRefreshed, Branch: "bot/scc-operator-v0.5.3-v2.15", Pushed: "origin",
+		PR:      &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
+		Commits: []domain.CommitInfo{{Hash: "abcdef0123456789", Subject: "Update"}, {Hash: "1234567890abcdef", Subject: "Run gen"}},
+	}
+}
+
+func TestRenderTextARefreshedPRIsShownWithItsNewCommits(t *testing.T) {
+	p := previewPlan()
+	p.Clone, p.Remote = "/src/rancher", "upstream"
+	p = withResults(p, refreshed())
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: refreshed #104 https://github.com/rancher/rancher/pull/104")
+	assert.Contains(t, out, "release/v2.15: pushed to origin")
+	assert.Contains(t, out, "refreshed")
+	assert.Contains(t, out, "Refreshed 1 PR.")
+	assert.NotContains(t, out, "git -C", "nothing is waiting in the clone to be reviewed")
+}
+
+func TestRenderTextADryRunThatWouldRefreshSaysSo(t *testing.T) {
+	p := previewPlan()
+	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	r := refreshed()
+	r.Status, r.Pushed = domain.ResultWouldRefresh, ""
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "release/v2.15: would refresh #104")
+}
+
+func TestRenderTextTheNoteOnAnAlreadyOpenPRIsShown(t *testing.T) {
+	for _, note := range []string{"identical to a fresh build", "not refreshed: commit 1187df75 is by t@example.com, not dev@example.com"} {
+		p := previewPlan()
+		p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104}, Note: note})
+
+		out := renderText(p, false)
+
+		assert.Contains(t, out, "release/v2.15: already open #104")
+		assert.Contains(t, out, "("+note+")", note)
+	}
+}
+
+func TestReplayOfARefreshedTargetHasTheRefreshedEventAfterThePush(t *testing.T) {
+	p := previewPlan()
+	p = withResults(p, refreshed())
+
+	got := kinds(replay(p))
+
+	assert.Equal(t, []domain.EventKind{
+		domain.EventResolved, domain.EventTargetChecked, domain.EventTargetsChecked,
+		domain.EventTargetStarted, domain.EventCommit, domain.EventCommit, domain.EventPushed, domain.EventRefreshed,
+		domain.EventTargetDone, domain.EventDone,
+	}, got)
+}
