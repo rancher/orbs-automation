@@ -105,7 +105,7 @@ go-git cannot create linked worktrees or switch a checkout the way `git` does, s
 
 * **Templates are compiled in.** The commit message, body and trailers are generic templates in `internal/ship/templates`, written with `{name}` placeholders from a closed set (`templates.TextVars`). The body's `{changes}` is generated from what the strategy and the steps did, so it never claims a step that did not run. An unknown placeholder is a config error. Project-specific and bundle-shipped templates ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) are not designed until a project needs one.
 * **The run record** is one line in the body: the engineer's login locally, or the workflow run URL in CI.
-* **Labels, title and branch prefix** come from the consumer's `pullRequests` block. A label the repository lacks is a warning, and the PR is still created.
+* **Labels, title and branch prefix** come from the consumer's `pullRequests` block. A label the repository lacks is a warning, and the PR is still created. How labels are applied, and which are ever created, is in [METADATA](METADATA.md).
 * **Identity and signing** are the actor rules in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## Errors and exit codes
