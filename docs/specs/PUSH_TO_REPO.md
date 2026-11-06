@@ -41,6 +41,8 @@ The update dispatcher owns the lifecycle of one branch. A **strategy** is Go cod
 
 The lifecycle around the edit is a chain with the consumer outermost: the method's `preEdit` steps, then the edge's, the edit, the edge's `postEdit` steps, then the method's. The consumer's `postEdit` regenerates derived files, so it sees everything a producer's step did. Only steps whose `since` and `until` range holds the branch's line run, and a branch in no line gets every step with no range. A step failure stops the run as an error naming the phase and position, and a failed post-edit step still reports what the edit changed.
 
+**Commits follow the work.** The lifecycle is a series of units: each pre-edit step, the edit, each post-edit step. After each unit, if it changed files, exactly those changes are committed, and if it changed nothing there is no commit. So the SCC bump is two commits, the edit of `build.yaml` and then the files `generate` made, and a project with more steps between them gets a commit for each that changed something. This is the same as how an engineer would do it by hand, and it needs no per-project config: a strategy that is not `yamlBump`, or a step that is not `generate`, is just another unit. The dispatcher reports each unit as it finishes to a checkpoint callback, and `ship` supplies the callback that commits, so the dispatcher still knows nothing of git. The edit's commit has the message the preview shows, and a step's commit is "Run `<command>`", each with the trailers. A step that fails ends the run, and the branch is removed with every commit made so far.
+
 The dispatcher decides which steps run and in what order, and builds each step's environment (`GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH`, `GERO_SOURCE_REPO`, and `GERO_PARAM_<KEY>` for each input). A **step runner**, which `ship` supplies, runs the command: the process, its scrubbed environment through `execx`, and where the program comes from (`from`: the consumer's clone, the producer's repo at the release for an owned project, or the central bundle). The dispatcher starts no process, so its lifecycle is tested with a runner that records calls.
 
 ## What the scripts do today
@@ -64,8 +66,7 @@ Per target branch, newest first:
 
 1. **Preconditions.** The state check above. A missing artifact stops the whole fan-out before any write, and a branch problem skips only that branch.
 2. **Prepare the branch** in the engineer's clone ([below](#preparing-the-branch)).
-3. **Edit.** The lifecycle above, in that branch's directory. Nothing to change ends the branch as **already up to date**: no PR.
-4. **Commit** through `git`, so the engineer's hooks, identity and signing settings apply ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)).
+3. **Edit and commit.** The lifecycle above, in that branch's directory, with a commit after each unit that changed files, made through `git` so the engineer's hooks, identity and signing settings apply ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). No unit changing anything ends the branch as **already up to date**: no commit and no PR.
 5. **Push** to the push target, never forced. Fetching is from `upstream`.
 6. **PR.** Find open PRs with the same key. The same version is **already open** and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking it and is closed.
 7. **Report.** One line per branch: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
@@ -101,7 +102,7 @@ After the state check, each target that needs a PR gets a result, shown under th
 
 | Result | Meaning |
 |---|---|
-| `committed` | The commit is on the new branch in your clone (`--no-push`). The report names the branch, the commit, whether it was made in place or in a worktree and why, and the command to review it |
+| `committed` | The commits are on the new branch in your clone (`--no-push`), listed one per line. The report names the branch, whether it was made in place or in a worktree and why, and the command to review it |
 | `would commit` | A dry run made the commit in a temporary worktree, and removed it and the branch. The report shows the same detail |
 | `already up to date` | The edit and the steps changed nothing, so there is no commit and no branch |
 | `failed` | Preparing the branch, a step or the commit failed, with the reason and the step's phase and position. The work is aborted and the clone is as it was found |
@@ -134,6 +135,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 ## Not built yet
 
 * The push, the PR and superseding an older one, with `--yes` and the confirmation, and a plain run doing all of it.
+* The preview shows the edit's commit message and not the commits of the steps, which are only known once the steps have run (`TODO(step-commits)` in the preview). A way to name a step's commit, or fold it into the previous one, is the first knob to add if a project needs it.
 * The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
 * The check for open PRs the new one would supersede.
