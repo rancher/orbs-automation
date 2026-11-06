@@ -139,12 +139,12 @@ type Plan struct {
 // strategy; if any branch needs a PR it checks the release's images exist, once.
 // It writes nothing.
 func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, error) {
-	plan, _, err := check(ctx, ws, prober, in)
+	plan, _, err := check(ctx, ws, prober, in, nil)
 	return plan, err
 }
 
 // check is Check, and the resolution it was made from, which a run goes on to use.
-func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, resolution, error) {
+func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, sink Sink) (Plan, resolution, error) {
 	res, err := resolve(ctx, ws, in)
 	if err != nil {
 		return Plan{}, resolution{}, err

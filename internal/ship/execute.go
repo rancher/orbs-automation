@@ -56,8 +56,8 @@ var ErrNoClone = errors.New("no local clone of the consumer")
 //
 // A target that fails is reported as failed and the others go on. The plan is
 // returned with every error that comes after the check, so it can be reported.
-func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, ex *Executor) (Plan, error) {
-	plan, res, err := check(ctx, ws, prober, in)
+func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, ex *Executor, sink Sink) (Plan, error) {
+	plan, res, err := check(ctx, ws, prober, in, sink)
 	if err != nil || ex == nil || len(plan.Blockers) > 0 {
 		return plan, err
 	}

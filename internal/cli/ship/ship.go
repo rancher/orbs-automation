@@ -106,7 +106,7 @@ func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, e
 	if err := checkFormat(format); err != nil {
 		return "", err
 	}
-	plan, err := domain.Ship(ctx, ws, prober, in, ex)
+	plan, err := domain.Ship(ctx, ws, prober, in, ex, nil)
 	if errors.Is(err, workspace.ErrNotProject) {
 		return "", fmt.Errorf("%w: name the project to ship as the first argument", err)
 	}

@@ -97,7 +97,7 @@ func onlyResult(t *testing.T, p Plan) *TargetResult {
 func TestShipWithoutAnExecutorOnlyChecks(t *testing.T) {
 	ws, clone, _ := newShip(t)
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), nil)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), nil, nil)
 
 	require.NoError(t, err)
 	assert.Nil(t, plan.Targets[0].Result)
@@ -113,7 +113,7 @@ func branchExistsIn(t *testing.T, dir, name string) bool {
 func TestShipNoPushCommitsOnANewBranchInTheCloneAndGoesBack(t *testing.T) {
 	ws, clone, ex := newShip(t)
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
@@ -133,7 +133,7 @@ func TestShipDryRunCommitsInAWorktreeAndLeavesNothingBehind(t *testing.T) {
 	in := shipIn("release/v2.15")
 	in.DryRun = true
 
-	plan, err := Ship(bg, ws, &fakeProber{}, in, ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
@@ -153,7 +153,7 @@ func TestShipUsesAWorktreeForADirtyCloneAndKeepsTheBranch(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	put(t, clone, "build.yaml", "defaultSccOperatorImage: mine\n")
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
@@ -174,7 +174,7 @@ func TestShipMakesACommitForEachTargetAndFailsOnlyTheOneThatFails(t *testing.T) 
 	runGit(t, ws.up, "checkout", "--quiet", "main")
 	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn(""), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn(""), ex, nil)
 
 	require.NoError(t, err)
 	results := map[string]*TargetResult{}
@@ -199,7 +199,7 @@ func TestShipSkipsATargetThatIsAlreadyUpToDate(t *testing.T) {
 	runGit(t, ws.up, "commit", "--quiet", "-am", "already there")
 	runGit(t, ws.up, "checkout", "--quiet", "main")
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn(""), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn(""), ex, nil)
 
 	require.NoError(t, err)
 	byBranch := map[string]TargetPlan{}
@@ -216,7 +216,7 @@ func TestShipAMovedBranchIsAFailureThatSaysToRunAgain(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	ws.stale = map[string]string{"release/v2.15": strings.Repeat("a", 40)}
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
@@ -235,7 +235,7 @@ func TestShipARerunWithCommitsOnTheBranchIsAFailureNamingIt(t *testing.T) {
 	runGit(t, clone, "commit", "--quiet", "-m", "mine")
 	runGit(t, clone, "checkout", "--quiet", "main")
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
@@ -249,7 +249,7 @@ func TestShipMakesNoCommitWhenSomethingBlocksTheRelease(t *testing.T) {
 		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: registry.NotFound},
 	}}
 
-	plan, err := Ship(bg, ws, p, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, p, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, plan.Status)
@@ -261,7 +261,7 @@ func TestShipWithNoCloneIsAnErrorWhenThereIsAnythingToCommit(t *testing.T) {
 	ws, _, ex := newShip(t)
 	ws.cloneErr = ErrNoClone
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.ErrorIs(t, err, ErrNoClone)
 	assert.Equal(t, StatusReady, plan.Status, "the plan is still returned")
@@ -275,7 +275,7 @@ func TestShipWithNoCloneIsFineWhenEverythingIsUpToDate(t *testing.T) {
 	runGit(t, ws.up, "commit", "--quiet", "-am", "already there")
 	ws.cloneErr = errors.New("no clone")
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, plan.Status)
@@ -286,7 +286,7 @@ var _ updatedispatcher.StepRunner = steprun.Runner{}
 func TestShipRecordsTheCloneAndRemoteItMadeCommitsIn(t *testing.T) {
 	ws, clone, ex := newShip(t)
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, clone, plan.Clone)
@@ -296,7 +296,7 @@ func TestShipRecordsTheCloneAndRemoteItMadeCommitsIn(t *testing.T) {
 func TestShipRecordsNoCloneWhenItMadeNoCommits(t *testing.T) {
 	ws, _, _ := newShip(t)
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), nil)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), nil, nil)
 
 	require.NoError(t, err)
 	assert.Empty(t, plan.Clone)
@@ -307,7 +307,7 @@ func TestShipCommitsTheEditAndEachStepSeparatelyWithTheirOwnMessages(t *testing.
 	ws, clone, ex := newShip(t)
 	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
 
-	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex)
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("release/v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
