@@ -31,6 +31,8 @@ It runs first, reads from the host and not from any clone, and writes nothing. T
 6. Once, if any branch needs a PR, check the release's images exist ([IMAGES_EXIST](IMAGES_EXIST.md)).
 7. Look for open PRs the new one would supersede.
 
+The read half is shared with `gero repo status`, which traces what each consumer holds ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)): the branches a release goes to (`Route.BranchesFor`), a branch's head from the host's refs (`git.Refs.Branch`), and the value the strategy finds there (`Invocation.Check` over `updatedispatcher.HostTree`). Neither command reads a consumer's file by its own means.
+
 `--dry-run` is this check, and for the write steps it runs the same path and stops short of the first write.
 
 ## Applying a bump
