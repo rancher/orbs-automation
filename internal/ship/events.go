@@ -23,8 +23,6 @@ const (
 	EventCommit EventKind = "commit"
 	// EventDecided: what to do about the PR of a branch is known: open one, one
 	// is already open, or a newer one blocks it. Decision is it.
-	//
-	// STUB: not emitted until a later commit.
 	EventDecided EventKind = "decided"
 	// EventPushed: the branch is on the remote, named in Remote.
 	EventPushed EventKind = "pushed"

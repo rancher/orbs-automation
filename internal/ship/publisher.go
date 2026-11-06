@@ -43,8 +43,6 @@ type Publisher struct {
 // that order, so a failure leaves the older PRs as they were. res is updated: a
 // failure to push or to open the PR fails the target, and one to label or to close
 // an older PR is a warning. Each step is reported to sink as it is done.
-//
-// The events are STUBBED until a later commit: none are emitted yet.
 func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, m Marker, dec Publish, res *TargetResult, sink Sink) {
 	branch := tp.Preview.Branch
 	if err := p.Git.Push(ctx, p.Clone, p.Push.Remote, branch); err != nil {
@@ -52,6 +50,7 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 		return
 	}
 	res.Pushed = p.Push.Remote
+	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Remote: p.Push.Remote})
 	head := branch
 	if p.Push.Role == RoleFork {
 		head = p.HeadOwner + ":" + branch
@@ -64,6 +63,7 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 		return
 	}
 	res.Status, res.PR = ResultOpened, &PRRef{Number: created.Number, URL: created.URL}
+	emit(sink, Event{Kind: EventPROpened, Branch: tp.Branch, PR: res.PR})
 
 	p.label(ctx, consumer, created.Number, tp.Preview.Labels, res)
 	for _, older := range dec.Supersede {
@@ -76,7 +76,9 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 			res.Warnings = append(res.Warnings, fmt.Sprintf("could not close #%d: %v", older.Number, err))
 			continue
 		}
-		res.Superseded = append(res.Superseded, PRRef{Number: older.Number, URL: older.URL})
+		ref := PRRef{Number: older.Number, URL: older.URL}
+		res.Superseded = append(res.Superseded, ref)
+		emit(sink, Event{Kind: EventSuperseded, Branch: tp.Branch, PR: &ref})
 	}
 }
 
