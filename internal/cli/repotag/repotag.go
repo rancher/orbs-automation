@@ -18,6 +18,9 @@ import (
 // terminal to ask on and no --yes.
 var ErrNeedsApproval = errors.New("this makes a tag and needs approval, but there is no terminal to ask on: pass --yes")
 
+// ErrDeclined is returned when the answer to the question was no.
+var ErrDeclined = errors.New("declined: nothing was tagged")
+
 // ErrNoTag is returned when no tag was named. Choosing one is not built yet.
 var ErrNoTag = errors.New("name the tag to make: choosing one is not built yet")
 
