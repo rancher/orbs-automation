@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -363,4 +364,115 @@ func mustPrepare(t *testing.T, req PrepareRequest) *Work {
 	require.NotNil(t, w)
 	require.DirExists(t, w.Dir)
 	return w
+}
+
+// ours makes a branch of the engineer's clone that gero made: from base, with
+// commits that have the trailer and the author the clone is set to commit as.
+func ours(t *testing.T, clone, name, base string, subjects ...string) string {
+	t.Helper()
+	runGit(t, clone, "checkout", "--quiet", "-b", name, base)
+	for i, subject := range subjects {
+		put(t, clone, "made-"+strconv.Itoa(i)+".txt", subject)
+		runGit(t, clone, "add", ".")
+		runGit(t, clone, "commit", "--quiet", "--author=Dev <dev@example.com>", "-m", subject+"\n\nAutomation: gero ship")
+	}
+	tip := runGit(t, clone, "rev-parse", "HEAD")
+	runGit(t, clone, "checkout", "--quiet", "main")
+	return tip
+}
+
+func TestPrepareReusesABranchOfOursThatIsCurrent(t *testing.T) {
+	up := remote(t)
+	clone := engineer(t, up)
+	req := request(t, up, clone)
+	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
+	tip := ours(t, clone, "bot/x-v1", req.Base, "Update scc-operator", "Run generate")
+
+	w, err := Prepare(bg, GitCLI{}, req)
+
+	require.NoError(t, err)
+	require.NotNil(t, w)
+	assert.True(t, w.Reused)
+	assert.Equal(t, Existing, w.Place)
+	require.Len(t, w.Existing, 2)
+	assert.Equal(t, "Update scc-operator", w.Existing[0].Subject)
+	assert.Equal(t, "Run generate", w.Existing[1].Subject)
+	assert.Equal(t, tip, runGit(t, clone, "rev-parse", "bot/x-v1"), "not touched")
+	assert.Equal(t, "main", current(t, clone))
+	entries, readErr := os.ReadDir(req.TempDir)
+	require.NoError(t, readErr)
+	assert.Empty(t, entries, "no worktree for work that is not done")
+}
+
+func TestPrepareRebuildsABranchOfOursWhenTheTargetHasMovedOn(t *testing.T) {
+	up := remote(t)
+	clone := engineer(t, up)
+	old := request(t, up, clone)
+	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
+	oldTip := ours(t, clone, "bot/x-v1", old.Base, "Update scc-operator")
+	runGit(t, up, "checkout", "--quiet", "release/v1")
+	put(t, up, "later.txt", "x")
+	runGit(t, up, "add", ".")
+	runGit(t, up, "commit", "--quiet", "-m", "later")
+	runGit(t, up, "checkout", "--quiet", "main")
+	req := request(t, up, clone) // the base is the new head
+
+	w, err := Prepare(bg, GitCLI{}, req)
+
+	require.NoError(t, err)
+	assert.False(t, w.Reused)
+	assert.Equal(t, req.Base, runGit(t, w.Dir, "rev-parse", "HEAD"), "started again at the head of the target")
+	assert.NotEqual(t, oldTip, runGit(t, w.Dir, "rev-parse", "HEAD"))
+}
+
+func TestPrepareRefusesABranchWithAnotherAuthorsCommitsEvenWithTheTrailer(t *testing.T) {
+	up := remote(t)
+	clone := engineer(t, up)
+	req := request(t, up, clone)
+	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
+	runGit(t, clone, "checkout", "--quiet", "-b", "bot/x-v1", req.Base)
+	put(t, clone, "theirs.txt", "x")
+	runGit(t, clone, "add", ".")
+	runGit(t, clone, "commit", "--quiet", "--author=Someone <someone@example.com>", "-m", "theirs\n\nAutomation: gero ship")
+	runGit(t, clone, "checkout", "--quiet", "main")
+
+	w, err := Prepare(bg, GitCLI{}, req)
+
+	require.ErrorIs(t, err, ErrBranchExists)
+	assert.Nil(t, w)
+	assert.Contains(t, err.Error(), "someone@example.com")
+}
+
+func TestPrepareRebuildsWhenAskedEvenIfTheBranchIsCurrent(t *testing.T) {
+	up := remote(t)
+	clone := engineer(t, up)
+	req := request(t, up, clone)
+	req.Rebuild = true
+	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
+	oldTip := ours(t, clone, "bot/x-v1", req.Base, "Update scc-operator")
+
+	w, err := Prepare(bg, GitCLI{}, req)
+
+	require.NoError(t, err)
+	assert.False(t, w.Reused)
+	assert.Equal(t, req.Base, runGit(t, w.Dir, "rev-parse", "HEAD"), "from the base, with none of the old commits")
+	assert.NotEqual(t, oldTip, runGit(t, w.Dir, "rev-parse", "HEAD"))
+}
+
+func TestPrepareReusingNeedsNoWorktreeEvenInADryRunAndNeverDeletesTheBranch(t *testing.T) {
+	up := remote(t)
+	clone := engineer(t, up)
+	req := request(t, up, clone)
+	req.DryRun = true
+	runGit(t, clone, "fetch", "--quiet", "upstream", "release/v1")
+	tip := ours(t, clone, "bot/x-v1", req.Base, "Update scc-operator")
+
+	w, err := Prepare(bg, GitCLI{}, req)
+	require.NoError(t, err)
+	require.True(t, w.Reused)
+
+	require.NoError(t, w.Finish(bg, false), "a dry run asks for the branch to go, but this one was there before it")
+	assert.Equal(t, tip, runGit(t, clone, "rev-parse", "bot/x-v1"))
+	require.NoError(t, w.Abort(bg))
+	assert.Equal(t, tip, runGit(t, clone, "rev-parse", "bot/x-v1"), "nor does an abort")
 }

@@ -209,3 +209,43 @@ func TestShipEmitsTheStepsOfPublishingInOrder(t *testing.T) {
 	require.NotNil(t, decided.Decision)
 	assert.Equal(t, PublishCreate, decided.Decision.Action)
 }
+
+func TestShipPublishesTheBranchAnEarlierNoPushRunLeftWithoutBuildingItAgain(t *testing.T) {
+	ws, clone, ex, _, lg := publishing(t)
+	noPush := realRun()
+	noPush.NoPush = true
+	first, err := Ship(bg, ws, &fakeProber{}, noPush, ex, nil)
+	require.NoError(t, err)
+	made := onlyResult(t, first)
+	require.Equal(t, ResultCommitted, made.Status)
+	tip := runGit(t, clone, "rev-parse", botV215)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status, "the branch from the first run is what was published")
+	assert.Equal(t, made.Commits, res.Commits, "the same commits, not built again")
+	assert.Equal(t, tip, runGit(t, clone, "rev-parse", botV215))
+	assert.Equal(t, tip, runGit(t, ws.up, "rev-parse", botV215), "and it is on the remote")
+	assert.True(t, lg.has("create"))
+	assert.Equal(t, "main", current(t, clone))
+}
+
+func TestShipARerunOfANoPushRunReportsTheExistingBranch(t *testing.T) {
+	ws, clone, ex, _, _ := publishing(t)
+	in := realRun()
+	in.NoPush = true
+	first, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+	require.NoError(t, err)
+	tip := runGit(t, clone, "rev-parse", botV215)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultCommitted, res.Status)
+	assert.Equal(t, Existing, res.Place)
+	assert.Equal(t, onlyResult(t, first).Commits, res.Commits)
+	assert.Equal(t, tip, runGit(t, clone, "rev-parse", botV215))
+}
