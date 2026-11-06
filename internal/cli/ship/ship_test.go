@@ -482,3 +482,29 @@ func TestRunWithoutAnExecutorOnlyChecks(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "Nothing was written")
 }
+
+// TestRenderTextSectionsFollowTheOrderOfTheProcessing pins the order a reader
+// follows: what each branch holds, then what stands in the way, the images, what
+// the PR would be, and last what was done and where to see it.
+func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	p.Warnings = []string{"image rancher/x is not on Prime production"}
+	p.Targets[0].Warnings = []string{"this is a downgrade"}
+	p.Images = &registry.Report{Rows: []registry.Row{{Image: "rancher/scc-operator", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/scc-operator:v0.5.3"}}}
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+
+	out := renderText(p, false)
+
+	order := []string{
+		"Ship rancher/scc-operator", "Targets", "Warning: image rancher/x", "Warning (release/v2.15): this is a downgrade",
+		"Images", "\nPR\n", "Commits", "Review:", "No push: the commits are on branches",
+	}
+	last := -1
+	for _, section := range order {
+		at := strings.Index(out, section)
+		require.GreaterOrEqual(t, at, 0, "%q is in the output:\n%s", section, out)
+		assert.Greater(t, at, last, "%q comes after the one before it", section)
+		last = at
+	}
+}
