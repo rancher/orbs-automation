@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/execx"
@@ -93,7 +94,21 @@ func BranchCommit(ctx context.Context, dir, branch string) (string, bool, error)
 // from (`git rev-list --count from..to`). It is false when the clone lacks
 // either commit, so the answer is unknown and not zero.
 func CountCommits(ctx context.Context, dir, from, to string) (int, bool, error) {
-	return 0, false, nil
+	for _, c := range []string{from, to} {
+		has, err := HasCommit(ctx, dir, c)
+		if err != nil || !has {
+			return 0, false, err
+		}
+	}
+	out, err := inDir(ctx, dir, "rev-list", "--count", from+".."+to)
+	if err != nil {
+		return 0, false, err
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, false, fmt.Errorf("git rev-list: count %q: %w", strings.TrimSpace(out), err)
+	}
+	return n, true, nil
 }
 
 // State is what a clone is in, as far as starting a branch in it is concerned.
