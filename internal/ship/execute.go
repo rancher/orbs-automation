@@ -7,6 +7,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
@@ -408,7 +409,7 @@ func finish(result *TargetResult, err error) *TargetResult {
 // refresh rebuilds an already open PR of the actor's and replaces its branch when
 // that would change it. It only does so for a branch that is the actor's to
 // change: the PR's head is in the repository this run pushes to, under the name
-// this run would use, and every commit on it is ours (commitsAreOurs). Otherwise
+// this run would use, and every commit on it is ours (git.CommitsAreOurs). Otherwise
 // result.Note says which condition failed, and nothing is changed.
 //
 // The new branch is built from the current head of the target on a scratch
@@ -463,7 +464,7 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		skip("%v", err)
 		return
 	}
-	if ours, why := commitsAreOurs(facts, email); !ours {
+	if ours, why := git.CommitsAreOurs(facts, email); !ours {
 		skip("%s", why)
 		return
 	}

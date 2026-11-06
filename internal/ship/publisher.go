@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/github/pulls"
 )
 
@@ -124,7 +125,7 @@ func (p Publisher) pushBranch(ctx context.Context, tp TargetPlan) error {
 	if err != nil {
 		return plain()
 	}
-	if ours, why := commitsAreOurs(facts, email); !ours {
+	if ours, why := git.CommitsAreOurs(facts, email); !ours {
 		return fmt.Errorf("%s on %s has commits that are not ours, so it is not replaced: %s", branch, remote, why)
 	}
 	if !p.Refresh {

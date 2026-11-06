@@ -8,8 +8,12 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
 )
+
+// BranchCommit is a commit on a branch, as far as telling whose it is.
+type BranchCommit = git.BranchCommit
 
 var (
 	// ErrBaseMoved is returned by Prepare when the branch fetched from the
@@ -241,7 +245,7 @@ func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
 
 // settleExisting decides what to do about a branch of the name that is already
 // there, at commit. One that is at the base itself holds nothing, and goes. One
-// whose commits are all ours (see commitsAreOurs) is the actor's own earlier work:
+// whose commits are all ours (see git.CommitsAreOurs) is the actor's own earlier work:
 // when it is based on the current head of the target it is reused as it is, which
 // is also how a run whose push failed is resumed, and otherwise, or when a rebuild
 // was asked for, it goes and is built again. One with a commit that is not ours is
@@ -261,7 +265,7 @@ func settleExisting(ctx context.Context, g Git, req PrepareRequest, commit strin
 		if err != nil {
 			return nil, err
 		}
-		if ours, why := commitsAreOurs(facts, email); !ours {
+		if ours, why := git.CommitsAreOurs(facts, email); !ours {
 			return nil, fmt.Errorf("%w: %s is at %s, and %s: delete it or keep it, it is not ours to change", ErrBranchExists, req.Branch, short(commit), why)
 		}
 		if mergeBase == req.Base && !req.Rebuild {
