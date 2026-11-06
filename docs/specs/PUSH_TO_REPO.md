@@ -79,7 +79,7 @@ Per target branch, newest first:
 The consumer's clone is found as for every command ([WORKSPACE](WORKSPACE.md#resolving-repo-paths)). With none, the command fails and says to clone it or set `repos.paths.<slug>`; it never clones for itself. Each target branch is prepared the same way:
 
 1. **Fetch** the one upstream branch the state check read: objects only, so no local branch and nothing in the working tree moves. The new branch starts at the commit the state check read. If the branch has moved since, the check is read again before anything is written.
-2. **Pick where to work**, once per run from the state the clone is in:
+2. **Pick where to work**, for each target from the state the clone is in (an untracked file can be in the way of one branch and not another), and report why when it is a worktree:
    * **In place**, when the clone is clean and this is not a dry run: `git switch -c <branch> <commit>` in the engineer's own checkout.
    * **A temporary worktree** otherwise: `git worktree add -b <branch> <dir> <commit>` under the temp directory. The engineer's checkout is not touched at all. A dry run always works here, and removes the branch with it.
 3. **Clean** means: HEAD is a branch (not detached), no merge, rebase, cherry-pick or bisect is in progress, and no tracked file is staged, modified or deleted. Untracked files are allowed, unless one would be overwritten by the target branch's tree, which sends the run to a worktree instead.
