@@ -1,6 +1,6 @@
 # Ship (push to repo)
 
-**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`, and so is the update dispatcher it uses, and the step runner (`internal/steprun`). Preparing the branch, the commit, the push and the PR are not built.
+**Status:** draft. The state check, which writes nothing, is implemented as `gero ship`, and so is the update dispatcher it uses, and the step runner (`internal/steprun`). Preparing the branch and the commit are built, behind `--no-push` and `--dry-run`. The push and the PR are not.
 
 `gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md).
 
@@ -95,6 +95,21 @@ go-git cannot create linked worktrees or switch a checkout the way `git` does, s
 
 `gero ci:ship` is the same bump from a workflow, as the bot. Its shape is not decided on purpose. Either `gero` does the work itself (makes a shallow temporary clone with the workflow's token, resolves the bot identity, pushes to the upstream), or workflow steps do the setup first and hand `gero` the environment and config to work in. Both use the same backends, and only the loop and the setup differ. The decision waits until the local command works, and the differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
+## What a run reports
+
+After the state check, each target that needs a PR gets a result, shown under the targets and carried in `--json`:
+
+| Result | Meaning |
+|---|---|
+| `committed` | The commit is on the new branch in your clone (`--no-push`). The report names the branch, the commit, whether it was made in place or in a worktree and why, and the command to review it |
+| `would commit` | A dry run made the commit in a temporary worktree, and removed it and the branch. The report shows the same detail |
+| `already up to date` | The edit and the steps changed nothing, so there is no commit and no branch |
+| `failed` | Preparing the branch, a step or the commit failed, with the reason and the step's phase and position. The work is aborted and the clone is as it was found |
+
+A failure in one target does not stop the others, and the exit code is 1 when any target failed or was blocked. A branch that moved since the check is a failure that says to run again.
+
+Until the push is built, a run with neither flag stops after the state check and says so. The one confirmation of the write-command contract comes with the push, since until then nothing leaves the machine.
+
 ## Branches and PR identity
 
 * **Name.** `<prefix><tag>-<target>`, for example `bot/scc-operator-v0.5.3-v2.15`, with `release/` stripped from the target and no timestamp. The prefix is a template: the user's `branchPrefix` replaces the consumer's `pullRequests.branchPrefix` whole, which replaces the default `bot/{source}-`. The tag and target are always appended, so the name is unique for the bump whatever the prefix.
@@ -118,7 +133,8 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* Preparing the branch, the commit, the push, the PR and superseding an older one, with `--yes` and the confirmation.
+* The push, the PR and superseding an older one, with `--yes` and the confirmation, and a plain run doing all of it.
+* The `signCommits` key (the commit's `Sign` option exists), and the files a commit changed in the report.
 * `gero ci:ship`.
 * The check for open PRs the new one would supersede.
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
