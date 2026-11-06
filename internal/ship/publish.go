@@ -1,6 +1,9 @@
 package ship
 
-import "github.com/rancher/orbs-automation/internal/github/pulls"
+import (
+	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/semver"
+)
 
 // PublishAction is what to do about the PR of one target.
 type PublishAction string
@@ -33,12 +36,63 @@ type Publish struct {
 }
 
 // decidePublish decides what to do for a bump, from the open PRs found for its
-// base branch. Only PRs with the bump's key (source, consumer and target) count,
-// and only those opened by me, the login that is running, are the actor's own to
-// close; the others are never touched and do not block, though a same or newer
-// one is reported.
-//
-// STUB: always create, touching nothing, until a later commit.
+// base branch, newest first. Only PRs with the bump's key (source, consumer and
+// target) count, and only those opened by me, the login that is running, are the
+// actor's own to close; the others are never touched and do not block, though a
+// same or newer one is reported. A version that cannot be ordered against this
+// one is not acted on.
 func decidePublish(open []pulls.PR, me string, m Marker) Publish {
-	return Publish{Action: PublishCreate}
+	var out Publish
+	var older []pulls.PR
+	for _, p := range open {
+		found, ok := ParseMarker(p.Body)
+		if !ok || !found.SameBump(m) {
+			continue
+		}
+		order, comparable := compareVersions(found.Version, m.Version)
+		if p.Author != me {
+			if comparable && order >= 0 || !comparable && found.Version == m.Version {
+				out.Also = append(out.Also, p)
+			}
+			continue
+		}
+		switch {
+		case !comparable && found.Version != m.Version:
+			// Not ordered against this release, so not closed on a guess.
+		case order > 0:
+			if out.Newer == nil {
+				newer := p
+				out.Newer = &newer
+			}
+		case order == 0:
+			if out.Open == nil {
+				open := p
+				out.Open = &open
+			} else {
+				older = append(older, p) // a duplicate of the one kept
+			}
+		default:
+			older = append(older, p)
+		}
+	}
+	switch {
+	case out.Newer != nil:
+		out.Action = PublishBlocked
+	case out.Open != nil:
+		out.Action, out.Supersede = PublishAlreadyOpen, older
+	default:
+		out.Action, out.Supersede = PublishCreate, older
+	}
+	return out
+}
+
+// compareVersions orders two tags by SemVer precedence: negative when a is older
+// than b. ok is false when either is not a version.
+func compareVersions(a, b string) (order int, ok bool) {
+	va, okA := semver.Parse(a)
+	vb, okB := semver.Parse(b)
+	if !okA || !okB {
+		return 0, false
+	}
+	return semver.Compare(va, vb), true
 }

@@ -173,3 +173,13 @@ func TestDecideAVersionThatIsNotSemverIsLeftAlone(t *testing.T) {
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{102}, numbers(got.Supersede), "what cannot be ordered is not closed on a guess")
 }
+
+func TestDecideWhoIsRunningDecidesWhichPRsAreMine(t *testing.T) {
+	open := []pulls.PR{pr(120, "rancher-bot[bot]", bump("v0.5.3")), pr(101, me, bump("v0.5.3"))}
+
+	asDan := decidePublish(open, me, bump("v0.5.4"))
+	asTheBot := decidePublish(open, "rancher-bot[bot]", bump("v0.5.4"))
+
+	assert.Equal(t, []int{101}, numbers(asDan.Supersede))
+	assert.Equal(t, []int{120}, numbers(asTheBot.Supersede), "in CI the bot's own are the eligible ones")
+}
