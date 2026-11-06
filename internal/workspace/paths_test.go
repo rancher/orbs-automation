@@ -337,3 +337,57 @@ func TestRepoPath(t *testing.T) {
 		assert.Equal(t, "rancher/missing", got.Slug)
 	})
 }
+
+func TestConfiguredRepoPathIgnoresTheWorkingDirectory(t *testing.T) {
+	t.Run("a repos.paths entry", func(t *testing.T) {
+		ws := workspaceFor(t, t.TempDir(), nil, map[string]string{rancherSlug: "/src/rancher-src"})
+
+		got, err := ws.ConfiguredRepoPath(rancherSlug)
+
+		require.NoError(t, err)
+		assert.Equal(t, RepoPath{Slug: rancherSlug, Path: "/src/rancher-src", Source: PathSettings}, got)
+	})
+
+	t.Run("a clone under a repos.search directory", func(t *testing.T) {
+		search := t.TempDir()
+		clones(t, search, map[string]map[string]string{"rancher": {"origin": upstreamURL}})
+
+		got, err := workspaceFor(t, t.TempDir(), []string{search}, nil).ConfiguredRepoPath(rancherSlug)
+
+		require.NoError(t, err)
+		assert.Equal(t, PathScan, got.Source)
+		assert.Equal(t, filepath.Join(search, "rancher"), got.Path)
+	})
+
+	t.Run("the repository you are in is not a match", func(t *testing.T) {
+		dir := t.TempDir()
+		repotest.NewRepoAt(t, dir, map[string]string{"origin": upstreamURL})
+
+		_, err := workspaceFor(t, dir, nil, nil).ConfiguredRepoPath(rancherSlug)
+
+		assert.ErrorIs(t, err, ErrRepoNotFound)
+	})
+
+	t.Run("nor is a sibling of it", func(t *testing.T) {
+		parent := t.TempDir()
+		here := filepath.Join(parent, "scc-operator")
+		repotest.NewRepoAt(t, here, map[string]string{"origin": "https://github.com/rancher/scc-operator.git"})
+		require.NoError(t, os.Mkdir(filepath.Join(parent, "rancher"), 0o755))
+
+		_, err := workspaceFor(t, here, nil, nil).ConfiguredRepoPath(rancherSlug)
+
+		assert.ErrorIs(t, err, ErrRepoNotFound)
+	})
+
+	t.Run("several clones are ambiguous", func(t *testing.T) {
+		search := t.TempDir()
+		clones(t, search, map[string]map[string]string{
+			"a": {"origin": upstreamURL}, "b": {"origin": upstreamURL},
+		})
+
+		got, err := workspaceFor(t, t.TempDir(), []string{search}, nil).ConfiguredRepoPath(rancherSlug)
+
+		require.ErrorIs(t, err, ErrRepoAmbiguous)
+		assert.Len(t, got.Candidates, 2)
+	})
+}

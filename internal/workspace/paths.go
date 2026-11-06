@@ -73,12 +73,7 @@ func (w *Workspace) repoPath(slug string, here *clone, scan func() []clone) Repo
 	if here != nil && here.matches(slug) == strong {
 		return RepoPath{Slug: slug, Path: here.path, Source: PathCwd}
 	}
-	for key, p := range w.settings.Repos.Paths {
-		if strings.EqualFold(key, slug) {
-			return RepoPath{Slug: slug, Path: p, Source: PathSettings}
-		}
-	}
-	if rp, ok := fromScan(slug, scan()); ok {
+	if rp, ok := w.configuredPath(slug, scan); ok {
 		return rp
 	}
 	if here != nil {
@@ -89,6 +84,29 @@ func (w *Workspace) repoPath(slug string, here *clone, scan func() []clone) Repo
 		}
 	}
 	return RepoPath{Slug: slug, Err: ErrRepoNotFound}
+}
+
+// ConfiguredRepoPath resolves one slug by the user's own config alone: a
+// repos.paths entry, else a clone found under a repos.search directory. The
+// working directory plays no part, so the answer is the same wherever it is
+// asked. A slug that neither finds, or that several clones match equally, is
+// ErrRepoNotFound or ErrRepoAmbiguous.
+func (w *Workspace) ConfiguredRepoPath(slug string) (RepoPath, error) {
+	rp, ok := w.configuredPath(slug, func() []clone { return scanClones(w.settings.Repos.Search) })
+	if !ok {
+		rp = RepoPath{Slug: slug, Err: ErrRepoNotFound}
+	}
+	return rp, rp.Err
+}
+
+// configuredPath applies the two rules that come from the user file.
+func (w *Workspace) configuredPath(slug string, scan func() []clone) (RepoPath, bool) {
+	for key, p := range w.settings.Repos.Paths {
+		if strings.EqualFold(key, slug) {
+			return RepoPath{Slug: slug, Path: p, Source: PathSettings}, true
+		}
+	}
+	return fromScan(slug, scan())
 }
 
 // fromScan picks the clone for slug: the only strong match, else the only weak

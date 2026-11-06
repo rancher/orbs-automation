@@ -56,6 +56,8 @@ Rules:
 
 **Order for one slug:** the CWD repo if one of its remotes is the slug (a fork alone does not count), then `repos.paths`, then the `repos.search` scan, then the flat sibling. A `repos.paths` entry is returned as written, without checking that it exists. The sibling is `<parent of the CWD repo's root>/<name>` and counts only when that directory exists and the working directory is in a repo. Paths derived from the CWD repo's root come back with symlinks resolved, as go-git reports them (`/tmp` is `/private/tmp` on macOS).
 
+**From the user file alone.** `Workspace.ConfiguredRepoPath` applies only the `repos.paths` and scan rules, so the answer does not depend on where it is asked. `gero cd` uses it: being in a repository, or next to one, must not change where `cd <project>` goes. It adds one check the resolver lacks, that the path is a directory.
+
 **The scan.** Each `repos.search` directory is scanned to depth 2 for clones. A directory is a clone if it contains a `.git` directory (worktrees and submodules, where `.git` is a file, are not found), and the scan does not look inside a clone. Remote URLs are read from the repository config through `internal/git/repo` (go-git, no `git` subprocess) and parsed to `owner/name` slugs (`git.SlugFromURL`: https, ssh and scp-like URLs, host not checked, local paths ignored). Directory names are never used for matching, so no layout is assumed, and slugs compare case-insensitively.
 
 * A clone with a remote that is the slug itself, whatever the remote is called, is a **strong** match.
