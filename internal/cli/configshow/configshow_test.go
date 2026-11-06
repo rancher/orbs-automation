@@ -91,6 +91,18 @@ func TestEntries(t *testing.T) {
 			},
 		},
 		{
+			name: "pushTo, the default and per repo",
+			file: "pushTo: fork\nrepos:\n  overrides:\n    rancher/rancher:\n      pushTo: upstream\n",
+			want: map[string]Entry{
+				"pushTo":                                 {"pushTo", "fork", "file"},
+				"repos.overrides.rancher/rancher.pushTo": {"repos.overrides.rancher/rancher.pushTo", "upstream", "file"},
+			},
+		},
+		{
+			name: "pushTo unset",
+			want: map[string]Entry{"pushTo": {"pushTo", "", "default"}},
+		},
+		{
 			name: "repos sections",
 			file: "repos:\n  search: [/src]\n  paths:\n    rancher/rancher: /r\n  overrides:\n    rancher/scc-operator:\n      upstream: rancher\n",
 			want: map[string]Entry{

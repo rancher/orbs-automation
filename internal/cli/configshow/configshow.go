@@ -36,6 +36,7 @@ var hints = map[string]string{
 	"fork":         "inferred from remotes",
 	"githubUser":   "inferred from the fork remote",
 	"branchPrefix": "none",
+	"pushTo":       "none: the fork when one is set, else the upstream",
 }
 
 // Entries flattens s into one Entry per setting, in display order: the user
@@ -57,6 +58,7 @@ func Entries(s clicfg.Settings, dir workspace.ConfigDir) []Entry {
 		entry(s, "fork", s.Fork),
 		entry(s, "githubUser", s.GitHubUser),
 		entry(s, "branchPrefix", s.BranchPrefix),
+		entry(s, "pushTo", s.PushTo),
 	}
 	if len(s.Repos.Search) > 0 {
 		es = append(es, Entry{"repos.search", strings.Join(s.Repos.Search, ","), clicfg.SourceFile.String()})
@@ -65,7 +67,13 @@ func Entries(s clicfg.Settings, dir workspace.ConfigDir) []Entry {
 		es = append(es, Entry{"repos.paths." + slug, s.Repos.Paths[slug], clicfg.SourceFile.String()})
 	}
 	for _, slug := range sortedKeys(s.Repos.Overrides) {
-		es = append(es, Entry{"repos.overrides." + slug + ".upstream", s.Repos.Overrides[slug].Upstream, clicfg.SourceFile.String()})
+		o := s.Repos.Overrides[slug]
+		if o.Upstream != "" {
+			es = append(es, Entry{"repos.overrides." + slug + ".upstream", o.Upstream, clicfg.SourceFile.String()})
+		}
+		if o.PushTo != "" {
+			es = append(es, Entry{"repos.overrides." + slug + ".pushTo", o.PushTo, clicfg.SourceFile.String()})
+		}
 	}
 	return es
 }
