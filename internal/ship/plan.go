@@ -127,6 +127,11 @@ type Plan struct {
 	Blockers []string         `json:"blockers,omitempty"` // in the way of the whole release
 	Images   *registry.Report `json:"images,omitempty"`   // checked once, and only when some target needs a PR
 	Warnings []string         `json:"warnings,omitempty"`
+	// Clone and Remote are the engineer's clone of the consumer and its upstream
+	// remote, set by Ship when it made commits, so the report can say how to
+	// review them.
+	Clone  string `json:"clone,omitempty"`
+	Remote string `json:"remote,omitempty"`
 }
 
 // Check runs the state check for in. It resolves the release, finds the
