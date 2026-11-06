@@ -336,3 +336,38 @@ func Discard(ctx context.Context, dir string, created []string) error {
 	_, err := inDir(ctx, dir, append([]string{"clean", "--force", "--quiet", "--"}, created...)...)
 	return err
 }
+
+// CommitFact is what a commit says about who made it and what it is.
+type CommitFact struct {
+	Hash        string
+	AuthorEmail string
+	Message     string // the whole message, with its trailers
+}
+
+// MergeBase returns the best common ancestor of two commits: where a branch
+// left the branch it was made from.
+//
+// STUB: nothing until a later commit.
+func MergeBase(ctx context.Context, dir, a, b string) (string, error) { return "", nil }
+
+// CommitsSince lists the commits reachable from tip and not from base, oldest
+// first: what a branch added.
+//
+// STUB: none until a later commit.
+func CommitsSince(ctx context.Context, dir, base, tip string) ([]CommitFact, error) { return nil, nil }
+
+// ChangeFingerprint identifies the change tip makes to base, so two branches can
+// be compared by what they do and not by the trees they sit on, which differ
+// wherever the branch they came from has moved. It is a hash of the diff with no
+// context lines, and without what depends on where the change is or on what
+// surrounds it: the blob ids and the positions of the hunks.
+//
+// STUB: empty until a later commit.
+func ChangeFingerprint(ctx context.Context, dir, base, tip string) (string, error) { return "", nil }
+
+// ConfigIn returns what git would use for key in the clone in dir, or "" when it
+// is not set: the clone's own settings, then the user's and the system's. It is
+// how to know the identity a commit made there would have.
+//
+// STUB: empty until a later commit.
+func ConfigIn(ctx context.Context, dir, key string) (string, error) { return "", nil }
