@@ -348,3 +348,65 @@ func TestRoot(t *testing.T) {
 		})
 	}
 }
+
+func TestBranchCommit(t *testing.T) {
+	requireGit(t)
+	r := newRepo(t)
+	c := r.commit("one", 0)
+	head, err := r.repo.Head()
+	require.NoError(t, err)
+	repo, err := Open(r.dir)
+	require.NoError(t, err)
+
+	got, found, err := repo.BranchCommit(head.Name().Short())
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, c.String(), got)
+	_, found, err = repo.BranchCommit("nope")
+	require.NoError(t, err)
+	assert.False(t, found)
+}
+
+func TestCount(t *testing.T) {
+	requireGit(t)
+	r := newRepo(t)
+	one := r.commit("one", 0)
+	r.commit("two", time.Minute)
+	three := r.commit("three", 2*time.Minute)
+	repo, err := Open(r.dir)
+	require.NoError(t, err)
+
+	n, known, err := repo.Count(one.String(), three.String())
+	require.NoError(t, err)
+	assert.True(t, known)
+	assert.Equal(t, 2, n)
+	n, known, err = repo.Count(three.String(), one.String())
+	require.NoError(t, err)
+	assert.True(t, known)
+	assert.Zero(t, n)
+	_, known, err = repo.Count(one.String(), strings.Repeat("a", 40))
+	require.NoError(t, err)
+	assert.False(t, known, "a commit the clone lacks is unknown, not zero")
+}
+
+func TestClean(t *testing.T) {
+	requireGit(t)
+	r := newRepo(t)
+	r.commit("one", 0)
+	repo, err := Open(r.dir)
+	require.NoError(t, err)
+
+	clean, err := repo.Clean()
+	require.NoError(t, err)
+	assert.True(t, clean)
+
+	require.NoError(t, os.WriteFile(filepath.Join(r.dir, "untracked.txt"), []byte("x"), 0o600))
+	clean, err = repo.Clean()
+	require.NoError(t, err)
+	assert.True(t, clean, "an untracked file alone is not a change")
+
+	require.NoError(t, os.WriteFile(filepath.Join(r.dir, "f.txt"), []byte("changed"), 0o600))
+	clean, err = repo.Clean()
+	require.NoError(t, err)
+	assert.False(t, clean, "a tracked file is changed")
+}
