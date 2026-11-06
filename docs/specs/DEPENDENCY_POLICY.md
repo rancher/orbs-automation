@@ -22,9 +22,11 @@
 * **Integration-test dependencies live in the `test/integration` sub-module**, never in the root `go.mod` ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#5-integration-tests-live-in-a-sub-module)). The same rule applies: each one gets an entry here saying what the standard library would cost us. None approved yet.
 * **Running another program (`os/exec`) is an escape hatch**, allowed only for an operation go-git cannot do, or for `gero doctor` asking what the `gh` and `git` binaries would do ([GITHUB_ACCESS](GITHUB_ACCESS.md)). It is not a runtime fallback and has no obligation to mirror go-git.
   * `os/exec` is importable only from `internal/execx`, the one place `gero` starts another program. Its contract (an allow list of binaries, an argument vector never a shell string, a scrubbed environment so `GH_TOKEN` does not reach a child, raw output and exit code) is in the package doc.
+  * `gero repl` needs the opposite for `!` and `shell`: the user's own shell, a typed line as a string and the user's environment. That is a separate entry point in `execx`, used only by the REPL and decided when `shell` or `!` is built ([REPL](REPL.md)).
   * `internal/git/gitcli` and `internal/ghcli` run their binaries through it, and each use says why. Today that is the short commit hash, whose length depends on the repository's object count and which go-git cannot reproduce ([BRANCH_TAGS](BRANCH_TAGS.md)), plus the version and config reads for `gero doctor` ([DOCTOR](DOCTOR.md)).
 * Not adopted: `viper`, color or logging libraries, any TUI library ([CLI_FRAMEWORK](CLI_FRAMEWORK.md), [CLI_OUTPUT](CLI_OUTPUT.md)).
 
 ## Open questions
 
+* The line-editing library for `gero repl`, if one is adopted ([REPL](REPL.md)). The REPL spec lists the candidates and the measure.
 * Whether the integration sub-module needs a fake GitHub server library or hand-rolled `httptest` handlers, decided with the first integration test.

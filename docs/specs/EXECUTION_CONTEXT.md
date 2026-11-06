@@ -27,6 +27,7 @@ One function in `internal/clicfg` decides, once, and the result is `Settings.CI`
 | `upstream` default | Remote matching the slug, else the only remote | `origin` | [WORKSPACE](WORKSPACE.md) |
 | Log handler | Text | JSON | [CLI_OUTPUT](CLI_OUTPUT.md) |
 | Interaction | Prompts when stdin and stdout are a TTY, unless `--non-interactive` | Never prompts; a write needs `--non-interactive` | [CLI_OUTPUT](CLI_OUTPUT.md) |
+| `gero repl` | Runs, with a TTY | Refused ([REPL](REPL.md)) | [REPL](REPL.md) |
 | Ref and commit inputs | The repository | `GITHUB_REF`, `GITHUB_SHA` | [BRANCH_TAGS](BRANCH_TAGS.md) |
 | Token | `GH_TOKEN`, then the `gh` login | `GH_TOKEN` from the workflow | [GITHUB_ACCESS](GITHUB_ACCESS.md) |
 | Actor identity | The engineer | The bot | this spec |

@@ -27,6 +27,7 @@ Deferred. Nothing in v0.x or v1.0.0 needs prompts beyond handing off to `gh auth
 
 * Core commands stay non-interactive and scriptable.
 * Any prompt or rich rendering goes through one internal package, `internal/ui`, behind an interface with a plain-text implementation first. This is the seam that lets a TUI arrive later without touching commands.
+* `gero repl` is the one command that is interactive by nature: a prompt that runs the other commands. It stays outside the core commands' rule above, they are the same commands and remain scriptable, and it refuses to start without a TTY ([REPL](REPL.md)). Its line editor sits behind `internal/ui` like any prompt.
 * Interactive behavior is automatically disabled when stdin or stdout is not a TTY, or when running in CI. The one prompt the core commands have is the confirmation before a write ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)), a plain yes/no through `internal/ui`, skipped with `--non-interactive`.
 * The likely future stack is the Charm libraries (bubbletea, huh, lipgloss). No dependency is added until a feature needs it, and the addition then gets an entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md). The web dashboard (ARCHITECTURE_DESIGN §6) is a separate, later surface.
 

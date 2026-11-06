@@ -2,7 +2,7 @@
 
 **Status:** implemented for bash, zsh, fish and PowerShell. Only bash and zsh have been run in a real shell; the fish and PowerShell scripts are untested there.
 
-`gero shell install` adds completion and a `gero` shell function to the user's profile, after asking. The function exists because `gero cd <project>` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)) can only print a path: a program cannot change its parent shell's directory, so the shell has to do the `cd`.
+`gero shell install` adds completion and a `gero` shell function to the user's profile, after asking. The function exists because `gero cd <project>` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)) can only print a path: a program cannot change its parent shell's directory, so the shell has to do the `cd`. Inside `gero repl` there is no parent shell to ask: the REPL owns its working directory and changes it itself, from the same resolver ([REPL](REPL.md)).
 
 ## Commands
 
