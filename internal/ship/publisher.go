@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/github/pulls"
 )
@@ -94,6 +95,54 @@ func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Mar
 		ref := PRRef{Number: old.Number, URL: old.URL}
 		res.Superseded = append(res.Superseded, ref)
 		emit(sink, Event{Kind: EventSuperseded, Branch: branch, PR: &ref})
+	}
+}
+
+// headOwner is the owner of the repository a branch pushed by this publisher is
+// in: the fork's, or the repository's own for the upstream.
+func (p Publisher) headOwner(consumer string) string {
+	if p.Push.Role == RoleFork {
+		return p.HeadOwner
+	}
+	owner, _, _ := strings.Cut(consumer, "/")
+	return owner
+}
+
+// refreshMarker identifies the one comment gero keeps on a PR to record that it
+// rebuilt the branch.
+const refreshMarker = "<!-- gero:refresh v1 -->"
+
+// recordRefresh refreshes the PR's title and body from the preview, and records
+// the refresh in the comment gero keeps for the purpose: one that is edited in
+// place, found by its marker and by being the actor's own, with a line added for
+// each refresh, and created the first time. A failure is a warning.
+func (p Publisher) recordRefresh(ctx context.Context, consumer string, tp TargetPlan, base string, now time.Time, res *TargetResult) {
+	number := res.PR.Number
+	if err := p.Remote.UpdateBody(ctx, consumer, number, tp.Preview.Title, tp.Preview.Body); err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not refresh the title and body of #%d: %v", number, err))
+	}
+	line := fmt.Sprintf("- Rebuilt on %s@%s (%s)", tp.Branch, short(base), now.UTC().Format("2006-01-02 15:04 UTC"))
+	me, err := p.Remote.Me(ctx)
+	var comments []pulls.Comment
+	if err == nil {
+		comments, err = p.Remote.Comments(ctx, consumer, number, 0)
+	}
+	if err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not record the refresh on #%d: %v", number, err))
+		return
+	}
+	for _, c := range comments {
+		if c.Author == me && strings.Contains(c.Body, refreshMarker) {
+			body := strings.TrimRight(strings.Replace(c.Body, refreshMarker, "", 1), " \n") + "\n" + line + "\n\n" + refreshMarker
+			if err := p.Remote.EditComment(ctx, consumer, c.ID, body); err != nil {
+				res.Warnings = append(res.Warnings, fmt.Sprintf("could not record the refresh on #%d: %v", number, err))
+			}
+			return
+		}
+	}
+	body := "Rebuilt by gero ship:\n\n" + line + "\n\n" + refreshMarker
+	if err := p.Remote.Comment(ctx, consumer, number, body); err != nil {
+		res.Warnings = append(res.Warnings, fmt.Sprintf("could not record the refresh on #%d: %v", number, err))
 	}
 }
 

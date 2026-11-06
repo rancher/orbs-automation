@@ -147,7 +147,7 @@ func TestRefreshWillNotReplaceABranchWithACommitThatIsNotOurs(t *testing.T) {
 	runGit(t, ws.up, "checkout", "--quiet", botV215)
 	put(t, ws.up, "hand-made.txt", "someone's fixup")
 	runGit(t, ws.up, "add", ".")
-	runGit(t, ws.up, "commit", "--quiet", "-m", "a fixup by hand")
+	runGit(t, ws.up, "commit", "--quiet", "--author=Dev <dev@example.com>", "-m", "a fixup by hand")
 	runGit(t, ws.up, "checkout", "--quiet", "main")
 	withGenerate(ws)
 	handTip := runGit(t, ws.up, "rev-parse", botV215)

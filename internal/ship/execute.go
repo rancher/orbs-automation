@@ -184,7 +184,7 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 		states[k] = res.decideTarget(ctx, pub, me, plan, plan.Targets[i], sink)
 	}
 	if pub != nil && !in.DryRun && ex.Confirm != nil {
-		if c, writes := confirmation(plan, states); writes {
+		if c, writes := confirmation(plan, states, in.Refresh); writes {
 			ok, err := ex.Confirm(ctx, c)
 			if err != nil {
 				return plan, err
@@ -245,7 +245,7 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 
 // confirmation is what the run is about to do, and whether that is anything
 // that writes: a PR to open, or an older one to close.
-func confirmation(plan Plan, states []targetState) (Confirmation, bool) {
+func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, bool) {
 	c := Confirmation{Consumer: plan.Consumer, Release: plan.Release.Tag}
 	if plan.Push != nil {
 		c.Push = *plan.Push
@@ -258,14 +258,18 @@ func confirmation(plan Plan, states []targetState) (Confirmation, bool) {
 		case PublishBlocked:
 			c.Blocked = append(c.Blocked, st.tp.Branch)
 		case PublishAlreadyOpen:
-			c.Already = append(c.Already, st.tp.Branch)
+			if refresh {
+				c.Refreshes = append(c.Refreshes, st.tp.Branch)
+			} else {
+				c.Already = append(c.Already, st.tp.Branch)
+			}
 			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
 		default:
 			c.Opens = append(c.Opens, st.tp.Branch)
 			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
 		}
 	}
-	return c, len(c.Opens)+len(c.Closes) > 0
+	return c, len(c.Opens)+len(c.Closes)+len(c.Refreshes) > 0
 }
 
 // workTarget does the work for one target that was decided. One that needs none
@@ -291,6 +295,9 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher
 			result.WouldSupersede = refs(st.dec.Supersede)
 		} else {
 			pub.supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp.Branch, st.dec.Supersede, result, sink)
+		}
+		if in.Refresh {
+			r.refresh(ctx, ex, pub, clone, remote, in, plan, st, result, sink)
 		}
 		return result
 	}
@@ -378,4 +385,127 @@ func finish(result *TargetResult, err error) *TargetResult {
 		result.Status = ResultFailed
 	}
 	return result
+}
+
+// refresh rebuilds an already open PR of the actor's and replaces its branch when
+// that would change it. It only does so for a branch that is the actor's to
+// change: the PR's head is in the repository this run pushes to, under the name
+// this run would use, and every commit on it is ours (commitsAreOurs). Otherwise
+// result.Note says which condition failed, and nothing is changed.
+//
+// The new branch is built from the current head of the target on a scratch
+// branch, and compared with the old one by the change each makes
+// (Git.ChangeFingerprint), so the existing branch is not touched until it is known
+// to differ. When they are the same, even if the old one is behind, nothing is
+// pushed. When they differ the branch is replaced with a push that is only allowed
+// while the remote's branch is still where it was seen, the PR's title and body
+// are refreshed, and the refresh is recorded in the one comment gero keeps on the
+// PR. A dry run does everything but the replacing and says it would.
+func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, clone, remote string, in Input, plan Plan, st targetState, result *TargetResult, sink Sink) {
+	tp, open, branch, g := st.tp, st.dec.Open, st.tp.Preview.Branch, ex.Git
+	skip := func(format string, args ...any) { result.Note = "not refreshed: " + fmt.Sprintf(format, args...) }
+	fail := func(format string, args ...any) {
+		result.Status, result.Error = ResultFailed, fmt.Sprintf(format, args...)
+	}
+
+	if want := pub.headOwner(plan.Consumer); open.HeadOwner != want {
+		skip("its branch is in %s's repository, and this run pushes to %s's", open.HeadOwner, want)
+		return
+	}
+	if open.HeadRef != branch {
+		skip("its branch is %s, and this run would use %s", open.HeadRef, branch)
+		return
+	}
+	base, err := g.Fetch(ctx, clone, remote, tp.Branch)
+	if err != nil {
+		skip("could not read %s: %v", tp.Branch, err)
+		return
+	}
+	if base != tp.Commit {
+		skip("%s moved since it was checked; run it again", tp.Branch)
+		return
+	}
+	tip, err := g.Fetch(ctx, clone, pub.Push.Remote, branch)
+	if err != nil {
+		skip("could not read %s on %s: %v", branch, pub.Push.Remote, err)
+		return
+	}
+	mergeBase, err := g.MergeBase(ctx, clone, base, tip)
+	if err != nil {
+		skip("%v", err)
+		return
+	}
+	facts, err := g.CommitsSince(ctx, clone, mergeBase, tip)
+	if err != nil {
+		skip("%v", err)
+		return
+	}
+	email, err := g.Config(ctx, clone, "user.email")
+	if err != nil {
+		skip("%v", err)
+		return
+	}
+	if ours, why := commitsAreOurs(facts, email); !ours {
+		skip("%s", why)
+		return
+	}
+	before, err := g.ChangeFingerprint(ctx, clone, mergeBase, tip)
+	if err != nil {
+		skip("%v", err)
+		return
+	}
+
+	scratchName := branch + ".refresh"
+	scratch := tp
+	preview := *tp.Preview
+	preview.Branch = scratchName
+	scratch.Preview = &preview
+	built := r.commitTarget(ctx, ex, clone, remote, in, scratch, sink)
+	switch built.Status {
+	case ResultCommitted, ResultWouldCommit:
+	case ResultUpToDate:
+		skip("a fresh build changes nothing, so there is nothing to put on the branch")
+		return
+	default:
+		fail("rebuild %s: %s", branch, built.Error)
+		return
+	}
+	after, err := g.ChangeFingerprint(ctx, clone, base, built.Tip())
+	if err != nil {
+		fail("compare the rebuilt branch with %s: %v", branch, err)
+		return
+	}
+	if before == after {
+		if !in.DryRun {
+			if err := g.DeleteBranch(ctx, clone, scratchName); err != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove the scratch branch %s: %v", scratchName, err))
+			}
+		}
+		result.Note = "identical to a fresh build"
+		return
+	}
+	result.Commits = built.Commits
+	if in.DryRun {
+		result.Status = ResultWouldRefresh
+		return
+	}
+	if err := g.ForceBranch(ctx, clone, branch, built.Tip()); err != nil {
+		fail("move %s to the rebuilt commit: %v", branch, err)
+		return
+	}
+	if err := g.DeleteBranch(ctx, clone, scratchName); err != nil {
+		result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove the scratch branch %s: %v", scratchName, err))
+	}
+	if err := g.PushReplacing(ctx, clone, pub.Push.Remote, branch, tip); err != nil {
+		fail("replace %s on %s: %v", branch, pub.Push.Remote, err)
+		return
+	}
+	result.Status, result.Pushed = ResultRefreshed, pub.Push.Remote
+	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Remote: pub.Push.Remote})
+	emit(sink, Event{Kind: EventRefreshed, Branch: tp.Branch, PR: result.PR})
+	now := time.Now
+	if ex.Now != nil {
+		now = ex.Now
+	}
+	pub.recordRefresh(ctx, plan.Consumer, tp, base, now(), result)
 }
