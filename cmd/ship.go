@@ -69,6 +69,7 @@ afterwards; with both flags it is a dry run.`,
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
 	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")
+	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
 	rootCmd.AddCommand(shipCmd)
 }

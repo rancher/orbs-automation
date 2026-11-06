@@ -42,6 +42,8 @@ type Options struct {
 	AllowDowngrade bool
 	// NoPush stops after the commit, leaving the branch in the clone for review.
 	NoPush bool
+	// PushTo is --push-to: fork or upstream, to override the settings.
+	PushTo string
 }
 
 // ParseArgs reads the positional arguments of gero ship: [project] [tag|line].
@@ -84,10 +86,17 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 		defer func() { _ = os.RemoveAll(tmp) }()
 		ex = &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp}
 	}
-	return runTo(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, domain.Input{
+	return runTo(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, inputFrom(s, opts), opts.Preview)
+}
+
+// inputFrom is what the user asked for, from the flags and the settings.
+//
+// STUB: leaves out --push-to and the actor until a later commit.
+func inputFrom(s clicfg.Settings, opts Options) domain.Input {
+	return domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Method: opts.Method, Branch: opts.Branch, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
-	}, opts.Preview)
+	}
 }
 
 func checkFormat(format string) error {
