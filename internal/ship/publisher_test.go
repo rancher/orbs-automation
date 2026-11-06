@@ -60,6 +60,8 @@ type fakeRemote struct {
 	open      pulls.Open            // what OpenForBase finds
 	openBy    map[string]pulls.Open // what it finds for a base, when that is set
 	openErr   error
+	byHead    map[string][]pulls.PR // what OpenForHead finds for a head
+	headErr   error
 	meErr     error
 
 	behind      int
@@ -101,6 +103,11 @@ func (f *fakeRemote) OpenForBase(_ context.Context, slug, base string, _ int) (p
 		return found, f.openErr
 	}
 	return f.open, f.openErr
+}
+
+func (f *fakeRemote) OpenForHead(_ context.Context, slug, head string) ([]pulls.PR, error) {
+	f.log.add("open head %s %s", slug, head)
+	return f.byHead[head], f.headErr
 }
 
 func (f *fakeRemote) Create(_ context.Context, slug string, in pulls.NewPR) (pulls.PR, error) {

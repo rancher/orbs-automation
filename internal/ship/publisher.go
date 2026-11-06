@@ -17,6 +17,8 @@ type Remote interface {
 	// Me is the login that is running: whose PRs are the actor's own.
 	Me(ctx context.Context) (string, error)
 	OpenForBase(ctx context.Context, slug, base string, limit int) (pulls.Open, error)
+	// OpenForHead is the open PRs from one head, owner:branch, with one request.
+	OpenForHead(ctx context.Context, slug, head string) ([]pulls.PR, error)
 	Create(ctx context.Context, slug string, in pulls.NewPR) (pulls.PR, error)
 	Comment(ctx context.Context, slug string, number int, body string) error
 	Close(ctx context.Context, slug string, number int) error
