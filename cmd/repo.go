@@ -122,7 +122,7 @@ is not found or a registry could not be reached.`,
 		infoCmd,
 		statusCmd,
 		&cobra.Command{
-			Use:   "branch-tags",
+			Use:   "current-tags",
 			Short: "Resolve branch and previous tags from the repository state",
 			Long: `Print the branch tag, the static tag for this commit and the previous
 static tag, for refs/heads/main and refs/heads/release/<version>.
