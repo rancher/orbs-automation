@@ -1,6 +1,7 @@
 package ship
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -542,4 +543,64 @@ func TestRenderTextACommitlessResultListsNoCommits(t *testing.T) {
 	out := renderText(p, false)
 
 	assert.NotContains(t, out, "log --oneline")
+}
+
+// observingProber looks at what has been written when an image is looked for, to
+// see what the run showed before its slowest check.
+type observingProber struct {
+	out  *bytes.Buffer
+	seen *string
+}
+
+func (p observingProber) Exists(context.Context, string, string, string) registry.Result {
+	*p.seen = p.out.String()
+	return registry.Result{Status: registry.Found}
+}
+
+func TestRunToShowsTheBranchesBeforeTheSlowImageCheck(t *testing.T) {
+	var out bytes.Buffer
+	var seen string
+
+	err := runTo(context.Background(), &out, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputText, in, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, seen, "Ship rancher/scc-operator", "the title was already written")
+	assert.Contains(t, seen, "Targets", "and the branches, while the images were being looked for")
+	assert.Contains(t, seen, "release", "and what each holds")
+	assert.NotContains(t, seen, "Images", "but not the images, which were not known yet")
+	assert.Contains(t, out.String(), "Images", "they come after")
+}
+
+func TestRunToTextIsTheReportRunWithReturns(t *testing.T) {
+	ws, prober := readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}
+	var out bytes.Buffer
+
+	err := runTo(context.Background(), &out, ws, prober, nil, clicfg.OutputText, in, false)
+	want, wantErr := runWith(context.Background(), ws, prober, nil, clicfg.OutputText, in, false)
+
+	require.NoError(t, err)
+	require.NoError(t, wantErr)
+	assert.Equal(t, want, out.String())
+}
+
+func TestRunToJSONIsOneDocumentAtTheEnd(t *testing.T) {
+	var out bytes.Buffer
+	var seen string
+
+	err := runTo(context.Background(), &out, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputJSON, in, false)
+
+	require.NoError(t, err)
+	assert.Empty(t, seen, "nothing was written while the run was going")
+	var got domain.Plan
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got), out.String())
+	assert.Equal(t, "rancher/scc-operator", got.Producer)
+}
+
+func TestRunToReturnsTheErrorAfterTheReport(t *testing.T) {
+	var out bytes.Buffer
+
+	err := runTo(context.Background(), &out, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in, false)
+
+	require.ErrorIs(t, err, ErrBlocked)
+	assert.Contains(t, out.String(), "status  blocked", "the report was written first")
 }
