@@ -75,6 +75,8 @@ type fakeRemote struct {
 	comments    []pulls.Comment
 	commentsErr error
 	editErr     error
+	// updatedTitle and updatedBody are what the last UpdateBody was given.
+	updatedTitle, updatedBody string
 }
 
 func (f *fakeRemote) BehindBy(_ context.Context, _, base, head string) (int, error) {
@@ -84,6 +86,7 @@ func (f *fakeRemote) BehindBy(_ context.Context, _, base, head string) (int, err
 
 func (f *fakeRemote) UpdateBody(_ context.Context, _ string, n int, title, body string) error {
 	f.log.add("update #%d title=%q body=%q", n, title, body)
+	f.updatedTitle, f.updatedBody = title, body
 	return f.updateErr
 }
 

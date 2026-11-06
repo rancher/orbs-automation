@@ -2,6 +2,7 @@ package ship
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,8 @@ func refreshing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *
 	require.NoError(t, err)
 	require.Equal(t, ResultOpened, onlyResult(t, first).Status)
 	open := existing(104, "danpock", "v0.5.3")
+	preview := first.Targets[0].Preview
+	open.Title, open.Body = preview.Title, preview.Body                           // as the PR was made
 	open.HeadOwner, open.HeadRef, open.Base = "rancher", botV215, "release/v2.15" // pushed to the upstream
 	remote.open = pulls.Open{PRs: []pulls.PR{open}}
 	lg.calls = nil
@@ -57,25 +60,136 @@ func TestRefreshOfABranchThatIsIdenticalToAFreshBuildChangesNothing(t *testing.T
 	_ = remote
 }
 
-func TestRefreshOfABranchThatIsBehindButTheSameChangeIsIdentical(t *testing.T) {
-	ws, clone, ex, remote, _, in := refreshing(t)
+// targetMoves puts a commit on the target that the PR's branch does not have, as
+// a busy base does, and has GitHub say the PR is behind by it.
+func targetMoves(t *testing.T, ws *realWorkspace, remote *fakeRemote) {
+	t.Helper()
 	runGit(t, ws.up, "checkout", "--quiet", "release/v2.15")
 	put(t, ws.up, "unrelated.txt", "the target moved on")
 	runGit(t, ws.up, "add", ".")
 	runGit(t, ws.up, "commit", "--quiet", "-m", "unrelated")
 	runGit(t, ws.up, "checkout", "--quiet", "main")
 	remote.behind = 1
-	remoteBefore := runGit(t, ws.up, "rev-parse", botV215)
+}
+
+func TestRefreshOfABranchThatIsBehindIsReplacedEvenWhenTheChangeIsIdentical(t *testing.T) {
+	ws, clone, ex, remote, lg, in := refreshing(t)
+	targetMoves(t, ws, remote)
+	oldTip := runGit(t, ws.up, "rev-parse", botV215)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
-	assert.Contains(t, res.Note, "identical", "the same change, though the base moved: not worth a force push")
+	require.Equal(t, ResultRefreshed, res.Status, "behind is out of date, so it is rebuilt on the current head")
 	assert.Equal(t, 1, res.BehindBy)
-	assert.Equal(t, remoteBefore, runGit(t, ws.up, "rev-parse", botV215))
+	newTip := runGit(t, ws.up, "rev-parse", botV215)
+	assert.NotEqual(t, oldTip, newTip)
+	assert.Equal(t, "1", runGit(t, ws.up, "rev-list", "--count", "release/v2.15.."+botV215), "on top of the moved target")
 	assert.False(t, branchExistsIn(t, clone, scratchV215))
+	require.True(t, lg.has("comment #104 "))
+	assert.Contains(t, lg.calls[lg.index("comment #104 ")], "was 1 behind")
+}
+
+func TestRefreshOfABranchThatIsBehindIsOnlyReportedWithoutTheFlag(t *testing.T) {
+	ws, _, ex, remote, lg, _ := refreshing(t)
+	targetMoves(t, ws, remote)
+	oldTip := runGit(t, ws.up, "rev-parse", botV215)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, 1, res.BehindBy)
+	assert.Equal(t, oldTip, runGit(t, ws.up, "rev-parse", botV215))
+	assert.False(t, lg.has("update"))
+}
+
+const staleBody = "## Summary\nan older text\n\n"
+
+func TestRefreshUpdatesAStaleDescriptionAndKeepsOtherHiddenBlocksWhenTheBranchIsFine(t *testing.T) {
+	ws, _, ex, remote, lg, in := refreshing(t)
+	pr := &remote.open.PRs[0]
+	fresh := pr.Body
+	pr.Title = "an older title"
+	pr.Body = staleBody + ownMarker(pr.Body) + "\n\n" + trackerBlock + "\n"
+	oldTip := runGit(t, ws.up, "rev-parse", botV215)
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultAlreadyOpen, res.Status, "the branch is as it should be")
+	assert.Contains(t, res.Note, "description")
+	require.True(t, lg.has("update #104"), "the title and body are brought up to date")
+	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", remote.updatedTitle)
+	assert.Equal(t, mergeBody(pr.Body, fresh), remote.updatedBody)
+	assert.Contains(t, remote.updatedBody, trackerBlock, "what another part of gero put there stays")
+	assert.NotContains(t, remote.updatedBody, "an older text")
+	assert.Equal(t, oldTip, runGit(t, ws.up, "rev-parse", botV215), "and the branch is not pushed")
+	assert.False(t, lg.has("push"))
+	require.True(t, lg.has("comment #104 "), "the update is recorded")
+	assert.Contains(t, lg.calls[lg.index("comment #104 ")], "Updated the description")
+}
+
+func TestRefreshUpdatesATitleThatDiffersAloneAndNeverTouchesABodyThatDoesNot(t *testing.T) {
+	ws, _, ex, remote, lg, in := refreshing(t)
+	remote.open.PRs[0].Title = "an older title"
+
+	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	require.True(t, lg.has("update #104"))
+	assert.Equal(t, remote.open.PRs[0].Body, remote.updatedBody, "the body was already right")
+}
+
+func TestRefreshLeavesTheDescriptionAloneWhenOnlyTheLineEndingsDiffer(t *testing.T) {
+	ws, _, ex, remote, lg, in := refreshing(t)
+	remote.open.PRs[0].Body = strings.ReplaceAll(remote.open.PRs[0].Body, "\n", "\r\n") + "\r\n"
+
+	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	assert.False(t, lg.has("update"), "GitHub stores the line endings it likes")
+}
+
+func TestRefreshADryRunSaysItWouldUpdateTheDescriptionAndWritesNothing(t *testing.T) {
+	ws, _, ex, remote, lg, in := refreshing(t)
+	remote.open.PRs[0].Body = staleBody + ownMarker(remote.open.PRs[0].Body) + "\n"
+	in.DryRun = true
+
+	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Contains(t, res.Note, "would update the description")
+	for _, write := range []string{"push", "update", "edit comment", "comment #104", "close"} {
+		assert.False(t, lg.has(write), "a dry run does not %s", write)
+	}
+}
+
+func TestRefreshOfAReplacedBranchMergesTheBodyToo(t *testing.T) {
+	ws, _, ex, remote, _, in := refreshing(t)
+	pr := &remote.open.PRs[0]
+	pr.Body += "\n" + trackerBlock + "\n"
+	withGenerate(ws)
+
+	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, remote.updatedBody, trackerBlock, "a replaced branch does not erase the tracker's block")
+	assert.Contains(t, remote.updatedBody, "Ran `./scripts/gen.sh`", "and the new text is there")
+}
+
+// ownMarker is the marker block of a body made by gero ship.
+func ownMarker(body string) string {
+	for _, b := range geroBlocks(body) {
+		if b.kind == "ship" {
+			return b.text
+		}
+	}
+	return ""
 }
 
 func TestRefreshOfABranchThatDiffersReplacesItAndRecordsIt(t *testing.T) {
