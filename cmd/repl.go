@@ -48,6 +48,12 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 	if err := repl.Refuse(env.getenv, s.Terminal, s.CI); err != nil {
 		return err
 	}
+	// A template that does not parse is an error now, once, naming its key: a
+	// prompt must not fail a running session.
+	tmpl, err := repl.PromptTemplate(s)
+	if err != nil {
+		return err
+	}
 	// A gero repl typed at this prompt is refused like one in a child shell.
 	if err := env.setenv(repl.EnvRepl, "1"); err != nil {
 		return err
@@ -56,7 +62,9 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 	if err != nil {
 		return err
 	}
+	home, _ := os.UserHomeDir()
 	sess := &repl.Session{
+		Template: tmpl, ProjectOf: repl.ProjectOf(s), Home: home,
 		Dir: cwd, Env: os.Environ(),
 		StartShell: repl.ShellOn(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()),
 	}
@@ -72,7 +80,6 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 	}()
 	sess.Run = repl.Interruptible(sigs, lineRunner(baseFlags(cmd), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()))
 	sess.UseTerminal(s.Terminal)
-	home, _ := os.UserHomeDir()
 	history := clicfg.StatePath(env.getenv, home, "repl_history")
 	reader, err := repl.NewReader(cmd.InOrStdin(), cmd.OutOrStdout(), history, replCompletion(s, sess).Complete)
 	if err != nil {

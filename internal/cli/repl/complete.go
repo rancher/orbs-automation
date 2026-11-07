@@ -158,4 +158,10 @@ func ProjectOf(s clicfg.Settings) func(dir string) string {
 	return func(dir string) string { return projectNameOf(workspace.Open(s, dir)) }
 }
 
-func projectNameOf(ws ProjectWorkspace) string { return "" }
+func projectNameOf(ws ProjectWorkspace) string {
+	p, err := ws.Project(".")
+	if err != nil {
+		return ""
+	}
+	return p.Name
+}
