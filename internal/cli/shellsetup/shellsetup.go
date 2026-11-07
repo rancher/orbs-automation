@@ -14,6 +14,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/shellenv"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // ErrNeedsApproval is returned when approval is needed and cannot be asked for:
@@ -54,6 +55,7 @@ func Uninstall(o Options) (string, error) {
 }
 
 func run(o Options, install bool) (string, error) {
+	view := style.New(o.Terminal)
 	shell, profile, err := target(o)
 	if err != nil {
 		return "", err
@@ -74,19 +76,19 @@ func run(o Options, install bool) (string, error) {
 	}
 	if !changed {
 		if install {
-			return fmt.Sprintf("Already set up in %s\n", profile), nil
+			return view.Style(style.OK, "Already set up in "+profile) + "\n", nil
 		}
-		return fmt.Sprintf("Nothing to remove from %s\n", profile), nil
+		return view.Style(style.Dim, "Nothing to remove from "+profile) + "\n", nil
 	}
 
 	var out strings.Builder
 	if install {
-		fmt.Fprintf(&out, "Add to %s:\n\n%s\n", profile, shellenv.Block(shell))
+		fmt.Fprintf(&out, "%s\n\n%s\n", view.Style(style.Heading, "Add to "+profile+":"), shellenv.Block(shell))
 	} else {
-		fmt.Fprintf(&out, "Remove the gero block from %s.\n", profile)
+		out.WriteString(view.Style(style.Heading, "Remove the gero block from "+profile+".") + "\n")
 	}
 	if o.DryRun {
-		out.WriteString("Dry run: nothing was written.\n")
+		out.WriteString(view.Style(style.Dim, "Dry run: nothing was written.") + "\n")
 		return out.String(), nil
 	}
 	if !o.Yes {
@@ -103,9 +105,9 @@ func run(o Options, install bool) (string, error) {
 		return "", err
 	}
 	if install {
-		fmt.Fprintf(&out, "Updated %s. Open a new shell, or run: source %s\n", profile, profile)
+		fmt.Fprintf(&out, "%s %s. Open a new shell, or run: source %s\n", view.Style(style.OK, "Updated"), profile, profile)
 	} else {
-		fmt.Fprintf(&out, "Updated %s. Open a new shell to drop the gero function.\n", profile)
+		fmt.Fprintf(&out, "%s %s. Open a new shell to drop the gero function.\n", view.Style(style.OK, "Updated"), profile)
 	}
 	return out.String(), nil
 }
@@ -142,7 +144,8 @@ func approve(o Options, shown string) (bool, error) {
 	if !o.Interactive {
 		return false, ErrNeedsApproval
 	}
-	if _, err := fmt.Fprintf(o.Out, "%s\nContinue? [y/N] ", shown); err != nil {
+	view := style.New(o.Terminal)
+	if _, err := fmt.Fprintf(o.Out, "%s\n%s %s ", shown, view.Style(style.Heading, "Continue?"), view.Style(style.Dim, "[y/N]")); err != nil {
 		return false, err
 	}
 	line, err := bufio.NewReader(o.In).ReadString('\n')
