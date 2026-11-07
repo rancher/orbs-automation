@@ -57,11 +57,29 @@ func Render(r Report, format string) (string, error) {
 	return "", unsupported(format)
 }
 
+// styled is text in the look of role, or the text itself when the report has no
+// renderer or the renderer has no color.
+func (r Report) styled(role style.Role, text string) string {
+	if r.Style == nil {
+		return text
+	}
+	return r.Style.Style(role, text)
+}
+
+// markerRoles are the looks of the markers: a pass, a warning, a failure, and a
+// skip that is not one of them.
+var markerRoles = map[Status]style.Role{
+	StatusOK:   style.OK,
+	StatusWarn: style.Warn,
+	StatusFail: style.Error,
+	StatusSkip: style.Dim,
+}
+
 func renderText(r Report) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "gero %s (commit %s, built %s)\n", r.Build.Version, r.Build.Commit, r.Build.Date)
+	fmt.Fprintf(&b, "%s\n", r.styled(style.Dim, fmt.Sprintf("gero %s (commit %s, built %s)", r.Build.Version, r.Build.Commit, r.Build.Date)))
 	for _, category := range orderedCategories(r.Outcomes) {
-		fmt.Fprintf(&b, "\n%s\n", title(category))
+		fmt.Fprintf(&b, "\n%s\n", r.styled(style.Heading, title(category)))
 		for _, o := range r.Outcomes {
 			if o.Category != category {
 				continue
@@ -70,9 +88,9 @@ func renderText(r Report) string {
 			if o.Status == StatusSkip {
 				msg = "skipped, " + o.SkipReason
 			}
-			fmt.Fprintf(&b, "  %s %s: %s\n", markers[o.Status], o.Name, msg)
+			fmt.Fprintf(&b, "  %s %s: %s\n", r.styled(markerRoles[o.Status], markers[o.Status]), o.Name, msg)
 			if o.Remediation != "" {
-				fmt.Fprintf(&b, "    → %s\n", o.Remediation)
+				fmt.Fprintf(&b, "    %s\n", r.styled(style.Dim, "→ "+o.Remediation))
 			}
 		}
 	}
@@ -86,11 +104,11 @@ func renderText(r Report) string {
 	}
 	switch {
 	case n.Fail > 0:
-		b.WriteString("Some checks failed: fix the errors above, then run gero doctor again.\n")
+		b.WriteString(r.styled(style.Error, "Some checks failed: fix the errors above, then run gero doctor again.") + "\n")
 	case n.Warn > 0:
-		b.WriteString("Ready, with warnings.\n")
+		b.WriteString(r.styled(style.Warn, "Ready, with warnings.") + "\n")
 	default:
-		b.WriteString("Your workstation is ready to use gero.\n")
+		b.WriteString(r.styled(style.OK, "Your workstation is ready to use gero.") + "\n")
 	}
 	return b.String()
 }
