@@ -38,6 +38,7 @@ func ValidateAt(c config.Config, now time.Time) error {
 		v.external(x, projects)
 	}
 	v.repoSlugsAreUnique(c)
+	v.oneFinalDestination(c)
 	return errors.Join(v.errs...)
 }
 
@@ -170,6 +171,20 @@ func (v *validator) project(p config.Project, phases map[string]string, haveLine
 		}
 	}
 
+}
+
+// oneFinalDestination checks that at most one project is marked as the end of the
+// line, since a second would leave the view of the lines two places to start from.
+func (v *validator) oneFinalDestination(c config.Config) {
+	var marked []string
+	for _, p := range c.Projects {
+		if p.FinalDestination {
+			marked = append(marked, fmt.Sprintf("%q", p.Name))
+		}
+	}
+	if len(marked) > 1 {
+		v.add("projects %s are all marked finalDestination: only one project is the end of the line", strings.Join(marked, ", "))
+	}
 }
 
 func (v *validator) external(x config.External, projects map[string]bool) {
