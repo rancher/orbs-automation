@@ -8,6 +8,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [CLI_FRAMEWORK](CLI_FRAMEWORK.md) | cobra, command tree, global flags, context gating, exit codes |
 | [CLI_CONFIG](CLI_CONFIG.md) | CLI config versus application config, sources and precedence, user file, locating central config |
 | [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md) | Workstation versus CI for commands that run in both: detection, the actor (PR author, commit identity), push and signing, the write-command contract |
+| [REPO_STATUS](REPO_STATUS.md) | `gero repo status`: the sections of the report and what each answers, the state and next tags of a line, and who holds each release |
 | [TASK_COMMANDS](TASK_COMMANDS.md) | The steps of `ship` as commands of their own: `repo branch`, `repo tag`, `repo push`, `pr create`, `ship bump`, and the rules they share |
 | [PUSH_TO_REPO](PUSH_TO_REPO.md) | The write half of a downstream bump: the work branch in the engineer's clone, remotes, branch and PR identity, per-target outcomes, what changes from today's scripts |
 | [CI_SHIP](CI_SHIP.md) | `gero ci:ship`: the same bump as `gero ship` run by a workflow as the bot, what it shares and what CI adds |
