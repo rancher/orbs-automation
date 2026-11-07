@@ -129,7 +129,7 @@ func TestInfoUnresolvedCloneKeepsTheRest(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/rancher", got.Slug)
 	assert.Equal(t, LocalInfo{Error: workspace.ErrRepoNotFound.Error()}, got.Local)
-	assert.Contains(t, renderText(got), "unavailable")
+	assert.Contains(t, renderText(got, nil), "unavailable")
 }
 
 func TestInfoDetachedHead(t *testing.T) {
@@ -147,12 +147,12 @@ func TestInfoDirtyClone(t *testing.T) {
 	got, err := gather(fixture(), opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.True(t, got.Local.Dirty)
-	assert.Contains(t, renderText(got), "changes or an operation in progress")
+	assert.Contains(t, renderText(got, nil), "changes or an operation in progress")
 
 	got, err = gather(fixture(), opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	assert.False(t, got.Local.Dirty)
-	assert.Contains(t, renderText(got), "clean")
+	assert.Contains(t, renderText(got, nil), "clean")
 }
 
 func TestInfoUnreadableClone(t *testing.T) {
@@ -175,7 +175,7 @@ func TestInfoUnreadableWorkTree(t *testing.T) {
 func TestRenderTextHeadings(t *testing.T) {
 	got, err := gather(fixture(), opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
-	out := renderText(got)
+	out := renderText(got, nil)
 
 	for _, want := range []string{"rancher/rancher\n", "\nRelease lines\n", "\nLocal clone\n"} {
 		assert.Contains(t, out, want)
@@ -192,7 +192,7 @@ func TestRenderTextHeadings(t *testing.T) {
 
 func TestRenderTextShowsLocalError(t *testing.T) {
 	got := Info{Slug: "rancher/charts", Local: LocalInfo{Error: "no local clone found"}}
-	assert.Contains(t, renderText(got), "no local clone found")
+	assert.Contains(t, renderText(got, nil), "no local clone found")
 }
 
 func TestRenderTextSingleProjectHasNoLinesTable(t *testing.T) {
@@ -202,7 +202,7 @@ func TestRenderTextSingleProjectHasNoLinesTable(t *testing.T) {
 	ws.projects["rancher/rancher"] = p
 	got, err := gather(ws, opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
-	assert.NotContains(t, renderText(got), "Release lines")
+	assert.NotContains(t, renderText(got, nil), "Release lines")
 }
 
 func TestRenderJSON(t *testing.T) {

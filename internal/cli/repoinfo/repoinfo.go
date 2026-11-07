@@ -13,6 +13,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -99,7 +100,7 @@ func Run(s clicfg.Settings, cwd string, slugs []string) (string, error) {
 	if s.Output == clicfg.OutputJSON {
 		return renderJSON(i)
 	}
-	return renderText(i), nil
+	return renderText(i, style.New(s.Terminal)), nil
 }
 
 func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
@@ -163,7 +164,8 @@ func local(ws Workspace, open Opener, slug string) LocalInfo {
 	return l
 }
 
-func renderText(i Info) string {
+func renderText(i Info, view *style.Renderer) string {
+	_ = view
 	var b strings.Builder
 	section(&b, i.Slug, func(row func(label, value string)) {
 		row("owned", yesNo(i.Owned))
