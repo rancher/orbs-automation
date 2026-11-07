@@ -41,6 +41,16 @@ type Session struct {
 	StartShell ShellFunc
 	// Style is how the prompt looks. Nil is plain.
 	Style *style.Renderer
+	// Template is the prompt, parsed once up front. Nil is the default one.
+	Template *Template
+	// ProjectOf finds the config name of the project a directory is in, or ""
+	// when it is in none. It is asked when the session starts and when the
+	// directory changes, never on every line, so it may read what it needs.
+	ProjectOf func(dir string) string
+	// Home is the home directory, which {path} writes as ~.
+	Home string
+
+	project string // ProjectOf of Dir, as it was last asked
 }
 
 // ErrGeroPrefix is returned for a line that starts with gero.
