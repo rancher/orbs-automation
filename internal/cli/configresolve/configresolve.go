@@ -12,6 +12,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -41,10 +42,10 @@ type Workspace interface {
 // and renders the rows as s.Output (text or json). When any row is unresolved
 // the output is still returned, with ErrUnresolved.
 func Repos(s clicfg.Settings, cwd string, slugs []string) (string, error) {
-	return repos(workspace.Open(s, cwd), s.Output, slugs)
+	return repos(workspace.Open(s, cwd), s.Output, slugs, style.New(s.Terminal))
 }
 
-func repos(ws Workspace, format string, slugs []string) (string, error) {
+func repos(ws Workspace, format string, slugs []string, view *style.Renderer) (string, error) {
 	if format != clicfg.OutputText && format != clicfg.OutputJSON {
 		return "", fmt.Errorf("output format %q is not supported by config resolve repos: use text or json", format)
 	}
@@ -61,7 +62,7 @@ func repos(ws Workspace, format string, slugs []string) (string, error) {
 	if format == clicfg.OutputJSON {
 		out, err = renderJSON(rows)
 	} else {
-		out = renderText(rows)
+		out = renderText(rows, view)
 	}
 	if err != nil {
 		return "", err
@@ -96,7 +97,8 @@ func projectSlugs(ws Workspace, cfg config.Config, want []string) ([]string, err
 	return out, nil
 }
 
-func renderText(rows []workspace.RepoPath) string {
+func renderText(rows []workspace.RepoPath, view *style.Renderer) string {
+	_ = view
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "SLUG\tPATH\tSOURCE")

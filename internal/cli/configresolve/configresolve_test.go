@@ -84,7 +84,7 @@ func mixed() *fakeWorkspace {
 }
 
 func TestReposTextTable(t *testing.T) {
-	out, err := repos(mixed(), clicfg.OutputText, nil)
+	out, err := repos(mixed(), clicfg.OutputText, nil, nil)
 
 	require.ErrorIs(t, err, ErrUnresolved)
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
@@ -102,7 +102,7 @@ func TestReposTextHintsOnlyForWhatWentWrong(t *testing.T) {
 	ws := mixed()
 	ws.cfg.Projects = ws.cfg.Projects[2:] // rancher/charts, not found
 
-	out, _ := repos(ws, clicfg.OutputText, nil)
+	out, _ := repos(ws, clicfg.OutputText, nil, nil)
 
 	assert.Contains(t, out, "not found: clone it")
 	assert.NotContains(t, out, "ambiguous")
@@ -112,7 +112,7 @@ func TestReposAllResolvedIsNotAnError(t *testing.T) {
 	ws := mixed()
 	ws.cfg.Projects = ws.cfg.Projects[:1]
 
-	out, err := repos(ws, clicfg.OutputText, nil)
+	out, err := repos(ws, clicfg.OutputText, nil, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "/src/rancher")
@@ -120,7 +120,7 @@ func TestReposAllResolvedIsNotAnError(t *testing.T) {
 }
 
 func TestReposJSON(t *testing.T) {
-	out, err := repos(mixed(), clicfg.OutputJSON, nil)
+	out, err := repos(mixed(), clicfg.OutputJSON, nil, nil)
 
 	require.ErrorIs(t, err, ErrUnresolved)
 	var got []struct {
@@ -143,7 +143,7 @@ func TestReposJSON(t *testing.T) {
 }
 
 func TestReposNoProjects(t *testing.T) {
-	out, err := repos(&fakeWorkspace{}, clicfg.OutputJSON, nil)
+	out, err := repos(&fakeWorkspace{}, clicfg.OutputJSON, nil, nil)
 
 	require.NoError(t, err)
 	assert.JSONEq(t, "[]", out)
@@ -153,7 +153,7 @@ func TestReposAsksForProjectsOnly(t *testing.T) {
 	ws := mixed()
 	ws.cfg.Externals = []config.External{{Name: "kubernetes", Repo: config.Repo{Name: "kubernetes/kubernetes"}}}
 
-	_, _ = repos(ws, clicfg.OutputText, nil)
+	_, _ = repos(ws, clicfg.OutputText, nil, nil)
 
 	assert.Equal(t, [][]string{{"rancher/rancher", "rancher/scc-operator", "rancher/charts"}}, ws.asked)
 }
@@ -161,7 +161,7 @@ func TestReposAsksForProjectsOnly(t *testing.T) {
 func TestReposOneSlug(t *testing.T) {
 	ws := mixed()
 
-	out, err := repos(ws, clicfg.OutputText, []string{"rancher/rancher"})
+	out, err := repos(ws, clicfg.OutputText, []string{"rancher/rancher"}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, [][]string{{"rancher/rancher"}}, ws.asked)
@@ -172,7 +172,7 @@ func TestReposOneSlug(t *testing.T) {
 func TestReposOneSlugUsesTheConfigSpelling(t *testing.T) {
 	ws := mixed()
 
-	_, err := repos(ws, clicfg.OutputText, []string{"Rancher/Rancher"})
+	_, err := repos(ws, clicfg.OutputText, []string{"Rancher/Rancher"}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, [][]string{{"rancher/rancher"}}, ws.asked)
@@ -181,7 +181,7 @@ func TestReposOneSlugUsesTheConfigSpelling(t *testing.T) {
 func TestReposUnknownSlug(t *testing.T) {
 	ws := mixed()
 
-	out, err := repos(ws, clicfg.OutputText, []string{"rancher/nope"})
+	out, err := repos(ws, clicfg.OutputText, []string{"rancher/nope"}, nil)
 
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrUnresolved)
@@ -192,7 +192,7 @@ func TestReposUnknownSlug(t *testing.T) {
 
 func TestReposByProjectName(t *testing.T) {
 	ws := mixed()
-	out, err := repos(ws, clicfg.OutputText, []string{"scc-operator"})
+	out, err := repos(ws, clicfg.OutputText, []string{"scc-operator"}, nil)
 	assert.ErrorIs(t, err, ErrUnresolved, "that clone is ambiguous in the fixture")
 	assert.Equal(t, [][]string{{"rancher/scc-operator"}}, ws.asked, "a name is asked for by its slug")
 	assert.Contains(t, out, "ambiguous")
@@ -201,7 +201,7 @@ func TestReposByProjectName(t *testing.T) {
 func TestReposDotIsTheProjectTheWorkingDirectoryIsIn(t *testing.T) {
 	ws := mixed()
 	ws.current = "rancher/rancher"
-	out, err := repos(ws, clicfg.OutputText, []string{"."})
+	out, err := repos(ws, clicfg.OutputText, []string{"."}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, [][]string{{"rancher/rancher"}}, ws.asked)
 	assert.Contains(t, out, "/src/rancher")
@@ -209,14 +209,14 @@ func TestReposDotIsTheProjectTheWorkingDirectoryIsIn(t *testing.T) {
 
 func TestReposDotOutsideAProject(t *testing.T) {
 	ws := mixed()
-	out, err := repos(ws, clicfg.OutputText, []string{"."})
+	out, err := repos(ws, clicfg.OutputText, []string{"."}, nil)
 	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.Empty(t, out)
 	assert.Empty(t, ws.asked)
 }
 
 func TestReposOneSlugUnresolved(t *testing.T) {
-	out, err := repos(mixed(), clicfg.OutputText, []string{"rancher/charts"})
+	out, err := repos(mixed(), clicfg.OutputText, []string{"rancher/charts"}, nil)
 
 	assert.ErrorIs(t, err, ErrUnresolved)
 	assert.Contains(t, out, "not found")
@@ -230,7 +230,7 @@ func TestReposConfigErrors(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ws := &fakeWorkspace{cfgErr: cfgErr}
 
-			out, err := repos(ws, clicfg.OutputText, nil)
+			out, err := repos(ws, clicfg.OutputText, nil, nil)
 
 			assert.ErrorIs(t, err, cfgErr)
 			assert.Empty(t, out)
@@ -244,7 +244,7 @@ func TestReposRejectsOtherFormats(t *testing.T) {
 		t.Run(format, func(t *testing.T) {
 			ws := mixed()
 
-			out, err := repos(ws, format, nil)
+			out, err := repos(ws, format, nil, nil)
 
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), format)
