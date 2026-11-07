@@ -94,9 +94,6 @@ func Split(line string) ([]string, error) {
 	return words, nil
 }
 
-// Prompt is the text shown before each line.
-func Prompt() string { return "gero> " }
-
 // Exec runs one line. It reports true when the line leaves the REPL. An error
 // ends the line, not the session.
 func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, error) {
@@ -140,6 +137,7 @@ func (s *Session) cd(args []string) error {
 		return err
 	}
 	s.Dir = dir
+	s.refreshProject()
 	return nil
 }
 
@@ -231,6 +229,7 @@ func (s *Session) projectDir(key string) (string, error) {
 // Loop reads lines from r until it ends or a line leaves the REPL, showing the
 // results on out and the errors of lines on errOut. The prompt is shown by r.
 func Loop(ctx context.Context, r editor.Reader, out, errOut io.Writer, s *Session) error {
+	s.refreshProject()
 	for {
 		line, err := r.ReadLine(s.prompt())
 		switch {
@@ -257,14 +256,41 @@ func Loop(ctx context.Context, r editor.Reader, out, errOut io.Writer, s *Sessio
 // UseTerminal sets how the prompt looks from what the terminal can do.
 func (s *Session) UseTerminal(t clicfg.Terminal) { s.Style = style.New(t) }
 
-// prompt is what is shown before each line: the default prompt, in the look of
-// a prompt when the terminal has color. The space after it is not styled, so
-// nothing of the style reaches what is typed, and it stays one line of plain
-// text and complete SGR escapes, which is all the editor measures
-// (docs/specs/REPL.md).
+// defaultTemplate is the prompt when none is given. It is a constant of clicfg,
+// and a test holds that it parses.
+var defaultTemplate = func() *Template {
+	t, err := ParseTemplate(clicfg.DefaultReplPrompt)
+	if err != nil {
+		panic("the default prompt template does not parse: " + err.Error())
+	}
+	return t
+}()
+
+// prompt is what is shown before each line: the template for where the session
+// is, in the look of a prompt when the terminal has color. The blanks at its end
+// are not styled, so nothing of the style reaches what is typed, and it stays one
+// line of plain text and complete SGR escapes, which is all the editor measures
+// (docs/specs/REPL.md). It does no I/O: the project is the one looked up when
+// the directory last changed.
 func (s *Session) prompt() string {
-	text := strings.TrimSuffix(Prompt(), " ")
-	return s.Style.Style(style.Prompt, text) + " "
+	t := s.Template
+	if t == nil {
+		t = defaultTemplate
+	}
+	text := t.Render(Values{Project: s.project, Dir: s.Dir, Home: s.Home})
+	core := strings.TrimRight(text, " ")
+	if core == "" {
+		return text
+	}
+	return s.Style.Style(style.Prompt, core) + text[len(core):]
+}
+
+// refreshProject looks up the project of the working directory. It is asked at
+// the start and when the directory changes, and never for a line.
+func (s *Session) refreshProject() {
+	if s.ProjectOf != nil {
+		s.project = s.ProjectOf(s.Dir)
+	}
 }
 
 // NewReader is the line reader for gero repl on a terminal: line editing, history

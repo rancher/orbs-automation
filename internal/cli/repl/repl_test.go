@@ -42,10 +42,6 @@ func TestSplitUnterminatedQuote(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestPromptIsPlain(t *testing.T) {
-	assert.Equal(t, "gero> ", Prompt())
-}
-
 // tree makes dir/{docs/,test/integration/,README.md,a.txt}.
 func tree(t *testing.T) string {
 	t.Helper()
