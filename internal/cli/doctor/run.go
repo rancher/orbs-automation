@@ -68,7 +68,7 @@ func run(ctx context.Context, s clicfg.Settings, f Flags, b Build, checks []Chec
 		return "", unsupported(s.Output)
 	}
 	if f.ListChecks {
-		return RenderChecks(checks, s.Output)
+		return RenderChecks(checks, s.Output, style.New(s.Terminal))
 	}
 	outcomes, err := Run(ctx, checks, Options{Online: f.Online, Timeout: f.Timeout, Names: f.Names})
 	if errors.Is(err, ErrUnknownCheck) {

@@ -161,7 +161,7 @@ func TestRenderChecksText(t *testing.T) {
 		fakeCheck{name: "auth-api", category: "authentication", online: true},
 	}
 
-	got, err := RenderChecks(checks, clicfg.OutputText)
+	got, err := RenderChecks(checks, clicfg.OutputText, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, ""+
@@ -176,7 +176,7 @@ func TestRenderChecksJSON(t *testing.T) {
 		fakeCheck{name: "auth-api", category: "authentication", online: true},
 	}
 
-	got, err := RenderChecks(checks, clicfg.OutputJSON)
+	got, err := RenderChecks(checks, clicfg.OutputJSON, nil)
 
 	require.NoError(t, err)
 	assert.JSONEq(t, `[
@@ -186,7 +186,7 @@ func TestRenderChecksJSON(t *testing.T) {
 }
 
 func TestRenderChecksUnsupportedFormat(t *testing.T) {
-	got, err := RenderChecks([]Check{fakeCheck{name: "git"}}, clicfg.OutputEnv)
+	got, err := RenderChecks([]Check{fakeCheck{name: "git"}}, clicfg.OutputEnv, nil)
 
 	require.Error(t, err)
 	assert.Empty(t, got)

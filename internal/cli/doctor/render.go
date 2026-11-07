@@ -186,7 +186,8 @@ func renderJSON(r Report) (string, error) {
 
 // RenderChecks formats the check list for --list-checks as clicfg.OutputText or
 // clicfg.OutputJSON.
-func RenderChecks(checks []Check, format string) (string, error) {
+func RenderChecks(checks []Check, format string, view *style.Renderer) (string, error) {
+	_ = view
 	switch format {
 	case clicfg.OutputText:
 		var b strings.Builder
