@@ -43,7 +43,8 @@ the consumer holds (--allow-downgrade ships it anyway). A consumer that already
 has the release is reported as already up to date.
 
 It shows the branch, title and labels the PR would have; --preview adds the
-commit message and body.
+commit message and body, and the commit each step would make if it changes
+files. Each commit made is listed with the files it changed.
 
 For each branch that needs a PR it works in your own clone of the consumer
 (found as gero cd finds it): on a new branch when the clone is clean and on a
@@ -92,7 +93,7 @@ with both flags it is a dry run.`,
 	shipCmd.Flags().StringSliceVar(&in.Lines, "line", nil, "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to; repeat it or separate lines with commas for several")
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
-	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message and PR body too")
+	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message, the PR body and the commit each step would make too")
 	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	shipCmd.Flags().BoolVar(&in.Refresh, "refresh", false, "rebuild your open PR for this release and replace its branch if it differs")
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")

@@ -216,6 +216,9 @@ func (h *humanSink) pr() {
 		for _, t := range prs {
 			h.block("Commit message ("+t.Key()+")", t.Preview.CommitMessage)
 			h.block("Body ("+t.Key()+")", t.Preview.Body)
+			if len(t.Preview.Steps) > 0 {
+				h.block("Step commits ("+t.Key()+")", stepsText(t.Preview.Steps))
+			}
 		}
 	}
 }
@@ -525,4 +528,19 @@ func filesText(files []string) string {
 	default:
 		return fmt.Sprintf("%d files: %s and %d more", n, strings.Join(files[:3], ", "), n-3)
 	}
+}
+
+// stepsText lists the commits the steps of a bump may make, in the order they run,
+// with where each fits around the edit and what ran it.
+func stepsText(steps []domain.StepPreview) string {
+	lines := []string{"a step's commit is made only if it changes files"}
+	for _, s := range steps {
+		when, _, _ := strings.Cut(s.CommitMessage, "\n")
+		where := "after the edit "
+		if s.BeforeEdit {
+			where = "before the edit"
+		}
+		lines = append(lines, fmt.Sprintf("%s  %s  (%s)", where, when, s.Phase))
+	}
+	return strings.Join(lines, "\n")
 }
