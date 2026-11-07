@@ -46,7 +46,7 @@ func ln(id, branch, version string) config.ProjectLine {
 // rancher is the hub: a branch for each of four lines, with v2.16 on main.
 func rancher() config.Project {
 	return config.Project{
-		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
+		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}, FinalDestination: true,
 		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
 			ln("v2.16", "", ""), ln("v2.15", "release/v2.15", ""), ln("v2.14", "release/v2.14", ""), ln("v2.13", "release/v2.13", ""),
 		}},
@@ -172,7 +172,7 @@ func TestResolveHasTheFactsOfEachLineAndItsPhaseFromTheClock(t *testing.T) {
 	assert.Equal(t, "eol", lineOf(t, got, "v2.13").Phase)
 }
 
-func TestResolveTheHubIsTheProjectTheLinesDocumentIsNamedFor(t *testing.T) {
+func TestResolveTheHubIsTheFinalDestination(t *testing.T) {
 	got := resolve(t, Options{})
 
 	assert.Equal(t, "rancher/rancher", got.Hub)
@@ -196,14 +196,14 @@ func TestResolveAHubCanBeNamed(t *testing.T) {
 	assert.Nil(t, lineOf(t, got, "v2.14").Hub, "docs has no v2.14")
 }
 
-func TestResolveWithNoHubToBeFoundAndNoneNamedIsAnError(t *testing.T) {
+func TestResolveWithNoFinalDestinationAndNoHubNamedIsAnErrorThatSaysHow(t *testing.T) {
 	cfg := fixtureConfig()
-	cfg.Lines.Name = "nothing-like-it"
-	cfg.Projects = cfg.Projects[1:] // rancher is gone
+	cfg.Projects[0].FinalDestination = false // the lines document is still named rancher, which is not used
 
 	_, err := Resolve(cfg, engineOf(t, cfg), Options{}, now)
 
 	require.ErrorIs(t, err, ErrNoHub)
+	assert.ErrorContains(t, err, "finalDestination")
 	assert.ErrorContains(t, err, "--hub")
 }
 
@@ -245,8 +245,26 @@ func TestResolveAProducerWithNoSuchLineIsAGapAndNotALink(t *testing.T) {
 	assert.Empty(t, lineOf(t, got, "v2.15").Gaps)
 }
 
-func TestResolveShipsToTheProjectsTheHubShipsTo(t *testing.T) {
+func TestResolveTheFinalDestinationHasNoShipsToEvenWhenItHasEdges(t *testing.T) {
 	got := resolve(t, Options{})
+
+	assert.True(t, got.HubIsFinalDestination)
+	for _, l := range got.Lines {
+		assert.Empty(t, l.ShipsTo, l.ID)
+	}
+	var docsOnTheLine bool
+	for _, a := range lineOf(t, got, "v2.15").Also {
+		docsOnTheLine = docsOnTheLine || a.Name == "docs"
+	}
+	assert.True(t, docsOnTheLine, "a project it ships to is then just on the line, with its own connections")
+}
+
+func TestResolveAHubThatIsNotTheFinalDestinationShipsToTheProjectsItShipsTo(t *testing.T) {
+	cfg := fixtureConfig()
+	cfg.Projects[0].FinalDestination = false
+	got, err := Resolve(cfg, engineOf(t, cfg), Options{Hub: "rancher"}, now)
+	require.NoError(t, err)
+	assert.False(t, got.HubIsFinalDestination)
 
 	v215 := lineOf(t, got, "v2.15")
 	require.Len(t, v215.ShipsTo, 1)
@@ -264,8 +282,9 @@ func TestResolveProjectsOnALineThatAreNotConnectedToTheHubAreAlsoWithTheirOwnCon
 	for _, a := range v215.Also {
 		also = append(also, a.Name)
 	}
-	assert.Equal(t, []string{"charts"}, also, "shell and docs are connected to the hub, charts is not")
-	charts := v215.Also[0]
+	assert.Equal(t, []string{"docs", "charts"}, also, "shell is connected to the hub; docs is shipped to by it, which a final destination does not show")
+	require.Len(t, v215.Also, 2)
+	charts := v215.Also[1]
 	assert.Equal(t, "release-v2.15", charts.Branch)
 	require.Len(t, charts.TakesFrom, 1)
 	assert.Equal(t, "obteam", charts.TakesFrom[0].Name)
@@ -357,12 +376,13 @@ func TestRunTextIsTheLinesNewestFirstEachWithWhatIsConnectedToIt(t *testing.T) {
 	assert.True(t, strings.HasPrefix(out, "Release lines, through rancher/rancher\n"), out)
 	assert.Less(t, strings.Index(out, "\nv2.16"), strings.Index(out, "\nv2.15"))
 	assert.Less(t, strings.Index(out, "\nv2.15"), strings.Index(out, "\nv2.13"))
+	assert.NotContains(t, out, "\n    ships to\n", "nothing ships on from the final destination")
 	for _, want := range []string{
 		"v2.15  ga  GA 2026-08-27, EOM 2027-02-27, EOL 2028-02-27  Kubernetes 1.34-1.36",
 		"v2.16  development", "v2.13  eol",
 		"rancher/rancher  release/v2.15",
 		"rancher/rancher  main (default branch)",
-		"takes from", "ships to", "also on this line",
+		"takes from", "also on this line",
 	} {
 		assert.Contains(t, out, want)
 	}

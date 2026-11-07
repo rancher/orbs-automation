@@ -52,8 +52,8 @@ type Result struct {
 	HubName string `json:"hubName"` // its config name
 	// HubIsFinalDestination says the hub is the project releases end in, so nothing
 	// is shown as shipping on from it.
-	HubIsFinalDestination bool `json:"hubIsFinalDestination,omitempty"`
-	Lines   []Line `json:"lines"`
+	HubIsFinalDestination bool   `json:"hubIsFinalDestination,omitempty"`
+	Lines                 []Line `json:"lines"`
 	// Gaps is every gap of every line, as the sentences each line carries, so a
 	// reader can see at once whether the map has any.
 	Gaps []string `json:"gaps,omitempty"`
