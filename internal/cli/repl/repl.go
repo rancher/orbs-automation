@@ -109,6 +109,8 @@ func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, e
 	case "pwd":
 		_, err = fmt.Fprintln(out, s.Dir)
 		return false, err
+	case "clear":
+		return false, s.clear(out, args[1:])
 	case "ls":
 		return false, s.ls(out, args[1:])
 	case "cd":
@@ -117,6 +119,11 @@ func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, e
 		return false, s.shell(ctx, args[1:])
 	}
 	return false, s.Run(ctx, s.Dir, args)
+}
+
+// clear is the stub: it does nothing yet.
+func (s *Session) clear(out io.Writer, args []string) error {
+	return nil
 }
 
 // cd moves the REPL into the clone root of the project named by its one
