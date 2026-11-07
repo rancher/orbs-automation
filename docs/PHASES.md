@@ -34,18 +34,18 @@ Until v1.0.0 the tool is not announced. From v1.0.0 only stable tags are release
 **Owner:** the author, building a foundation others can build on, plus two real flows end to end. Not announced outside the team. v1.0.0 is about **automation**: the flows run from an engineer's workstation, and CI and tracking follow in v1.x. It is not about file generation.
 
 Two flows, in order:
-* **Flow A, `scc-operator` into `rancher/rancher` (the POC).** One release line fanning out to every active Rancher branch. It exercises the update dispatcher, `yamlBump` and per-target status with the fewest moving parts. `shell` takes the same route with a series for each line. An engineer runs the bump with `gero ship` from their own clone; in CI it stays a bash script triggered by a stable tag until `gero ci:ship` replaces it in v1.x. Its job is to prove to the team that the approach is good.
-* **Flow B, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: `yamlBump`, `chartsPackageBump` (the most complex strategy), multi-hop chains and the tag step between hops, run by hand.
+* **The POC flow, `scc-operator` into `rancher/rancher`.** One release line fanning out to every active Rancher branch. It exercises the update dispatcher, `yamlBump` and per-target status with the fewest moving parts. `shell` takes the same route with a series for each line. An engineer runs the bump with `gero ship` from their own clone; in CI it stays a bash script triggered by a stable tag until `gero ci:ship` replaces it in v1.x. Its job is to prove to the team that the approach is good.
+* **The chain flow, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: `yamlBump`, `chartsPackageBump` (the most complex strategy), multi-hop chains and the tag step between hops, run by hand.
 
 | Label | Work | Depends on |
 |---|---|---|
-| v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show` (the settings and where each came from) and `gero config resolve repos`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for the repos Flow A touches (`rancher`, `scc-operator`, `shell`), written and corrected up front; those for Flow B (`kuberlr-kubectl`, BRO, `rancher/charts`) are written with v0.8 to v0.10, and everything for them stays in `config-mock/` until then | none |
+| v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show` (the settings and where each came from) and `gero config resolve repos`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for the repos the POC flow touches (`rancher`, `scc-operator`, `shell`), written and corrected up front; those for the chain flow (`kuberlr-kubectl`, BRO, `rancher/charts`) are written with v0.8 to v0.10, and everything for them stays in `config-mock/` until then | none |
 | v0.2 | **Read-only insight:** tag classification, the line map (`gero lines resolve`), a project's releases and who has picked them up (`gero repo status`, which also names what each line can have next), and the release-line rules in one place (`internal/git/releasetag`) for every command to share | v0.1 |
 | v0.3 | **Update dispatcher, `yamlBump` and the workstation bump:** target, branch resolution from the line map, named strategy, steps with a commit for each, per-consumer `pullRequests` conventions, deterministic branches, reuse and supersede of open PRs, `--refresh`, preconditions, a release for each line, fan-out with per-target status. The commands that make the pieces by hand: `repo branch`, `repo tag`. Used by the team beside the existing script | v0.2 |
-| | **POC review with the team:** show Flow A from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before going further | v0.3 |
+| | **POC review with the team:** show the POC flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before going further | v0.3 |
 | v0.4 | **More strategies:** `chartsPackageBump`, run in dry-run beside today's scripts | POC review |
 | v0.5 | **Multi-hop chains by hand:** the line map (`gero lines resolve`) and `gero repo status` follow a chain through every hop to its end, and the tag step between hops is `gero repo tag`; each hop is a `gero ship` once the one before it has merged and been tagged. Watching a whole chain without doing that by hand is the tracker, v1.2 | v0.4 |
-| v0.6 | **Flow B runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0 | v0.5 |
+| v0.6 | **The chain flow runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0 | v0.5 |
 
 ### Decides in v0.x
 
@@ -60,7 +60,7 @@ Final kind and field names; whether the path through `rancher/charts` into `ranc
 * CI passes and a tagged release publishes installable binaries.
 * Config validates; the schema and defaults are documented in code; the team has reviewed the config shapes (at the POC review), and they move from `gero/v1alpha1` to `gero/v1`.
 * The GitHub access layer exists with narrow, fakeable interfaces.
-* Flow A (`scc-operator`) and Flow B (the `kuberlr-kubectl` chain) both run for real from an engineer's workstation: `gero ship` opens the bump PRs along the chain, and `gero repo branch` and `gero repo tag` make the pieces by hand. The scripts in the repos keep running in CI until v1.x replaces them.
+* The POC flow (`scc-operator`) and the chain flow (the `kuberlr-kubectl` chain) both run for real from an engineer's workstation: `gero ship` opens the bump PRs along the chain, and `gero repo branch` and `gero repo tag` make the pieces by hand. The scripts in the repos keep running in CI until v1.x replaces them.
 * Real configs exist for all repos and validate in CI.
 * A backlog of well-sized issues that someone else can pick up without the author.
 
@@ -77,7 +77,7 @@ Planning labels, not promises, roughly in dependency order. Only stable tags are
 | v1.1 | **`gero ci:ship`:** the same bump as the bot from a workflow ([CI_SHIP](specs/CI_SHIP.md)): a temporary clone, the bot identity, a push with a token that starts workflows, a step summary, steps from the producer and the central bundle. Run beside `push-to-rancher.yml`, then in place of it | v1.0.0 |
 | v1.2 | **Tracking issue format:** versioned state block, read-only rendered view, labels including stale; fixture-driven tests | v1.0.0 |
 | v1.3 | **Reconciler:** `gero ci:reconcile` on cron, per-operation locks, backoff; observe human-pushed tags first | v1.1, v1.2 |
-| v1.4 | **Flow A and Flow B in CI**, tracked end to end through `gero`, beside and then replacing today's scripts | v1.3, v1.0.0 |
+| v1.4 | **The POC flow and the chain flow in CI**, tracked end to end through `gero`, beside and then replacing today's scripts | v1.3, v1.0.0 |
 | v1.5 | `VERSION.md` generator and verify: generate from `release.lines` and `RancherLines` with a generated header, dry-run diff, PR on the default branch | v1.0.0 |
 | v1.6 | Shared reusable workflows (CI, head builds, FOSSA), pinned by `gero` tag or SHA | v1.0.0 |
 | v1.7 | Rendered workflows from `WorkflowsConfig`; the release workflow last (signing and attestation make it the most sensitive) | v1.6 |
