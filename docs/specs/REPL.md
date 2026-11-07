@@ -1,6 +1,6 @@
 # REPL
 
-**Status:** draft. Nothing is built.
+**Status:** draft. Step 1 of the build order is built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `exit` and the working directory); there is no `gero repl` command yet.
 
 `gero repl` is an interactive prompt that runs `gero` commands one line at a time, with a few shell-like commands of its own so a user has less reason to leave it. It is not a shell: it is started from one, and exiting returns to it. The goal is fewer trips out, not a replacement for the user's shell.
 
@@ -101,7 +101,7 @@ The REPL loop, the REPL-only commands and the shell hand-off are in `internal/cl
 
 ## Not built yet
 
-Everything. In the order it is meant to land, stopping when users stop leaving:
+Step 1 exists as the core only: `Session`, `Split`, `Exec` and `Loop`, with the runner and the project lookup of `ls` injected. The `gero repl` command in `cmd/`, which needs the tree built for each line, the TTY refusals and the real runner, is not written. In the order it is meant to land, stopping when users stop leaving:
 
 1. The loop, `pwd`, `ls` and `exit`, with the working directory as state.
 2. `cd <project>`.
