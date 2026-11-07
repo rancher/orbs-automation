@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
@@ -187,21 +187,20 @@ func renderJSON(r Report) (string, error) {
 // RenderChecks formats the check list for --list-checks as clicfg.OutputText or
 // clicfg.OutputJSON.
 func RenderChecks(checks []Check, format string, view *style.Renderer) (string, error) {
-	_ = view
 	switch format {
 	case clicfg.OutputText:
-		var b strings.Builder
-		w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tCATEGORY\tONLINE\tDESCRIPTION")
+		rows := [][]string{{
+			view.Style(style.Dim, "NAME"), view.Style(style.Dim, "CATEGORY"),
+			view.Style(style.Dim, "ONLINE"), view.Style(style.Dim, "DESCRIPTION"),
+		}}
 		for _, c := range checks {
-			online := "no"
+			online := view.Style(style.Dim, "no")
 			if c.Online() {
 				online = "yes"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", c.Name(), c.Category(), online, c.Description())
+			rows = append(rows, []string{c.Name(), view.Style(style.Dim, c.Category()), online, c.Description()})
 		}
-		_ = w.Flush() // writes to a strings.Builder, which cannot fail
-		return b.String(), nil
+		return ui.Align(rows, view.Width), nil
 	case clicfg.OutputJSON:
 		type entry struct {
 			Name        string `json:"name"`
