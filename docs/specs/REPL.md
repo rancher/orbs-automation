@@ -21,7 +21,7 @@ These exist only inside the REPL and are not in the command tree, so `gero pwd` 
 | `ls [target]` | Lists a directory: names only, sorted, a trailing `/` on directories. No flags. The target is described below |
 | `cd <project>` | The existing `gero cd` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), below |
 | `!<command line>` | Runs the rest of the line in the user's shell (`$SHELL -c`), in the working directory, with the terminal attached, then returns to the prompt |
-| `shell` | Starts the user's `$SHELL` as an interactive child process with `GERO_REPL=1` in its environment. Exiting it returns to the prompt |
+| `shell` | Starts the user's `$SHELL` as an interactive child process with `GERO_REPL=1` in its environment. Exiting it returns to the prompt. The bare word only: `shell` with any argument is an error, and the `gero shell` setup commands are not reachable inside the REPL until `!` is built |
 | `help` | The command tree's help, plus these commands |
 | `exit`, Ctrl-D | Leaves the REPL |
 
@@ -40,7 +40,15 @@ A path below a project, such as `ls <project>/docs`, is not accepted: the user c
 
 **`!` and `shell`.** The child gets the REPL's working directory and environment, so a `cd` done in the REPL is seen by `!` and `shell`. The reverse does not hold: a `cd` inside `shell` or `!` ends with that child and does not move the REPL, as with any subprocess. The `gero` function from [SHELL_SETUP](SHELL_SETUP.md) works in the child as it does in any shell. `GERO_REPL=1` is there so a user can mark their prompt and so a nested `gero repl` is refused.
 
-**This is not what `internal/execx` is for.** `execx` is the one place `gero` starts another program, and it takes a binary from an allow list, an argument vector never a shell string, and a scrubbed environment ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). A passthrough is the reverse on each count: the user's own `$SHELL`, a line the user typed handed to it as a string, the terminal attached, and the environment the user started the REPL with. It is a separate, narrow entry point in `execx`, used only by the REPL, with its own policy entry. It is never reached from a command's `RunE`, and no `gero` command builds a shell string.
+**`shell` in detail** (decided). The child is `$SHELL` run as is, with no arguments: with the terminal attached it is interactive on its own and reads the user's usual startup files, as one started from a terminal does. No `-i` and no `-l`.
+
+* **Shadows the tree.** The REPL-only `shell` takes the name from the tree's `gero shell` (`init`, `install`, `uninstall`). A line whose first word is `shell` is the child, and with any other word after it is an error saying `shell` takes no arguments, never a pass-through to the tree. The setup commands are for a real shell, where `gero shell install` works as before, and they are reachable from the REPL through `!gero shell install` once `!` is built. Until then they are not reachable inside the REPL.
+* **`$SHELL` unset or not an executable file is an error** naming `$SHELL`. The REPL does not guess `/bin/sh`: it is the user's shell or no shell, as the REPL itself is the user's REPL or none.
+* **The whole environment is passed through**, plus `GERO_REPL=1`. This is what a user expects of their own shell, which already holds any token in it. It also sets the policy for `!`, to be built, which gets the same environment.
+* **The exit status of the child is not shown and not an error.** The status of an interactive shell is that of the last command run in it, not a failure of `shell`, so the REPL returns quietly to the prompt. Only a failure to start the child is an error.
+* **Ctrl-C belongs to the child** while it runs. It is in the foreground of the terminal and receives the signal, and the REPL neither cancels anything nor leaves while it waits. The REPL's interrupt handling resumes when the child exits.
+
+**This is not what `internal/execx`'s `Runner` is for.** `Runner` is the one place `gero` starts an allow-listed program, and it takes a binary from an allow list, an argument vector never a shell string, and a scrubbed environment ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). A passthrough is the reverse on each count: the user's own `$SHELL`, a line the user typed handed to it as a string (for `!`), the terminal attached, and the environment the user started the REPL with. It is a separate function and type in `execx`, `Passthrough` taking a `PassCmd` (the shell, an argument vector, the directory, the environment, and the input and output streams) and a context, and not a method on `Runner`, so the two policies cannot blur into one. It is used only by the REPL, has its own policy entry, and the REPL core takes it as an injected function so tests need no real shell. It is never reached from a command's `RunE`, and no `gero` command builds a shell string.
 
 ## Working directory is the session state
 
@@ -105,16 +113,15 @@ Steps 1 and 2 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the 
 
 1. The loop, `pwd`, `ls` and `exit`, with the working directory as state.
 2. `cd <project>` (built).
-3. `shell` and `GERO_REPL`.
+3. `shell`, with `GERO_REPL` in its child's environment and the `execx` `Passthrough` entry point (decided above, not yet built). The REPL already sets `GERO_REPL` in its own process, so a nested `gero repl` is refused today.
 4. History, line editing and completion.
 5. The prompt template, `repl.prompt` and its placeholders, which also puts the project in the prompt for a user who wants it. Until then the prompt is the plain default.
 
-`!<command line>` is deferred, and so is everything about how it is built, the `execx` entry point and the environment it passes included. They are decided when it is built. `shell` starts a program the same way, so whichever of the two is built first settles that entry point for both.
+`!<command line>` stays deferred, and builds on what `shell` settles: the `Passthrough` entry point, the whole environment passed through, and the `$SHELL` rules above. It adds the `$SHELL -c` line, the question of its exit status and its tests, and with it the `gero shell` setup commands become reachable from the REPL.
 
 ## Open questions
 
 * **Keyboard shortcuts.** What works today comes from the terminal's own line discipline, because the plain reader reads whole lines: Ctrl-D at an empty prompt is end of input and leaves, Ctrl-C clears the line or cancels the running command, and Ctrl-U, Ctrl-W and Backspace edit the line as in any cooked-mode program. Nothing else can work without raw mode, since a key like Ctrl-X is not delivered until Enter. Ctrl-X as an exit key is therefore decided with the editor in step 4, where it competes with the editor's own bindings (in emacs-style editors Ctrl-X is a prefix, and Ctrl-X Ctrl-C is the usual exit), so the choice there is between that chord and Ctrl-D alone **(unverified)**. History search (Ctrl-R), Ctrl-A and Ctrl-E, and Ctrl-L to clear the screen come with the same library.
 * The prompt's syntax, placeholder set and key name, `repl.prompt`, are **(leaning)** and are fixed when the template is built, along with whether it needs a way to show that the last line failed.
 * Which front end, an editor on a loop or a Bubble Tea program, and so which library, decided when the line editor is built, from a spike behind `internal/ui` **(unverified)**. The candidates are `chzyer/readline`, `reeflective/console`, a small raw-mode editor on `golang.org/x/term` (already in `go.sum`), and Bubble Tea v2 with `bubbles` and `lipgloss` v2 ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). The measure is the one used for prompts in [CLI_OUTPUT](CLI_OUTPUT.md): modules added, binary size and behavior without a TTY, plus two more for the second shape: whether a write command's stdin confirmation and Ctrl-C work unchanged inside it, and which package measures width.
-* Whether the passthrough passes the whole environment through, as the user's own shell would have it, or scrubs `GH_TOKEN` and `GITHUB_TOKEN` as `execx` does for every other child. Decided with the first of `!` and `shell` to be built. Passing it through matches what a user expects. Scrubbing keeps a token out of a program the user did not mean to give it to, though the user's shell already holds it.
 * Which phase the REPL belongs to, if any ([PHASES](../PHASES.md)). It is not scheduled.
