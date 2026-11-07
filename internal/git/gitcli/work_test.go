@@ -346,3 +346,48 @@ func TestCountCommits(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, known, "a commit the clone does not hold is unknown, not zero")
 }
+
+func TestCommitFilesListsThePathsACommitChanged(t *testing.T) {
+	dir := clone(t, upstream(t))
+	write(t, dir, "build.yaml", "image: new\n")
+	write(t, dir, "app/gen/out.go", "package gen\n")
+	write(t, dir, "docs/a b.md", "spaces in a name\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "--quiet", "-m", "change three files")
+
+	got, err := CommitFiles(ctx, dir, run(t, dir, "rev-parse", "HEAD"))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"app/gen/out.go", "build.yaml", "docs/a b.md"}, got, "every path, nested ones whole, in git's order")
+}
+
+func TestCommitFilesOfADeletionAndARenameNameThePathsTouched(t *testing.T) {
+	dir := clone(t, upstream(t))
+	run(t, dir, "rm", "--quiet", "build.yaml")
+	write(t, dir, "new.txt", "x\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "--quiet", "-m", "delete one, add one")
+
+	got, err := CommitFiles(ctx, dir, run(t, dir, "rev-parse", "HEAD"))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"build.yaml", "new.txt"}, got)
+}
+
+func TestCommitFilesOfARootCommitListsItsFiles(t *testing.T) {
+	dir := clone(t, upstream(t))
+	root := run(t, dir, "rev-list", "--max-parents=0", "HEAD")
+
+	got, err := CommitFiles(ctx, dir, root)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"build.yaml"}, got)
+}
+
+func TestCommitFilesOfACommitThatIsNotThereIsAnError(t *testing.T) {
+	dir := clone(t, upstream(t))
+
+	_, err := CommitFiles(ctx, dir, "0123456789abcdef0123456789abcdef01234567")
+
+	require.Error(t, err)
+}
