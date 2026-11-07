@@ -2,6 +2,8 @@ package linesresolve
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -318,4 +320,107 @@ func TestResultIsJSONThatReadsBack(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &back))
 	assert.Equal(t, got, back)
 	assert.Contains(t, string(data), `"takesFrom"`)
+}
+
+type fakeWorkspace struct {
+	cfg       config.Config
+	cfgErr    error
+	engine    *updatedispatcher.Engine
+	engineErr error
+}
+
+func (f fakeWorkspace) Config() (config.Config, error) { return f.cfg, f.cfgErr }
+func (f fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
+	return f.engine, f.engineErr
+}
+
+func workspaceOf(t *testing.T) fakeWorkspace {
+	t.Helper()
+	cfg := fixtureConfig()
+	return fakeWorkspace{cfg: cfg, engine: engineOf(t, cfg)}
+}
+
+func rendered(t *testing.T, format string, opts Options) (string, error) {
+	t.Helper()
+	var b strings.Builder
+	err := run(&b, workspaceOf(t), format, opts, now)
+	return b.String(), err
+}
+
+func TestRunTextIsTheLinesNewestFirstEachWithWhatIsConnectedToIt(t *testing.T) {
+	out, err := rendered(t, "text", Options{})
+
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(out, "Release lines, through rancher/rancher\n"), out)
+	assert.Less(t, strings.Index(out, "\nv2.16"), strings.Index(out, "\nv2.15"))
+	assert.Less(t, strings.Index(out, "\nv2.15"), strings.Index(out, "\nv2.13"))
+	for _, want := range []string{
+		"v2.15  ga  GA 2026-08-27, EOM 2027-02-27, EOL 2028-02-27  Kubernetes 1.34-1.36",
+		"v2.16  development", "v2.13  eol",
+		"rancher/rancher  release/v2.15",
+		"rancher/rancher  main (default branch)",
+		"takes from", "ships to", "also on this line",
+	} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestRunTextSaysWhatFeedsAndWhatIsFedWithSeriesBranchAndMethod(t *testing.T) {
+	out, err := rendered(t, "text", Options{Lines: []string{"v2.15"}})
+
+	require.NoError(t, err)
+	for _, want := range []string{
+		"shell", "0.8.x", "release/v2.15", "build-yaml-bump",
+		"scc-operator", "any release",
+		"docs", "version-2.15",
+		"charts", "release-v2.15", "takes from obteam (any release)",
+	} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestRunTextMarksTheGapsAndCountsThem(t *testing.T) {
+	out, err := rendered(t, "text", Options{})
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "! shell has no line v2.13")
+	assert.Contains(t, out, "Gaps: 1")
+
+	clean, err := rendered(t, "text", Options{Lines: []string{"v2.15"}})
+	require.NoError(t, err)
+	assert.Contains(t, clean, "No gaps.")
+}
+
+func TestRunJSONIsTheResult(t *testing.T) {
+	out, err := rendered(t, "json", Options{Phases: []string{"ga"}})
+
+	require.NoError(t, err)
+	var got Result
+	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+	assert.Equal(t, []string{"v2.15"}, ids(got))
+	assert.Equal(t, "rancher/rancher", got.Hub)
+}
+
+func TestRunErrorsComeBackBeforeAnythingIsWritten(t *testing.T) {
+	var b strings.Builder
+	ws := workspaceOf(t)
+	assert.Error(t, run(&b, ws, "env", Options{}, now), "an output format it does not support")
+	ws.cfgErr = errors.New("no config directory")
+	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now), "no config directory")
+	ws = workspaceOf(t)
+	ws.engine = nil
+	ws.engineErr = errors.New("method x is not usable")
+	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now), "not usable")
+	assert.Empty(t, b.String())
+}
+
+func TestRunAnEngineThatIsPartlyUsableIsStillUsed(t *testing.T) {
+	ws := workspaceOf(t)
+	ws.engineErr = errors.New("method y of charts is not usable")
+	var b strings.Builder
+
+	err := run(&b, ws, "text", Options{Lines: []string{"v2.15"}}, now)
+
+	require.NoError(t, err)
+	assert.Contains(t, b.String(), "shell")
 }

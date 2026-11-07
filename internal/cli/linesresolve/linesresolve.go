@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
+	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
 // ErrNoHub is returned when no project can be taken as the hub of the map, and
@@ -394,8 +395,11 @@ func date(t time.Time) string {
 }
 
 // Run writes the map to w in the format the settings ask for.
+func Run(_ context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
+	return run(w, workspace.Open(s, cwd), s.Output, opts, time.Now())
+}
+
+// run is Run over its dependencies.
 //
 // STUB: does nothing until a later commit.
-func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
-	return nil
-}
+func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time) error { return nil }
