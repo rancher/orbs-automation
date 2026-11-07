@@ -114,5 +114,5 @@ Stretch 1:
 Later stretches:
 
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
-* Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag", or the image's contents have to be read, which the release's image lists could answer: each Assets tag has a GitHub release with them ([rancher-assets](../projects/rancher-assets.md)).
+* Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag". The answer is traced through the `lock.yaml` at that tag, which records the commit the generated Dockerfile used, to the contents of `rancher/charts` at that commit. It belongs to stretch 2, with the charts-to-Assets connection.
 * How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.
