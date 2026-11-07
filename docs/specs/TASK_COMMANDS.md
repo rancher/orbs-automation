@@ -68,6 +68,7 @@ Tagged v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell
 $ gero repo tag shell v2.15 --stable --push
 Push the tag v0.8.4 on release/v2.15 at 8c61398, which is v0.8.4-rc.1 with no commits since, in rancher/shell to upstream? [y/N] y
 Tagged and pushed v0.8.4 on release/v2.15 at 8c61398 ... to upstream
+  https://github.com/rancher/shell/releases/tag/v0.8.4
 ```
 
 **In CI** the same task runs as the bot, with a push made with a token that starts workflows. The tracking issue's sign-off, a check before a stable tag is made, is a gate above this command and not part of it, and is not decided ([METADATA](METADATA.md#control-labels)).

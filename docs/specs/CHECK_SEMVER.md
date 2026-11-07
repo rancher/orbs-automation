@@ -40,7 +40,7 @@ gero semver check [tag]
 
 * **Context:** either (read-only, no credentials).
 * The command reads the environment and passes the string down. The library never reads it.
-* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/repo.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
+* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/semver.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
 
 ## 3. Library
 
@@ -66,7 +66,7 @@ func Classify(tag string, opts ...Option) Info
 * The default call reproduces the script (section 2). `WithGrammar()` switches to the SemVer 2.0.0 grammar (section 6).
 * No I/O, no environment, no error return: non-SemVer is a result, not a failure.
 * Implemented with the stdlib `regexp`, with no dependency **(leaning)**. The script's regex must be reproduced exactly, which a strict SemVer library would not do. A library can be adopted later for the grammar mode if [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) allows it and the tests still hold.
-* It is the one place tag classification lives. `lines resolve`, `reconcile` and the prerelease policy call it instead of reimplementing the shell check.
+* It is the one place tag classification lives. `repo images exist`, `ship` (the prerelease policy) and later `reconcile` call it instead of reimplementing the shell check.
 
 ## 4. Test plan
 

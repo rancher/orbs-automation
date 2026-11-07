@@ -40,7 +40,7 @@ flag > env > user file > inferred from CWD repo > built-in default > error
 | `fork` | Remote with the same repo name under a different owner |
 | `githubUser` | Owner of the fork remote's URL (no network call) |
 | Release line | `main` is the development line; `release/vX.Y` is that line |
-| `output` | `text`; color follows `NO_COLOR` and TTY detection |
+| `output` | `text`. The separate `color` setting is `auto` unless set, and its rules are in [CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities) |
 | `branchPrefix` | None |
 
 Rules:

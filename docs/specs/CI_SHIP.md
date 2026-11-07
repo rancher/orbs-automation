@@ -1,6 +1,6 @@
 # CI_SHIP
 
-**Status:** draft. The command, what it shares with `gero ship` and what differs are decided in outline; the shape of its setup is open on purpose ([Open questions](#open-questions)). Nothing here is built.
+**Status:** draft. The command, what it shares with `gero ship` and what differs are decided in outline; the shape of its setup is open on purpose ([Open questions](#open-questions)). `gero ship` runs as the bot when `Settings.CI` is set, over the same backend; the `ci:ship` command and its setup are not built (see [Not built yet](#not-built-yet)).
 
 `gero ci:ship` is the same bump as [`gero ship`](PUSH_TO_REPO.md), run by a workflow as the bot. It replaces the bash that the producer's workflow runs today (`push-to-rancher.yml` calling `run-gha.sh`: check the image, set the bot identity in a fresh checkout of the consumer, open a PR for each branch). The context rules it follows are in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md), and this spec only adds what is specific to shipping.
 
@@ -11,7 +11,7 @@
 * **The place to work.** A workflow has no engineer's clone. `ci:ship` is given a clean clone of the consumer, which `internal/ship` already works in without touching anything else: a new branch in place, removed after the run. The `Workspace` interface is the seam. `gero ship` answers `CloneDir` with the engineer's clone found by `gero cd`, and `ci:ship` answers it with a temporary one ([Open questions](#open-questions) says how it gets there).
 * **The actor, the push and the labels** are the CI column of the table in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#what-differs-by-context): the bot's commit identity from `GERO_BOT_USER`, a push to the upstream with the workflow's token, the `bot/` branch prefix, and the project's `botLabels` besides its `labels`. The push target in CI is always the upstream ([PUSH_TO_REPO](PUSH_TO_REPO.md#where-the-branch-is-pushed)).
 * **No prompt.** The workflow passes `--non-interactive` (or sets `GERO_NON_INTERACTIVE`), and without it the command fails before writing, naming the flag.
-* **Output.** The log handler is JSON, `--json` and `--output env` work as for every command ([CLI_OUTPUT](CLI_OUTPUT.md)), and the report is also written as markdown to `$GITHUB_STEP_SUMMARY` **(leaning)**, which is what the bash's `summary` function does today.
+* **Output.** The log handler is JSON, `--json` works as it does for `gero ship` ([CLI_OUTPUT](CLI_OUTPUT.md)), and `--output env` is not built for `ship`, and the report is also written as markdown to `$GITHUB_STEP_SUMMARY` **(leaning)**, which is what the bash's `summary` function does today.
 
 ## Rules that do not change in CI
 

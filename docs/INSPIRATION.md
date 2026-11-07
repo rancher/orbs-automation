@@ -20,14 +20,9 @@ Our team name—**ORBS**—was inspired by the legendary **Dragon Balls** from *
 
 While the tool's name pays homage to DBZ lore, the CLI interface itself remains pragmatic, clean, and intuitive for daily developer workflows using standard `gero <category> <action>` syntax.
 
-### Key Workflow Categories
+### Commands
 
-* **gero config** — Local developer setup, API token management, and workspace initialization.
-* **gero build** — Local builds, container generation, and artifact compilation.
-* **gero test** — Running automated test suites, linting, and code quality checks.
-* **gero deploy** — Triggering release pipelines, environment deployments, and status tracking.
-* **gero sync** — Pulling down upstream configurations, secrets, or microservice dependencies.
-* **gero status** — Inspecting local environment health, active pipelines, and service states.
+The commands are noun and verb, as in `gh`: `gero repo status`, `gero ship`, `gero lines resolve`, `gero config validate`, `gero doctor`. `gero --help` is the current tree, and [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md) is how it is organized.
 
 ---
 

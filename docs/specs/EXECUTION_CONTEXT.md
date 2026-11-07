@@ -1,6 +1,6 @@
 # Execution Context
 
-**Status:** draft. Detection and CI-only gating are built (see [Detecting the context](#detecting-the-context)), and so are the pieces of [What differs by context](#what-differs-by-context) that name an owner other than this spec. The rest is under [Not built yet](#not-built-yet). Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
+**Status:** agreed, and implemented for the detection of the context, CI-only gating, commit identity and the write-command contract of `gero ship`. The rest is under [Not built yet](#not-built-yet). Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
 
 How one `gero` command behaves on an engineer's workstation and in CI, and who it acts as in each. [CLI_FRAMEWORK](CLI_FRAMEWORK.md) decides which commands are CI-only. This spec covers what every command that runs in both has in common, above all the ones that write. The first of those is [PUSH_TO_REPO](PUSH_TO_REPO.md): an engineer runs it locally and the PRs carry their name, and CI runs it and the PRs carry the bot's name. The same command and the same code do both.
 
@@ -89,8 +89,10 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 ## Not built yet
 
-* Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`), and `gero doctor` (the `commit-identity` check) and `gero ship` call it. The cross-repo token check (`cigate.RequireCrossRepoToken`), the workstation-signs detection (`clicfg.WorkstationSigns`) and the `auth status` fallback for installation tokens exist too, and likewise wait for a command to call them. The fallback treats a 403 from `GET /user` as an installation token and is unverified against a real one.
-* The write-command contract is built for `gero ship`, with the work branch or worktree, the one confirmation, and `--non-interactive`/`--yes` or `GERO_NON_INTERACTIVE`. Not yet: the preflight line that names workstation signs under a forced CI context.
+* The cross-repo token check (`cigate.RequireCrossRepoToken`) and the workstation-signs detection (`clicfg.WorkstationSigns`) exist, and no command calls them yet.
+* The `auth status` fallback treats a 403 from `GET /user` as an installation token, which is unverified against a real one.
+* The preflight line that names workstation signs under a forced CI context.
+* `gero repo branch` and `gero repo tag` follow the one-confirmation and `--dry-run` rules but do not print the preflight line, which only `gero ship` prints.
 
 ## Decided
 

@@ -2,7 +2,7 @@
 
 **Status:** implemented.
 
-Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before a release is pushed downstream, check that the images it names are published where they must be. The command is `gero repo images exist`. The same check is the artifact precondition of a downstream bump ([PUSH_TO_REPO](PUSH_TO_REPO.md)), so the logic is a library, `internal/registry`, and the command is a thin wrapper over it.
+Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before a release is pushed downstream, check that the images it names are published where they must be. The command is `gero repo images exist`. The same check is the artifact precondition of a downstream bump, which `gero ship` runs once per release ([PUSH_TO_REPO](PUSH_TO_REPO.md)), so the logic is a library, `internal/registry`, and the command is a thin wrapper over it.
 
 ## The command
 
@@ -10,7 +10,7 @@ Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before 
 
 * The Project is found as for `gero repo info` ([WORKSPACE](WORKSPACE.md)): named, or the repository you are in. One argument is the tag, two are the project and the tag. The tag is used as given (`v0.5.3`).
 * Read-only, and it needs the network. `--json` is supported.
-* One row per image and registry: the registry's label, the full reference, and `found`, `not found` or `unreachable` with the reason.
+* The text report is a title line (`<project> <tag> (stable|prerelease)`), a table with one row per image and registry (`IMAGE`, `REGISTRY`, `STATUS`, `REFERENCE`: the registry's label, the full reference, and `found`, `not found` or `unreachable` with the reason), the warnings, and a closing line. It is styled by the terminal of the settings ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)). `--json` is the one machine format and is never styled, and `--output env` is refused.
 * Exit 0 when every required image is found. Exit 1 when any is not found or could not be reached. Usage and config errors are 2 ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). The rows are printed before a non-zero exit.
 
 `not found` and `unreachable` are different results: a missing image means the publish has not happened, and an unreachable registry means nothing is known. Both fail the run, and the report says which.
@@ -49,7 +49,6 @@ Tests run the client against an `httptest` registry, including the token challen
 ## Not built yet
 
 * `until`, to stop expecting an image after some line. Nothing needs it yet, so it is not designed; an image that is dropped is the case that would.
-* The downstream bump does not call `internal/registry` as its artifact precondition yet, because the bump engine does not exist ([PUSH_TO_REPO](PUSH_TO_REPO.md)).
 
 ## Open questions
 

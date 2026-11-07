@@ -18,8 +18,8 @@ Milestones are tied to `gero` version tags, and each headline tag has an **audie
 
 | Tag | Name | Who builds it | Audience | What we say | Gate |
 |---|---|---|---|---|---|
-| **v0.x** | Solo foundation and POC | The author, with team review | Nobody outside the team | Nothing | POC accepted by the team, then the chain flow runs for real |
-| **v1.0.0** | Foundation and a headline automated, tracked chain | The author | The wider organization, to a limited degree | "We have a tool, it already automates and tracks a multi-repo release chain, and the team is building on it" | Peer-ready and the chain flow runs for real |
+| **v0.x** | Solo foundation and POC | The author | Nobody outside the team | Nothing | POC accepted by the team, then the chain flow runs for real |
+| **v1.0.0** | Foundation and a headline automated, tracked chain | The author, with team review | The wider organization, to a limited degree | "We have a tool, it already automates and tracks a multi-repo release chain, and the team is building on it" | Peer-ready and the chain flow runs for real |
 | **v1.x** | Team build-out | The team | The team, and early users | Progress updates | Real flows run through `gero`; stable tags only |
 | **v2.0.0** | Complete | The team | The wider organization and leadership | "Most of the release work we did by hand is now automated" | A real release cycle run through `gero` |
 | **v3.0.0** | QA bridge | The team with QA | Engineering and QA leadership | "Engineering and QA are now in sync through shared tooling" | QA results appear on release tracking |
@@ -39,7 +39,7 @@ Two flows, in order:
 
 | Label | Work | Depends on |
 |---|---|---|
-| v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show --resolved`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for **all** repos, written and corrected up front even before each is needed | none |
+| v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show` (the settings and where each came from) and `gero config resolve repos`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for the repos Flow A touches (`rancher`, `scc-operator`, `shell`), written and corrected up front; those for Flow B (`kuberlr-kubectl`, BRO, `rancher/charts`) are written with v0.8 to v0.10, and everything for them stays in `config-mock/` until then | none |
 | v0.2 | **Read-only insight:** tag classification, the line map (`gero lines resolve`), a project's releases and who has picked them up (`gero repo status`, which also names what each line can have next), and the release-line rules in one place (`internal/git/releasetag`) for every command to share | v0.1 |
 | v0.3 | **Update dispatcher, `yamlBump` and the workstation bump:** target, branch resolution from the line map, named strategy, steps with a commit for each, per-consumer `pullRequests` conventions, deterministic branches, reuse and supersede of open PRs, `--refresh`, preconditions, a release for each line, fan-out with per-target status. The commands that make the pieces by hand: `repo branch`, `repo tag`. Used by the team beside the existing script | v0.2 |
 | v0.4 | **`gero ci:ship`:** the same bump as the bot from a workflow ([CI_SHIP](specs/CI_SHIP.md)): a temporary clone, the bot identity, a push with a token that starts workflows, a step summary, steps from the producer and the central bundle. Run beside `push-to-rancher.yml`, then in place of it | v0.3 |
@@ -48,7 +48,7 @@ Two flows, in order:
 | v0.7 | **Flow A runs for real** through `gero` in CI and tracked end to end, beside and then replacing today's script | v0.6 |
 | | **POC review with the team:** show Flow A, review the config shapes and the direction, and fold feedback in before going further | v0.7 |
 | v0.8 | **More strategies:** `chartsPackageBump`, run in dry-run beside today's scripts | POC review |
-| v0.9 | **Multi-hop chains:** chain views and the tag step between hops, tracked in one issue; the line map follows a chain through another project to its end (`gero lines resolve` follows one hop today) | v0.8 |
+| v0.9 | **Multi-hop chains:** chain views and the tag step between hops, tracked in one issue; the line map follows a chain through another project to its end | v0.8 |
 | v0.10 | **Flow B runs for real** through `gero`, plus hardening ahead of v1.0.0 | v0.9 |
 
 ### Decides in v0.x
@@ -115,7 +115,7 @@ Planning labels, not promises, roughly in dependency order. Only stable tags are
 * **Docs:** each milestone writes or trims the specs it touches, following the [docs rules](README.md). Facts about specific repos go in `projects/`.
 * **Testing:** fixture-driven tests for resolution and the reconciler; dry-run and `verify` modes for anything that writes.
 * **Dependencies:** stdlib first; a new module needs an entry in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md) and the depguard allow-list.
-* **TUI:** not scheduled. The `internal/ui` seam lands in v0.1 so a TUI can be added after v1.0.0 without touching commands.
+* **Interactive and styled output:** `gero repl`, the line editor, and color are part of v0.x ([REPL](specs/REPL.md), [CLI_OUTPUT](specs/CLI_OUTPUT.md)); what is left of the REPL waits for v1.0.0 and the team's use. A full-screen TUI is not planned, and the `internal/ui` seam keeps one possible without touching commands.
 * **Migration:** old scripts and `automation-core` tooling are retired per capability, not all at once.
 * **Other teams:** another team that wants `gero` can use our releases with their own configs, or fork it. We do not plan special support.
 

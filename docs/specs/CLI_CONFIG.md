@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** implemented for the flags, environment, user file and defaults (`internal/clicfg`) and for locating the central config. The file-only keys other than `repos.*` have no reader yet.
+**Status:** implemented for the flags, environment, user file and defaults (`internal/clicfg`) and for locating the central config. The file keys `fork`, `githubUser`, `branchPrefix`, `pushTo`, `signCommits` and `repos.*` are read by `gero ship`, `gero repo tag` and the workspace.
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md). Inferring values from the working directory, and resolving repo paths, are in [WORKSPACE](WORKSPACE.md).
 
@@ -40,10 +40,12 @@ Highest wins:
 ```go
 type FlagLookup func(key string) (value string, set bool) // set == Flags().Changed
 type Inputs struct {
-    Flags    FlagLookup
-    Getenv   func(string) string
-    UserFile io.Reader // nil when absent
-    CI       bool
+    Flags        FlagLookup
+    Getenv       func(string) string
+    UserFile     io.Reader // nil when absent
+    UserFileName string    // for error messages
+    Home         string    // expands a leading ~ in paths
+    Facts        Facts     // what only the process knows of its terminal
 }
 func Load(Inputs) (Settings, error)
 ```
@@ -73,9 +75,9 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
 | `color` | `GERO_COLOR` | `--color`, `--no-color` | `auto` (default), `always` or `never`. `auto` defers to `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and TTY detection ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) |
 | (none) | `GERO_DRY_RUN` | `--dry-run` | `true` or `false` (default). **Not a user-file key**: a file that turned it on would silence every write |
-| n/a | `GERO_NON_INTERACTIVE` | `--non-interactive`, `--yes` | `true` skips the confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). No user-file key |
+| n/a | `GERO_NON_INTERACTIVE` | `--non-interactive`, `--yes` (on the write commands) | `true` skips the confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). No user-file key |
 | n/a | `GERO_BOT_USER` | n/a | The bot's login in CI, for example `rancher-scc-bot[bot]`, supplied by the workflow with the token. Names the commit identity ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)). Recorded as `Settings.BotUser`; no flag, no user-file key |
-| `host` | `GERO_HOST` | `--host` | GitHub host, if we ever target non-github.com |
+| `host` | `GERO_HOST` | `--host` | **(not built)** GitHub host, if we ever target non-github.com |
 | n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md)). A setting named `log`; no user-file key |
 | `repl.prompt` | `GERO_REPL_PROMPT` | n/a | The prompt of `gero repl`, a template of plain text and placeholders (`{project}`, `{dir}`, `{path}`), default `gero{project: (%s)}> ` ([REPL](REPL.md#the-prompt)). No flag: a prompt is not a per-invocation choice. Checked by `gero repl` when it starts, and by no other command |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
@@ -135,7 +137,6 @@ If none resolves, the command fails with a message listing these four places. Th
 ## Not built yet
 
 * The `inferred` source in `gero config show` ([WORKSPACE](WORKSPACE.md)).
-* A reader for `fork`, `githubUser` and `branchPrefix`.
 
 ## Open questions
 

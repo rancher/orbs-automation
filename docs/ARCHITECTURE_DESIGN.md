@@ -9,7 +9,7 @@ The central engineering tooling and automation ecosystem is designed as a hybrid
 |                            Central Tooling Repository                             |
 |                                                                                   |
 |   +-------------------+    +------------------------+    +--------------------+   |
-|   |  main.go, cmd/,   |    |       workflows/       |    |       config/      |   |
+|   |  main.go, cmd/,   |    |  workflows/ (planned)  |    |       config/      |   |
 |   |  (Go CLI Binary,  |    |  (Reusable GHA Workf)  |    | (project configs)  |   |
 |   |   internal/...)   |    |                        |    |                    |   |
 |   +-------------------+    +------------------------+    +--------------------+   |
@@ -53,7 +53,7 @@ The CLI is built on **cobra** with a small custom loader for CLI config (no vipe
                         internal/clicfg  ->  Settings  ->  command
 ```
 
-Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Prompts and rich rendering sit behind `internal/ui`, which leaves room for a TUI later. Dependencies are stdlib-first and allow-listed. All decisions are in the [specs](specs/README.md).
+Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Output for a person is styled by `internal/ui/style` (lipgloss v2) and laid out by `ui.Align`, and `gero repl` reads its lines through `internal/ui/editor` (ergochat/readline). Each outside module sits behind one package, dependencies are stdlib-first, and the allow-list is in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md). A full-screen TUI is not planned. All decisions are in the [specs](specs/README.md).
 
 ---
 

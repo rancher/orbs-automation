@@ -1,6 +1,6 @@
 # CLI Framework
 
-**Status:** agreed, and implemented for the command tree's first commands. Items marked **(leaning)** are proposals; see Not built yet at the end for the gaps.
+**Status:** agreed, and implemented for every command in the table that is not marked **(leaning)** or **(not built)**. Items marked **(leaning)** are proposals; see Not built yet at the end for the gaps.
 
 How `gero` is built as a CLI: framework, command tree, global flags, context gating and exit codes. Product design is in [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md). Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md).
 
@@ -21,17 +21,17 @@ How `gero` is built as a CLI: framework, command tree, global flags, context gat
 
 ## 2. Command tree and global flags
 
-Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only or either ([execution contexts](../IMPLEMENTATION.md#execution-contexts)).
+Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only (gated by the `gero/context` annotation) or either ([execution contexts](../IMPLEMENTATION.md#execution-contexts)). A command marked workstation is built for an engineer's clone and is not gated by the annotation; `gero repl` refuses CI itself.
 
 | Command | Context | Notes |
 |---|---|---|
 | `gero config validate` | either | Runs without credentials |
-| `gero config show --resolved` | either | Application config with defaults applied; `--json` supported |
+| `gero config show` | either | Read-only; the resolved CLI settings (flags, `GERO_*`, the user file, defaults) with the layer each value came from; `--json` and `--output env` supported. The application config with defaults applied (`--resolved`) is not built ([APP_CONFIG](APP_CONFIG.md)) |
 | `gero config resolve repos [name|owner/name|.]` | either | Read-only; local path of each central-config repo and how it was found ([WORKSPACE](WORKSPACE.md)); `--json` supported. Prints its table before exiting 1 when a repo is unresolved or ambiguous |
 | `gero cd <name\|owner/name>` | either (built for workstations) | Read-only; prints the local clone of a project, found only by the user file (`repos.paths`, else `repos.search`), for a shell function to `cd` into: a program cannot change its parent's directory. The project is always named, never implied. Exits 1 when the project is unknown or has no unique clone ([WORKSPACE](WORKSPACE.md)) |
 | `gero shell init <bash\|zsh\|fish\|powershell>` | either (built for workstations) | Read-only; prints the completion script and the `gero` function that makes `gero cd` change directory ([SHELL_SETUP](SHELL_SETUP.md)) |
 | `gero shell install`, `gero shell uninstall` | either (built for workstations) | Writes the user's shell profile, inside one marked block, after asking (`--yes` to approve, `--shell`, `--profile`); honors `--dry-run` ([SHELL_SETUP](SHELL_SETUP.md)) |
-| `gero repl` | workstation | An interactive prompt that runs this table's commands a line at a time, with `pwd`, `ls` and `shell` of its own, and `cd` changing the REPL's own directory. Needs a TTY; refuses in CI ([REPL](REPL.md)) |
+| `gero repl` | workstation | An interactive prompt that runs this table's commands a line at a time, with `pwd`, `ls`, `shell` and `exit` of its own, and `cd` changing the REPL's own directory. Needs a TTY; refuses in CI ([REPL](REPL.md)) |
 | `gero auth status [--hostname host]` | either | Read-only; the host and token source gero would use (`GH_TOKEN`, `GITHUB_TOKEN`, gh config, gh keyring) and the login GitHub reports for the token; the token is never printed. Prints its result before exiting 1 when GitHub rejects the token. `--json` supported |
 | `gero doctor [check...]` | either (built for workstations) | Read-only; checks the workstation setup and says how to fix what is not. Offline unless `--online`; `--json`, `--list-checks` and `--strict` ([DOCTOR](DOCTOR.md)) |
 | `gero version` | either | Read-only; prints the build version, commit and date, the same text as `--version`. `--json` supported |
@@ -43,11 +43,11 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero repo build-tags` | either | Read-only; port of the shared `branch-tags.sh` script: the rolling, fixed and previous fixed tags of a build of this branch's head. Emits env-style output. `current-tags` is an alias |
 | `gero ship [project] [tag|line]` | workstation | Writes; honors `--dry-run`. Downstream PRs: resolves the tag, checks the state of each consumer branch the release goes to (`--line` for one), then edits, commits, pushes and opens a PR for each, superseding an older one ([PUSH_TO_REPO](PUSH_TO_REPO.md)). Works in the engineer's own clone of the consumer. Asks once, commits, then pushes and opens the PR for each target and closes the actor's own older PRs; `--yes` skips the question, `--push-to fork|upstream` picks where, `--refresh` rebuilds an open PR of the actor's and replaces its branch only if it differs, `--no-push` stops after the commits and never contacts GitHub `--json` supported |
 | `gero repo branch [project] <line> <name>` | workstation | Writes the local clone only, so it asks nothing; honors `--dry-run`, `--json` supported. Makes a branch off the upstream branch of a release line and leaves the checkout alone; `--switch` moves onto it ([TASK_COMMANDS](TASK_COMMANDS.md)) |
-| `gero repo tag [project] <line> [tag]` | both | Makes a lightweight tag in the clone, so it asks nothing; `--push` sends it to the upstream and asks once (`--yes` or `GERO_NON_INTERACTIVE` skips it). Honors `--dry-run`, `--json` supported (a push needs `--yes`). The tag is on the head of the upstream branch of a release line, chosen from the line's newest when not named (`--stable`, `--minor`, `--major`), never moving one ([TASK_COMMANDS](TASK_COMMANDS.md#gero-repo-tag-project-line-tag)) |
+| `gero repo tag [project] <line> [tag]` | either | Makes a lightweight tag in the clone, so it asks nothing; `--push` sends it to the upstream and asks once (`--yes` or `GERO_NON_INTERACTIVE` skips it). Honors `--dry-run`, `--json` supported (a push needs `--yes`). The tag is on the head of the upstream branch of a release line, chosen from the line's newest when not named (`--stable`, `--minor`, `--major`), never moving one ([TASK_COMMANDS](TASK_COMMANDS.md#gero-repo-tag-project-line-tag)) |
 | `gero repo push [project] [--branch <name>]` **(leaning)** | workstation | Writes; honors `--dry-run`. Pushes a branch, never forced ([TASK_COMMANDS](TASK_COMMANDS.md)) |
 | `gero pr create [project] [--head <branch>] [--base <line\|branch>]` **(leaning)** | workstation | Writes; honors `--dry-run`. Opens a PR for a pushed branch, the checked-out one unless named ([TASK_COMMANDS](TASK_COMMANDS.md)) |
 | `gero ship bump` **(leaning)** | workstation | Writes. The step of `ship` that applies a change set and commits it; a bare `gero ship` still runs the whole process ([TASK_COMMANDS](TASK_COMMANDS.md)) |
-| `gero ci:ship` | CI-only | The same bump as the bot, from a workflow ([CI_SHIP](CI_SHIP.md)) |
+| `gero ci:ship` **(not built)** | CI-only | The same bump as the bot, from a workflow ([CI_SHIP](CI_SHIP.md)) |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
 | `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
 | `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |
@@ -61,9 +61,11 @@ Global (persistent) flags:
 
 | Flag | Meaning |
 |---|---|
-| `--config-dir` | Where the central config is ([CLI_CONFIG](CLI_CONFIG.md)) |
+| `--config-dir` | Where the central config is ([CLI_CONFIG](CLI_CONFIG.md)); env `GERO_CONFIG_DIR` |
+| `--upstream <remote>` | The remote treated as the real source; env `GERO_UPSTREAM` ([CLI_CONFIG](CLI_CONFIG.md)) |
+| `--output text\|json\|env` | The output format; env `GERO_OUTPUT`. `--json` is shorthand for `--output json` |
 | `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing: no branch is pushed and no PR is opened. Read-only commands accept and ignore it. Env `GERO_DRY_RUN`; not a user-file key, so a file cannot turn it on for every run. Default is off, with `verify` as the explicit check mode **(leaning)**. |
-| `--non-interactive`, `--yes` | Never prompt (env `GERO_NON_INTERACTIVE`), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing **(leaning)** |
+| `--non-interactive`, `--yes` | On the commands that write (`gero ship`, `gero repo tag`; `gero shell install` has `--yes`), not global: never prompt (env `GERO_NON_INTERACTIVE`, which any command reads), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing **(leaning)** |
 | `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
 | `--color auto\|always\|never` | When output is styled ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)). `auto` (default) follows `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and whether stdout is a TTY. `always` and `never` decide it, and beat those variables |
@@ -93,8 +95,8 @@ One helper maps errors to codes so commands return errors and never call `os.Exi
 
 ## Not built yet
 
-* The rest of the command tree beyond the commands in the table that do something today; the others are stubs.
-* The exit-code helper. (`--color` and `--no-color` are built.) Until the helper exists, a usage or validation error exits 1, not 2. (Context gating is built.)
+* `gero workflows sync`, `gero workflows verify` and `gero ci:reconcile` are stubs that return `errs.NotImplemented`. `gero ci:ship`, `gero repo push`, `gero pr create`, `gero ship bump` and `gero dashboard` are not registered.
+* The exit-code helper. Until it exists, a usage or validation error exits 1, not 2.
 * `--json` for `config validate`, and `--output env` for `auth status`.
 
 ## Open questions

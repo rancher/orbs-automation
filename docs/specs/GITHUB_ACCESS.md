@@ -20,7 +20,7 @@ All go-gh use stays in `internal/github/gogh.go` (lint-enforced).
 
 ## REST: `google/go-github`
 
-Typed REST calls (issues, tags, PRs, releases, check runs). It is the main API client and its types stay inside `internal/github` (lint-enforced).
+Typed REST calls: PRs, labels and comments, user ids, and the rate limit today; issues, check runs and releases are planned. It is the main API client and its types stay inside `internal/github` (lint-enforced).
 
 * Authenticate with `github.WithAuthToken(token)` using the token from `pkg/auth`. The token goes only to the client's own API origins, sent as `Authorization: Bearer`.
 * Tests inject a fake `http.RoundTripper` with `github.WithTransport`, so no network or port is needed.
@@ -33,7 +33,7 @@ Typed REST calls (issues, tags, PRs, releases, check runs). It is the main API c
 
 **`git` via a subprocess is an escape hatch, not a fallback.** go-git is the implementation. There is no try-go-git-then-git at runtime and no matching API on both sides. The `git` binary is used only for a specific operation go-git cannot do, or does differently from git in a way that matters, and each use records the reason next to the code. All such uses live in `internal/git/gitcli`, which starts git through `internal/execx`, so `gitcli` is the list of what go-git could not do. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
 
-**Push and commit signing** are where the escape hatch is expected to be used first, because they depend on the engineer's SSH agent, credential helpers and signing configuration. The reasoning, and who the commits are attributed to in each context, is in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
+**Push and commit signing** are where the escape hatch is used (`gitcli.Push`, `gitcli.PushTag`, signed commits), because they depend on the engineer's SSH agent, credential helpers and signing configuration. The reasoning, and who the commits are attributed to in each context, is in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## `gh` via subprocess
 
@@ -55,7 +55,7 @@ Only if REST proves insufficient (for example batched state queries). That is th
 
 ## Not built yet
 
-* The reconciler's interface over the client, and any REST call beyond the login and rate-limit reads `gero doctor` makes.
+* The reconciler's interface over the client, and the reads and writes of issues, check runs and releases.
 * Enterprise hosts under `*.ghe.com` and `github.localhost`: `NewClient` refuses them until their API address is worked out.
 
 ## Open questions

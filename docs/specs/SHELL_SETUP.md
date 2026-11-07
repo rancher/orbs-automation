@@ -55,3 +55,7 @@ The block is shown and `Continue? [y/N]` is asked before anything is written; on
 * Running the fish and PowerShell scripts in a real shell in tests.
 * Completing the project argument of `gero cd` from the config.
 * A `gero doctor` check that the block is installed and current.
+
+## Open questions
+
+None yet.

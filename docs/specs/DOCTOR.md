@@ -58,7 +58,7 @@ Checks arrive with the feature that depends on them, in the same change. Likely 
 
 ## 3. Output
 
-Grouped by category, in the order environment, dependencies, configuration, authentication. A header line gives the `gero` version. Markers are `✔` ok, `⚠` warn, `✗` fail and `○` skip, so the result reads the same without color. A remediation follows its line, indented, after `→`:
+Grouped by category, in the order environment, dependencies, configuration, authentication. A header line gives the `gero` version. Markers are `✔` ok, `⚠` warn, `✗` fail and `○` skip, so the result reads the same without color. With color on ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) the markers, headings, remediation and closing line are styled, and `--json` is never styled. A remediation follows its line, indented, after `→`:
 
 ```
 gero 0.4.0 (commit abc1234, built 2026-10-29)
@@ -94,7 +94,7 @@ gero doctor [check...] [--online] [--timeout 10s] [--strict] [--list-checks]
 ```
 
 * `gero doctor <check>...` runs only the named checks, plus the checks they need, which are shown. Naming an online check runs it without `--online`: asking for it by name is the opt-in.
-* `--list-checks` prints each check's name, category, whether it is online, and a one-line description, then exits.
+* `--list-checks` prints each check's name, category, whether it is online, and a one-line description, then exits; it honors `--json` too.
 * `--online` adds the checks that need the network. `--timeout` bounds each of them. A timeout is a `warn`, never a `fail`, since a flaky network is not a broken setup.
 * `--strict` makes warnings exit non-zero.
 * An unknown check name is a usage error and prints the list.
