@@ -341,3 +341,65 @@ func TestCheckAPrereleaseIsNeverAskedForAPrerelease(t *testing.T) {
 
 	require.NoError(t, err)
 }
+
+func TestCandidatesAreTheNextPrereleaseAndTheNextStableWithTheReasonEachIsRefused(t *testing.T) {
+	rc := func(commit string) git.Tag { return git.Tag{Name: "v0.8.4-rc.2", Commit: commit} }
+	tests := []struct {
+		name  string
+		c     Choice
+		want  [2]string // the tags, in the order prerelease then stable or promotion
+		kinds [2]Kind
+		errs  [2]error
+	}{
+		{"after a stable tag", line(at("old", "v0.8.3")...), [2]string{"v0.8.4-rc.1", "v0.8.4"}, [2]Kind{KindPrerelease, KindStable}, [2]error{nil, nil}},
+		{"an rc on the head: only the promotion", line(rc("head1234")), [2]string{"v0.8.4-rc.3", "v0.8.4"}, [2]Kind{KindPrerelease, KindPromotion}, [2]error{ErrNothingNew, nil}},
+		{"an rc and the branch has moved: only another rc", line(rc("old")), [2]string{"v0.8.4-rc.3", "v0.8.4"}, [2]Kind{KindPrerelease, KindPromotion}, [2]error{nil, ErrMovedSincePrerelease}},
+		{"a stable tag on the head: nothing", line(at("head1234", "v0.8.3")...), [2]string{"v0.8.4-rc.1", "v0.8.4"}, [2]Kind{KindPrerelease, KindStable}, [2]error{ErrNothingNew, ErrNothingNew}},
+		{"no tag yet", line(), [2]string{"v0.8.0-rc.1", "v0.8.0"}, [2]Kind{KindPrerelease, KindStable}, [2]error{nil, nil}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Candidates(tt.c)
+
+			require.Len(t, got, 2)
+			for i, cand := range got {
+				assert.Equal(t, tt.want[i], cand.Tag, "candidate %d", i)
+				assert.Equal(t, tt.kinds[i], cand.Kind, "candidate %d", i)
+				if tt.errs[i] == nil {
+					assert.NoError(t, cand.Err, "candidate %d", i)
+				} else {
+					assert.ErrorIs(t, cand.Err, tt.errs[i], "candidate %d", i)
+				}
+			}
+		})
+	}
+}
+
+func TestCandidatesAPromotionSaysWhichPrereleaseItPromotes(t *testing.T) {
+	got := Candidates(line(git.Tag{Name: "v0.8.4-rc.2", Commit: "head1234"}))
+
+	require.NotNil(t, got[1].Promotes)
+	assert.Equal(t, "v0.8.4-rc.2", got[1].Promotes.Name)
+	assert.Nil(t, got[0].Promotes)
+}
+
+func TestCandidatesWhenAPrereleaseIsRequiredTheStableAfterAStableIsRefusedButStillNamed(t *testing.T) {
+	c := line(at("old", "v0.8.3")...)
+	c.RequiresPrerelease = true
+
+	got := Candidates(c)
+
+	assert.Equal(t, "v0.8.4", got[1].Tag)
+	assert.ErrorIs(t, got[1].Err, ErrNeedsPrerelease)
+	assert.NoError(t, got[0].Err)
+}
+
+func TestCandidatesWithNoTagAndNoSeriesHaveNoTag(t *testing.T) {
+	c := line()
+	c.Series = ""
+
+	for _, cand := range Candidates(c) {
+		assert.ErrorIs(t, cand.Err, ErrNoBase)
+		assert.Empty(t, cand.Tag)
+	}
+}

@@ -191,6 +191,40 @@ type Chosen struct {
 	Promotes *git.Tag
 }
 
+// Kind says what a candidate tag is.
+type Kind string
+
+// The kinds of tag a line can have next.
+const (
+	// KindPrerelease: the next iteration of the prerelease under way, or after a
+	// stable tag the first prerelease of the next version.
+	KindPrerelease Kind = "prerelease"
+	// KindStable: the next stable tag, after a stable one.
+	KindStable Kind = "stable"
+	// KindPromotion: the stable version of the prerelease that is newest.
+	KindPromotion Kind = "promotion"
+)
+
+// Candidate is a tag the line could have next, and whether it may be made now.
+type Candidate struct {
+	Tag  string
+	Kind Kind
+	// Promotes is the prerelease a promotion is the stable version of.
+	Promotes *git.Tag
+	// Err is why the tag may not be made now (ErrNothingNew, ErrNeedsPrerelease,
+	// ErrMovedSincePrerelease, ErrNoBase), or nil when it may. Tag is still the tag it
+	// would be, except for ErrNoBase, which has none.
+	Err error
+}
+
+// Candidates are the two tags a line can have next, a prerelease and a stable or
+// promotion, each with the reason it may not be made now when it may not. It is
+// the one set of rules that Choose picks from and that gero repo status shows, so
+// what the status says is what the tag command does. Stable is not used.
+func Candidates(c Choice) []Candidate {
+	return []Candidate{prereleaseCandidate(c), stableCandidate(c)}
+}
+
 // Choose picks the tag to make from the newest tag of the line, with
 // internal/semver doing the arithmetic. It is the policy that semver does not
 // have: which tag may follow which.
@@ -203,61 +237,88 @@ type Chosen struct {
 // already has the line's newest tag gets no new one. The tag is written with the
 // "v" the line's tags have, and with the project's pattern when there are none.
 func Choose(c Choice) (Chosen, error) {
-	newest := newestOf(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
-	if newest == nil {
-		return first(c)
+	cand := prereleaseCandidate(c)
+	if c.Stable {
+		cand = stableCandidate(c)
 	}
-	prefix := ""
-	if strings.HasPrefix(newest.Name, "v") {
-		prefix = "v"
+	if cand.Err != nil {
+		return Chosen{}, cand.Err
 	}
-	v, _ := semver.Parse(newest.Name)
-	switch {
-	case !c.Stable:
-		if newest.Commit == c.Commit {
-			return Chosen{}, fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
-		}
-		label := "rc"
-		if v.IsPrerelease() {
-			label = "" // the one under way keeps its name
-		}
-		next, err := v.NextPrerelease(c.Bump, label)
-		if err != nil {
-			return Chosen{}, err
-		}
-		return Chosen{Tag: prefix + next.String()}, nil
-	case v.IsPrerelease():
-		if newest.Commit != c.Commit {
-			return Chosen{}, fmt.Errorf("%w: %s is on %s and the branch is at %s, so the commits after it have no prerelease: make another",
-				ErrMovedSincePrerelease, newest.Name, short(newest.Commit), short(c.Commit))
-		}
-		return Chosen{Tag: prefix + v.NextStable(c.Bump).String(), Promotes: newest}, nil
-	case newest.Commit == c.Commit:
-		return Chosen{}, fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
-	case c.RequiresPrerelease:
-		return Chosen{}, fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
-	}
-	return Chosen{Tag: prefix + v.NextStable(c.Bump).String()}, nil
+	return Chosen{Tag: cand.Tag, Promotes: cand.Promotes}, nil
 }
 
-// first is the first tag of a line that has none, from the start of its series.
-func first(c Choice) (Chosen, error) {
-	start, ok := seriesStart(c.Series)
-	if !ok {
-		return Chosen{}, fmt.Errorf("%w: name the tag", ErrNoBase)
+// vPrefix is "v" when the line's newest tag has one, else when the pattern says.
+func vPrefix(c Choice, newest *git.Tag) string {
+	name := c.Pattern
+	if newest != nil {
+		name = newest.Name
 	}
-	prefix := ""
-	if strings.HasPrefix(c.Pattern, "v") {
-		prefix = "v"
+	if strings.HasPrefix(name, "v") {
+		return "v"
 	}
-	if !c.Stable {
+	return ""
+}
+
+func prereleaseCandidate(c Choice) Candidate {
+	cand := Candidate{Kind: KindPrerelease}
+	newest := newestOf(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	if newest == nil {
+		start, ok := seriesStart(c.Series)
+		if !ok {
+			cand.Err = fmt.Errorf("%w: name the tag", ErrNoBase)
+			return cand
+		}
 		start.Prerelease = "rc.1"
-		return Chosen{Tag: prefix + start.String()}, nil
+		cand.Tag = vPrefix(c, nil) + start.String()
+		return cand
 	}
-	if c.RequiresPrerelease {
-		return Chosen{}, fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
+	v, _ := semver.Parse(newest.Name)
+	label := "rc"
+	if v.IsPrerelease() {
+		label = "" // the one under way keeps its name
 	}
-	return Chosen{Tag: prefix + start.String()}, nil
+	next, err := v.NextPrerelease(c.Bump, label)
+	if err != nil {
+		cand.Err = err
+		return cand
+	}
+	cand.Tag = vPrefix(c, newest) + next.String()
+	if newest.Commit == c.Commit {
+		cand.Err = fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
+	}
+	return cand
+}
+
+func stableCandidate(c Choice) Candidate {
+	cand := Candidate{Kind: KindStable}
+	newest := newestOf(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	if newest == nil {
+		start, ok := seriesStart(c.Series)
+		if !ok {
+			cand.Err = fmt.Errorf("%w: name the tag", ErrNoBase)
+			return cand
+		}
+		cand.Tag = vPrefix(c, nil) + start.String()
+		if c.RequiresPrerelease {
+			cand.Err = fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
+		}
+		return cand
+	}
+	v, _ := semver.Parse(newest.Name)
+	cand.Tag = vPrefix(c, newest) + v.NextStable(c.Bump).String()
+	switch {
+	case v.IsPrerelease():
+		cand.Kind, cand.Promotes = KindPromotion, newest
+		if newest.Commit != c.Commit {
+			cand.Err = fmt.Errorf("%w: %s is on %s and the branch is at %s, so the commits after it have no prerelease: make another",
+				ErrMovedSincePrerelease, newest.Name, short(newest.Commit), short(c.Commit))
+		}
+	case newest.Commit == c.Commit:
+		cand.Err = fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
+	case c.RequiresPrerelease:
+		cand.Err = fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
+	}
+	return cand
 }
 
 // seriesStart is the lowest version of a series: 0.8.x is 0.8.0, 9.x is 9.0.0 and
