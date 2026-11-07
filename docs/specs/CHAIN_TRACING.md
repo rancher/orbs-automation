@@ -46,7 +46,7 @@ All of it is additive: a config without these keys behaves as it does today.
   ```
 
   A line's `branch` is the first stage's branch, so everything that asks for "the branch of a line" keeps its answer. A producer's edge names the stage it lands on (`stage:`, default the first), so a producer of ours lands on `dev` and the release team promotes to `release`.
-* **Lines in tags.** `branching: perLineTag` says the lines of a project are found in its tags and not in per-line branches, and `tagScheme` names how those tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. `tagScheme` is required with `perLineTag`, and a project with per-line branches keeps the default, semver. The stage names are the same as in the charts repo, `dev` and `release`, so an edge between same-named stages needs no mapping.
+* **Lines in tags.** `branching: perLineTag` says the lines of a project are found in its tags and not in per-line branches, and `tagScheme` names how those tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. `tagScheme` is the one extra field it needs: it defaults to semver and `rancher-assets` sets `calverLineStage`. A `perLineTag` project has no `lines` list (the loader refuses one, so tags are the only source): its lines are the lines its tags carry, and a tag that does not parse is skipped. A view that starts from the hub shows only the lines the hub lists, so Assets tags of a retired line do not appear. All of its tags are on its one branch, the repository's default, so it needs no branch per line. Finding the lines reads the tags, so a view that reads no remote shows such a project without lines. The stage names are the same as in the charts repo, `dev` and `release`, so an edge between same-named stages needs no mapping.
 * **Stewardship: `repo.owned` and `repo.managedBy`, two fields that work together.** `owned` says whether `gero` ships from the repository: it is true when the repository's workflows run `gero` ([APP_CONFIG](APP_CONFIG.md)), and false, the default, when shipping to its downstream is not ours. `managedBy` says which team is responsible for the project. It is `orbs` when `owned` is true and `managedBy` is unset; for an unowned project there is no default, and an unset `managedBy` is reported as unspecified and never assumed to be ORBS. The four combinations:
 
   | `owned` | `managedBy` | What it means |
@@ -97,13 +97,14 @@ Everything. Stretch 1 is built in this order: the config additions it needs (`ow
 ## Decided
 
 * An unowned project need not state `managedBy`: it is reported as unspecified.
-* A team name is a lowercase slug: `orbs`.
+* A team name is a lowercase slug: `orbs`, `release-team`.
+* **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. A held tag of a stage other than the edge's expected `stage` is shown as differing from what is expected, styled as a warning, and never fails a run, since it is the normal state during an RC phase. A strict mode for CI is possible later without changing the model.
+* **Branch of an Assets line is Rancher's.** The walk goes from a line to the hub's branch for it (from the hub's own `lines`), reads `build.yaml` there, and parses the Assets tag, whose line must match. Nothing maps lines between the two projects.
 
 ## Open questions
 
 Stretch 1:
 
-* Whether a held `dev` tag is a warning or an error (leaning: a warning), and which Rancher branch each Assets line maps to when the release team's own map is hardcoded (leaning: the lines of the Rancher project's config).
 * Whether the key path for `yamlRead` needs a quoting rule for keys that contain a dot, such as the line `2.16`.
 
 Later stretches:
