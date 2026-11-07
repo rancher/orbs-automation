@@ -318,7 +318,8 @@ func (m mapper) line(l config.Line, now time.Time) Line {
 // r, and when it should but cannot, why (a gap). A producer with no lines of its own
 // ships every release to every release branch of the hub, so it feeds the line the
 // hub's branch is one of them. One that follows lines feeds the line it has, and has
-// a gap for one it lacks.
+// a gap for one it lacks, unless its lines are in its tags (perLineTag): it lists
+// the lines it is used for, and only those are judged.
 func (m mapper) feedsHub(p config.Project, r updatedispatcher.Route, line string, hubNode Node, hubHas bool) (Link, string, bool) {
 	universal := r.Edge.AcceptLines(p) == config.AcceptLinesUniversal
 	pl, pHas := nodeOf(p, line)
@@ -333,6 +334,10 @@ func (m mapper) feedsHub(p config.Project, r updatedispatcher.Route, line string
 			return Link{}, "", false
 		}
 		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Params: r.Edge.Params, Universal: true}, "", true
+	case !pHas && p.Release.Branching == config.BranchingPerLineTag:
+		// Its lines are the ones it is used for, and it lists those, so a line it does
+		// not list is not one it is meant to feed.
+		return Link{}, "", false
 	case !pHas:
 		return Link{}, fmt.Sprintf("%s has no line %s, so nothing of it ships to %s %s", p.Name, line, m.hub.Name, line), false
 	}

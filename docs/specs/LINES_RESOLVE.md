@@ -26,7 +26,7 @@ No gaps.
 * **Takes from** are the projects with an edge to the hub whose releases go to the hub's branch for the line, found with the routes `gero ship` ships down. A producer with its own lines is shown with its series and branch for the line; one with none (`universal`) goes to every release branch of the hub, so it is on every line the hub has a branch for, as `any release`. Each row says the update method and the key it updates.
 * **Ships to** are the projects the hub's releases for the line go to, with the branches, shown when the hub is named with `--hub` and is not the final destination. Nothing ships on from the final destination, so the section is not shown for it, whatever edges it has, and a project it has an edge to is then just on the line. A consumer with no branch for the line is left out.
 * **Also on this line** is every other project that has the line but no direct link to the hub on it, with its own connections, so a chain through it shows. One hop from the hub is followed; the projects reached only through another are listed here with that other connection, and not followed further.
-* **Gaps** are what does not connect, marked with `!` and counted at the end: a producer that follows lines and ships to the hub but has no such line, or has a line the hub does not have. A project that does not have a line the hub has, and ships to nothing on it, is not a gap.
+* **Gaps** are what does not connect, marked with `!` and counted at the end: a producer that follows lines and ships to the hub but has no such line, or has a line the hub does not have. A project that does not have a line the hub has, and ships to nothing on it, is not a gap. Neither is a line a `perLineTag` project does not list (`rancher-assets` lists `v2.16`): it lists the lines it is used for and only those are judged, so it is on `v2.16` as a source and absent from the others without a warning ([CHAIN_TRACING](CHAIN_TRACING.md)).
 * **Filters.** Lines named as arguments (`v2.15` or `2.15`) and `--phase` (one or several of `development`, `ga`, `eom`, `eol`) narrow the lines shown. An unknown line or phase is an error that says what there is. `--json` carries the same map as `lines`, each with its `hub`, `takesFrom`, `shipsTo`, `also` and `gaps`.
 
 ## Not built yet
@@ -37,4 +37,4 @@ No gaps.
 
 ## Open questions
 
-* Whether the Rancher Assets path (charts to the assets image to rancher) is worth modeling as edges, so the chain through `rancher/charts` connects back to the hub and leaves `also`.
+* The charts to Assets edge, so the chain through `rancher/charts` connects back to the hub and leaves `also`: the Assets to Rancher edge is modeled and shown, and charts is stretch 2 of [CHAIN_TRACING](CHAIN_TRACING.md).
