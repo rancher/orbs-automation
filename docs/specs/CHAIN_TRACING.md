@@ -22,7 +22,7 @@ Our own hop is the first one. The others are the release team's, and `gero` read
 
 The chain is traced from its far end back, one stretch at a time, and each stretch is finished before the next starts:
 
-1. **Assets and Rancher.** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. This is the simplest hop to read, and it establishes the tag scheme, `yamlRead`, observed edges and the walk.
+1. **Assets and Rancher.** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. This is the simplest hop to read, and it establishes the shared release scheme, observed edges and the walk.
 2. **Charts to Assets.** Which charts commit an Assets tag was built from, and the dev and release tiers of `rancher/charts`.
 3. **Our projects to charts.** BRO's tag into a charts bump, and `chartsPackageBump`.
 
@@ -63,7 +63,10 @@ All of it is additive: a config without these keys behaves as it does today.
 
 A scheme is code, named in config and claimed from one registry, as update strategies are, and it is table-tested on real tags. It answers four questions: which line a tag is for, which stage, in what order tags of one line and stage come, and which tag is the newest.
 
-In Go, `internal/calver` has a `Scheme` (its name, `Parse` of a tag name into a `Tag` with its line, stage and UTC time, and `Compare` of two tags of one line and stage), a registry of the schemes gero has that is listed explicitly as `updatedispatcher.Builtin` is, and two functions over a scheme and a list of tag names: `Select` (the tags of a line and stage, newest first) and `Lines` (the lines the tags carry, newest first). It works on names and takes no `git` type, so it needs no repository. `semver` is not in it: a project that keeps the default has per-line branches and no scheme to ask.
+In Go there are two layers.
+
+* **`internal/calver`** is the tag format of `calverLineStage` and nothing else: `Parse` of a tag name into a `Tag` with its line, stage and UTC time, `Compare` of two tags of one line and stage, `Select` (the tags of a line and stage, newest first) and `Lines`. It works on names and takes no `git` type.
+* **`internal/tagscheme`** is the one thing every reader of a project's releases asks, and is chosen from the project by `release.branching` and `release.tagScheme`. A `Scheme` answers: the lines the tags carry (`Lines`), the line a tag is in (`LineOf`), the newest stable and the newest prerelease of a line (`Latest`: for semver a stable and a prerelease tag, for `calverLineStage` the `release` stage and the `dev` stage, since a dev tag is a prerelease), whether a tag is stable (`IsStable`), and the order of two tags of a line (`Compare`: semver order, or for CalVer the date, since a newer date with the same line prefix is a newer image). The semver implementation is what `git.InSeries`, `git.LatestReleases` and `ship`'s `lineSeries` do today, moved behind it unchanged, and the CalVer one is `internal/calver`. `ship`, `repo status`, `repo tag` and `lines resolve` call the scheme and carry no scheme code of their own, so `ship` has no CalVer code in it. What tag could be made next (`internal/git/releasetag`) is for tags a person makes, stays semver, and does not apply to a `perLineTag` project, whose tags its own CI makes. This is the `TODO(releasetag)` in `internal/ship/release.go`.
 
 **`calverLineStage`** (the Assets tags):
 * The format is `v{minor}-{YYYYMMDD}T{HHMM}Z`, with `-dev` after it for dev. The date is UTC and to the minute, and it is the commit time of the commit that was released, not the build time. Prod and dev tags of one commit share it.
@@ -73,7 +76,7 @@ In Go, `internal/calver` has a `Scheme` (its name, `Parse` of a tag name into a 
 
 ## Reading a hop
 
-* **`yamlRead`** is a strategy that reads one key of one file at a ref, a branch head, a tag or a commit, and writes nothing. It shares the key-path code of `yamlBump`, and its key may use `{line}`, `{minor}` and `{stage}`. A strategy offers writing through a separate small interface, so a read-only one cannot be asked to write.
+* **No new strategy.** What a hop holds is read by the edge that already names it: `build-yaml-bump` on Rancher's `build.yaml` has a read half (`yamlBump`'s `Check`, which reads a file at a commit and writes nothing), and `rancher-assets.project.yaml` already has that edge. Read-only comes from the project being unowned, not from a second strategy: `gero ship` refuses an unowned producer, and `Holdings` and `Sources` read it. Reading `lock.yaml` at a ref in stretch 2 is a small helper over the file reader and the key-path code of `yamlBump`, not a strategy, and the quoting rule for a key that contains a dot (the line `2.16`) is settled there.
 * **Assets from charts (stretch 2).** The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
 * **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, read as for any `yamlBump` edge, and its tag is parsed by the scheme. The stage of the tag held is shown, and neither stage is a warning.
 
@@ -87,21 +90,21 @@ In Go, `internal/calver` has a `Scheme` (its name, `Parse` of a tag name into a 
 ## Where it lives
 
 * `internal/config` holds the stages, `managedBy`, `perLineTag`, `tagScheme` and the edge's stage, and validates them: `perLineTag` has a known scheme, an observed edge's stage, when set, is one the producer's scheme can give, and `managedBy`, when set, is a lowercase slug (`orbs`). For stretch 2: stage names are unique, each branch pattern has `{line}`, and a managed edge's stage exists on its consumer.
-* `internal/calver` is pure: the schemes and nothing else.
+* `internal/calver` is pure: the tag format and nothing else. `internal/tagscheme` is the shared release scheme, with the semver implementation and a CalVer one on `internal/calver`.
 * `internal/chain` is a pure, cycle-safe walk over the project graph that returns a tree. It asks the graph for edges and a small reader interface for what a hop holds, and has fakes in tests, as the packages that read GitHub do.
-* `internal/updatedispatcher` registers `yamlRead`, and `internal/ship` skips edges from an unowned project.
+* `internal/ship` skips edges from an unowned project and asks the scheme for releases, lines and order.
 * `internal/cli/linesresolve` and `internal/cli/repostatus` use the walk, and the per-run list of a repository's refs is read once and kept for the run.
 
 ## Not built yet
 
-Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), and `gero ship` refusing a producer that is not owned; `config/rancher-assets.project.yaml` uses them; and `internal/calver` with the `calverLineStage` scheme. Not built: `yamlRead` and reading at a ref; then `internal/chain` with `lines resolve`; then `repo status`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
+Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), and `gero ship` refusing a producer that is not owned; `config/rancher-assets.project.yaml` uses them; and `internal/calver` with the `calverLineStage` format. Not built: `internal/tagscheme`, first with the semver implementation moved behind it unchanged and then the CalVer one; `IsUniversal` and an edge's default `lines` for a `perLineTag` project; `Holdings` and `Sources` reading an Assets producer, and `repo status` showing the stage held; then `internal/chain` with `lines resolve`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
 
 ## Decided
 
 * An unowned project need not state `managedBy`: it is reported as unspecified.
 * A team name is a lowercase slug: `orbs`, `release-team`.
 * **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. The stage of a held tag is shown as a fact, and never as a warning or a failure: Rancher holds a `dev` Assets tag (a prerelease) until the release team cuts a stable one, so no stage is wrong there.
-* **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which `yamlRead` at a ref can do. It belongs to stretch 2: first to check a held tag's stage against the rule, and later, if the release team adopts `gero` for Assets, to make the rule part of a `ship` decision.
+* **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which a read of `lock.yaml` at a ref can do. It belongs to stretch 2: first to check a held tag's stage against the rule, and later, if the release team adopts `gero` for Assets, to make the rule part of a `ship` decision.
 * **Lines are found, not listed.** A `perLineTag` project has no `lines` list, so it is configured once for every line it has tags for, and a line with no tags is simply not there.
 * **Branch of an Assets line is Rancher's.** The walk goes from a line to the hub's branch for it (from the hub's own `lines`), reads `build.yaml` there, and parses the Assets tag, whose line must match. Nothing maps lines between the two projects.
 
@@ -109,10 +112,10 @@ Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: pe
 
 Stretch 1:
 
-* Whether the key path for `yamlRead` needs a quoting rule for keys that contain a dot, such as the line `2.16`.
 
 Later stretches:
 
+* Whether the key path for the `lock.yaml` read needs a quoting rule for keys that contain a dot, such as the line `2.16`.
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
 * Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag". The answer is traced through the `lock.yaml` at that tag, which records the commit the generated Dockerfile used, to the contents of `rancher/charts` at that commit. It belongs to stretch 2, with the charts-to-Assets connection.
 * How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.
