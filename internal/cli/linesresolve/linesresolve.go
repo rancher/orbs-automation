@@ -9,12 +9,14 @@ package linesresolve
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -105,6 +107,8 @@ type Link struct {
 	Project string `json:"project"`
 	Name    string `json:"name"`
 	Method  string `json:"method"`
+	// Params are what the edge passes to the method, such as the key it updates.
+	Params map[string]string `json:"params,omitempty"`
 	// Series and Branch are the other project's own series and branch for the line,
 	// when it ships (a producer) and has them.
 	Series string `json:"series,omitempty"`
@@ -330,7 +334,7 @@ func (m mapper) feedsHub(p config.Project, r updatedispatcher.Route, line string
 		if err != nil || !slices.Contains(branches, hubNode.Branch) {
 			return Link{}, "", false
 		}
-		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Universal: true}, "", true
+		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Params: r.Edge.Params, Universal: true}, "", true
 	case !pHas:
 		return Link{}, fmt.Sprintf("%s has no line %s, so nothing of it ships to %s %s", p.Name, line, m.hub.Name, line), false
 	}
@@ -338,7 +342,7 @@ func (m mapper) feedsHub(p config.Project, r updatedispatcher.Route, line string
 	if err != nil || !slices.Contains(branches, hubNode.Branch) {
 		return Link{}, fmt.Sprintf("%s %s does not reach %s %s (%v)", p.Name, line, m.hub.Name, line, err), false
 	}
-	return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Series: pl.Series, Branch: pl.Branch}, "", true
+	return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Params: r.Edge.Params, Series: pl.Series, Branch: pl.Branch}, "", true
 }
 
 // producerLink is the link of a producer on a line, as the project it ships to has
@@ -346,13 +350,13 @@ func (m mapper) feedsHub(p config.Project, r updatedispatcher.Route, line string
 // that follows lines and has none.
 func producerLink(p config.Project, r updatedispatcher.Route, line string) (Link, bool) {
 	if r.Edge.AcceptLines(p) == config.AcceptLinesUniversal {
-		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Universal: true}, true
+		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Params: r.Edge.Params, Universal: true}, true
 	}
 	pl, ok := nodeOf(p, line)
 	if !ok {
 		return Link{}, false
 	}
-	return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Series: pl.Series, Branch: pl.Branch}, true
+	return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Params: r.Edge.Params, Series: pl.Series, Branch: pl.Branch}, true
 }
 
 // shipsTo is the link to the consumer of route r that a release of p for the line
@@ -367,7 +371,7 @@ func shipsTo(p config.Project, r updatedispatcher.Route, line string) (Link, boo
 	if err != nil {
 		return Link{}, false
 	}
-	return Link{Project: r.Consumer.Repo.Name, Name: r.Consumer.Name, Method: r.Method.Name, Branches: branches}, true
+	return Link{Project: r.Consumer.Repo.Name, Name: r.Consumer.Name, Method: r.Method.Name, Params: r.Edge.Params, Branches: branches}, true
 }
 
 // nodeOf is the project's own place on a line: false when it has no such line. The
@@ -399,7 +403,141 @@ func Run(_ context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Opt
 	return run(w, workspace.Open(s, cwd), s.Output, opts, time.Now())
 }
 
-// run is Run over its dependencies.
-//
-// STUB: does nothing until a later commit.
-func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time) error { return nil }
+// run is Run over its dependencies. An engine that is only partly usable (an
+// update method that is not) still routes the edges that are, so it is used and
+// the problem is left to gero doctor and gero config validate.
+func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time) error {
+	if format != clicfg.OutputText && format != clicfg.OutputJSON {
+		return fmt.Errorf("output format %q is not supported by lines resolve: use text or json", format)
+	}
+	cfg, err := ws.Config()
+	if err != nil {
+		return err
+	}
+	engine, engineErr := ws.Updates()
+	if engine == nil {
+		return fmt.Errorf("the update methods cannot be built: %w", engineErr)
+	}
+	res, err := Resolve(cfg, engine, opts, now)
+	if err != nil {
+		return err
+	}
+	if format == clicfg.OutputJSON {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(res)
+	}
+	_, err = io.WriteString(w, renderText(res))
+	return err
+}
+
+// renderText is the map as text: a block for each line, newest first, with the
+// hub's branch, what it takes from and ships to, the projects also on the line
+// and the gaps, and a count of the gaps at the end.
+func renderText(r Result) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Release lines, through %s\n", r.Hub)
+	for _, l := range r.Lines {
+		b.WriteString("\n" + lineHeader(l) + "\n")
+		if l.Hub == nil {
+			fmt.Fprintf(&b, "  %s  (no such line)\n", r.Hub)
+		} else {
+			fmt.Fprintf(&b, "  %s  %s\n", l.Hub.Project, branchText(*l.Hub))
+		}
+		b.WriteString("    takes from\n")
+		writeLinks(&b, "      ", l.TakesFrom, takesRow)
+		b.WriteString("    ships to\n")
+		writeLinks(&b, "      ", l.ShipsTo, shipsRow)
+		if len(l.Also) > 0 {
+			b.WriteString("    also on this line\n")
+			for _, a := range l.Also {
+				fmt.Fprintf(&b, "      %s  %s\n", a.Name, branchText(a.Node))
+				for _, in := range a.TakesFrom {
+					fmt.Fprintf(&b, "        takes from %s (%s) via %s\n", in.Name, seriesText(in), via(in))
+				}
+				for _, out := range a.ShipsTo {
+					fmt.Fprintf(&b, "        ships to %s (%s) via %s\n", out.Name, strings.Join(out.Branches, ", "), via(out))
+				}
+			}
+		}
+		for _, gap := range l.Gaps {
+			fmt.Fprintf(&b, "  ! %s\n", gap)
+		}
+	}
+	if len(r.Gaps) == 0 {
+		b.WriteString("\nNo gaps.\n")
+	} else {
+		fmt.Fprintf(&b, "\nGaps: %d\n", len(r.Gaps))
+	}
+	return b.String()
+}
+
+// lineHeader is a line's id, its phase, its dates and its Kubernetes range.
+func lineHeader(l Line) string {
+	parts := []string{l.ID, l.Phase}
+	var dates []string
+	for _, d := range []struct{ label, value string }{{"GA", l.Dates.GA}, {"EOM", l.Dates.EOM}, {"EOL", l.Dates.EOL}} {
+		if d.value != "" {
+			dates = append(dates, d.label+" "+d.value)
+		}
+	}
+	if len(dates) > 0 {
+		parts = append(parts, strings.Join(dates, ", "))
+	}
+	if l.Kubernetes.Min != "" || l.Kubernetes.Max != "" {
+		parts = append(parts, "Kubernetes "+l.Kubernetes.Min+"-"+l.Kubernetes.Max)
+	}
+	return strings.Join(parts, "  ")
+}
+
+func branchText(n Node) string {
+	text := n.Branch
+	if n.IsDefaultBranch {
+		text += " (default branch)"
+	}
+	if n.Series != "" {
+		text += "  series " + n.Series
+	}
+	return text
+}
+
+// seriesText is what a producer holds of a line: its series, or any release.
+func seriesText(l Link) string {
+	if l.Universal {
+		return "any release"
+	}
+	return l.Series
+}
+
+func takesRow(l Link) string {
+	branch := l.Branch
+	if l.Universal {
+		branch = ""
+	}
+	return strings.Join([]string{l.Name, seriesText(l), branch, via(l)}, "\t")
+}
+
+// via is the method of a link and the key it updates.
+func via(l Link) string {
+	if key := l.Params["updateKey"]; key != "" {
+		return l.Method + " (" + key + ")"
+	}
+	return l.Method
+}
+
+func shipsRow(l Link) string {
+	return strings.Join([]string{l.Name, strings.Join(l.Branches, ", "), via(l)}, "\t")
+}
+
+// writeLinks writes a group of links as aligned rows, or a dash for none.
+func writeLinks(b *strings.Builder, indent string, links []Link, row func(Link) string) {
+	if len(links) == 0 {
+		b.WriteString(indent + "-\n")
+		return
+	}
+	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
+	for _, l := range links {
+		fmt.Fprintf(w, "%s%s\n", indent, row(l))
+	}
+	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+}

@@ -223,3 +223,11 @@ func TestRepoStatusCanLeaveOutTheConsumersAndTheSources(t *testing.T) {
 	assert.NotNil(t, status.Flags().Lookup("no-consumers"))
 	assert.NotNil(t, status.Flags().Lookup("no-sources"))
 }
+
+func TestLinesResolveTakesAHubAndPhases(t *testing.T) {
+	resolve, _, err := rootCmd.Find([]string{"lines", "resolve"})
+	require.NoError(t, err)
+
+	assert.NotNil(t, resolve.Flags().Lookup("hub"))
+	assert.NotNil(t, resolve.Flags().Lookup("phase"))
+}

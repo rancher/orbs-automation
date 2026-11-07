@@ -222,7 +222,10 @@ func TestResolveTakesFromTheProjectsThatShipToTheHubsBranchForTheLine(t *testing
 	v215 := lineOf(t, got, "v2.15")
 	assert.Equal(t, []string{"shell", "scc-operator"}, names(v215.TakesFrom), "in config order")
 	shell := v215.TakesFrom[0]
-	assert.Equal(t, Link{Project: "rancher/shell", Name: "shell", Method: "build-yaml-bump", Series: "0.8.x", Branch: "release/v2.15"}, shell)
+	assert.Equal(t, Link{
+		Project: "rancher/shell", Name: "shell", Method: "build-yaml-bump", Series: "0.8.x", Branch: "release/v2.15",
+		Params: map[string]string{"updateKey": "defaultShellVersion", "value": "{image}:{tag}"},
+	}, shell)
 	scc := v215.TakesFrom[1]
 	assert.True(t, scc.Universal)
 	assert.Empty(t, scc.Series, "it has no series and no branch for the line")
@@ -377,6 +380,21 @@ func TestRunTextSaysWhatFeedsAndWhatIsFedWithSeriesBranchAndMethod(t *testing.T)
 	} {
 		assert.Contains(t, out, want)
 	}
+}
+
+func TestRunTextSaysWhichKeyEachLinkUpdates(t *testing.T) {
+	out, err := rendered(t, "text", Options{Lines: []string{"v2.15"}})
+
+	require.NoError(t, err)
+	for _, want := range []string{"build-yaml-bump (defaultShellVersion)", "build-yaml-bump (defaultSccOperatorImage)", "build-yaml-bump (rancherDocs)", "via build-yaml-bump (obChart)"} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestResolveLinksCarryTheParamsOfTheirEdge(t *testing.T) {
+	got := resolve(t, Options{Lines: []string{"v2.15"}})
+
+	assert.Equal(t, "defaultShellVersion", got.Lines[0].TakesFrom[0].Params["updateKey"])
 }
 
 func TestRunTextMarksTheGapsAndCountsThem(t *testing.T) {
