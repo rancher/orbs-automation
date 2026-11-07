@@ -11,6 +11,8 @@ spec:
     requiresPrerelease: true
     branching: perLineTag
     tagScheme: calverLineStage
+    lines:
+      - line: v2.16
   pullRequests:
     title: "[{branch}] Update {source} to {version}"
     branchPrefix: "bot/{source}-"

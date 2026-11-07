@@ -16,6 +16,7 @@ func observed() config.Config {
 	b := &c.Projects[1]
 	b.Repo.Owned, b.Repo.ManagedBy = false, "release-team"
 	b.Release.Branching, b.Release.TagScheme = config.BranchingPerLineTag, config.TagSchemeCalverLineStage
+	b.Release.Lines = []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}} // v2.15 is ga, and needs no branch here
 	b.Downstream[0].Stage = config.StageRelease
 	return c
 }
@@ -40,9 +41,15 @@ func TestValidateStewardshipAndTagProblems(t *testing.T) {
 	}{
 		{"managedBy with a capital", func(c *config.Config) { producer(c).Repo.ManagedBy = "Release-Team" }, []string{`Project "b"`, "repo.managedBy", `"Release-Team"`}},
 		{"managedBy with a space", func(c *config.Config) { producer(c).Repo.ManagedBy = "release team" }, []string{"repo.managedBy"}},
-		{"perLineTag with lines", func(c *config.Config) {
-			producer(c).Release.Lines = []config.ProjectLine{{Line: "v2.16"}}
+		{"perLineTag with no lines", func(c *config.Config) {
+			producer(c).Release.Lines = nil
 		}, []string{`Project "b"`, "release.lines", "perLineTag"}},
+		{"perLineTag line with a branch", func(c *config.Config) {
+			producer(c).Release.Lines[0].Branch = "release/v2.16"
+		}, []string{"release.lines[0]", "branch", "perLineTag"}},
+		{"perLineTag line with a version", func(c *config.Config) {
+			producer(c).Release.Lines[1].Version = "1.x"
+		}, []string{"release.lines[1]", "version", "perLineTag"}},
 		{"perLineTag with the default scheme", func(c *config.Config) {
 			producer(c).Release.TagScheme = config.TagSchemeSemver
 		}, []string{"release.tagScheme", "perLineTag", "calverLineStage"}},

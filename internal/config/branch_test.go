@@ -98,3 +98,15 @@ func TestProjectIsNotUniversalWhenItsLinesAreInItsTags(t *testing.T) {
 	assert.False(t, p.IsUniversal(), "a perLineTag project lists no lines and still follows them")
 	assert.Equal(t, AcceptLinesAll, Edge{}.AcceptLines(p), "so an edge from it maps each line to the consumer's branch for it")
 }
+
+func TestAPerLineTagProjectKeepsEveryLineOnItsDefaultBranch(t *testing.T) {
+	p := Project{
+		Repo:    Repo{Name: "o/assets", DefaultBranch: "main"},
+		Release: Release{Branching: BranchingPerLineTag, Lines: []ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}}},
+	}
+
+	branch, ok := p.BranchOfLine("v2.15")
+	assert.True(t, ok)
+	assert.Equal(t, "main", branch)
+	assert.Equal(t, []string{"main"}, p.ReleaseBranches(), "one branch, whatever lines it lists")
+}
