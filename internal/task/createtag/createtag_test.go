@@ -23,16 +23,16 @@ func tagsAt(commit string, names ...string) []git.Tag {
 
 // shell is the producer of the examples: 0.8.x is the series of v2.15.
 func shell(tag string, existing ...git.Tag) Input {
-	return Input{Repo: "rancher/shell", Tag: tag, Commit: "head1234", Tags: existing, Pattern: "v*", Series: "0.8.x"}
+	return Input{Repo: "rancher/shell", CloneDir: "/work", Tag: tag, Commit: "head1234", Tags: existing, Pattern: "v*", Series: "0.8.x"}
 }
 
-type fakeRemote struct {
+type fakeGit struct {
 	made []string
 	err  error
 }
 
-func (f *fakeRemote) Create(_ context.Context, slug, name, commit string) error {
-	f.made = append(f.made, slug+" "+name+" "+commit)
+func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string) error {
+	f.made = append(f.made, dir+" "+name+" "+commit)
 	return f.err
 }
 
@@ -115,17 +115,17 @@ func TestCheckARcAfterTheRcItFollowsIsNewer(t *testing.T) {
 }
 
 func TestRunMakesTheTagOnTheCommit(t *testing.T) {
-	r := &fakeRemote{}
+	r := &fakeGit{}
 
 	got, err := Run(bg, r, shell("v0.8.4-rc.1", tagsAt("aaa", "v0.8.3")...))
 
 	require.NoError(t, err)
 	assert.Equal(t, Create, got.Action)
-	assert.Equal(t, []string{"rancher/shell v0.8.4-rc.1 head1234"}, r.made)
+	assert.Equal(t, []string{"/work v0.8.4-rc.1 head1234"}, r.made)
 }
 
 func TestRunMakesNothingForATagThatIsAlreadyThere(t *testing.T) {
-	r := &fakeRemote{}
+	r := &fakeGit{}
 
 	got, err := Run(bg, r, shell("v0.8.3", tagsAt("head1234", "v0.8.3")...))
 
@@ -135,7 +135,7 @@ func TestRunMakesNothingForATagThatIsAlreadyThere(t *testing.T) {
 }
 
 func TestRunMakesNothingForATagThatFailsTheCheck(t *testing.T) {
-	r := &fakeRemote{}
+	r := &fakeGit{}
 
 	_, err := Run(bg, r, shell("v0.9.0"))
 
@@ -144,12 +144,12 @@ func TestRunMakesNothingForATagThatFailsTheCheck(t *testing.T) {
 }
 
 func TestRunReportsAFailureToMakeTheTag(t *testing.T) {
-	r := &fakeRemote{err: errors.New("403 Resource not accessible")}
+	r := &fakeGit{err: errors.New("fatal: tag already exists")}
 
 	_, err := Run(bg, r, shell("v0.8.4-rc.1"))
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "403")
+	assert.ErrorContains(t, err, "already exists")
 }
 
 func at(commit string, names ...string) []git.Tag { return tagsAt(commit, names...) }

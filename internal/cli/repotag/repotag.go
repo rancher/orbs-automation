@@ -132,24 +132,136 @@ func ParseArgs(args []string) (project, line, tag string) {
 // Run makes the tag opts names in the engineer's clone, and with --push sends it
 // to the upstream, and writes the report to w in the format the settings ask for.
 // Nothing here needs a GitHub token: the head and the tags are read from the host
-// without one, and a push is git's, with the engineer's own credentials.
-//
-// STUB: does nothing until a later commit.
+// without one, and a push is git's, with the engineer's own credentials, so it is
+// the engineer that the host sees pushing the tag.
 func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
 	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, s.Output, s.DryRun, opts)
 }
 
-// run is Run over its dependencies.
-//
-// STUB: does nothing until a later commit.
+// run is Run over its dependencies. The head of the line's branch and the tags
+// are read from the host, and the head is fetched so the tag is on what is live
+// there and not on what the clone last saw. What would be done is settled by the
+// task's check before anything is asked or written, so a tag the line cannot have
+// is an error and not a question. Only a push is asked about, since it is the one
+// step that leaves the machine, and it is asked before the tag is made so that a
+// no leaves nothing behind.
 func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, dryRun bool, opts Options) error {
-	return nil
+	if format != clicfg.OutputText && format != clicfg.OutputJSON {
+		return fmt.Errorf("output format %q is not supported by repo tag: use text or json", format)
+	}
+	if opts.Tag != "" && (opts.Stable || opts.Bump != BumpPatch) {
+		return ErrTagAndChoice
+	}
+	project, err := ws.Project(opts.Project)
+	if err != nil {
+		return err
+	}
+	slug := project.Repo.Name
+	remote := ws.UpstreamFor(slug)
+	if remote == "" {
+		return fmt.Errorf("no upstream remote is set for %s: set upstream in the user file, or repos.overrides.%s.upstream", slug, slug)
+	}
+	clone, err := ws.RepoPath(slug)
+	if err != nil {
+		return fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
+	}
+	branch, series, err := lineBranch(project, opts.Line)
+	if err != nil {
+		return err
+	}
+	refs, err := ws.UpstreamRefs(ctx, slug)
+	if err != nil {
+		return fmt.Errorf("read the branches and tags of %s: %w", slug, err)
+	}
+	head, ok := refs.Branch(branch)
+	if !ok {
+		return fmt.Errorf("%s has no branch %s on the host", slug, branch)
+	}
+	fetched, err := g.Fetch(ctx, clone.Path, remote, branch)
+	if err != nil {
+		return err
+	}
+	if fetched != head.Commit {
+		return fmt.Errorf("%s of %s moved while it was read, from %s to %s: run it again", branch, slug, short(head.Commit), short(fetched))
+	}
+	tag, promotes := opts.Tag, ""
+	if tag == "" {
+		chosen, err := createtag.Choose(createtag.Choice{
+			Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series, Commit: head.Commit,
+			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: project.Release.RequiresPrerelease,
+		})
+		if err != nil {
+			return err
+		}
+		tag = chosen.Tag
+		if chosen.Promotes != nil {
+			promotes = chosen.Promotes.Name
+		}
+	}
+	// The clone's own tag of the name counts as well as the host's, so a tag that
+	// was made and not pushed is neither made again nor moved.
+	local, hasLocal, err := g.TagCommit(ctx, clone.Path, tag)
+	if err != nil {
+		return err
+	}
+	tags := refs.Tags
+	if hasLocal {
+		tags = append(slices.Clone(tags), git.Tag{Name: tag, Commit: local})
+	}
+	in := createtag.Input{
+		Repo: slug, CloneDir: clone.Path, Tag: tag, Commit: head.Commit, Tags: tags,
+		Pattern: project.Release.TagPattern, Series: series, RequiresPrerelease: project.Release.RequiresPrerelease,
+	}
+	decision, err := createtag.Check(in)
+	if err != nil {
+		return err
+	}
+	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, Remote: remote, DryRun: dryRun}
+	if decision.Newest != nil {
+		res.Newest = decision.Newest.Name
+	}
+	onHost := slices.ContainsFunc(refs.Tags, func(t git.Tag) bool { return t.Name == tag && t.Commit == head.Commit })
+	inClone := hasLocal && local == head.Commit
+	push := opts.Push && !onHost
+	switch {
+	case onHost:
+		res.Action = "already tagged"
+	case dryRun:
+		res.Action = "would tag"
+		if inClone {
+			res.Action = "would push"
+		} else if push {
+			res.Action += " and push"
+		}
+	default:
+		if push {
+			if err := approve(w, format, res, opts); err != nil {
+				return err
+			}
+		}
+		res.Action = "tagged"
+		if inClone {
+			res.Action = "in your clone"
+		} else if _, err := createtag.Run(ctx, g, in); err != nil {
+			return err
+		}
+		if push {
+			if err := g.PushTag(ctx, clone.Path, remote, tag); err != nil {
+				return fmt.Errorf("%s is in your clone, but pushing it to %s failed: %w", tag, remote, err)
+			}
+			res.Action = "tagged and pushed"
+			if inClone {
+				res.Action = "pushed"
+			}
+		}
+	}
+	return report(w, format, res)
 }
 
-// approve asks once, before the tag is made, unless --yes was given. Without a
-// terminal it is an error, so a forgotten flag in CI is a loud failure and not a
-// hang or a silent yes, and the question is only ever asked in text, since json
-// is for a program to read.
+// approve asks once, before anything is changed, to push the tag, unless --yes was
+// given. Without a terminal it is an error, so a forgotten flag in CI is a loud
+// failure and not a hang or a silent yes, and the question is only ever asked in
+// text, since json is for a program to read.
 func approve(w io.Writer, format string, res Result, opts Options) error {
 	if opts.Yes {
 		return nil
@@ -157,7 +269,7 @@ func approve(w io.Writer, format string, res Result, opts Options) error {
 	if !opts.Interactive || format != clicfg.OutputText {
 		return ErrNeedsApproval
 	}
-	if _, err := fmt.Fprintf(w, "Tag %s? [y/N] ", res.what()); err != nil {
+	if _, err := fmt.Fprintf(w, "Push the tag %s to %s? [y/N] ", res.what(), res.Remote); err != nil {
 		return err
 	}
 	line, err := bufio.NewReader(opts.In).ReadString('\n')
@@ -179,12 +291,23 @@ func report(w io.Writer, format string, res Result) error {
 		return enc.Encode(res)
 	}
 	where := res.what()
+	hint := fmt.Sprintf("  to send it: git push %s %s\n", res.Remote, res.Tag)
 	var err error
 	switch res.Action {
 	case "tagged":
-		_, err = fmt.Fprintf(w, "\nTagged %s\n  https://github.com/%s/releases/tag/%s\n", where, res.Project, res.Tag)
+		_, err = fmt.Fprintf(w, "Tagged %s\n%s", where, hint)
+	case "tagged and pushed":
+		_, err = fmt.Fprintf(w, "Tagged and pushed %s to %s\n  https://github.com/%s/releases/tag/%s\n", where, res.Remote, res.Project, res.Tag)
+	case "pushed":
+		_, err = fmt.Fprintf(w, "Pushed %s to %s (it was in your clone already)\n", where, res.Remote)
+	case "in your clone":
+		_, err = fmt.Fprintf(w, "%s is already in your clone on %s at %s\n%s", res.Tag, res.Branch, short(res.Commit), hint)
 	case "would tag":
-		_, err = fmt.Fprintf(w, "Would tag %s   (nothing was sent)\n", where)
+		_, err = fmt.Fprintf(w, "Would tag %s in your clone   (nothing was changed)\n", where)
+	case "would tag and push":
+		_, err = fmt.Fprintf(w, "Would tag %s in your clone and push it to %s   (nothing was changed)\n", where, res.Remote)
+	case "would push":
+		_, err = fmt.Fprintf(w, "Would push %s to %s, as it is in your clone already   (nothing was changed)\n", where, res.Remote)
 	default:
 		_, err = fmt.Fprintf(w, "%s is already tagged on %s at %s in %s: nothing to do\n", res.Tag, res.Branch, short(res.Commit), res.Project)
 	}

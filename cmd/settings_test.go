@@ -208,3 +208,10 @@ func TestRepoTagMinorAndMajorAreExclusive(t *testing.T) {
 
 	assert.Error(t, tag.ValidateFlagGroups())
 }
+
+func TestRepoTagHasAPushFlag(t *testing.T) {
+	tag, _, err := rootCmd.Find([]string{"repo", "tag"})
+	require.NoError(t, err)
+
+	assert.NotNil(t, tag.Flags().Lookup("push"))
+}

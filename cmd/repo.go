@@ -114,23 +114,26 @@ the repository you are in is used.`,
 		},
 	}
 	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
-	var yes, nonInteractive, stable, minor, major bool
+	var push, yes, nonInteractive, stable, minor, major bool
 	tagCmd := &cobra.Command{
 		Use:   "tag [project] <line> [tag]",
 		Short: "Tag the head of the upstream branch of a release line",
-		Long: `Make the tag <tag> on the head of the upstream branch of a release line,
-as the host has it now, and not on anything in your clone. The line is one of
-the Project's release lines (v2.15, or 2.15), or a branch of it (release/v2.15,
-main). The tag is made on GitHub, as a lightweight tag, so it needs a token that
-may write to the repository and, for the release workflow to start, that is a
-person's or an App's and not the workflow's default token.
+		Long: `Make the tag <tag> in your clone, on the head of the upstream branch of a
+release line as the host has it now (fetched, so not on whatever the clone last
+saw). The line is one of the Project's release lines (v2.15, or 2.15), or a
+branch of it (release/v2.15, main). The tag is a lightweight one, a local tag
+that you push yourself, which the command says how to do, so the host sees you
+pushing it and a workflow that runs on tags starts as you. --push sends it to
+the upstream for you, with your own git credentials, after asking once.
 
 The tag is checked first: it must be a version that matches the Project's tag
 pattern, is in the line's series (0.8.x for a line whose versions are 0.8.x), and
-is newer than the line's newest tag. A tag that is already on that commit is
-reported as done, and a tag that is on another commit is an error: a tag is never
-moved. It asks once before it makes the tag; --yes and GERO_NON_INTERACTIVE skip
-the question, and --dry-run says what would be tagged without a token.
+is newer than the line's newest tag. A tag that the host has on that commit is
+reported as done, one that is only in your clone is not made again, and a tag
+that is on another commit is an error: a tag is never moved. Making a tag in
+your clone asks nothing, as it is undone with git tag -d; --push asks, and
+--yes and GERO_NON_INTERACTIVE skip the question. --dry-run says what would be
+done and changes nothing.
 
 With two arguments, a version second is the line and the tag, and anything else
 is the Project and the line.
@@ -142,7 +145,7 @@ prerelease it is the next one of the same version (rc.2). --stable asks for a
 stable tag instead: the promotion of the newest prerelease, which is only made
 while the branch is still on the commit that prerelease is on, and after a
 stable tag the next stable one, unless the Project requires a prerelease before
-every stable tag. A promotion always asks, and says which prerelease it is.`,
+every stable tag. A promotion says which prerelease it is.`,
 		Args: cobra.RangeArgs(1, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -163,12 +166,13 @@ every stable tag. A promotion always asks, and says which prerelease it is.`,
 				bump = repotag.BumpMajor
 			}
 			return repotag.Run(ctx, cmd.OutOrStdout(), s, cwd, repotag.Options{
-				Project: project, Line: line, Tag: tag, Stable: stable, Bump: bump, Yes: s.NonInteractive,
+				Project: project, Line: line, Tag: tag, Stable: stable, Bump: bump, Push: push, Yes: s.NonInteractive,
 				In: cmd.InOrStdin(), Interactive: isTerminal(os.Stdin),
 			})
 		},
 	}
-	tagCmd.Flags().BoolVarP(&yes, "yes", "y", false, "go on without asking before the tag is made")
+	tagCmd.Flags().BoolVar(&push, "push", false, "send the tag to the upstream as well, after asking once")
+	tagCmd.Flags().BoolVarP(&yes, "yes", "y", false, "go on without asking before the tag is pushed")
 	tagCmd.Flags().BoolVar(&nonInteractive, "non-interactive", false, "the same as --yes: never ask")
 	tagCmd.Flags().BoolVar(&stable, "stable", false, "choose a stable tag: the promotion of the newest prerelease, or the next stable one")
 	tagCmd.Flags().BoolVar(&minor, "minor", false, "choose the first prerelease of the next minor version, after a stable tag")

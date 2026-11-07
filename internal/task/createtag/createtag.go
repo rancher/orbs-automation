@@ -1,5 +1,5 @@
 // Package createtag is the task that tags a commit of a project's release line
-// on the host: one action, run alone or as a step of a longer process
+// in the engineer's clone: one action, run alone or as a step of a longer process
 // (docs/specs/PROJECT_LAYOUT.md, Tasks). Which tag, and on which commit, is the
 // caller's to say; the task checks that it is a tag the line can have, and never
 // moves or replaces one.
@@ -46,11 +46,13 @@ var (
 
 // Input says which tag to make, on what, and what the repository holds already.
 type Input struct {
-	Repo   string // owner/name
-	Tag    string
-	Commit string // the commit to tag: the head of the line's branch, read from the host
-	// Tags are the repository's tags as the host has them, with the commit each
-	// one is on (an annotated tag at the commit it peels to).
+	Repo     string // owner/name, to say which repository a message is about
+	CloneDir string // the clone the tag is made in
+	Tag      string
+	Commit   string // the commit to tag: the head of the line's branch, as the host has it
+	// Tags are the repository's tags as the host has them, and the local tag of the
+	// name if there is one, with the commit each is on (an annotated tag at the
+	// commit it peels to).
 	Tags    []git.Tag
 	Pattern string // the project's tagPattern, such as "v*"; "" matches every tag
 	Series  string // the line's series, such as "0.8.x" or "v2.15"; "" for no series
@@ -77,10 +79,11 @@ type Decision struct {
 	Newest *git.Tag
 }
 
-// Remote is what making the tag needs from GitHub. It is defined here, where it
-// is used.
-type Remote interface {
-	Create(ctx context.Context, slug, name, commit string) error
+// Git is what making the tag needs from git. It is defined here, where it is
+// used.
+type Git interface {
+	// CreateTag makes the lightweight tag name at commit in the clone in dir.
+	CreateTag(ctx context.Context, dir, name, commit string) error
 }
 
 // Check says what making the tag would do, or why it cannot be made, and reads
@@ -152,12 +155,12 @@ func newestOf(in Input) *git.Tag {
 
 // Run checks the tag and makes it. A tag that is already on the commit is not
 // made again, and is not an error.
-func Run(ctx context.Context, r Remote, in Input) (Decision, error) {
+func Run(ctx context.Context, g Git, in Input) (Decision, error) {
 	d, err := Check(in)
 	if err != nil || d.Action == Already {
 		return d, err
 	}
-	if err := r.Create(ctx, in.Repo, in.Tag, in.Commit); err != nil {
+	if err := g.CreateTag(ctx, in.CloneDir, in.Tag, in.Commit); err != nil {
 		return Decision{}, err
 	}
 	return d, nil

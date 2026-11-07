@@ -7,7 +7,7 @@ The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an eng
 | Command | Task | Does |
 |---|---|---|
 | `gero repo branch [project] <line> <name>` | `createbranch` | Makes a branch off the upstream branch of a release line |
-| `gero repo tag [project] <line> [tag]` | `createtag` | Tags the head of a release line's upstream branch |
+| `gero repo tag [project] <line> [tag]` | `createtag` | Tags the head of a release line's upstream branch in the clone, and with `--push` sends the tag |
 | `gero repo push [project] [--branch <name>]` | `pushbranch` | Pushes a branch, never forced |
 | `gero pr create [project] [--head <branch>] [--base <line\|branch>]` | `createpr` | Opens a PR for a branch that is already pushed, and labels it |
 | `gero ship bump …` **(leaning)** | `bumpcommit` | Applies one change set to a branch and commits it |
@@ -42,11 +42,11 @@ An optional `--from <ref>` for cutting the branch off something other than the h
 
 ## `gero repo tag [project] <line> [tag]`
 
-Makes the tag `<tag>` on the head of the upstream branch of the release line `<line>`, found as `repo branch` finds it: a line (`v2.15` or `2.15`), or a branch of the project (`release/v2.15`, or `main` for a project with no lines), which has the series of the line it is the branch of. The head is read from the host when the command runs, never from a local branch, so a tag is always on what is live. A tag is a full version and a project or a line never is, which tells two arguments apart: with a version second they are the line and the tag, else the project and the line.
+Makes the tag `<tag>` **in the engineer's clone**, on the head of the upstream branch of the release line `<line>`, found as `repo branch` finds it: a line (`v2.15` or `2.15`), or a branch of the project (`release/v2.15`, or `main` for a project with no lines), which has the series of the line it is the branch of. The head is read from the host when the command runs and fetched, so the tag is on what is live there and not on what the clone last saw, and the checkout is left where it is. A tag is a full version and a project or a line never is, which tells two arguments apart: with a version second they are the line and the tag, else the project and the line.
 
-**The tag is made on the host**, through the API, as a lightweight tag: a ref at that commit. Nothing is pushed from the machine and no clone is needed, so an engineer and a workflow run the same task. The tags of these repositories are lightweight, bar a few that people made by hand with `git tag -a`, and the producer's release workflow runs on `push: tags: "*"`. A tag made with the workflow's default `GITHUB_TOKEN` does not start workflows, so the token has to be a person's or an App's ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)).
+**The tag is a local, lightweight one, and sending it is a push.** The consequence of `gero repo tag` is a tag in the clone, which the engineer pushes (`git push upstream v0.8.4-rc.1`, which the command prints), so GitHub sees the engineer push it and a workflow that runs on `push: tags` starts as them. `--push` does that push as well, with the engineer's own git credentials, to the upstream: a release tag is never pushed to a fork. The tags of these repositories are lightweight, bar a few made by hand with `git tag -a`, so there is no tagger, message or signature to keep. In CI the same push is made with a token that is not the default `GITHUB_TOKEN`, which is how it starts workflows ([CI_SHIP](CI_SHIP.md)).
 
-**A given tag is checked, not trusted.** It matches the project's `tagPattern`, is a version in the line's series (`0.8.x` for shell's `v2.15`), is newer than the line's newest tag, and does not exist. A tag that exists on the same commit is "already tagged" and the command succeeds, so a rerun is safe; on another commit it is an error. A tag is never moved, deleted or forced.
+**A given tag is checked, not trusted.** It matches the project's `tagPattern`, is a version in the line's series (`0.8.x` for shell's `v2.15`), is newer than the line's newest tag, and does not exist. The host's tags and the clone's own are both looked at. A tag the host has on the same commit is "already tagged" and the command succeeds, so a rerun is safe; a tag only the clone has, on that commit, is not made again and is pushed with `--push`; a tag on another commit, in either place, is an error. A tag is never moved, deleted or forced.
 
 **An omitted tag is chosen** (`--stable`, `--minor` and `--major` only apply then, and a tag with one of them is an error) from the newest tag of the line's series, whichever kind it is, and a commit that already has that tag gets no new one. With no tag in the line yet, the first is the start of its series (`v0.8.0-rc.1` for `0.8.x`), and a project with no series has to name it. The version is written with the `v` the line's tags have, else the project's pattern says, by `Version.NextPrerelease` and `NextStable` ([`internal/semver`](../../internal/semver/next.go)), which know nothing of projects. This command and `repo status` decide what is allowed and pass them the version, the bump and the label:
 
@@ -56,19 +56,21 @@ Makes the tag `<tag>` on the head of the upstream branch of the release line `<l
 | prerelease `v0.8.4-rc.1` | `v0.8.4-rc.2` | `v0.8.4`, the promotion of that RC |
 
 * **Prereleases are written with a dot, `rc.1`,** as SemVer has it and as the team's repositories already do. A legacy prerelease with no dot (`rc1`) is continued in its own style (`rc2`), since `rc.2` sorts below `rc1` and would be a tag older than the one before it. A new prerelease is always dotted.
-* **A promotion, the "unRC", is never the default.** It needs `--stable`, always asks, and says what it is: `Tag v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head is no longer on that RC's commit it refuses and names both commits, since the promotion is the same code made stable, and the way on is another RC. A project with `requiresPrerelease` also refuses a stable tag after a stable one, and a stable tag that is named is only made on a commit that has a prerelease of its version ([IMPLEMENTATION](../IMPLEMENTATION.md)). `--yes` skips the question, as everywhere.
-* **A tag asks once.** Tags are hard to undo, so a plain prerelease asks too, and `--yes`, `GERO_NON_INTERACTIVE` and `--dry-run` work as for `ship`. A dry run says which tag, on which commit and in which repository, and sends nothing, and needs no token. What is asked is settled first, so a tag the line cannot have is an error and not a question. `--json` is for a program and never asks: it needs `--yes`.
+* **A promotion, the "unRC", is never the default.** It needs `--stable`, and says what it is: `v0.8.4 on release/v2.15 at 1b3c9e07, which is v0.8.4-rc.2 with no commits since`. When the head is no longer on that RC's commit it refuses and names both commits, since the promotion is the same code made stable, and the way on is another RC. A project with `requiresPrerelease` also refuses a stable tag after a stable one, and a stable tag that is named is only made on a commit that has a prerelease of its version ([IMPLEMENTATION](../IMPLEMENTATION.md)).
+* **Making the tag asks nothing**, as `repo branch` asks nothing: it changes only the clone and is undone with `git tag -d`. **`--push` asks once**, before anything is made, since a push is the step that leaves the machine, and `--yes` and `GERO_NON_INTERACTIVE` skip it. `--json` is for a program and never asks, so a push with it needs `--yes`. `--dry-run` says what would be done and changes nothing. What is asked is settled first, so a tag the line cannot have is an error and not a question.
+* **No GitHub token is needed.** The head and the tags are read from the host without one, and a push is git's.
 
 ```
 $ gero repo tag shell v2.15
-Tag v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell?  [y/N] y
-Tagged v0.8.4-rc.1  https://github.com/rancher/shell/releases/tag/v0.8.4-rc.1
+Tagged v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell
+  to send it: git push upstream v0.8.4-rc.1
 
-$ gero repo tag shell v2.15 --stable
-Tag v0.8.4 on release/v2.15 at 8c61398, which is v0.8.4-rc.1 with no commits since, in rancher/shell?  [y/N]
+$ gero repo tag shell v2.15 --stable --push
+Push the tag v0.8.4 on release/v2.15 at 8c61398, which is v0.8.4-rc.1 with no commits since, in rancher/shell to upstream? [y/N] y
+Tagged and pushed v0.8.4 on release/v2.15 at 8c61398 ... to upstream
 ```
 
-**In CI** the same task runs as the bot. The tracking issue's sign-off, a check before a stable tag is made, is a gate above this command and not part of it, and is not decided ([METADATA](METADATA.md#control-labels)).
+**In CI** the same task runs as the bot, with a push made with a token that starts workflows. The tracking issue's sign-off, a check before a stable tag is made, is a gate above this command and not part of it, and is not decided ([METADATA](METADATA.md#control-labels)).
 
 ## `gero repo push [project] [--branch <name>]`
 
