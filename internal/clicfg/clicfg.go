@@ -155,6 +155,15 @@ var scalars = []scalar{
 		fromFile: func(f *fileConfig) string { return f.Output },
 	},
 	{
+		// The template of the prompt of gero repl: a user-file key, repl.prompt, and
+		// an environment variable, GERO_REPL_PROMPT. There is no flag, since a
+		// prompt is not a per-invocation choice.
+		name:     "repl.prompt",
+		def:      DefaultReplPrompt,
+		field:    func(s *Settings) *string { return &s.ReplPrompt },
+		fromFile: func(f *fileConfig) string { return f.Repl.Prompt },
+	},
+	{
 		name:     "color",
 		def:      ColorAuto,
 		validate: validateColor,
@@ -398,7 +407,7 @@ func expandPath(p, home string, getenv func(string) string) (string, error) {
 }
 
 // EnvName derives the environment variable for a file key:
-// configDir -> GERO_CONFIG_DIR.
+// configDir -> GERO_CONFIG_DIR, repl.prompt -> GERO_REPL_PROMPT.
 func EnvName(key string) string {
 	return "GERO_" + strings.ToUpper(splitWords(key, '_'))
 }
@@ -408,10 +417,16 @@ func FlagName(key string) string {
 	return strings.ToLower(splitWords(key, '-'))
 }
 
+// splitWords puts sep between the words of a key: before a capital, and where a
+// dot nests the key (repl.prompt).
 func splitWords(key string, sep rune) string {
 	var b strings.Builder
 	for i, r := range key {
-		if i > 0 && unicode.IsUpper(r) {
+		switch {
+		case r == '.':
+			b.WriteRune(sep)
+			continue
+		case i > 0 && unicode.IsUpper(r):
 			b.WriteRune(sep)
 		}
 		b.WriteRune(r)
