@@ -121,7 +121,7 @@ Steps 1 to 3 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the r
 
 ## Deferred ideas
 
-**Marking the prompt of the child `shell`.** A user in a `shell` started from the REPL may want its prompt to say so. Not built, and not scheduled: nothing forces it out of the box without cost, so it stays an idea. What is known:
+**Marking the prompt of the child `shell`.** A user in a `shell` started from the REPL may want its prompt to say so. Deferred until after v1, and revisited only if the team asks for it once they are using the REPL. Nothing forces it out of the box without cost, so until then it stays an idea, and users have the hook below. What is known:
 
 * **`GERO_REPL=1` is the hook.** It is in the child's environment for this. A user can put `${GERO_REPL:+(gero) }` in their own `PS1` today.
 * **Setting `PS1` on the child does not work.** `PS1` is normally a shell variable and not exported, and `~/.bashrc` or `~/.zshrc` (and oh-my-zsh, starship, powerlevel10k) set it after the shell starts, so a value from the environment is overwritten for most users. Fish and PowerShell have no `PS1`.
