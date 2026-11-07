@@ -198,3 +198,12 @@ func TestLogSinkRecordsWhoTheRunActsAs(t *testing.T) {
 	assert.Equal(t, "danpock", recs[0]["login"])
 	assert.Equal(t, true, recs[0]["signing"])
 }
+
+func TestLogSinkRecordsHowManyFilesACommitChanged(t *testing.T) {
+	c := &domain.CommitInfo{Hash: "abcdef0123", Subject: "Update", Files: []string{"build.yaml", "go.mod"}}
+
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventCommit, Branch: "release/v2.15", Commit: c})
+
+	require.Len(t, recs, 1)
+	assert.EqualValues(t, 2, recs[0]["files"])
+}

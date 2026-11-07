@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -1243,4 +1244,40 @@ func TestReplayOfAPlanWithAnActorHasTheEvent(t *testing.T) {
 	events := replay(actingPlan(false, "danpock"))
 
 	assert.Contains(t, kinds(events), domain.EventActor)
+}
+
+func TestRenderTextShowsTheFilesEachCommitChangedUnderIt(t *testing.T) {
+	p := previewPlan()
+	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
+	var many []string
+	for i := 1; i <= 12; i++ {
+		many = append(many, fmt.Sprintf("generated/f%d.go", i))
+	}
+	r.Commits = []domain.CommitInfo{
+		{Hash: "abcdef0123456789", Subject: "Update scc-operator to v0.5.3", Files: []string{"build.yaml"}},
+		{Hash: "1234567890abcdef", Subject: "Run `./scripts/generate-buildconfig`", Files: many},
+		{Hash: "fedcba9876543210", Subject: "Run `go mod tidy`", Files: []string{"go.mod", "go.sum"}},
+		{Hash: "0f0f0f0f0f0f0f0f", Subject: "Run `nothing`"},
+	}
+	p = withResults(p, r)
+
+	out := renderText(p, false)
+
+	for _, want := range []string{
+		"    abcdef0  Update scc-operator to v0.5.3\n             build.yaml\n",
+		"    1234567  Run `./scripts/generate-buildconfig`\n             12 files: generated/f1.go, generated/f2.go, generated/f3.go and 9 more\n",
+		"    fedcba9  Run `go mod tidy`\n             2 files: go.mod, go.sum\n",
+		"    0f0f0f0  Run `nothing`\n    ",
+	} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestFilesText(t *testing.T) {
+	assert.Equal(t, "", filesText(nil))
+	assert.Equal(t, "a", filesText([]string{"a"}))
+	assert.Equal(t, "2 files: a, b", filesText([]string{"a", "b"}))
+	assert.Equal(t, "4 files: a, b, c, d", filesText([]string{"a", "b", "c", "d"}))
+	assert.Equal(t, "5 files: a, b, c and 2 more", filesText([]string{"a", "b", "c", "d", "e"}))
 }

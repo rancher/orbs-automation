@@ -508,3 +508,18 @@ func trailer(p *domain.Plan) string {
 	}
 	return "Nothing was written."
 }
+
+// filesText says what a commit changed on one line: the file for one, else how
+// many with the first few named. It is empty for a commit whose files are not known.
+func filesText(files []string) string {
+	switch n := len(files); {
+	case n == 0:
+		return ""
+	case n == 1:
+		return files[0]
+	case n <= 4:
+		return fmt.Sprintf("%d files: %s", n, strings.Join(files, ", "))
+	default:
+		return fmt.Sprintf("%d files: %s and %d more", n, strings.Join(files[:3], ", "), n-3)
+	}
+}
