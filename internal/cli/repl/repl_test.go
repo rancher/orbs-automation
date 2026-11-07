@@ -79,6 +79,25 @@ func TestExit(t *testing.T) {
 	assert.True(t, exit)
 }
 
+func TestClearClearsTheScreenAndTheScrollback(t *testing.T) {
+	s := &Session{Dir: "/work/here"}
+
+	out, exit, err := exec(t, s, "clear")
+
+	require.NoError(t, err)
+	assert.False(t, exit)
+	assert.Equal(t, "\x1b[H\x1b[2J\x1b[3J", out, "cursor home, erase the screen, erase the scrollback")
+}
+
+func TestClearTakesNoArgument(t *testing.T) {
+	s := &Session{Dir: "/work/here"}
+
+	out, _, err := exec(t, s, "clear all")
+
+	require.Error(t, err)
+	assert.Empty(t, out, "nothing is cleared for a refused line")
+}
+
 func TestLsListsTheWorkingDirectorySortedWithSlashOnDirectories(t *testing.T) {
 	s := &Session{Dir: tree(t)}
 

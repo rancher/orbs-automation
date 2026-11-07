@@ -27,7 +27,7 @@ type Completion struct {
 }
 
 // replOnly are the commands only the REPL has, beside the tree's own.
-var replOnly = []string{"pwd", "ls", "exit"}
+var replOnly = []string{"pwd", "ls", "clear", "exit"}
 
 // Complete returns the words that may complete the word at the end of line, all
 // of which start with what is typed of it, sorted and each once.
@@ -37,7 +37,7 @@ func (c Completion) Complete(line string) []string {
 	switch {
 	case len(words) == 0:
 		out = append(c.tree(nil, toComplete), withPrefix(replOnly, toComplete)...)
-	case words[0] == "pwd", words[0] == "exit", words[0] == "shell":
+	case words[0] == "pwd", words[0] == "exit", words[0] == "shell", words[0] == "clear":
 		// They take no argument.
 	case words[0] == "cd":
 		if len(words) == 1 {

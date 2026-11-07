@@ -121,9 +121,17 @@ func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, e
 	return false, s.Run(ctx, s.Dir, args)
 }
 
-// clear is the stub: it does nothing yet.
+// clearScreen moves the cursor home, erases the screen and then the scrollback.
+// The REPL only runs on a terminal that does cursor control, so it is safe to send.
+const clearScreen = "\x1b[H\x1b[2J\x1b[3J"
+
+// clear clears the screen and the scrollback, and takes no argument.
 func (s *Session) clear(out io.Writer, args []string) error {
-	return nil
+	if len(args) > 0 {
+		return errors.New("clear takes no arguments")
+	}
+	_, err := io.WriteString(out, clearScreen)
+	return err
 }
 
 // cd moves the REPL into the clone root of the project named by its one

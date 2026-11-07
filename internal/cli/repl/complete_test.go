@@ -49,7 +49,7 @@ func complete(t *testing.T, dir, line string) []string {
 func TestTheFirstWordIsACommandOfTheTreeOrOneOnlyTheREPLHas(t *testing.T) {
 	got := complete(t, t.TempDir(), "")
 
-	assert.ElementsMatch(t, []string{"repo", "ship", "cd", "shell", "doctor", "pwd", "ls", "exit"}, got, "each once, shell too")
+	assert.ElementsMatch(t, []string{"repo", "ship", "cd", "shell", "doctor", "pwd", "ls", "clear", "exit"}, got, "each once, shell too")
 }
 
 func TestTheFirstWordIsFilteredByWhatIsTyped(t *testing.T) {
@@ -121,7 +121,7 @@ func TestTheCommandsWithNothingToCompleteSayNothing(t *testing.T) {
 func TestMissingPartsOfACompletionAreNotAProblem(t *testing.T) {
 	var none Completion
 
-	assert.ElementsMatch(t, []string{"pwd", "ls", "exit"}, none.Complete(""))
+	assert.ElementsMatch(t, []string{"pwd", "ls", "clear", "exit"}, none.Complete(""))
 	assert.Empty(t, none.Complete("repo "))
 	assert.Empty(t, none.Complete("cd "))
 	assert.Empty(t, none.Complete("ls "))

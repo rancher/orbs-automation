@@ -181,7 +181,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* The push spike test against a scratch repository (`TestPushSpikeToARealRemote`, which needs `GERO_SPIKE_PUSH_URL`), which settles the credential questions in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing) with a test and not only with use.
+* The push spike test against a scratch repository (`TestPushSpikeToARealRemote`, which needs `GERO_SPIKE_PUSH_URL`), which would keep the credential questions in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing) settled by a test and not only by use. Optional: the workstation push is used against real remotes.
 * A way to name a step's commit, or fold it into the previous one, which is the first knob to add if a project needs it.
 * `gero ci:ship` ([CI_SHIP](CI_SHIP.md)).
 * The sequence above as chained tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
