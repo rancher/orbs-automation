@@ -15,6 +15,7 @@ The groupings below describe how each project behaves in the relationships we re
 
 **Consumers (receive bumps)**
 * [rancher-charts](rancher-charts.md)
+* [rancher-assets](rancher-assets.md): also feeds Rancher; CalVer tags with a line prefix and a `-dev` suffix, one branch, owned by the release team (gathered 2026-11-07)
 * [rancher-rancher](rancher-rancher.md)
 
 **QA**
@@ -34,6 +35,7 @@ Where the same fact is encoded in several places, per repo. This is the stronges
 | scc-operator to Rancher branches | hardcoded branch array in its `push-to-rancher/common.sh` and its README |
 | frameworks-automation Rancher line to branches | a `version-md` table copied into each `dependencies/*.yaml`, plus `branch-template` |
 | rancher/rancher current line | `chartDefaultBranch` in `build.yaml` |
+| The Assets image Rancher holds | `defaultAssetsImage` in rancher's `build.yaml`, set by rancher-assets' own `push-to-rancher` scripts |
 | Chart version major to Rancher line | an unwritten convention (e.g. 110 is v2.15, 111 is v2.16), computed independently by each producer |
 
 Common patterns seen across projects:
