@@ -3,7 +3,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
 	"testing"
+
+	"github.com/rancher/orbs-automation/internal/cli/repl"
+	"github.com/rancher/orbs-automation/internal/clicfg"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -106,3 +113,77 @@ func TestGlobalFlagsAreDeclared(t *testing.T) {
 		assert.NotNil(t, flags.Lookup(name), name)
 	}
 }
+
+func TestTreeCompleteIsWhatCobraCompletes(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	assert.Contains(t, treeComplete(nil, "do"), "doctor")
+	assert.Contains(t, treeComplete([]string{"repo"}, "st"), "status")
+	assert.Contains(t, treeComplete([]string{"repo", "status"}, "--jso"), "--json")
+	assert.Empty(t, treeComplete(nil, "zzzz"))
+}
+
+func TestTreeCompleteDoesNotOfferCobrasOwnCommandsAsDescriptions(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	for _, w := range treeComplete([]string{"repo"}, "") {
+		assert.NotContains(t, w, "\t", "a word, without the description cobra puts after a tab")
+		assert.NotContains(t, w, ":", "and not the directive line")
+	}
+}
+
+func TestReplCompletionHasTheTreeTheREPLsOwnCommandsAndTheDirectory(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "docs"), 0o755))
+	c := replCompletion(clicfg.Settings{}, &repl.Session{Dir: dir})
+
+	first := c.Complete("p")
+	assert.Contains(t, first, "pwd", "the REPL's own")
+	assert.Contains(t, c.Complete("do"), "doctor", "the tree's")
+	assert.Contains(t, c.Complete("ls d"), "docs/", "a directory of the session's")
+	assert.Contains(t, c.Complete("repo st"), "status")
+}
+
+func TestReplCompletionFollowsTheWorkingDirectoryOfTheSession(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	a, b := t.TempDir(), t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(a, "alpha"), 0o755))
+	require.NoError(t, os.Mkdir(filepath.Join(b, "beta"), 0o755))
+	sess := &repl.Session{Dir: a}
+	c := replCompletion(clicfg.Settings{}, sess)
+
+	assert.Contains(t, c.Complete("ls a"), "alpha/")
+	sess.Dir = b
+
+	assert.Contains(t, c.Complete("ls b"), "beta/")
+	assert.NotContains(t, c.Complete("ls a"), "alpha/")
+}
+
+func TestASessionStylesItsPromptFromTheTerminal(t *testing.T) {
+	r := &promptRecorder{}
+	s := &repl.Session{Dir: "/"}
+	s.UseTerminal(clicfg.Terminal{StdoutTTY: true, Profile: clicfg.Profile256})
+
+	require.NoError(t, repl.Loop(context.Background(), r, io.Discard, io.Discard, s))
+
+	require.Len(t, r.prompts, 1)
+	assert.Contains(t, r.prompts[0], "\x1b[", "a terminal with color gets a styled prompt")
+	assert.Equal(t, "gero> ", regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(r.prompts[0], ""))
+
+	plain := &promptRecorder{}
+	p := &repl.Session{Dir: "/"}
+	p.UseTerminal(clicfg.Terminal{})
+	require.NoError(t, repl.Loop(context.Background(), plain, io.Discard, io.Discard, p))
+	assert.Equal(t, []string{"gero> "}, plain.prompts)
+}
+
+// promptRecorder is a line reader that records its prompts and ends at once.
+type promptRecorder struct{ prompts []string }
+
+func (p *promptRecorder) ReadLine(prompt string) (string, error) {
+	p.prompts = append(p.prompts, prompt)
+	return "", io.EOF
+}
+
+func (*promptRecorder) Close() error { return nil }
