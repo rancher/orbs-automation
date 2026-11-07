@@ -1,6 +1,6 @@
 # CLI Output
 
-**Status:** implemented for output and logging, and for progressive output in `gero ship`. Color control is built (the `color` setting, `--color` and `--no-color`, `Settings.Terminal`), and nothing is styled yet. The prompt side of `internal/ui` and the styling seam are agreed, not built.
+**Status:** implemented for output and logging, and for progressive output in `gero ship`. Color control is built (the `color` setting, `--color` and `--no-color`, `Settings.Terminal`), and so is the styling seam (`internal/ui/style`, on lipgloss v2, and `ui.Align`). The human output of every command is styled. The prompt side of `internal/ui` (the REPL's line editor) is not built.
 
 How `gero` talks to the user: command output, logging, and the seam for interactive features. Flags that control these are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
 
@@ -71,7 +71,7 @@ A spike built one confirm-and-table program per option in a scratch module (`huh
 
 ## Not built yet
 
-* Styling itself: the `color` setting and `Settings.Terminal` are built, and no command reads them yet. The TTY and width checks are `internal/cli/termfacts`, on `golang.org/x/term`, so `/dev/null`, a pipe and a file are not terminals; what is one is checked by hand on a real terminal.
+* Styling is built for every command that prints for a person: `doctor` (and `--list-checks`), `ship` and its question, `config show`, `config validate`, `config resolve repos`, `auth status`, `repo status`, `repo info`, `repo images exist`, `repo branch`, `repo tag` and its question, `lines resolve` and `shell install` and its question. Never styled, by design: `--json`, `--output env`, `gero cd` and `shell init` (a shell consumes them), `repo build-tags` and `semver check` (`KEY=value` for a workflow), `version`, and cobra's own error line on stderr. A command takes the renderer from `Settings.Terminal` (`style.New`), or on its `Options` (`Style`) where its tests had no settings, and a nil renderer is plain. The TTY and width checks are `internal/cli/termfacts`, on `golang.org/x/term`, so `/dev/null`, a pipe and a file are not terminals; what is one is checked by hand on a real terminal.
 * The prompt and TUI side of `internal/ui`; `ui.Output` and `ui.Stream` exist.
 * Handing the logger to every command: `ship` gets one built in `cmd/`, and the others do not log yet.
 
