@@ -64,7 +64,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 
 ### Keys and environment
 
-Names are not final **(leaning)**.
+Names are not final **(leaning)**. A dot in a key nests it in the file, and becomes an underscore in the environment variable (`repl.prompt` is `GERO_REPL_PROMPT`).
 
 | File key | Env var | Flag | Meaning |
 |---|---|---|---|
@@ -77,6 +77,7 @@ Names are not final **(leaning)**.
 | n/a | `GERO_BOT_USER` | n/a | The bot's login in CI, for example `rancher-scc-bot[bot]`, supplied by the workflow with the token. Names the commit identity ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)). Recorded as `Settings.BotUser`; no flag, no user-file key |
 | `host` | `GERO_HOST` | `--host` | GitHub host, if we ever target non-github.com |
 | n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md)). A setting named `log`; no user-file key |
+| `repl.prompt` | `GERO_REPL_PROMPT` | n/a | The prompt of `gero repl`, a template of plain text and placeholders (`{project}`, `{dir}`, `{path}`), default `gero{project: (%s)}> ` ([REPL](REPL.md#the-prompt)). No flag: a prompt is not a per-invocation choice. Checked by `gero repl` when it starts, and by no other command |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
 | n/a | `GERO_CONTEXT` | n/a | `ci` or `workstation`, forcing the execution context ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)). Recorded as `Settings.CI`; no user-file key |
 
@@ -103,6 +104,8 @@ configDir: ~/GitProjects/SUSE/orbs-automation/config
 output: text
 color: auto            # auto (default), always or never
 upstream: upstream
+repl:
+  prompt: "gero{project: (%s)}> "   # {project} {dir} {path}; {{ and }} are braces
 fork: origin
 githubUser: danpock
 branchPrefix: dan/
