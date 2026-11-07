@@ -1,6 +1,6 @@
 # Chain tracing
 
-**Status:** draft. Nothing here is built. Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
+**Status:** draft. Only the config fields for stretch 1 are built, as [Not built yet](#not-built-yet) says. Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
 
 `gero lines resolve` and `gero repo status` answer "what is the state of this whole release chain?" from the central config and from what GitHub already holds, with no tracker. Following one hop is built. This spec is how they follow a chain through every hop, including the hop through the Rancher Assets image that connects `rancher/charts` to `rancher/rancher`, which we do not own. What the chain looks like today is in [rancher-assets](../projects/rancher-assets.md) and [rancher-charts](../projects/rancher-charts.md).
 
@@ -92,7 +92,7 @@ A scheme is code, named in config and claimed from one registry, as update strat
 
 ## Not built yet
 
-Everything. Stretch 1 is built in this order: the config additions it needs (`owned`, `managedBy`, `perLineTag`, `tagScheme`, an observed edge's stage) and validation, with the skip in `ship`; then `internal/calver`; then `yamlRead` and reading at a ref; then `internal/chain` with `lines resolve`; then `repo status`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
+Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), and `gero ship` refusing a producer that is not owned; `config/rancher-assets.project.yaml` uses them. Not built: `internal/calver`; then `yamlRead` and reading at a ref; then `internal/chain` with `lines resolve`; then `repo status`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
 
 ## Decided
 

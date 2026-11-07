@@ -1,0 +1,28 @@
+# `r/r-assets` repo Project config
+apiVersion: gero/v1alpha1
+kind: Project
+name: rancher-assets
+spec:
+  repo:
+    name: rancher/rancher-assets
+    owned: false # Will not create PRs for this projects release
+    managedBy: release-team
+  release:
+    requiresPrerelease: true
+    branching: perLineTag
+    tagScheme: calverLineStage
+  pullRequests:
+    title: "[{branch}] Update {source} to {version}"
+    branchPrefix: "bot/{source}-"
+    labels:
+      - status/auto-created
+      - team/release-team
+  downstream:
+    - to: rancher
+      method: build-yaml-bump
+      params:
+        updateKey: defaultAssetsImage
+        value: "{image}:{tag}"
+
+  images:
+    - name: rancher/rancher-assets
