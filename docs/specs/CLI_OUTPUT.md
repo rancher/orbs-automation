@@ -1,6 +1,6 @@
 # CLI Output
 
-**Status:** implemented for output and logging, and for progressive output in `gero ship`. Color control and the prompt side of `internal/ui` are agreed, not built.
+**Status:** implemented for output and logging, and for progressive output in `gero ship`. Color control is built (the `color` setting, `--color` and `--no-color`, `Settings.Terminal`), and nothing is styled yet. The prompt side of `internal/ui` and the styling seam are agreed, not built.
 
 How `gero` talks to the user: command output, logging, and the seam for interactive features. Flags that control these are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md).
 
@@ -71,7 +71,7 @@ A spike built one confirm-and-table program per option in a scratch module (`huh
 
 ## Not built yet
 
-* `--no-color`, and `NO_COLOR` and TTY detection beyond what commands do by default.
+* Styling itself: the `color` setting and `Settings.Terminal` are built, and no command reads them yet. The terminal's width is not filled in (`Facts.Width` is always 0). The TTY test is `isTerminal` in `cmd/`, which is true for any character device, `/dev/null` included, so `x/term` is the better check when a prompt or a table needs one.
 * The prompt and TUI side of `internal/ui`; `ui.Output` and `ui.Stream` exist.
 * Handing the logger to every command: `ship` gets one built in `cmd/`, and the others do not log yet.
 

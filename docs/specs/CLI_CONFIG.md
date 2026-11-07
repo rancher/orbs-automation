@@ -101,6 +101,7 @@ File-only keys, all **(leaning)**:
 # "~" and $ENV are expanded in paths; relative paths are an error.
 configDir: ~/GitProjects/SUSE/orbs-automation/config
 output: text
+color: auto            # auto (default), always or never
 upstream: upstream
 fork: origin
 githubUser: danpock
