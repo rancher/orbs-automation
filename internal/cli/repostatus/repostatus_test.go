@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -352,4 +353,121 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	s := clicfg.Settings{Output: clicfg.OutputEnv}
 	_, err := Run(ctx, s, t.TempDir(), nil)
 	assert.ErrorContains(t, err, "not supported by repo status")
+}
+
+// nextTags are the tags of a target's candidates, in order.
+func nextTags(t Target) []string {
+	var out []string
+	for _, n := range t.Next {
+		out = append(out, n.Tag)
+	}
+	return out
+}
+
+func TestStatusAnRcAndTheBranchPastItCanHaveAnotherRcButNotAPromotion(t *testing.T) {
+	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	require.NoError(t, err)
+	v213 := byLine(got)["v2.13"]
+
+	assert.Equal(t, "rc-open-work", v213.State)
+	require.Len(t, v213.Next, 2)
+	assert.Equal(t, Next{Tag: "v2.13.0-rc.11", Kind: "prerelease", Available: true}, v213.Next[0])
+	assert.Equal(t, Next{Tag: "v2.13.0", Kind: "promotion", Promotes: "v2.13.0-rc.10", Available: false, Why: "the branch has moved since the rc"}, v213.Next[1])
+}
+
+func TestStatusAnRcOnTheHeadCanBePromotedAndAnotherRcSaysNothingIsNew(t *testing.T) {
+	ws := fixture()
+	ws.branches[0].Commit = "sha-v2.13.0-rc.10" // main's head is the rc
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v213 := byLine(got)["v2.13"]
+	assert.Equal(t, "rc-open", v213.State, "the host alone says so, whatever the clone has")
+	require.Len(t, v213.Next, 2)
+	assert.Equal(t, Next{Tag: "v2.13.0-rc.11", Kind: "prerelease", Available: false, Why: "no new commits"}, v213.Next[0])
+	assert.Equal(t, Next{Tag: "v2.13.0", Kind: "promotion", Promotes: "v2.13.0-rc.10", Available: true}, v213.Next[1])
+}
+
+func TestStatusAStableTagOnTheHeadIsReleasedAndHasNothingNext(t *testing.T) {
+	ws := fixture()
+	ws.tags = []git.Tag{tag("v2.12.1")}
+	ws.branches[1].Commit = "sha-v2.12.1"
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v212 := byLine(got)["v2.12"]
+	assert.Equal(t, "released", v212.State)
+	assert.Empty(t, v212.Next)
+}
+
+func TestStatusAStableTagWithWorkSinceItNamesTheNextPrerelease(t *testing.T) {
+	ws := fixture()
+	ws.tags = []git.Tag{tag("v2.12.1")}
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v212 := byLine(got)["v2.12"]
+	assert.Equal(t, "work-since-release", v212.State)
+	require.Equal(t, []string{"v2.12.2-rc.1"}, nextTags(v212))
+	assert.True(t, v212.Next[0].Available)
+}
+
+func TestStatusALineWithNoTagStartsAtItsSeries(t *testing.T) {
+	ws := fixture()
+	ws.tags = nil
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v212 := byLine(got)["v2.12"]
+	assert.Equal(t, "no-release", v212.State)
+	assert.Equal(t, []string{"v2.12.0-rc.1"}, nextTags(v212))
+}
+
+func TestStatusABranchTheHostDoesNotHaveHasNoStateAndNothingNext(t *testing.T) {
+	ws := fixture()
+	ws.branches = ws.branches[:1]
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v212 := byLine(got)["v2.12"]
+	assert.Empty(t, v212.State)
+	assert.Empty(t, v212.Next)
+}
+
+func TestRenderTextHasAReleasesSectionWithStateAndNextAndALocalCloneSection(t *testing.T) {
+	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	require.NoError(t, err)
+
+	out := renderText(got)
+
+	releases, local, found := strings.Cut(out, "\nLocal clone\n")
+	require.True(t, found, out)
+	assert.Contains(t, releases, "\nReleases\n")
+	for _, want := range []string{"LATEST STABLE", "LATEST PRE-RELEASE", "STATE", "NEXT", "rc open, work since the rc",
+		"v2.13.0-rc.11", "(v2.13.0 promotes v2.13.0-rc.10: the branch has moved since the rc)"} {
+		assert.Contains(t, releases, want)
+	}
+	assert.NotContains(t, releases, "UNRELEASED", "clone facts are their own section")
+	assert.NotContains(t, releases, "LOCAL")
+	for _, want := range []string{"UNRELEASED", "LOCAL", "in sync", "7"} {
+		assert.Contains(t, local, want)
+	}
+}
+
+func TestRenderTextAPromotionThatIsAvailableIsNotInParentheses(t *testing.T) {
+	ws := fixture()
+	ws.branches[0].Commit = "sha-v2.13.0-rc.10"
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+	require.NoError(t, err)
+
+	out := renderText(got)
+
+	assert.Contains(t, out, "v2.13.0 (promotes v2.13.0-rc.10)")
+	assert.Contains(t, out, "(v2.13.0-rc.11: no new commits)")
+	assert.Contains(t, out, "rc open, head on the rc")
 }
