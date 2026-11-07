@@ -5,6 +5,7 @@ go 1.27.3
 require (
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/cli/go-gh/v2 v2.17.0
+	github.com/ergochat/readline v0.1.3
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/google/go-github/v93 v93.0.0
 	github.com/spf13/cobra v1.10.2
@@ -31,7 +32,6 @@ require (
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
-	github.com/ergochat/readline v0.1.3 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.2 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
