@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -76,7 +77,7 @@ func run(ctx context.Context, s clicfg.Settings, f Flags, b Build, checks []Chec
 	if err != nil {
 		return "", err
 	}
-	out, err := Render(Report{Build: b, Outcomes: outcomes}, s.Output)
+	out, err := Render(Report{Build: b, Outcomes: outcomes, Style: style.New(s.Terminal)}, s.Output)
 	if err != nil {
 		return "", err
 	}

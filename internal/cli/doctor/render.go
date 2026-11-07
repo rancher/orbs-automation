@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // Build says which gero produced a report, for the header and the JSON.
@@ -22,6 +23,9 @@ type Build struct {
 type Report struct {
 	Build    Build
 	Outcomes []Outcome
+	// Style colors the text format. Nil, and one built for a terminal without
+	// color, leave it plain; the JSON format is never styled.
+	Style *style.Renderer
 }
 
 // categoryOrder is the order of the known groups in the text output. A category
