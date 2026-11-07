@@ -89,6 +89,22 @@ There are two shapes the front end can take, and the choice is the one open ques
 | `reeflective/console` v0.5.0 | 10 (`cobra`, `carapace`, `mvdan.cc/sh`, `reeflective/readline`, `yaml.v3` and more) | 11 MB | Writes cursor escape sequences to stdout even when piped, and ran `exit` as an unknown cobra command | It owns the loop and runs the cobra commands itself, so it would sit beside our core's `Exec` and its REPL-only commands and not under them. Its own `exit`, history and completion would have to be switched off or wrapped |
 | Bubble Tea v2 with `bubbles` `textinput` and `lipgloss` v2 | 17 | 5.5 MB | Fails, `error opening TTY: could not open TTY: open /dev/tty`, as `huh` did | The program owns the screen. A command's output and the one confirmation that reads stdin must go around the program, as `tea.ExecProcess` does for a child. That is the break the spec warns of |
 
+**On the real binary.** The sizes above are standalone programs, where the standard library is most of what is linked. What matters is the cost on `gero` itself, so each candidate was linked into a scratch copy of the repository (a program using it, run only when an environment variable is set, so it is not discarded) and `gero` built. Binaries are the default `go build`, not stripped, and the modules are all those of the build.
+
+| `gero` with | Modules | Size | Over today's |
+|---|---|---|---|
+| nothing added (today) | 28 | 16.8 MB | |
+| `ergochat/readline` | 30 | 17.1 MB | +0.25 MB (+1.5%) |
+| lipgloss v2 | 43 | 17.8 MB | +1.0 MB (+6%) |
+| lipgloss v2 and `ergochat/readline` | 45 | 18.1 MB | +1.3 MB, so +0.28 MB for the editor once styling is in |
+| Bubble Tea v2 with `bubbles` `textinput` (pulls lipgloss v2) | 46 | 18.6 MB | +1.8 MB (+11%) |
+| Bubble Tea v2, `textinput` and lipgloss v2 used | 46 | 18.6 MB | +1.8 MB, so +0.8 MB over lipgloss alone |
+
+* **The editor is the cheap part, whichever way styling goes.** `ergochat/readline` costs a quarter of a megabyte with or without lipgloss, since it shares almost nothing with it.
+* **Bubble Tea costs 0.8 MB more than lipgloss alone, and 15 modules more than nothing.** It is the right pick only if the REPL, and later commands, use enough of it to need that, such as a model-driven prompt with a completion menu and a status line, or `huh` forms (`huh` is built on it, so the cost would then be shared). `textinput` alone is not that.
+* **`reeflective/console` is out** (10 modules and 11 MB standalone, and it takes over running commands).
+* These are from linking one small use of each. A larger use grows the number a little, not the shape of it.
+
 The measures the spec asked for the second shape, whether a write command's stdin confirmation and Ctrl-C work unchanged inside Bubble Tea, and which package measures width, are **(unverified)**: they need a pty and a longer program, and the table already shows its cost in modules and in the way it takes the terminal.
 
 **Leaning: `ergochat/readline`, an editor on a loop.** It adds two modules and 0.5 MB, keeps the core as it is (a line in, a line given back), keeps `gero` commands writing straight to the terminal so output, streaming and Ctrl-C behave as in a shell, and gives history, Ctrl-R and completion that the `x/term` route would have us build. The cost is a dependency whose last release is from 2024 and whose behavior on a real terminal is not yet seen; `x/term` costs nothing in modules and is the fallback if that turns out to matter. Whichever is picked gets its entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) and a `depguard` rule that keeps it behind `internal/ui` before it is imported.
