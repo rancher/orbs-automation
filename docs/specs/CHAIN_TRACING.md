@@ -18,11 +18,21 @@ BRO tag ──bump PR──▶ charts dev-v2.15 ──promotion──▶ charts 
 
 Our own hop is the first one. The others are the release team's, and `gero` reads them.
 
+## Scope and order
+
+The chain is traced from its far end back, one stretch at a time, and each stretch is finished before the next starts:
+
+1. **Assets and Rancher.** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. This is the simplest hop to read, and it establishes the tag scheme, `yamlRead`, observed edges and the walk.
+2. **Charts to Assets.** Which charts commit an Assets tag was built from, and the dev and release tiers of `rancher/charts`.
+3. **Our projects to charts.** BRO's tag into a charts bump, and `chartsPackageBump`.
+
+Only stretch 1 is specified in detail below. Stages (the tiers of `rancher/charts`) and the reading of `lock.yaml` belong to stretch 2, are kept here as the direction, and are marked as such.
+
 ## What the config adds
 
 All of it is additive: a config without these keys behaves as it does today.
 
-* **Stages.** A project whose branches come in tiers lists them once, as patterns, with `{line}` standing for the Rancher line:
+* **Stages (stretch 2).** A project whose branches come in tiers lists them once, as patterns, with `{line}` standing for the Rancher line:
 
   ```yaml
   release:
@@ -47,7 +57,7 @@ All of it is additive: a config without these keys behaves as it does today.
   | false | `orbs`, written out | ORBS's own, with no `gero` workflows in it yet: observed until there are. |
 
   **Every edge from an unowned project is observed:** `gero` reads where it stands, and `gero ship` never opens a PR for it. An edge into an unowned project is written as usual, which is how `rancher/rancher` receives its bumps. `managedBy` does not change what is written: it is who is responsible, shown in reports and in the message when `gero ship` declines an observed edge. **To adopt `gero` for a repository the release team manages,** set `owned: true` and change its workflows to call `gero` commands; `managedBy` keeps naming the team that is responsible, and its edges become ours to ship.
-* **A stage on an edge** means two things. On a managed edge it is the stage the edge writes (the consumer's first by default). On an observed edge it is the stage the edge follows, and by default it is every stage, paired by name. On `assets → rancher`, `stage: release` is the stream Rancher is expected to hold.
+* **A stage on an edge** means two things. On a managed edge it is the stage the edge writes (the consumer's first by default; stretch 2, since no project of ours has stages yet). On an observed edge it is a stage of the producer: the stream the consumer is expected to hold. On `assets → rancher`, `stage: release` says Rancher should hold a release tag, and Rancher itself has no stages. Without it, an observed edge accepts any stage and does not warn.
 
 ## Tag schemes
 
@@ -62,7 +72,7 @@ A scheme is code, named in config and claimed from one registry, as update strat
 ## Reading a hop
 
 * **`yamlRead`** is a strategy that reads one key of one file at a ref, a branch head, a tag or a commit, and writes nothing. It shares the key-path code of `yamlBump`, and its key may use `{line}`, `{minor}` and `{stage}`. A strategy offers writing through a separate small interface, so a read-only one cannot be asked to write.
-* **Assets from charts.** The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
+* **Assets from charts (stretch 2).** The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
 * **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, read as for any `yamlBump` edge, and its tag is parsed by the scheme. A tag of the `dev` stage held where `release` is expected is a warning.
 
 ## What the reports show
@@ -70,10 +80,11 @@ A scheme is code, named in config and claimed from one registry, as update strat
 * `gero lines resolve` shows a line's chain as a tree from the hub back through every hop, with a hop that does not fit the line reported as a gap at the hop where it breaks. A project reached only through another is no longer under `also`.
 * `gero repo status` shows each hop's holdings through the chain, to a depth that `--depth` caps, with a hop that cannot be read reported on its own and the rest still shown.
 * An observed hop is marked as observed.
+* **Both directions.** From Rancher: the Assets tag each branch holds, with its line, stage and age against the newest tag of that line and stage. From Assets: the Rancher branches that hold a given tag, found by reading `build.yaml` on each Rancher branch of the line.
 
 ## Where it lives
 
-* `internal/config` holds the stages, `managedBy`, `perLineTag`, `tagScheme` and the edge's stage, and validates them: stage names are unique, each branch pattern has `{line}`, `perLineTag` has a known scheme, an edge's stage exists on its consumer, and `managedBy`, when set, is a team name.
+* `internal/config` holds the stages, `managedBy`, `perLineTag`, `tagScheme` and the edge's stage, and validates them: `perLineTag` has a known scheme, an observed edge's stage is one the producer's scheme can give, and `managedBy`, when set, is a lowercase slug (`orbs`). For stretch 2: stage names are unique, each branch pattern has `{line}`, and a managed edge's stage exists on its consumer.
 * `internal/calver` is pure: the schemes and nothing else.
 * `internal/chain` is a pure, cycle-safe walk over the project graph that returns a tree. It asks the graph for edges and a small reader interface for what a hop holds, and has fakes in tests, as the packages that read GitHub do.
 * `internal/updatedispatcher` registers `yamlRead`, and `internal/ship` skips edges from an unowned project.
@@ -81,11 +92,22 @@ A scheme is code, named in config and claimed from one registry, as update strat
 
 ## Not built yet
 
-Everything. The order it is built in: the config additions and validation with the skip in `ship`, then `internal/calver`, then `yamlRead` and reading at a ref, then `internal/chain` with `lines resolve`, then `repo status`, and `chartsPackageBump`, the write side of the charts hop, separately.
+Everything. Stretch 1 is built in this order: the config additions it needs (`owned`, `managedBy`, `perLineTag`, `tagScheme`, an observed edge's stage) and validation, with the skip in `ship`; then `internal/calver`; then `yamlRead` and reading at a ref; then `internal/chain` with `lines resolve`; then `repo status`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
+
+## Decided
+
+* An unowned project need not state `managedBy`: it is reported as unspecified.
+* A team name is a lowercase slug: `orbs`.
 
 ## Open questions
 
-* Whether an unowned project must say `managedBy` outright, and not only be reported as unspecified when it does not, and how the team name is spelled.
+Stretch 1:
+
+* Whether a held `dev` tag is a warning or an error (leaning: a warning), and which Rancher branch each Assets line maps to when the release team's own map is hardcoded (leaning: the lines of the Rancher project's config).
+* Whether the key path for `yamlRead` needs a quoting rule for keys that contain a dot, such as the line `2.16`.
+
+Later stretches:
+
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
 * Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag", or the image's contents have to be read.
 * How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.
