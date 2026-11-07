@@ -49,13 +49,17 @@ func New(t clicfg.Terminal) *Renderer {
 // tests get.
 func Plain() *Renderer { return &Renderer{} }
 
-// Style returns text in the look of role. With no color it is text unchanged.
+// Style returns text in the look of role. With no color, and on a nil Renderer,
+// it is text unchanged.
 //
 // The palette is the basic 16 colors with bold, which read on a light or a dark
 // background, since the terminal's background is not known. lipgloss v2 always
 // renders full escapes, so what is chosen here for the profile is all there is
 // to downsampling: a color the terminal does not have is never asked for.
 func (r *Renderer) Style(role Role, text string) string {
+	if r == nil {
+		return text
+	}
 	st, ok := r.styles[role]
 	if !ok {
 		return text

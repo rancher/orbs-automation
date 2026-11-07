@@ -92,3 +92,13 @@ func TestWidthCountsCellsAndNotEscapes(t *testing.T) {
 		assert.Equal(t, row.want, r.Width(r.Style(OK, row.text)), "styled "+row.text)
 	}
 }
+
+// A command that was given no renderer shows plain text, so none has to make one.
+func TestNilRendererIsPlain(t *testing.T) {
+	var r *Renderer
+
+	for _, role := range roles {
+		assert.Equal(t, "text", r.Style(role, "text"))
+	}
+	assert.Equal(t, 4, r.Width("世界"))
+}
