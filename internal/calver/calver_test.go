@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func at(y int, m time.Month, d, h, min int) time.Time {
-	return time.Date(y, m, d, h, min, 0, 0, time.UTC)
+func at(y int, m time.Month, d, h, minute int) time.Time {
+	return time.Date(y, m, d, h, minute, 0, 0, time.UTC)
 }
 
 func TestLineStageParse(t *testing.T) {
