@@ -156,4 +156,12 @@ func OpenUserFile(getenv func(string) string, home string) (io.ReadCloser, strin
 // ~/.local/state/gero/name. It is empty when neither is known. Like UserFilePath
 // it does not use the platform's directory, which on macOS is under
 // ~/Library/Application Support.
-func StatePath(getenv func(string) string, home, name string) string { return "" }
+func StatePath(getenv func(string) string, home, name string) string {
+	if x := getenv("XDG_STATE_HOME"); x != "" {
+		return filepath.Join(x, "gero", name)
+	}
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".local", "state", "gero", name)
+}
