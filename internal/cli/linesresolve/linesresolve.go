@@ -16,11 +16,11 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -433,49 +433,63 @@ func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time, 
 // hub's branch, what it takes from and ships to, the projects also on the line
 // and the gaps, and a count of the gaps at the end.
 func renderText(r Result, view *style.Renderer) string {
-	_ = view
 	var b strings.Builder
-	fmt.Fprintf(&b, "Release lines, through %s\n", r.Hub)
+	b.WriteString(view.Style(style.Heading, "Release lines, through "+r.Hub) + "\n")
 	for _, l := range r.Lines {
-		b.WriteString("\n" + lineHeader(l) + "\n")
+		b.WriteString("\n" + lineHeader(view, l) + "\n")
 		if l.Hub == nil {
-			fmt.Fprintf(&b, "  %s  (no such line)\n", r.Hub)
+			fmt.Fprintf(&b, "  %s  %s\n", r.Hub, view.Style(style.Warn, "(no such line)"))
 		} else {
 			fmt.Fprintf(&b, "  %s  %s\n", l.Hub.Project, branchText(*l.Hub))
 		}
-		b.WriteString("    takes from\n")
-		writeLinks(&b, "      ", l.TakesFrom, takesRow)
+		b.WriteString("    " + view.Style(style.Dim, "takes from") + "\n")
+		writeLinks(&b, view, "      ", l.TakesFrom, takesRow)
 		if !r.HubIsFinalDestination {
-			b.WriteString("    ships to\n")
-			writeLinks(&b, "      ", l.ShipsTo, shipsRow)
+			b.WriteString("    " + view.Style(style.Dim, "ships to") + "\n")
+			writeLinks(&b, view, "      ", l.ShipsTo, shipsRow)
 		}
 		if len(l.Also) > 0 {
-			b.WriteString("    also on this line\n")
+			b.WriteString("    " + view.Style(style.Dim, "also on this line") + "\n")
 			for _, a := range l.Also {
 				fmt.Fprintf(&b, "      %s  %s\n", a.Name, branchText(a.Node))
 				for _, in := range a.TakesFrom {
-					fmt.Fprintf(&b, "        takes from %s (%s) via %s\n", in.Name, seriesText(in), via(in))
+					b.WriteString("        " + view.Style(style.Dim, fmt.Sprintf("takes from %s (%s) via %s", in.Name, seriesText(in), via(in))) + "\n")
 				}
 				for _, out := range a.ShipsTo {
-					fmt.Fprintf(&b, "        ships to %s (%s) via %s\n", out.Name, strings.Join(out.Branches, ", "), via(out))
+					b.WriteString("        " + view.Style(style.Dim, fmt.Sprintf("ships to %s (%s) via %s", out.Name, strings.Join(out.Branches, ", "), via(out))) + "\n")
 				}
 			}
 		}
 		for _, gap := range l.Gaps {
-			fmt.Fprintf(&b, "  ! %s\n", gap)
+			b.WriteString("  " + view.Style(style.Warn, "! "+gap) + "\n")
 		}
 	}
 	if len(r.Gaps) == 0 {
-		b.WriteString("\nNo gaps.\n")
+		b.WriteString("\n" + view.Style(style.OK, "No gaps.") + "\n")
 	} else {
-		fmt.Fprintf(&b, "\nGaps: %d\n", len(r.Gaps))
+		b.WriteString("\n" + view.Style(style.Warn, fmt.Sprintf("Gaps: %d", len(r.Gaps))) + "\n")
 	}
 	return b.String()
 }
 
-// lineHeader is a line's id, its phase, its dates and its Kubernetes range.
-func lineHeader(l Line) string {
-	parts := []string{l.ID, l.Phase}
+// phaseRole is the look of where a line is in its life.
+func phaseRole(phase string) style.Role {
+	switch phase {
+	case config.PhaseGA:
+		return style.OK
+	case config.PhaseEOM:
+		return style.Warn
+	case config.PhaseEOL:
+		return style.Error
+	}
+	return style.Dim
+}
+
+// lineHeader is a line's id, its phase, its dates and its Kubernetes range. The
+// id is a heading, the phase takes the look of where the line is, and the rest
+// is secondary text.
+func lineHeader(view *style.Renderer, l Line) string {
+	parts := []string{view.Style(style.Heading, l.ID), view.Style(phaseRole(l.Phase), l.Phase)}
 	var dates []string
 	for _, d := range []struct{ label, value string }{{"GA", l.Dates.GA}, {"EOM", l.Dates.EOM}, {"EOL", l.Dates.EOL}} {
 		if d.value != "" {
@@ -483,10 +497,10 @@ func lineHeader(l Line) string {
 		}
 	}
 	if len(dates) > 0 {
-		parts = append(parts, strings.Join(dates, ", "))
+		parts = append(parts, view.Style(style.Dim, strings.Join(dates, ", ")))
 	}
 	if l.Kubernetes.Min != "" || l.Kubernetes.Max != "" {
-		parts = append(parts, "Kubernetes "+l.Kubernetes.Min+"-"+l.Kubernetes.Max)
+		parts = append(parts, view.Style(style.Dim, "Kubernetes "+l.Kubernetes.Min+"-"+l.Kubernetes.Max))
 	}
 	return strings.Join(parts, "  ")
 }
@@ -510,12 +524,12 @@ func seriesText(l Link) string {
 	return l.Series
 }
 
-func takesRow(l Link) string {
+func takesRow(view *style.Renderer, l Link) []string {
 	branch := l.Branch
 	if l.Universal {
 		branch = ""
 	}
-	return strings.Join([]string{l.Name, seriesText(l), branch, via(l)}, "\t")
+	return []string{l.Name, seriesText(l), branch, view.Style(style.Dim, via(l))}
 }
 
 // via is the method of a link and the key it updates.
@@ -526,19 +540,21 @@ func via(l Link) string {
 	return l.Method
 }
 
-func shipsRow(l Link) string {
-	return strings.Join([]string{l.Name, strings.Join(l.Branches, ", "), via(l)}, "\t")
+func shipsRow(view *style.Renderer, l Link) []string {
+	return []string{l.Name, strings.Join(l.Branches, ", "), view.Style(style.Dim, via(l))}
 }
 
 // writeLinks writes a group of links as aligned rows, or a dash for none.
-func writeLinks(b *strings.Builder, indent string, links []Link, row func(Link) string) {
+func writeLinks(b *strings.Builder, view *style.Renderer, indent string, links []Link, row func(*style.Renderer, Link) []string) {
 	if len(links) == 0 {
-		b.WriteString(indent + "-\n")
+		b.WriteString(indent + view.Style(style.Dim, "-") + "\n")
 		return
 	}
-	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
-	for _, l := range links {
-		fmt.Fprintf(w, "%s%s\n", indent, row(l))
+	table := make([][]string, len(links))
+	for i, l := range links {
+		cells := row(view, l)
+		cells[0] = indent + cells[0]
+		table[i] = cells
 	}
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	b.WriteString(ui.Align(table, view.Width))
 }
