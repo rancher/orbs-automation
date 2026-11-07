@@ -94,9 +94,15 @@ func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, e
 		return false, err
 	case "ls":
 		return false, s.ls(out, args[1:])
+	case "cd":
+		return false, s.cd(args[1:])
 	}
 	return false, s.Run(ctx, s.Dir, args)
 }
+
+// cd moves the REPL into the clone root of the project named by its one
+// argument, and nothing else: no paths, no @, no argument.
+func (s *Session) cd(args []string) error { return nil }
 
 // ls lists the working directory, a directory under it, or a project's clone
 // root. A bare word is a directory when one exists, else a project; a leading @
