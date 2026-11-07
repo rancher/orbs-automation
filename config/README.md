@@ -32,6 +32,7 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 
 | Field | Default |
 |---|---|
+| `finalDestination` | `false`; only `rancher/rancher` sets it |
 | `repo.owned` | `false` |
 | `repo.defaultBranch` | `main` |
 | `release.branching` | `single` |
@@ -50,6 +51,8 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `pullRequests.botLabels` | none: applied only to a PR the bot opens, such as `origin/bot` |
 
 `release.requiresPrerelease` is off unless a project opts in. Stricter release verification is opt-in, which also leaves room for more checks later. Nothing reads it yet: it is reserved for picking the next tag of each line once workflows produce tags, and `gero ship` does not use it.
+
+`finalDestination: true` marks the one project that releases end in, `rancher/rancher`: every other project ships to it, directly or through another project, and it ships to none. Only that project sets it and at most one project may, which the loader checks. It lets a view such as `gero lines resolve` start from the end of the line without knowing a project by name, and that view shows nothing as shipping on from it.
 
 `release.branching` is the layout of the project's own release branches, not a list of them: `single` keeps every release on the default branch, whatever lines it lists, and `perLine` keeps each Rancher line on the branch its `release.lines` entry names (the default branch for a line with none). It is separate from `release.lines`, which says which version series goes with which Rancher line.
 

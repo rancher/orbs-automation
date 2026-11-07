@@ -39,6 +39,8 @@ A bump has two halves, and each is configured by the project that knows it. The 
 | `accept` | Which releases the consumer takes: `when: stable` (the default) or `all`. A consumer that wants both has two methods |
 | `preEdit`, `postEdit` | Steps the consumer runs around the edit |
 
+**One project is the final destination.** A project may set `finalDestination: true`: the project that releases end in, `rancher/rancher`, which the others ship to and which ships to none. At most one project sets it, and it is what a view of how the lines connect starts from ([LINES_RESOLVE](LINES_RESOLVE.md)).
+
 **An edge is a producer's call into a method.** A project lists `downstream` edges. Each names a consumer (`to`, by project name or slug) and one of its methods, and passes the params the method allows. An edge may set `lines` (how its releases map to the consumer's branches; omitted, it is worked out from the producer) and add its own `preEdit` and `postEdit` steps, which may come from the consumer's clone, from the producer's repo (for an owned project) or from the central bundle (`from`). The reverse view, "who consumes X" and "what does Y take", is derived from the edges and can be compiled into the bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
 
 **Three stages, three inputs.** A strategy is code. A method **configures** it once with `with`, and that gives an updater that is checked early, by `config validate` and `gero doctor`. An edge **invokes** it with params, which become the inputs of each call. The strategy never sees how a param was declared, only the values, with defaults filled in. The updater has a read side that never writes (used by the state check) and a write side ([PUSH_TO_REPO](PUSH_TO_REPO.md#applying-a-bump)).

@@ -132,8 +132,8 @@ type Also struct {
 }
 
 // Resolve builds the map from the config and the engine, at the time now. The
-// hub is the project named in opts, else the one the lines document is named for
-// (rancher), and every project connected to it on a line is connected by the
+// hub is the project named in opts, else the one marked finalDestination, and
+// every project connected to it on a line is connected by the
 // routes of the engine, which are the ones gero ship ships down, so the map and a
 // run agree. One hop from the hub is followed; a project that has a line but no
 // direct link to the hub on it is listed with its own connections.
@@ -150,7 +150,7 @@ func Resolve(cfg config.Config, engine *updatedispatcher.Engine, opts Options, n
 		return Result{}, err
 	}
 	m := mapper{cfg: cfg, engine: engine, hub: hub}
-	res := Result{Hub: hub.Repo.Name, HubName: hub.Name}
+	res := Result{Hub: hub.Repo.Name, HubName: hub.Name, HubIsFinalDestination: hub.FinalDestination}
 	for _, l := range doc {
 		line := m.line(l, now)
 		res.Gaps = append(res.Gaps, line.Gaps...)
@@ -160,31 +160,22 @@ func Resolve(cfg config.Config, engine *updatedispatcher.Engine, opts Options, n
 }
 
 // hubOf finds the project the lines are connected through: the one named, else the
-// one the lines document is named for, else rancher/rancher.
+// one project marked finalDestination, and no project by its name.
 func hubOf(cfg config.Config, name string) (config.Project, error) {
-	find := func(key string) (config.Project, bool) {
-		for _, p := range cfg.Projects {
-			if p.Name == key || strings.EqualFold(p.Repo.Name, key) {
-				return p, true
-			}
-		}
-		return config.Project{}, false
-	}
 	if name != "" {
-		if p, ok := find(name); ok {
-			return p, nil
+		for _, p := range cfg.Projects {
+			if p.Name == name || strings.EqualFold(p.Repo.Name, name) {
+				return p, nil
+			}
 		}
 		return config.Project{}, fmt.Errorf("%w: %q is not a project in the config", ErrNoHub, name)
 	}
-	for _, key := range []string{cfg.Lines.Name, "rancher/rancher"} {
-		if key == "" {
-			continue
-		}
-		if p, ok := find(key); ok {
+	for _, p := range cfg.Projects {
+		if p.FinalDestination {
 			return p, nil
 		}
 	}
-	return config.Project{}, fmt.Errorf("%w: the lines document %q names no project and there is no rancher/rancher; name one with --hub", ErrNoHub, cfg.Lines.Name)
+	return config.Project{}, fmt.Errorf("%w: no project is marked finalDestination: true, so name one with --hub", ErrNoHub)
 }
 
 var phases = []string{config.PhaseDevelopment, config.PhaseGA, config.PhaseEOM, config.PhaseEOL}
@@ -290,7 +281,10 @@ func (m mapper) line(l config.Line, now time.Time) Line {
 			}
 		}
 	}
-	if hubHas {
+	// Nothing ships on from the final destination, whatever edges it has, so they
+	// are not shown as that, and the projects it has edges to are then just on the
+	// line.
+	if hubHas && !m.hub.FinalDestination {
 		for _, r := range m.engine.RoutesFrom(m.hub) {
 			if link, ok := shipsTo(m.hub, r, l.ID); ok {
 				out.ShipsTo = append(out.ShipsTo, link)
@@ -449,8 +443,10 @@ func renderText(r Result) string {
 		}
 		b.WriteString("    takes from\n")
 		writeLinks(&b, "      ", l.TakesFrom, takesRow)
-		b.WriteString("    ships to\n")
-		writeLinks(&b, "      ", l.ShipsTo, shipsRow)
+		if !r.HubIsFinalDestination {
+			b.WriteString("    ships to\n")
+			writeLinks(&b, "      ", l.ShipsTo, shipsRow)
+		}
 		if len(l.Also) > 0 {
 			b.WriteString("    also on this line\n")
 			for _, a := range l.Also {

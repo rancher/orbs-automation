@@ -3,6 +3,7 @@ apiVersion: gero/v1alpha1
 kind: Project
 name: rancher
 spec:
+  finalDestination: true   # releases end here: the other projects ship to it, and it ships to none
   repo:
     name: rancher/rancher
   release:
