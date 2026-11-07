@@ -150,3 +150,10 @@ func OpenUserFile(getenv func(string) string, home string) (io.ReadCloser, strin
 	}
 	return f, path, nil
 }
+
+// StatePath returns where gero keeps state of its own, such as the REPL's
+// history, and name is the file: $XDG_STATE_HOME/gero/name, else
+// ~/.local/state/gero/name. It is empty when neither is known. Like UserFilePath
+// it does not use the platform's directory, which on macOS is under
+// ~/Library/Application Support.
+func StatePath(getenv func(string) string, home, name string) string { return "" }
