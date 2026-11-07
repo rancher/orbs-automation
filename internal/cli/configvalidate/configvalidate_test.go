@@ -40,7 +40,7 @@ func TestRunSummarizesAValidConfig(t *testing.T) {
 		},
 	}
 
-	out, err := run(ws)
+	out, err := run(ws, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "/work/config")
@@ -53,14 +53,14 @@ func TestRunSummarizesAValidConfig(t *testing.T) {
 func TestRunSummarizesAConfigWithoutLines(t *testing.T) {
 	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfg: config.Config{}}
 
-	out, err := run(ws)
+	out, err := run(ws, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "lines: 0")
 }
 
 func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
-	_, err := run(fakeWorkspace{dirErr: workspace.ErrNotFound})
+	_, err := run(fakeWorkspace{dirErr: workspace.ErrNotFound}, nil)
 
 	assert.ErrorIs(t, err, workspace.ErrNotFound)
 }
@@ -69,7 +69,7 @@ func TestRunReturnsConfigProblems(t *testing.T) {
 	problem := errors.New(`Project "a": repo.name "x" must be owner/name`)
 	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfgErr: problem}
 
-	out, err := run(ws)
+	out, err := run(ws, nil)
 
 	assert.ErrorIs(t, err, problem)
 	assert.Empty(t, out)
@@ -102,7 +102,7 @@ func TestRunReturnsWhatTheUpdateDispatcherFinds(t *testing.T) {
 	problem := errors.New(`Project "rancher": method "build-yaml-bump": strategy "nope" is not known: use one of yamlBump`)
 	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfg: config.Config{}, updatesErr: problem}
 
-	out, err := run(ws)
+	out, err := run(ws, nil)
 
 	assert.ErrorIs(t, err, problem, "a method or an edge that cannot work is a config problem, like any other")
 	assert.Empty(t, out)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -26,10 +27,11 @@ type Workspace interface {
 // It returns a one-line summary on success, and on failure the error naming
 // every problem, or workspace.ErrNotFound when there is no config directory.
 func Run(s clicfg.Settings, cwd string) (string, error) {
-	return run(workspace.Open(s, cwd))
+	return run(workspace.Open(s, cwd), style.New(s.Terminal))
 }
 
-func run(ws Workspace) (string, error) {
+func run(ws Workspace, view *style.Renderer) (string, error) {
+	_ = view
 	dir, err := ws.ConfigDir()
 	if err != nil {
 		return "", err
