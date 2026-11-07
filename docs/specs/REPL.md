@@ -7,20 +7,20 @@
 ## Boundaries
 
 * **Started, not logged into.** `gero repl` is a command like any other ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). It is not meant to be `$SHELL`, and no part of the design depends on that. Anyone who sets it as their login shell gets what it does and nothing more.
-* **No shell language.** No pipes, redirects, globbing, quoting beyond splitting a line into words, variables, job control or scripting. A line that needs them goes to a real shell through `!` or `shell` below. A clear edge is better than a leaky imitation of a shell.
+* **No shell language.** No pipes, redirects, globbing, quoting beyond splitting a line into words, variables, job control or scripting. A line that needs them goes to a real shell through `shell` below. A clear edge is better than a leaky imitation of a shell.
 * **The same commands.** A line is a command from the one command tree ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), typed without the leading `gero`, which is not accepted: `gero repo status` is an unknown command, and the error says the REPL takes the command alone. There is no second set of commands to keep in step with the CLI, and a command's help, flags and exit behavior are the same in both places.
 * **Workstation only.** The REPL needs a person at a terminal. It refuses to start when stdin or stdout is not a TTY or when the context is CI, with a message saying so, using the detection in [CLI_OUTPUT](CLI_OUTPUT.md#3-tui-and-interactive-features) and [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md). It also refuses to start when `GERO_REPL` is set, which is how a REPL started from inside its own `shell` is caught. It refuses as well when the terminal is a TTY but cannot do cursor control (`TERM` unset or `dumb`, as in some editor-embedded terminals), saying why. The rule is that the REPL has to be an enhancement on top of the user's shell, with history, editing and completion, and where it cannot be that, the user is better off in their shell and gets a message saying so, not a lesser REPL.
 
 ## REPL-only commands
 
-These exist only inside the REPL and are not in the command tree, so `gero pwd` is an unknown command. They are the small set a user otherwise exits for. A name that is neither one of these nor a `gero` command is an error that suggests `!`, and nothing is passed to the shell by guessing.
+These exist only inside the REPL and are not in the command tree, so `gero pwd` is an unknown command. They are the small set a user otherwise exits for. A name that is neither one of these nor a `gero` command is an error that points to `shell`, and nothing is passed to the shell by guessing. (Not built: today it is cobra's unknown-command error.)
 
 | Command | Does |
 |---|---|
 | `pwd` | Prints the working directory |
 | `ls [target]` | Lists a directory: names only, sorted, a trailing `/` on directories. No flags. The target is described below |
 | `cd <project>` | The existing `gero cd` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), below |
-| `!<command line>` | Runs the rest of the line in the user's shell (`$SHELL -c`), in the working directory, with the terminal attached, then returns to the prompt |
+| `!<command line>` | **Deferred until after v1** ([Deferred ideas](#deferred-ideas)). Would run the rest of the line in the user's shell (`$SHELL -c`), in the working directory, with the terminal attached, then returns to the prompt |
 | `shell` | Starts the user's `$SHELL` as an interactive child process with `GERO_REPL=1` in its environment. Exiting it returns to the prompt. The bare word only: `shell` with any argument is an error, and the `gero shell` setup commands are not reachable inside the REPL until `!` is built |
 | `help` | The command tree's help, plus these commands |
 | `exit`, Ctrl-D | Leaves the REPL |
@@ -42,7 +42,7 @@ A path below a project, such as `ls <project>/docs`, is not accepted: the user c
 
 **`shell` in detail** (decided). The child is `$SHELL` run as is, with no arguments: with the terminal attached it is interactive on its own and reads the user's usual startup files, as one started from a terminal does. No `-i` and no `-l`.
 
-* **Shadows the tree.** The REPL-only `shell` takes the name from the tree's `gero shell` (`init`, `install`, `uninstall`). A line whose first word is `shell` is the child, and with any other word after it is an error saying `shell` takes no arguments, never a pass-through to the tree. The setup commands are for a real shell, where `gero shell install` works as before, and they are reachable from the REPL through `!gero shell install` once `!` is built. Until then they are not reachable inside the REPL.
+* **Shadows the tree.** The REPL-only `shell` takes the name from the tree's `gero shell` (`init`, `install`, `uninstall`). A line whose first word is `shell` is the child, and with any other word after it is an error saying `shell` takes no arguments, never a pass-through to the tree. The setup commands are for a real shell, where `gero shell install` works as before, and they are reachable from the REPL by starting `shell` and running them there, where the user's own `gero` is on the path.
 * **`$SHELL` unset or not an executable file is an error** naming `$SHELL`. The REPL does not guess `/bin/sh`: it is the user's shell or no shell, as the REPL itself is the user's REPL or none.
 * **The whole environment is passed through**, plus `GERO_REPL=1`. This is what a user expects of their own shell, which already holds any token in it. It also sets the policy for `!`, to be built, which gets the same environment.
 * **The exit status of the child is not shown and not an error.** The status of an interactive shell is that of the last command run in it, not a failure of `shell`, so the REPL returns quietly to the prompt. Only a failure to start the child is an error.
@@ -117,7 +117,7 @@ Steps 1 to 3 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the r
 4. History, line editing and completion.
 5. The prompt template, `repl.prompt` and its placeholders, which also puts the project in the prompt for a user who wants it. Until then the prompt is the plain default.
 
-`!<command line>` stays deferred, and builds on what `shell` settles: the `Passthrough` entry point, the whole environment passed through, and the `$SHELL` rules above. It adds the `$SHELL -c` line, the question of its exit status and its tests, and with it the `gero shell` setup commands become reachable from the REPL.
+`!<command line>` is deferred until after v1 ([Deferred ideas](#deferred-ideas)). `shell` is the one way to the user's shell for now.
 
 ## Deferred ideas
 
@@ -127,6 +127,8 @@ Steps 1 to 3 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the r
 * **Setting `PS1` on the child does not work.** `PS1` is normally a shell variable and not exported, and `~/.bashrc` or `~/.zshrc` (and oh-my-zsh, starship, powerlevel10k) set it after the shell starts, so a value from the environment is overwritten for most users. Fish and PowerShell have no `PS1`.
 * **Option, preferred if it is ever done: an opt-in snippet in the block `gero shell install` manages** ([SHELL_SETUP](SHELL_SETUP.md)), prefixing the prompt for bash and zsh, with a fish equivalent, only when `GERO_REPL` is set. A prompt framework that redraws the prompt later can still overwrite it, and for those the documented route is the framework's own environment-variable module keyed on `GERO_REPL`.
 * **Option, advised against: start the child with an rc file of ours** (`bash --rcfile`, a temporary `ZDOTDIR` for zsh). It would force the marker, but it is shell-specific, changes how the user's shell starts, rewrites a prompt without being asked, and breaks the rule that `shell` runs the user's `$SHELL` as is.
+
+**`!<command line>`.** Deferred until after v1, and built only if someone asks for a one-line way to run a shell command without opening `shell`. Nothing is decided beyond what `shell` already settled, and it would build on that: the `execx.Passthrough` entry point, the whole environment passed through, and the `$SHELL` rules. What it would add is the `$SHELL -c` line, a rule for its exit status (a line that fails is closer to a command than an interactive shell is, so showing the status is likely), and its tests. Until then nothing in the REPL passes a typed line to a shell as a string, which keeps the REPL further from being a shell.
 
 ## Open questions
 
