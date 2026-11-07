@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -28,13 +29,12 @@ var ErrIncomplete = errors.New("the host could not be read: the report is incomp
 // Workspace is what Status needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	// Project returns the Project with the given config name or owner/name
-	// slug, or the one in the working directory when the key is empty.
-	Project(key string) (config.Project, error)
+	// Reader is the projects and update methods of the config and what the host
+	// has: the project asked about, the tags and branch heads of slug as its host
+	// reports them, and the files of a consumer, which tracing who has picked a
+	// release up reads with the same pieces gero ship uses.
+	ship.Reader
 	RepoPath(slug string) (workspace.RepoPath, error)
-	// UpstreamRefs lists the tags and branch heads of slug as its host reports
-	// them.
-	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// TODO(release-state): consumer tracing adds UpstreamFile(ctx, slug, ref,
 	// path) here (workspace.Workspace has it) and Updates(), the engine of the
 	// updates config. Do not read a pin here by hand: gero ship reads what a
@@ -69,6 +69,21 @@ type Status struct {
 	// Clone is why the comparisons with the local clone are missing, when
 	// they are.
 	Clone string `json:"clone,omitempty"`
+	// Consumers is what each project that this one ships to holds of its releases,
+	// and Sources what this one takes from each project that ships to it. They are
+	// left out for a project with none, or when the options skip them.
+	Consumers []ship.ConsumerHoldings `json:"consumers,omitempty"`
+	Sources   []ship.SourceHoldings   `json:"sources,omitempty"`
+	// TraceError is why the consumers or the sources could not be worked out at all,
+	// such as an update method that is not usable.
+	TraceError string `json:"traceError,omitempty"`
+}
+
+// Options says which sections beyond the releases and the local clone to leave
+// out.
+type Options struct {
+	NoConsumers bool // do not trace who has picked up what this project ships
+	NoSources   bool // do not trace what this project takes from others
 }
 
 // Target is one release branch and where its releases stand.
@@ -127,18 +142,18 @@ type TagInfo struct {
 // contains the working directory cwd, and renders it as s.Output (text or
 // json). When the host could not be read it returns the report together with
 // ErrIncomplete.
-func Run(ctx context.Context, s clicfg.Settings, cwd string, slugs []string) (string, error) {
+func Run(ctx context.Context, s clicfg.Settings, cwd string, slugs []string, opts Options) (string, error) {
 	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
 		return "", fmt.Errorf("output format %q is not supported by repo status: use text or json", s.Output)
 	}
 	ws := workspace.Open(s, cwd)
-	st, err := gather(ctx, ws, func(dir string) (Clone, error) {
+	st, err := gatherWith(ctx, ws, func(dir string) (Clone, error) {
 		r, err := ws.OpenAt(dir)
 		if err != nil {
 			return nil, err
 		}
 		return r, nil
-	}, slugs)
+	}, slugs, opts)
 	if err != nil {
 		return "", err
 	}
@@ -155,6 +170,11 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, slugs []string) (st
 }
 
 func gather(ctx context.Context, ws Workspace, open Opener, slugs []string) (Status, error) {
+	return gatherWith(ctx, ws, open, slugs, Options{})
+}
+
+// gatherWith is gather with the options of the command.
+func gatherWith(ctx context.Context, ws Workspace, open Opener, slugs []string, opts Options) (Status, error) {
 	var key string
 	if len(slugs) > 0 {
 		key = slugs[0]
@@ -174,8 +194,22 @@ func gather(ctx context.Context, ws Workspace, open Opener, slugs []string) (Sta
 	for n := range st.Targets {
 		fill(&st.Targets[n], p, refs, clone)
 	}
+	trace(ctx, ws, p, opts, &st)
 	return st, nil
 }
+
+// trace adds the consumers and the sources of p to the status, unless the options
+// skip them. What it reads is read by ship.Holdings and ship.Sources, which are the
+// pieces a run of gero ship reads a consumer with.
+//
+// STUB: adds nothing until a later commit.
+func trace(ctx context.Context, ws ship.Reader, p config.Project, opts Options, st *Status) {}
+
+// holdStatus says in a few words how what a consumer branch holds stands against
+// the releases that go to it.
+//
+// STUB: empty until a later commit.
+func holdStatus(h ship.Holding) string { return "" }
 
 // targets lists the release branches of p, before anything is read.
 func targets(p config.Project) []Target {

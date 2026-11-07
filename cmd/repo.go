@@ -46,6 +46,7 @@ compares), use repo status.`,
 			return err
 		},
 	}
+	var noConsumers, noSources bool
 	statusCmd := &cobra.Command{
 		Use:   "status [name|owner/name]",
 		Short: "Show where the releases of a repository stand, as the host has them",
@@ -81,13 +82,15 @@ read. For config and the clone alone, with no network, use repo info.`,
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			out, err := repostatus.Run(ctx, settingsFrom(cmd), cwd, args)
+			out, err := repostatus.Run(ctx, settingsFrom(cmd), cwd, args, repostatus.Options{NoConsumers: noConsumers, NoSources: noSources})
 			if out != "" {
 				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 			}
 			return err
 		},
 	}
+	statusCmd.Flags().BoolVar(&noConsumers, "no-consumers", false, "leave out who has picked up what this project ships")
+	statusCmd.Flags().BoolVar(&noSources, "no-sources", false, "leave out what this project takes from the projects that ship to it")
 	var switchTo bool
 	branchCmd := &cobra.Command{
 		Use:   "branch [project] <line> <name>",

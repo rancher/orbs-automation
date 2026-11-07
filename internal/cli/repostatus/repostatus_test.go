@@ -10,6 +10,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +27,23 @@ type fakeWorkspace struct {
 	refsErr    error
 	asked      string
 	refCalls   []string
+	// The rest is for tracing consumers and sources.
+	refsBySlug map[string]git.Refs // used for a slug that is in it, else tags and branches
+	engine     *updatedispatcher.Engine
+	engineErr  error
+	files      map[string]string // "slug@ref:path"
+	fileCalls  []string
+}
+
+func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) { return f.engine, f.engineErr }
+
+func (f *fakeWorkspace) UpstreamFile(_ context.Context, slug, ref, path string) ([]byte, error) {
+	f.fileCalls = append(f.fileCalls, slug+"@"+ref+":"+path)
+	content, ok := f.files[slug+"@"+ref+":"+path]
+	if !ok {
+		return nil, errors.New("file not found")
+	}
+	return []byte(content), nil
 }
 
 func (f *fakeWorkspace) Project(slug string) (config.Project, error) {
@@ -46,6 +65,9 @@ func (f *fakeWorkspace) RepoPath(slug string) (workspace.RepoPath, error) {
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
 	f.refCalls = append(f.refCalls, slug)
+	if refs, ok := f.refsBySlug[slug]; ok {
+		return refs, f.refsErr
+	}
 	return git.Refs{Tags: f.tags, Branches: f.branches}, f.refsErr
 }
 
@@ -351,7 +373,7 @@ func TestRenderJSON(t *testing.T) {
 
 func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	s := clicfg.Settings{Output: clicfg.OutputEnv}
-	_, err := Run(ctx, s, t.TempDir(), nil)
+	_, err := Run(ctx, s, t.TempDir(), nil, Options{})
 	assert.ErrorContains(t, err, "not supported by repo status")
 }
 
@@ -470,4 +492,210 @@ func TestRenderTextAPromotionThatIsAvailableIsNotInParentheses(t *testing.T) {
 	assert.Contains(t, out, "v2.13.0 (promotes v2.13.0-rc.10)")
 	assert.Contains(t, out, "(v2.13.0-rc.11: no new commits)")
 	assert.Contains(t, out, "rc open, head on the rc")
+}
+
+// sccOperator is a producer with no release lines, shipping to rancher.
+func sccOperator() config.Project {
+	return config.Project{
+		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true, DefaultBranch: "main"},
+		Release: config.Release{Branching: "single", TagPattern: "v*"},
+		Downstream: []config.Edge{{
+			To: "rancher", Method: "build-yaml-bump",
+			Params: map[string]string{"updateKey": "defaultSccOperatorImage", "value": "{image}:{tag}"},
+		}},
+	}
+}
+
+// shipping makes the fixture a project that takes from scc-operator, and
+// scc-operator one that ships to it: both projects, the engine of their update
+// methods, the refs of each and the file rancher holds the value in.
+func shipping(t *testing.T) *fakeWorkspace {
+	t.Helper()
+	ws := fixture()
+	rancher := rancherProject()
+	rancher.UpdateMethods = []config.UpdateMethod{{
+		Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
+		AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
+	}}
+	ws.projects = map[string]config.Project{"rancher/rancher": rancher, "rancher/scc-operator": sccOperator()}
+	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: []config.Project{sccOperator(), rancher}})
+	require.NoError(t, err)
+	ws.engine = engine
+	ws.refsBySlug = map[string]git.Refs{
+		"rancher/scc-operator": {
+			Tags:     []git.Tag{tag("v0.5.2"), tag("v0.5.3"), tag("v0.6.0-rc.1")},
+			Branches: []git.Branch{{Name: "main", Commit: "sha-scc-main"}},
+		},
+		"rancher/rancher": {Tags: ws.tags, Branches: ws.branches},
+	}
+	ws.files = map[string]string{
+		"rancher/rancher@sha-head-main:build.yaml":          "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n",
+		"rancher/rancher@sha-head-release/v2.12:build.yaml": "defaultSccOperatorImage: rancher/scc-operator:v0.5.2\n",
+	}
+	return ws
+}
+
+func holdingOn(t *testing.T, hs []ship.Holding, branch string) ship.Holding {
+	t.Helper()
+	for _, h := range hs {
+		if h.Branch == branch {
+			return h
+		}
+	}
+	require.Failf(t, "no such holding", "%s in %v", branch, hs)
+	return ship.Holding{}
+}
+
+func TestStatusOfAConsumerHasASourceForEachProjectThatShipsToIt(t *testing.T) {
+	ws := shipping(t)
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), []string{"rancher/rancher"})
+
+	require.NoError(t, err)
+	require.Len(t, got.Sources, 1)
+	src := got.Sources[0]
+	assert.Equal(t, "rancher/scc-operator", src.Producer)
+	assert.Equal(t, "build-yaml-bump", src.Method)
+	require.Len(t, src.Targets, 2)
+	main := holdingOn(t, src.Targets, "main")
+	assert.Equal(t, "rancher/scc-operator:v0.5.3", main.Current)
+	assert.True(t, main.Stable.UpToDate)
+	assert.Equal(t, "v0.6.0-rc.1", main.Newest.Tag)
+	assert.Equal(t, "rancher/scc-operator:v0.5.2", holdingOn(t, src.Targets, "release/v2.12").Current)
+	assert.Empty(t, got.Consumers, "rancher ships to no one")
+}
+
+func TestStatusOfAProducerHasAConsumerForEachProjectItShipsTo(t *testing.T) {
+	ws := shipping(t)
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), []string{"rancher/scc-operator"})
+
+	require.NoError(t, err)
+	require.Len(t, got.Consumers, 1)
+	c := got.Consumers[0]
+	assert.Equal(t, "rancher/rancher", c.Consumer)
+	require.Len(t, c.Targets, 2)
+	assert.Equal(t, "v2.12", holdingOn(t, c.Targets, "release/v2.12").Line)
+	assert.Empty(t, got.Sources, "scc-operator takes from no one")
+	assert.Equal(t, "rancher/scc-operator", got.Slug)
+}
+
+func TestStatusOfAProjectThatShipsNowhereAndTakesFromNoOneHasNeither(t *testing.T) {
+	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, got.Consumers)
+	assert.Empty(t, got.Sources)
+	assert.Empty(t, got.TraceError)
+}
+
+func TestStatusOptionsLeaveOutTheConsumersOrTheSourcesAndTheirRequests(t *testing.T) {
+	ws := shipping(t)
+	got, err := gatherWith(ctx, ws, opener(syncedClone(), nil), []string{"rancher/scc-operator"}, Options{NoConsumers: true})
+	require.NoError(t, err)
+	assert.Empty(t, got.Consumers)
+	assert.Empty(t, ws.fileCalls, "nothing of the consumer was read")
+
+	ws = shipping(t)
+	got, err = gatherWith(ctx, ws, opener(syncedClone(), nil), []string{"rancher/rancher"}, Options{NoSources: true})
+	require.NoError(t, err)
+	assert.Empty(t, got.Sources)
+	assert.Empty(t, ws.fileCalls)
+}
+
+func TestStatusAnEngineThatCannotBeUsedIsATraceErrorAndKeepsTheRest(t *testing.T) {
+	ws := fixture()
+	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{})
+	require.NoError(t, err)
+	ws.engine, ws.engineErr = engine, errors.New("method build-yaml-bump of rancher is not usable")
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, got.TraceError, "not usable")
+	assert.Len(t, got.Targets, 2, "the releases are reported all the same")
+}
+
+func TestHoldStatus(t *testing.T) {
+	stable := func(tag string, upToDate bool, rel updatedispatcher.Relation) *ship.Verdict {
+		return &ship.Verdict{Tag: tag, UpToDate: upToDate, Relation: rel}
+	}
+	const (
+		newer = updatedispatcher.RelationNewer
+		same  = updatedispatcher.RelationSame
+		older = updatedispatcher.RelationOlder
+	)
+	tests := []struct {
+		name string
+		h    ship.Holding
+		want string
+	}{
+		{"an error", ship.Holding{Error: "no value for the key"}, "unreadable: no value for the key"},
+		{"nothing read", ship.Holding{}, "-"},
+		{"on the release, no prerelease newer", ship.Holding{Stable: stable("v0.5.3", true, same), Newest: stable("v0.5.3", true, same)}, "current"},
+		{"on the release, no newest at all", ship.Holding{Stable: stable("v0.5.3", true, same)}, "current"},
+		{"behind the release", ship.Holding{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.5.3", false, newer)}, "behind v0.5.3"},
+		{"ahead of the release", ship.Holding{Stable: stable("v0.5.3", false, older)}, "ahead of v0.5.3"},
+		{"a version it cannot compare", ship.Holding{Stable: stable("v0.5.3", false, updatedispatcher.RelationUnknown)}, "unknown"},
+		{"on the newest, a prerelease", ship.Holding{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", true, same)}, "current"},
+		{"on the stable, a prerelease is newer", ship.Holding{Stable: stable("v0.5.3", true, same), Newest: stable("v0.6.0-rc.1", false, newer)}, "on stable, v0.6.0-rc.1 is newer"},
+		{"behind the stable, a prerelease is newer", ship.Holding{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.6.0-rc.1", false, newer)}, "behind v0.5.3"},
+		{"between the stable and the newest", ship.Holding{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.2", false, newer)}, "on a prerelease, v0.6.0-rc.2 is newer"},
+		{"past the newest", ship.Holding{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", false, older)}, "ahead of v0.6.0-rc.1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, holdStatus(tt.h))
+		})
+	}
+}
+
+func TestRenderTextHasASourcesSectionForWhatTheProjectTakes(t *testing.T) {
+	got, err := gather(ctx, shipping(t), opener(syncedClone(), nil), []string{"rancher/rancher"})
+	require.NoError(t, err)
+
+	out := renderText(got)
+
+	_, sources, found := strings.Cut(out, "\nSources: scc-operator (rancher/scc-operator), build-yaml-bump\n")
+	require.True(t, found, out)
+	for _, want := range []string{"LINE", "BRANCH", "HEAD", "HOLDS", "LATEST STABLE", "STATUS",
+		"rancher/scc-operator:v0.5.3", "v0.5.3", "on stable, v0.6.0-rc.1 is newer", "behind v0.5.3", "release/v2.12"} {
+		assert.Contains(t, sources, want)
+	}
+	assert.NotContains(t, out, "Consumers:")
+}
+
+func TestRenderTextHasAConsumersSectionForWhatTheProjectShips(t *testing.T) {
+	got, err := gather(ctx, shipping(t), opener(syncedClone(), nil), []string{"rancher/scc-operator"})
+	require.NoError(t, err)
+
+	out := renderText(got)
+
+	assert.Contains(t, out, "\nConsumers: rancher (rancher/rancher), build-yaml-bump\n")
+	assert.NotContains(t, out, "Sources:")
+}
+
+func TestRenderTextAConsumerThatCouldNotBeTracedSaysWhy(t *testing.T) {
+	st := Status{Slug: "rancher/scc-operator", Consumers: []ship.ConsumerHoldings{
+		{Consumer: "rancher/rancher", Name: "rancher", Method: "build-yaml-bump", Error: "read the branches of rancher/rancher: network down"},
+	}, TraceError: "method x is not usable"}
+
+	out := renderText(st)
+
+	assert.Contains(t, out, "Consumers: rancher (rancher/rancher), build-yaml-bump\n  unavailable: read the branches of rancher/rancher: network down")
+	assert.Contains(t, out, "could not trace: method x is not usable")
+}
+
+func TestRenderJSONCarriesTheConsumersAndTheSources(t *testing.T) {
+	got, err := gather(ctx, shipping(t), opener(syncedClone(), nil), []string{"rancher/rancher"})
+	require.NoError(t, err)
+
+	out, err := renderJSON(got)
+
+	require.NoError(t, err)
+	var back Status
+	require.NoError(t, json.Unmarshal([]byte(out), &back))
+	assert.Equal(t, got, back)
+	assert.Contains(t, out, `"sources"`)
+	assert.Contains(t, out, `"current": "rancher/scc-operator:v0.5.3"`)
 }
