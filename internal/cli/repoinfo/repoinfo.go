@@ -116,6 +116,7 @@ func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
 	i := Info{
 		Slug:          p.Repo.Name,
 		Owned:         p.Repo.Owned,
+		ManagedBy:     p.Steward(),
 		DefaultBranch: p.Repo.DefaultBranch,
 		Release: ReleaseInfo{
 			Branching:          p.Release.Branching,
@@ -169,6 +170,7 @@ func renderText(i Info, view *style.Renderer) string {
 	var b strings.Builder
 	section(&b, view, i.Slug, func(row func(label, value string)) {
 		row("owned", yesNo(i.Owned))
+		row("managed by", orUnspecified(i.ManagedBy))
 		row("default branch", i.DefaultBranch)
 		row("release branching", i.Release.Branching)
 		row("tag pattern", i.Release.TagPattern)
@@ -243,4 +245,12 @@ func renderJSON(i Info) (string, error) {
 		return "", err
 	}
 	return string(b) + "\n", nil
+}
+
+// orUnspecified is how an unowned project that names no team is shown.
+func orUnspecified(team string) string {
+	if team == "" {
+		return "unspecified"
+	}
+	return team
 }
