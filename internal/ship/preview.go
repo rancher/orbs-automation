@@ -19,6 +19,19 @@ type Preview struct {
 	Labels        []string `json:"labels,omitempty"`
 	CommitMessage string   `json:"commitMessage"`
 	Body          string   `json:"body"`
+	// Steps are the steps that run around the edit, in the order they run, each
+	// with the commit it makes when it changes files. Whether it does is only known
+	// once it has run, so these are the commits that may be made besides the edit's.
+	Steps []StepPreview `json:"steps,omitempty"`
+}
+
+// StepPreview is a step of the bump and the commit it would make.
+type StepPreview struct {
+	Phase string `json:"phase"` // where it runs: method preEdit, edge preEdit, edge postEdit or method postEdit
+	Run   string `json:"run"`   // the command
+	// BeforeEdit says the step runs before the edit, so its commit comes first.
+	BeforeEdit    bool   `json:"beforeEdit,omitempty"`
+	CommitMessage string `json:"commitMessage"`
 }
 
 // previewInput is everything the texts are made from.
