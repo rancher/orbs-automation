@@ -351,3 +351,32 @@ func TestCandidatesWithNoTagAndNoSeriesHaveNoTag(t *testing.T) {
 		assert.Empty(t, cand.Tag)
 	}
 }
+
+func TestStateOf(t *testing.T) {
+	rc := func(commit string) git.Tag { return git.Tag{Name: "v0.8.4-rc.2", Commit: commit} }
+	tests := []struct {
+		name string
+		c    Choice
+		want State
+	}{
+		{"no tag at all", line(), StateNoRelease},
+		{"only tags of other series", line(tagsAt("a", "v0.9.0", "v0.7.1")...), StateNoRelease},
+		{"a stable tag on the head", line(tagsAt("head1234", "v0.8.3")...), StateReleased},
+		{"a stable tag, the head past it", line(tagsAt("old", "v0.8.3")...), StateWorkSinceRelease},
+		{"an rc on the head", line(rc("head1234")), StateRCOpen},
+		{"an rc, the head past it", line(rc("old")), StateRCOpenWork},
+		{"an older rc and a newer stable on the head", line(append(tagsAt("old", "v0.8.3-rc.1"), git.Tag{Name: "v0.8.3", Commit: "head1234"})...), StateReleased},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, StateOf(tt.c))
+		})
+	}
+}
+
+func TestStateOfABranchTheHostDoesNotHaveIsNone(t *testing.T) {
+	c := line(tagsAt("old", "v0.8.3")...)
+	c.Commit = ""
+
+	assert.Equal(t, State(""), StateOf(c))
+}

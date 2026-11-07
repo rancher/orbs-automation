@@ -111,7 +111,7 @@ func Check(in Input) (Decision, error) {
 	if in.RequiresPrerelease && !v.IsPrerelease() && !hasPrereleaseOf(v, in) {
 		return Decision{}, fmt.Errorf("%w: %s has none of %s on %s", ErrNeedsPrerelease, in.Tag, base(v), short(in.Commit))
 	}
-	newest := newestOf(in)
+	newest := Newest(in)
 	if newest != nil {
 		if nv, _ := semver.Parse(newest.Name); semver.Compare(v, nv) <= 0 {
 			return Decision{}, fmt.Errorf("%w: %s is not newer than %s", ErrNotNewer, in.Tag, newest.Name)
@@ -123,7 +123,7 @@ func Check(in Input) (Decision, error) {
 // newestOf is the newest tag of the line, of any kind: of the series when there
 // is one, else of every tag the pattern matches. A tag that is not a version, such
 // as the rolling main-<sha> ones, does not count.
-func newestOf(in Input) *git.Tag {
+func Newest(in Input) *git.Tag {
 	var best *git.Tag
 	var bestV semver.Version
 	for i := range in.Tags {
@@ -242,7 +242,7 @@ func vPrefix(c Choice, newest *git.Tag) string {
 
 func prereleaseCandidate(c Choice) Candidate {
 	cand := Candidate{Kind: KindPrerelease}
-	newest := newestOf(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	newest := Newest(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
 	if newest == nil {
 		start, ok := seriesStart(c.Series)
 		if !ok {
@@ -272,7 +272,7 @@ func prereleaseCandidate(c Choice) Candidate {
 
 func stableCandidate(c Choice) Candidate {
 	cand := Candidate{Kind: KindStable}
-	newest := newestOf(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	newest := Newest(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
 	if newest == nil {
 		start, ok := seriesStart(c.Series)
 		if !ok {
@@ -343,3 +343,29 @@ func hasPrereleaseOf(v semver.Version, in Input) bool {
 
 // base is a version without its prerelease, as a prerelease tag of it reads.
 func base(v semver.Version) string { return v.String() + "-*" }
+
+// State is where a release line stands, from its newest tag and its head.
+type State string
+
+// The states.
+const (
+	// StateNoRelease: the line has no tag.
+	StateNoRelease State = "no-release"
+	// StateReleased: the newest tag is stable and the head is on it.
+	StateReleased State = "released"
+	// StateWorkSinceRelease: the newest tag is stable and the head is past it.
+	StateWorkSinceRelease State = "work-since-release"
+	// StateRCOpen: the newest tag is a prerelease and the head is on it, so it can
+	// be promoted.
+	StateRCOpen State = "rc-open"
+	// StateRCOpenWork: the newest tag is a prerelease and the head is past it.
+	StateRCOpenWork State = "rc-open-work"
+)
+
+// StateOf says where the line stands: c has the tags of the line and the head of
+// its branch, and the rest of it is not used. "On the tag" is the head's commit
+// being the tag's, which the host alone can say, with no clone. It is "" when
+// there is no head, since there is then no branch to be in a state.
+//
+// STUB: always ""; the states are not worked out until a later commit.
+func StateOf(c Choice) State { return "" }
