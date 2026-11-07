@@ -130,7 +130,16 @@ func (s *Session) cd(args []string) error {
 
 // shell runs the user's $SHELL as an interactive child, with GERO_REPL set, and
 // returns when it exits. The word shadows the tree's gero shell.
-func (s *Session) shell(ctx context.Context, args []string) error { return nil }
+func (s *Session) shell(ctx context.Context, args []string) error {
+	if len(args) > 0 {
+		return errors.New("shell takes no arguments: the gero shell commands are for your own shell")
+	}
+	sh, err := shellPath(s.Env)
+	if err != nil {
+		return err
+	}
+	return s.StartShell(ctx, sh, s.Dir, markedEnv(s.Env))
+}
 
 // ls lists the working directory, a directory under it, or a project's clone
 // root. A bare word is a directory when one exists, else a project; a leading @

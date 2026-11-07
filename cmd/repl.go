@@ -17,8 +17,8 @@ func addRepl(root *cobra.Command) {
 	root.AddCommand(&cobra.Command{
 		Use:   "repl",
 		Short: "Run gero commands one line at a time at a prompt",
-		Long: `Run gero commands one line at a time at a prompt, with pwd, ls and exit of its
-own. A line is a command typed without the leading gero. The global flags given
+		Long: `Run gero commands one line at a time at a prompt, with pwd, ls, cd, shell and
+exit of its own. A line is a command typed without the leading gero. The global flags given
 here, such as --dry-run, apply to every line.
 
 It needs a terminal and is not offered in CI. It is started from your shell and
@@ -56,7 +56,10 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 	if err != nil {
 		return err
 	}
-	sess := &repl.Session{Dir: cwd}
+	sess := &repl.Session{
+		Dir: cwd, Env: os.Environ(),
+		StartShell: repl.ShellOn(cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()),
+	}
 	sess.ProjectDir = func(key string) (string, error) {
 		out, err := cdpath.Path(s, sess.Dir, []string{key})
 		return strings.TrimSuffix(out, "\n"), err
