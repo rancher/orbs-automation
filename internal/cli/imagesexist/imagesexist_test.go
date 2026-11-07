@@ -156,7 +156,7 @@ func TestRenderText(t *testing.T) {
 	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v0.5.3-rc.1")
 	require.NoError(t, err)
 
-	out := renderText(r)
+	out := renderText(r, nil)
 
 	for _, want := range []string{
 		"rancher/scc-operator", "v0.5.3-rc.1", "prerelease",
@@ -173,7 +173,7 @@ func TestRenderText(t *testing.T) {
 func TestRenderTextAllFound(t *testing.T) {
 	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, &fakeChecker{}, "", "v0.5.3")
 	require.NoError(t, err)
-	out := renderText(r)
+	out := renderText(r, nil)
 	assert.Contains(t, out, "stable")
 	assert.Contains(t, out, "All required images were found")
 }
@@ -184,7 +184,7 @@ func TestRenderTextShowsWhyUnreachable(t *testing.T) {
 	}}
 	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v1")
 	require.NoError(t, err)
-	out := renderText(r)
+	out := renderText(r, nil)
 	assert.Contains(t, out, "unreachable (429 Too Many Requests)")
 	assert.Contains(t, out, "1 unreachable")
 }
@@ -303,7 +303,7 @@ func TestCheckNoWarningWhenNoImageHasASince(t *testing.T) {
 func TestRenderTextHasNoRowForAnImageBeforeItsLine(t *testing.T) {
 	skipped, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v2.15.3")
 	require.NoError(t, err)
-	out := renderText(skipped)
+	out := renderText(skipped, nil)
 	assert.NotContains(t, out, "rancher-server")
 	assert.NotContains(t, out, "before v2.16")
 }
@@ -311,7 +311,7 @@ func TestRenderTextHasNoRowForAnImageBeforeItsLine(t *testing.T) {
 func TestRenderTextShowsWarnings(t *testing.T) {
 	warned, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
-	out := renderText(warned)
+	out := renderText(warned, nil)
 	assert.Contains(t, out, "Warning: ")
 	assert.Contains(t, out, "none of the release lines")
 }
@@ -323,7 +323,7 @@ func TestRenderTextWhenNoImageIsExpected(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, r.Rows)
 	assert.False(t, r.Failed())
-	out := renderText(r)
+	out := renderText(r, nil)
 	assert.Contains(t, out, "No image is expected for this tag")
 	assert.NotContains(t, out, "All required images were found")
 	assert.NotContains(t, out, "REFERENCE", "no empty table")

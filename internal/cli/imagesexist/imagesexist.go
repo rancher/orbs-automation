@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/registry"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -63,7 +64,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd, project, tag string) (stri
 			return "", err
 		}
 	} else {
-		out = renderText(report)
+		out = renderText(report, style.New(s.Terminal))
 	}
 	if report.Failed() {
 		return out, ErrNotPublished
@@ -79,7 +80,8 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 	return registry.CheckProject(ctx, p, c, tag), nil
 }
 
-func renderText(r Report) string {
+func renderText(r Report, view *style.Renderer) string {
+	_ = view
 	var b strings.Builder
 	kind := "stable"
 	if !r.Stable {
