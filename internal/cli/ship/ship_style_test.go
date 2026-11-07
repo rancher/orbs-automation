@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,4 +144,109 @@ func TestARunWritesTheStyledTextAndItsPlainTextIsTheSame(t *testing.T) {
 
 	assert.Contains(t, styled, "\x1b[")
 	assert.Equal(t, plain, strip(styled))
+}
+
+func TestTheQuestionIsStyledAndItsPlainTextIsTheSame(t *testing.T) {
+	st := colored()
+	q := question(opening("main"))
+	text := strings.TrimSuffix(q, " [y/N] ")
+	var out bytes.Buffer
+
+	ok, err := confirmer(strings.NewReader("y\n"), &out, true, false, st)(context.Background(), opening("main"))
+
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Contains(t, out.String(), st.Style(style.Heading, text), "the question is what the user is to read")
+	assert.Contains(t, out.String(), st.Style(style.Dim, "[y/N]"), "the choices are secondary text")
+	assert.Equal(t, "\n"+q, strip(out.String()))
+}
+
+func TestTheQuestionWithoutColorIsThePlainQuestion(t *testing.T) {
+	for who, st := range map[string]*style.Renderer{"plain": style.Plain(), "none": style.New(clicfg.Terminal{})} {
+		var out bytes.Buffer
+
+		_, err := confirmer(strings.NewReader("n\n"), &out, true, false, st)(context.Background(), opening("main"))
+
+		require.NoError(t, err, who)
+		assert.Equal(t, "\n"+question(opening("main")), out.String(), who)
+	}
+}
+
+func TestYesNeverAsksSoNothingIsStyled(t *testing.T) {
+	var out bytes.Buffer
+
+	_, err := confirmer(strings.NewReader(""), &out, false, true, colored())(context.Background(), opening("main"))
+
+	require.NoError(t, err)
+	assert.Empty(t, out.String())
+}
+
+// event is the text one event adds to the report.
+func event(t *testing.T, st *style.Renderer, e domain.Event) string {
+	t.Helper()
+	var out bytes.Buffer
+	stream := ui.NewStream(&out, ui.WithWidth(st.Width))
+	newStyledSink(stream, false, st).Event(e)
+	stream.Flush()
+	return out.String()
+}
+
+func TestTheLinesOfWhatWasDoneNameTheirVerbInTheLookOfIt(t *testing.T) {
+	st := colored()
+	pr := &domain.PRRef{Number: 7, URL: "https://github.com/rancher/rancher/pull/7"}
+	rows := []struct {
+		name string
+		e    domain.Event
+		verb string
+		role style.Role
+		line string
+	}{
+		{"pushed", domain.Event{Kind: domain.EventPushed, Line: "v2.15", NewBranch: "bot/x", Remote: "origin"}, "pushed", style.OK,
+			"  v2.15: pushed bot/x to origin\n"},
+		{"opened", domain.Event{Kind: domain.EventPROpened, Line: "v2.15", PR: pr}, "opened", style.OK,
+			"  v2.15: opened #7 https://github.com/rancher/rancher/pull/7\n"},
+		{"refreshed", domain.Event{Kind: domain.EventRefreshed, Line: "v2.15", PR: pr}, "refreshed", style.OK,
+			"  v2.15: refreshed #7 https://github.com/rancher/rancher/pull/7\n"},
+		{"closed", domain.Event{Kind: domain.EventSuperseded, Line: "v2.15", PR: pr}, "closed", style.Dim,
+			"  v2.15: closed #7\n"},
+	}
+	for _, r := range rows {
+		got := event(t, st, r.e)
+
+		assert.Equal(t, r.line, strip(got), r.name+": the text is the same")
+		assert.Contains(t, got, st.Style(r.role, r.verb), r.name)
+		assert.Equal(t, r.line, event(t, style.Plain(), r.e), r.name+": plain")
+	}
+}
+
+func TestTheResultLinesTakeTheLookOfTheirStatus(t *testing.T) {
+	st := colored()
+	pr := &domain.PRRef{Number: 7, URL: "https://x/7"}
+	rows := []struct {
+		name   string
+		result domain.TargetResult
+		styled string
+		role   style.Role
+	}{
+		{"already open", domain.TargetResult{Status: domain.ResultAlreadyOpen, PR: pr}, "already open", style.Dim},
+		{"would refresh", domain.TargetResult{Status: domain.ResultWouldRefresh, PR: pr}, "would refresh", style.Dim},
+		{"up to date", domain.TargetResult{Status: domain.ResultUpToDate}, "already up to date", style.Dim},
+	}
+	for _, r := range rows {
+		res := r.result
+		got := event(t, st, domain.Event{Kind: domain.EventTargetDone, Line: "v2.15", Branch: "main", Result: &res})
+
+		assert.Equal(t, event(t, style.Plain(), domain.Event{Kind: domain.EventTargetDone, Line: "v2.15", Branch: "main", Result: &res}), strip(got), r.name)
+		assert.Contains(t, got, st.Style(r.role, r.styled), r.name)
+	}
+}
+
+func TestTheLabelsOfTheSummaryAreSecondaryText(t *testing.T) {
+	st := colored()
+
+	out := renderTextStyled(styledPlans()["acting"], false, st)
+
+	for _, label := range []string{"method", "status", "acting as"} {
+		assert.Contains(t, out, st.Style(style.Dim, label), label)
+	}
 }
