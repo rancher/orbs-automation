@@ -91,3 +91,8 @@ func forced(depth Profile) Profile {
 	}
 	return depth
 }
+
+// DefaultReplPrompt is the template of the prompt of gero repl when none is
+// given: plain text, with the project's config name added inside one
+// (docs/specs/REPL.md#the-prompt).
+const DefaultReplPrompt = "gero{project: (%s)}> "

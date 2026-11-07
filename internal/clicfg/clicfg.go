@@ -87,10 +87,14 @@ type Repos struct {
 // Settings is the resolved CLI config. Treat it as read-only and pass it down by
 // value.
 type Settings struct {
-	ConfigDir    string // central application config directory
-	Output       string // OutputText or OutputJSON
-	Color        string // ColorAuto, ColorAlways or ColorNever
-	Terminal     Terminal
+	ConfigDir string // central application config directory
+	Output    string // OutputText or OutputJSON
+	Color     string // ColorAuto, ColorAlways or ColorNever
+	Terminal  Terminal
+	// ReplPrompt is the template of the prompt of gero repl, repl.prompt in the
+	// user file. It is checked when the REPL starts and not here, so a bad one
+	// breaks the REPL and no other command.
+	ReplPrompt   string
 	LogLevel     string // LogDebug, LogInfo, LogWarn or LogError
 	Upstream     string // remote treated as the real source
 	Fork         string // remote holding the developer's fork

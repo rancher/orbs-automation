@@ -23,6 +23,11 @@ type fileConfig struct {
 	PushTo       string    `yaml:"pushTo"`
 	SignCommits  *bool     `yaml:"signCommits"`
 	Repos        fileRepos `yaml:"repos"`
+	Repl         fileRepl  `yaml:"repl"`
+}
+
+type fileRepl struct {
+	Prompt string `yaml:"prompt"`
 }
 
 type fileRepos struct {
