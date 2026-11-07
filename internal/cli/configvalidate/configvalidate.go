@@ -31,7 +31,6 @@ func Run(s clicfg.Settings, cwd string) (string, error) {
 }
 
 func run(ws Workspace, view *style.Renderer) (string, error) {
-	_ = view
 	dir, err := ws.ConfigDir()
 	if err != nil {
 		return "", err
@@ -47,6 +46,6 @@ func run(ws Workspace, view *style.Renderer) (string, error) {
 	if cfg.Lines != nil {
 		lines = len(cfg.Lines.Lines)
 	}
-	return fmt.Sprintf("config OK: %s (projects: %d, externals: %d, lines: %d)\n",
-		dir.Dir, len(cfg.Projects), len(cfg.Externals), lines), nil
+	return fmt.Sprintf("%s: %s (projects: %d, externals: %d, lines: %d)\n",
+		view.Style(style.OK, "config OK"), dir.Dir, len(cfg.Projects), len(cfg.Externals), lines), nil
 }
