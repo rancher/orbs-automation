@@ -34,6 +34,8 @@ linters:
             - go.yaml.in/yaml/v3
             - golang.org/x/net/html
             - golang.org/x/term
+            - charm.land/lipgloss
+            - github.com/ergochat/readline
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
         # internal/errs for exit-code errors and its own subpackages.
@@ -116,6 +118,27 @@ linters:
           deny:
             - pkg: golang.org/x/term
               desc: golang.org/x/term is only allowed in internal/cli/termfacts (docs/specs/DEPENDENCY_POLICY.md)
+        # Styling stays in one package, so the colors, the downsampling and the
+        # lipgloss version are decided in one place
+        # (docs/specs/DEPENDENCY_POLICY.md, docs/specs/CLI_OUTPUT.md).
+        nolipgloss:
+          list-mode: lax
+          files:
+            - "!**/internal/ui/style/**"
+            - "!$test"
+          deny:
+            - pkg: charm.land/lipgloss
+              desc: lipgloss is only allowed in internal/ui/style (docs/specs/DEPENDENCY_POLICY.md)
+        # The REPL's line editor stays in one package, behind a small seam
+        # (docs/specs/DEPENDENCY_POLICY.md, docs/specs/REPL.md).
+        noreadline:
+          list-mode: lax
+          files:
+            - "!**/internal/ui/editor/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/ergochat/readline
+              desc: the line editor is only allowed in internal/ui/editor (docs/specs/DEPENDENCY_POLICY.md)
         # Central config is loaded, defaulted and validated only by
         # internal/workspace, so no command can use config that skipped them
         # (docs/specs/WORKSPACE.md, docs/specs/PROJECT_LAYOUT.md).
