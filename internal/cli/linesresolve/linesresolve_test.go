@@ -462,3 +462,45 @@ func TestRunAnEngineThatIsPartlyUsableIsStillUsed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, b.String(), "shell")
 }
+
+// assets is used for v2.16 only, and lists only that line: its lines are in its tags
+// and one branch holds them all.
+func assets() config.Project {
+	return config.Project{
+		Name: "rancher-assets", Repo: config.Repo{Name: "rancher/rancher-assets", ManagedBy: "release-team", DefaultBranch: "main"},
+		Release: config.Release{
+			Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage,
+			Lines: []config.ProjectLine{ln("v2.16", "", "")},
+		},
+		Downstream: []config.Edge{edge("rancher", "defaultAssetsImage")},
+	}
+}
+
+func resolveWithAssets(t *testing.T) Result {
+	t.Helper()
+	cfg := fixtureConfig()
+	cfg.Projects = append(cfg.Projects, assets())
+	got, err := Resolve(cfg, engineOf(t, cfg), Options{}, now)
+	require.NoError(t, err)
+	return got
+}
+
+func TestAProjectUsedForOneLineTakesPartOnThatLineAndHasNoGapOnTheOthers(t *testing.T) {
+	got := resolveWithAssets(t)
+
+	var names []string
+	for _, in := range lineOf(t, got, "v2.16").TakesFrom {
+		names = append(names, in.Name)
+	}
+	assert.Contains(t, names, "rancher-assets")
+	for _, id := range []string{"v2.15", "v2.14", "v2.13"} {
+		l := lineOf(t, got, id)
+		for _, in := range l.TakesFrom {
+			assert.NotEqual(t, "rancher-assets", in.Name, id)
+		}
+		for _, gap := range l.Gaps {
+			assert.NotContains(t, gap, "rancher-assets", "only the lines it declares are judged: %s", id)
+		}
+	}
+	assert.Len(t, got.Gaps, 1, "shell's missing v2.13 is the only gap, as without Assets")
+}
