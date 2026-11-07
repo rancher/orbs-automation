@@ -94,7 +94,7 @@ One helper maps errors to codes so commands return errors and never call `os.Exi
 ## Not built yet
 
 * The rest of the command tree beyond the commands in the table that do something today; the others are stubs.
-* `--color` and `--no-color`, context gating and the exit-code helper. Until the helper exists, a usage or validation error exits 1, not 2.
+* `--color` and `--no-color`, and the exit-code helper. Until the helper exists, a usage or validation error exits 1, not 2. (Context gating is built.)
 * `--json` for `config validate`, and `--output env` for `auth status`.
 
 ## Open questions

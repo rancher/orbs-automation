@@ -1,6 +1,6 @@
 # Ship (push to repo)
 
-**Status:** draft, built for the workstation. `gero ship` checks the state, asks once, makes the commits (one per unit of work), pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub, and **not yet against real GitHub**: the push spike (`TestPushSpikeToARealRemote`) and a trial on a scratch repository are still to be run. The CI variant is not built.
+**Status:** draft, built for the workstation. `gero ship` checks the state, asks once, makes the commits (one per unit of work), pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub, and the team has used it against real GitHub for bumps into `rancher/rancher`, including `--refresh`; the push spike test (`TestPushSpikeToARealRemote`) itself has not been run. The CI variant is not built.
 
 `gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md).
 
@@ -181,7 +181,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* A run against real GitHub: the push spike, and a first PR on a scratch repository. The same goes for `--refresh`, whose forced push has only been tried against local repositories.
+* The push spike test against a scratch repository (`TestPushSpikeToARealRemote`, which needs `GERO_SPIKE_PUSH_URL`), which settles the credential questions in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing) with a test and not only with use.
 * A way to name a step's commit, or fold it into the previous one, which is the first knob to add if a project needs it.
 * `gero ci:ship` ([CI_SHIP](CI_SHIP.md)).
 * The sequence above as chained tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).

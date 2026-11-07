@@ -23,7 +23,7 @@ Unmarked items are decisions or working agreements. **(leaning)** is a proposal 
 
 ## Release Rules
 
-* `release.requiresPrerelease` means a stable tag must come from a commit that already has an RC. It is a safety check that some repos do not need at all, so it is off unless a project opts in. The config accepts it from the start; enforcement ships later (see [PHASES](PHASES.md)).
+* `release.requiresPrerelease` means a stable tag must come from a commit that already has an RC. It is a safety check that some repos do not need at all, so it is off unless a project opts in. `gero repo tag` enforces it for the tags it makes, and `gero repo status` shows what it allows; enforcing it for tags made by hand or by a workflow comes later (see [PHASES](PHASES.md)).
 * Even when the rule is on, it can be **overridden per release** (for example a single-commit CVE dependency bump that needs a new patch, not an RC retest).
   * Mechanism: an explicit CLI flag or issue label, with the reason recorded in the tracking issue. **(leaning)** A flag follows the conventions in [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md).
 * **Tag classification** (semver, prerelease, build metadata) is one shared library function, `internal/semver` ([CHECK_SEMVER](specs/CHECK_SEMVER.md)). Existing repos reimplement it in shell (see [projects/](projects/README.md)).

@@ -50,7 +50,7 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `pullRequests.pushTo` | none: `fork` or `upstream`, for a repository that is only ever pushed to one way; the flag and the user's settings come first |
 | `pullRequests.botLabels` | none: applied only to a PR the bot opens, such as `origin/bot` |
 
-`release.requiresPrerelease` is off unless a project opts in. Stricter release verification is opt-in, which also leaves room for more checks later. Nothing reads it yet: it is reserved for picking the next tag of each line once workflows produce tags, and `gero ship` does not use it.
+`release.requiresPrerelease` is off unless a project opts in. Stricter release verification is opt-in, which also leaves room for more checks later. `gero repo tag` and `gero repo status` read it: with it set a stable tag follows a stable one only through a prerelease, and a stable tag is only made on a commit that already has a prerelease of its version ([TASK_COMMANDS](../docs/specs/TASK_COMMANDS.md#gero-repo-tag-project-line-tag)). `gero ship` does not use it, and picking the next tag from a workflow is not built.
 
 `finalDestination: true` marks the one project that releases end in, `rancher/rancher`: every other project ships to it, directly or through another project, and it ships to none. Only that project sets it and at most one project may, which the loader checks. It lets a view such as `gero lines resolve` start from the end of the line without knowing a project by name, and that view shows nothing as shipping on from it.
 

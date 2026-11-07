@@ -91,7 +91,6 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 * Commit identity is resolved and wired (`internal/actor`, `internal/cli/identity`, the `User-Agent`), and `gero doctor` (the `commit-identity` check) and `gero ship` call it. The cross-repo token check (`cigate.RequireCrossRepoToken`), the workstation-signs detection (`clicfg.WorkstationSigns`) and the `auth status` fallback for installation tokens exist too, and likewise wait for a command to call them. The fallback treats a 403 from `GET /user` as an installation token and is unverified against a real one.
 * The write-command contract is built for `gero ship`, with the work branch or worktree, the one confirmation, and `--non-interactive`/`--yes` or `GERO_NON_INTERACTIVE`. Not yet: the preflight line that names workstation signs under a forced CI context.
-* Any write command at all. These are the rules the first one is built against.
 
 ## Decided
 
