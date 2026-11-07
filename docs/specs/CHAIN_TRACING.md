@@ -97,7 +97,7 @@ In Go there are two layers.
 
 ## Not built yet
 
-Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), and `gero ship` refusing a producer that is not owned; `config/rancher-assets.project.yaml` uses them; and `internal/calver` with the `calverLineStage` format. Not built: `internal/tagscheme`, first with the semver implementation moved behind it unchanged and then the CalVer one; `IsUniversal` and an edge's default `lines` for a `perLineTag` project; `Holdings` and `Sources` reading an Assets producer, and `repo status` showing the stage held; then `internal/chain` with `lines resolve`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
+Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag` with its listed lines, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), `gero ship` refusing a producer that is not owned, `config/rancher-assets.project.yaml`, `internal/calver` (the `calverLineStage` format), and `internal/tagscheme` (the shared scheme, with semver and CalVer, called by `ship` and `repo status`). `gero repo status` of `rancher-assets` and of `rancher` already shows the hop: the Assets tag Rancher holds on each listed line, whether it is behind the newest release or dev tag by date, and the stage held in `--json`. Not built: `internal/chain` with `lines resolve` following every hop; `repo tag` calling the scheme. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
 
 ## Decided
 
