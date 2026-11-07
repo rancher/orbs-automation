@@ -18,6 +18,7 @@ These exist only inside the REPL and are not in the command tree, so `gero pwd` 
 | Command | Does |
 |---|---|
 | `pwd` | Prints the working directory |
+| `clear` | Clears the screen and the scrollback and returns to the prompt. No argument |
 | `ls [target]` | Lists a directory: names only, sorted, a trailing `/` on directories. No flags. The target is described below |
 | `cd <project>` | The existing `gero cd` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), below |
 | `!<command line>` | **Deferred until after v1** ([Deferred ideas](#deferred-ideas)). Would run the rest of the line in the user's shell (`$SHELL -c`), in the working directory, with the terminal attached, then returns to the prompt |
@@ -107,7 +108,7 @@ The REPL loop, the REPL-only commands and the shell hand-off are in `internal/cl
 
 The REPL is complete enough for v1. What is left waits for v1 and the team's use, and each item is taken up if the team asks for it, so what gets built is what they run into.
 
-* **`help`.** It is cobra's help, which does not list `pwd`, `ls` or `exit`, and describes the tree's `gero shell` (completion setup) where the REPL's `shell` is the child shell. A short block of the REPL's own commands before cobra's help, with `help <command>` left to cobra, is the first thing to try; a REPL-only help is the larger option.
+* **`help`.** It is cobra's help, which does not list `pwd`, `ls`, `clear` or `exit`, and describes the tree's `gero shell` (completion setup) where the REPL's `shell` is the child shell. A short block of the REPL's own commands before cobra's help, with `help <command>` left to cobra, is the first thing to try; a REPL-only help is the larger option.
 * **An unknown name** gets cobra's unknown-command error. The intended version is one line that points to `help` and `shell`, not a full help screen.
 * **The prompt** has no way to show that the last line failed, and only the placeholders `{project}`, `{dir}` and `{path}`; more come when a user asks for something it cannot say.
 * **`!<command line>`** and **marking the prompt of the child `shell`** ([Deferred ideas](#deferred-ideas)).

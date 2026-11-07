@@ -21,7 +21,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md) | Shipping the central config and templates as one release file: compile command, verified fetch, cache, source precedence |
 | [IMAGES_EXIST](IMAGES_EXIST.md) | Port of `validate_image_exists`: `gero repo images exist`, the `images` config, the registry client |
 | [SHELL_SETUP](SHELL_SETUP.md) | `gero shell install`: the marked profile block, completion, and the wrapper that lets `gero cd` change directory |
-| [REPL](REPL.md) | `gero repl`: an interactive prompt over the same commands, its few shell-like commands (`pwd`, `ls`, `cd`, `shell`, `exit`), the working directory as state, the line editor with history and completion, the prompt template (`repl.prompt`) |
+| [REPL](REPL.md) | `gero repl`: an interactive prompt over the same commands, its few shell-like commands (`pwd`, `ls`, `cd`, `clear`, `shell`, `exit`), the working directory as state, the line editor with history and completion, the prompt template (`repl.prompt`) |
 | [DOCTOR](DOCTOR.md) | `gero doctor`: workstation health checks, statuses, `--online`, output, exit codes |
 | [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) | Stdlib-first, approved modules, the depguard allow-list |
 | [TESTING](TESTING.md) | How the CLI layer is tested |
