@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -154,7 +155,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd string, slugs []string, opt
 	if err != nil {
 		return "", err
 	}
-	out := renderText(st)
+	out := renderText(st, style.New(s.Terminal))
 	if s.Output == clicfg.OutputJSON {
 		if out, err = renderJSON(st); err != nil {
 			return "", err
@@ -412,7 +413,8 @@ func tagInfo(t *git.Tag) *TagInfo {
 // renderText is the report as sections that each answer one question: what the
 // lines of the project have and what they could have next (the host's facts, and
 // the meaning made of them), and how the local clone stands (the clone's facts).
-func renderText(st Status) string {
+func renderText(st Status, view *style.Renderer) string {
+	_ = view
 	var b strings.Builder
 	b.WriteString(st.Slug + "\n")
 	if st.Error != "" {

@@ -192,7 +192,7 @@ func TestStatusAMissingBranchHasNoHead(t *testing.T) {
 	assert.Empty(t, at(t, got, 1).Head)
 	assert.Nil(t, at(t, got, 1).Unreleased)
 	assert.Empty(t, at(t, got, 1).Local, "nothing to compare with")
-	assert.Contains(t, renderText(got), "(not found)")
+	assert.Contains(t, renderText(got, nil), "(not found)")
 }
 
 func TestStatusUnreleasedCommitsSinceTheLatestTag(t *testing.T) {
@@ -222,7 +222,7 @@ func TestStatusUnreleasedIsUnknownWhenTheCloneLacksTheCommit(t *testing.T) {
 	got, err := gather(ctx, fixture(), opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.Nil(t, byLine(got)["v2.13"].Unreleased, "unknown is not zero")
-	assert.Contains(t, renderText(got), "-")
+	assert.Contains(t, renderText(got, nil), "-")
 }
 
 func TestStatusUnreleasedIsUnknownWithoutATag(t *testing.T) {
@@ -292,7 +292,7 @@ func TestStatusSingleBranchProject(t *testing.T) {
 	assert.Empty(t, at(t, got, 0).Line)
 	assert.Equal(t, "sha-head-main", at(t, got, 0).Head)
 	assert.Equal(t, info("v2.12.1"), at(t, got, 0).LatestStable, "every tag counts when there are no lines")
-	out := renderText(got)
+	out := renderText(got, nil)
 	assert.NotContains(t, out, "LINE")
 	assert.Contains(t, out, "BRANCH")
 }
@@ -305,7 +305,7 @@ func TestStatusHostErrorKeepsTheRest(t *testing.T) {
 	assert.Equal(t, "network down", got.Error)
 	assert.Equal(t, "rancher/rancher", got.Slug)
 	assert.Len(t, got.Targets, 2, "the lines come from config")
-	assert.Contains(t, renderText(got), "unavailable: network down")
+	assert.Contains(t, renderText(got, nil), "unavailable: network down")
 }
 
 func TestStatusMissingCloneKeepsTheRest(t *testing.T) {
@@ -317,7 +317,7 @@ func TestStatusMissingCloneKeepsTheRest(t *testing.T) {
 	assert.Equal(t, info("v2.12.1"), byLine(got)["v2.12"].LatestStable, "the host does not need a clone")
 	assert.Equal(t, "sha-head-main", at(t, got, 0).Head)
 	assert.Nil(t, at(t, got, 0).Unreleased)
-	assert.Contains(t, renderText(got), "Local clone: unavailable")
+	assert.Contains(t, renderText(got, nil), "Local clone: unavailable")
 }
 
 func TestStatusUnreadableClone(t *testing.T) {
@@ -346,7 +346,7 @@ func TestStatusFromCurrentRepository(t *testing.T) {
 func TestRenderTextTable(t *testing.T) {
 	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
-	out := renderText(got)
+	out := renderText(got, nil)
 	for _, want := range []string{
 		"rancher/rancher\n", "LINE", "BRANCH", "HEAD", "LATEST STABLE", "LATEST PRE-RELEASE", "UNRELEASED", "LOCAL",
 		"v2.13", "main (default branch)", "release/v2.12", "sha-hea", "in sync", "v2.12.1 (sha-v2.", "7",
@@ -465,7 +465,7 @@ func TestRenderTextHasAReleasesSectionWithStateAndNextAndALocalCloneSection(t *t
 	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 
-	out := renderText(got)
+	out := renderText(got, nil)
 
 	releases, local, found := strings.Cut(out, "\nLocal clone\n")
 	require.True(t, found, out)
@@ -487,7 +487,7 @@ func TestRenderTextAPromotionThatIsAvailableIsNotInParentheses(t *testing.T) {
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 
-	out := renderText(got)
+	out := renderText(got, nil)
 
 	assert.Contains(t, out, "v2.13.0 (promotes v2.13.0-rc.10)")
 	assert.Contains(t, out, "(v2.13.0-rc.11: no new commits)")
@@ -654,7 +654,7 @@ func TestRenderTextHasASourcesSectionForWhatTheProjectTakes(t *testing.T) {
 	got, err := gather(ctx, shipping(t), opener(syncedClone(), nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
 
-	out := renderText(got)
+	out := renderText(got, nil)
 
 	_, sources, found := strings.Cut(out, "\nSources: scc-operator (rancher/scc-operator), build-yaml-bump\n")
 	require.True(t, found, out)
@@ -669,7 +669,7 @@ func TestRenderTextHasAConsumersSectionForWhatTheProjectShips(t *testing.T) {
 	got, err := gather(ctx, shipping(t), opener(syncedClone(), nil), []string{"rancher/scc-operator"})
 	require.NoError(t, err)
 
-	out := renderText(got)
+	out := renderText(got, nil)
 
 	assert.Contains(t, out, "\nConsumers: rancher (rancher/rancher), build-yaml-bump\n")
 	assert.NotContains(t, out, "Sources:")
@@ -680,7 +680,7 @@ func TestRenderTextAConsumerThatCouldNotBeTracedSaysWhy(t *testing.T) {
 		{Consumer: "rancher/rancher", Name: "rancher", Method: "build-yaml-bump", Error: "read the branches of rancher/rancher: network down"},
 	}, TraceError: "method x is not usable"}
 
-	out := renderText(st)
+	out := renderText(st, nil)
 
 	assert.Contains(t, out, "Consumers: rancher (rancher/rancher), build-yaml-bump\n  unavailable: read the branches of rancher/rancher: network down")
 	assert.Contains(t, out, "could not trace: method x is not usable")
