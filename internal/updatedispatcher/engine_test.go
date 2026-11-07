@@ -164,3 +164,41 @@ func TestBindExplicitlyOptionalParam(t *testing.T) {
 	_, err := NewEngine(Builtin(), cfg)
 	assert.NoError(t, err, "required: false means the edge may leave it out")
 }
+
+func TestRoutesIntoAConsumerAreTheEdgesThatNameItInTheProducersConfigOrder(t *testing.T) {
+	cfg := fixtureConfig()
+	shell := config.Project{
+		Name: "shell", Repo: config.Repo{Name: "rancher/shell", Owned: true},
+		Downstream: []config.Edge{
+			{To: "rancher/rancher", Method: "build-yaml-bump", Params: map[string]string{"updateKey": "defaultShellVersion", "value": "{image}:{tag}"}},
+			{To: "elsewhere", Method: "build-yaml-bump"},
+		},
+	}
+	cfg.Projects = append(cfg.Projects, shell)
+	e, err := NewEngine(Builtin(), cfg)
+	require.NoError(t, err)
+
+	got := e.RoutesInto(rancherProject())
+
+	require.Len(t, got, 2)
+	assert.Equal(t, "scc-operator", got[0].Producer.Name)
+	assert.Equal(t, "shell", got[1].Producer.Name, "an edge may name the consumer by its slug")
+	assert.Equal(t, "rancher", got[0].Consumer.Name)
+	assert.Equal(t, "build-yaml-bump", got[0].Method.Name)
+	assert.Equal(t, "defaultShellVersion", got[1].Edge.Params["updateKey"])
+}
+
+func TestRoutesIntoAProjectNothingShipsToAreNone(t *testing.T) {
+	e, err := NewEngine(Builtin(), fixtureConfig())
+	require.NoError(t, err)
+
+	assert.Empty(t, e.RoutesInto(sccProject()))
+}
+
+func TestRoutesIntoLeaveOutAnEdgeWhoseMethodWasNotBuilt(t *testing.T) {
+	cfg := fixtureConfig()
+	cfg.Projects[1].UpdateMethods[0].Strategy = "nope"
+	e, _ := NewEngine(Builtin(), cfg)
+
+	assert.Empty(t, e.RoutesInto(cfg.Projects[1]))
+}
