@@ -92,3 +92,27 @@ func TestPickRoute(t *testing.T) {
 		assert.ErrorContains(t, err, "rancher (build-yaml-bump)", "it says where the producer does ship")
 	})
 }
+
+func TestCheckPreviewHasTheStepCommitsOfTheTargetBranchsLineInTheOrderTheyRun(t *testing.T) {
+	ws := loopFixture()
+	ws.links = []link{stepsLink()}
+
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+
+	require.NoError(t, err)
+	var old TargetPlan
+	for _, tp := range got.Targets {
+		if tp.Branch == "release/v2.15" {
+			old = tp
+		}
+	}
+	require.NotNil(t, old.Preview)
+	var runs []string
+	var before []bool
+	for _, s := range old.Preview.Steps {
+		runs = append(runs, s.Run)
+		before = append(before, s.BeforeEdit)
+	}
+	assert.Equal(t, []string{"pre-method", "pre-edge", "post-edge", "post-method-old"}, runs)
+	assert.Equal(t, []bool{true, true, false, false}, before)
+}

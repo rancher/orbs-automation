@@ -111,3 +111,47 @@ func TestRenderPreviewRejectsAnUnknownPlaceholder(t *testing.T) {
 	_, err = renderPreview(in)
 	assert.ErrorContains(t, err, "nope")
 }
+
+func TestRenderPreviewHasTheCommitEachStepWouldMakeInTheOrderTheyRun(t *testing.T) {
+	in := previewFixture()
+	in.steps = []updatedispatcher.StepRef{
+		{Phase: updatedispatcher.MethodPreEdit, Step: config.Step{Run: config.Command{"scripts/prepare"}}},
+		{Phase: updatedispatcher.EdgePostEdit, Step: config.Step{Run: config.Command{"scripts/generate-buildconfig"}}},
+		{Phase: updatedispatcher.MethodPostEdit, Index: 1, Step: config.Step{Run: config.Command{"go", "generate", "./..."}}},
+	}
+
+	got, err := renderPreview(in)
+
+	require.NoError(t, err)
+	require.Len(t, got.Steps, 3)
+	assert.Equal(t, "method preEdit", got.Steps[0].Phase)
+	assert.True(t, got.Steps[0].BeforeEdit, "a pre-edit step's commit comes before the edit's")
+	assert.Equal(t, "scripts/prepare", got.Steps[0].Run)
+	assert.False(t, got.Steps[1].BeforeEdit)
+	assert.Equal(t, "go generate ./...", got.Steps[2].Run)
+	for _, s := range got.Steps {
+		assert.Contains(t, s.CommitMessage, "Run `"+s.Run+"`")
+		assert.Contains(t, s.CommitMessage, "the "+s.Phase+" step")
+		assert.Contains(t, s.CommitMessage, "Automation: gero ship")
+	}
+}
+
+func TestRenderPreviewWithNoStepsHasNoStepCommits(t *testing.T) {
+	got, err := renderPreview(previewFixture())
+
+	require.NoError(t, err)
+	assert.Empty(t, got.Steps)
+}
+
+func TestRenderPreviewTheStepMessagesAreTheOnesARunCommits(t *testing.T) {
+	in := previewFixture()
+	in.steps = []updatedispatcher.StepRef{{Phase: updatedispatcher.EdgePostEdit, Index: 2, Step: config.Step{Run: config.Command{"gen", "--all"}}}}
+	want, err := stepMessage(in)(updatedispatcher.Unit{Kind: updatedispatcher.UnitStep, Phase: updatedispatcher.EdgePostEdit, Index: 2, Run: []string{"gen", "--all"}})
+	require.NoError(t, err)
+
+	got, err := renderPreview(in)
+
+	require.NoError(t, err)
+	require.Len(t, got.Steps, 1)
+	assert.Equal(t, want, got.Steps[0].CommitMessage)
+}
