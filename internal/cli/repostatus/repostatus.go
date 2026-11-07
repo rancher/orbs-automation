@@ -95,6 +95,24 @@ type Target struct {
 	Unreleased *int `json:"unreleased,omitempty"`
 	// Local is how the clone's branch compares with Head.
 	Local string `json:"local,omitempty"`
+	// State is where the line stands, from its newest tag and its head, as
+	// releasetag.State names it. It needs the host alone. Empty when the host has no
+	// such branch.
+	State string `json:"state,omitempty"`
+	// Next are the tags the line could have next, as gero repo tag would make them.
+	Next []Next `json:"next,omitempty"`
+}
+
+// Next is a tag a line could have next.
+type Next struct {
+	Tag string `json:"tag"`
+	// Kind is prerelease, stable or promotion.
+	Kind string `json:"kind"`
+	// Promotes is the prerelease a promotion is the stable version of.
+	Promotes string `json:"promotes,omitempty"`
+	// Available is false when the tag may not be made now, and Why says why.
+	Available bool   `json:"available"`
+	Why       string `json:"why,omitempty"`
 }
 
 // TagInfo is a tag and the commit it points at.
@@ -200,6 +218,8 @@ func targets(p config.Project) []Target {
 //     strategy that finds no pin is an error to report as "no pin found". A consumer on a pre-release of a version that is now stable is
 //     behind. This is the costly tier (a request per consumer and branch), so
 //     it runs only when asked for (see the spec: tiers behind flags).
+//
+// STUB: State and Next are not worked out until a later commit.
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 	tags := refs.Tags
 	if t.Series != "" {
