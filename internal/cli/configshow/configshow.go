@@ -11,6 +11,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -98,7 +99,7 @@ func Render(s clicfg.Settings, dir workspace.ConfigDir, format string) (string, 
 	es := Entries(s, dir)
 	switch format {
 	case clicfg.OutputText:
-		return renderText(es), nil
+		return renderText(es, style.New(s.Terminal)), nil
 	case clicfg.OutputJSON:
 		return renderJSON(es)
 	case clicfg.OutputEnv:
@@ -107,7 +108,8 @@ func Render(s clicfg.Settings, dir workspace.ConfigDir, format string) (string, 
 	return "", fmt.Errorf("unknown output format %q", format)
 }
 
-func renderText(es []Entry) string {
+func renderText(es []Entry, st *style.Renderer) string {
+	_ = st
 	var b strings.Builder
 	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
