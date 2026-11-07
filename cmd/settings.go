@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"io"
+	"os"
 
 	"github.com/rancher/orbs-automation/cmd/ci"
 	"github.com/rancher/orbs-automation/internal/cli/cigate"
@@ -21,6 +22,8 @@ func addGlobalFlags(cmd *cobra.Command) {
 	f.String("config-dir", "", "directory of the central application config (env GERO_CONFIG_DIR)")
 	f.String("upstream", "", "remote that points at the real source repository (env GERO_UPSTREAM)")
 	f.String("output", "", "output format: text, json or env (env GERO_OUTPUT; default text)")
+	f.String("color", "", "color: auto, always or never (env GERO_COLOR; default auto: as much as the terminal supports)")
+	f.Bool("no-color", false, "shorthand for --color never")
 	f.Bool("json", false, "machine output, shorthand for --output json")
 	f.Bool("dry-run", false, "for a command that writes: compute and print what it would do, and change nothing (env GERO_DRY_RUN)")
 	f.CountP("verbose", "v", "log more to stderr: -v for info, -vv for debug (env GERO_LOG=debug|info|warn|error)")
@@ -81,6 +84,12 @@ func loadSettingsForDoctor(getenv func(string) string, home string) func(*cobra.
 	}
 }
 
+// terminalFacts is what the process knows about its terminal, which Load cannot
+// read itself. It is a variable so a test can give another.
+var terminalFacts = func() clicfg.Facts {
+	return clicfg.Facts{StdinTTY: isTerminal(os.Stdin), StdoutTTY: isTerminal(os.Stdout)}
+}
+
 // settingsLoader is loadSettings, optionally without reading the user file.
 func settingsLoader(getenv func(string) string, home string, skipUserFile bool) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, _ []string) error {
@@ -103,6 +112,7 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 			UserFile:     userFile,
 			UserFileName: path,
 			Home:         home,
+			Facts:        terminalFacts(),
 		})
 		if err != nil {
 			return err

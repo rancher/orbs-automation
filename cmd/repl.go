@@ -26,7 +26,6 @@ exiting returns to it.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runRepl(cmd, replEnv{
-				tty:    isTerminal(os.Stdin) && isTerminal(os.Stdout),
 				getenv: os.Getenv,
 				setenv: os.Setenv,
 			})
@@ -36,7 +35,6 @@ exiting returns to it.`,
 
 // replEnv is what runRepl takes from the process, so a test can give it others.
 type replEnv struct {
-	tty    bool
 	getenv func(string) string
 	setenv func(key, value string) error
 }
@@ -45,7 +43,7 @@ type replEnv struct {
 // cmd until it ends.
 func runRepl(cmd *cobra.Command, env replEnv) error {
 	s := settingsFrom(cmd)
-	if err := repl.Refuse(env.getenv, env.tty, s.CI); err != nil {
+	if err := repl.Refuse(env.getenv, s.Terminal, s.CI); err != nil {
 		return err
 	}
 	// A gero repl typed at this prompt is refused like one in a child shell.

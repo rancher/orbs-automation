@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func TestRefuse(t *testing.T) {
 	}
 	require.NotEmpty(t, rows)
 	for _, r := range rows {
-		err := Refuse(env(r.env), r.tty, r.ci)
+		err := Refuse(env(r.env), clicfg.Terminal{StdinTTY: r.tty, StdoutTTY: r.tty}, r.ci)
 
 		if r.want == "" {
 			assert.NoError(t, err, r.name)
