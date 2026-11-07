@@ -32,20 +32,19 @@ Stretch 1 is what the rest of this spec describes as built. Stages (the tiers of
 
 All of it is additive: a config without these keys behaves as it does today.
 
-* **Stages (stretch 2).** A project whose branches come in tiers lists them once, as patterns, with `{line}` standing for the Rancher line:
+* **Stages (stretch 2).** A line of a project whose branches come in tiers has a branch for each stage, written where the branch already is. `branch` is a string for a project with one branch per line, as it is today, or a map of stage to branch:
 
   ```yaml
   release:
     branching: perLine
-    stages:
-      - {name: dev, branch: "dev-{line}"}       # the first stage is the default
-      - {name: release, branch: "release-{line}"}
     lines:
-      - {line: v2.15, version: "110.x"}          # version is the chart series, as for any project
-      - {line: v2.14, version: "109.x", branches: {release: release-v2.14-hotfix}}   # an exception
+      - line: v2.16
+        branch: {dev: dev-v2.16, release: release-v2.16}
+      - line: v2.15
+        branch: {dev: dev-v2.15, release: release-v2.15}
   ```
 
-  A line's `branch` is the first stage's branch, so everything that asks for "the branch of a line" keeps its answer. A producer's edge names the stage it lands on (`stage:`, default the first), so a producer of ours lands on `dev` and the release team promotes to `release`.
+  The stages are the two the tag schemes already have, `dev` and `release`, in that order, and the first of a line's stages is its default. Everything that asks for the branch of a line keeps its answer, which is the default stage's branch (`dev-v2.16`). A branch name found in another project's file, such as the charts branch Rancher's `build.yaml` names, maps back to its line and stage through this table, with no naming pattern to get wrong. Only `dev` and `release` are stages, so the order needs no ordering of a YAML map. A producer's edge names the stage it lands on (`stage:`, default the first), so a producer of ours lands on `dev` and the release team promotes to `release`.
 * **Lines in tags.** `branching: perLineTag` says the lines of a project are in its tags and not in per-line branches, and `tagScheme` names how those tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. `tagScheme` is the one extra field it needs: it defaults to semver and `rancher-assets` sets `calverLineStage`. A `perLineTag` project lists its lines, each with just its `line` (no `branch` and no `version`, which the loader refuses): `rancher-assets` lists `v2.16`, the line it is used for, and a line is added when it is used. A tag that does not parse, or that is of a line not listed, is skipped. All of its tags are on its one branch, the repository's default, so it needs no branch per line. Explicit lines keep the reports plain: the edge to Rancher reaches only the lines both projects list, so Rancher's older branches, which hold no Assets image, are not in the report as errors, and no code has to discover lines from tags. The stage names are the same as in the charts repo, `dev` and `release`, so an edge between same-named stages needs no mapping.
 * **Stewardship: `repo.owned` and `repo.managedBy`, two fields that work together.** `owned` says whether `gero` ships from the repository: it is true when the repository's workflows run `gero` ([APP_CONFIG](APP_CONFIG.md)), and false, the default, when shipping to its downstream is not ours. `managedBy` says which team is responsible for the project. It is `orbs` when `owned` is true and `managedBy` is unset; for an unowned project there is no default, and an unset `managedBy` is reported as unspecified and never assumed to be ORBS. The four combinations:
 
@@ -74,10 +73,18 @@ In Go there are two layers.
 * **Newest** is the greatest timestamp among the tags of the line and stage. A tag is filtered by line and stage first and sorted second, since sorting every tag together mixes the two stages.
 * A tag that does not fit the format is not a release of that line and is skipped.
 
+## Charts as a project (stretch 2, draft)
+
+`rancher/charts` is unowned and managed by the release team. It has no tagged releases: from v2.16 on the real tagged releases of its content are the Assets tags, a project of their own, and before v2.16 Rancher names the charts branch directly in its `build.yaml`. So charts is traced in two ways, by line:
+
+* **From v2.16 (through Assets).** The charts commit an Assets tag was built from is pinned in Assets' `lock.yaml`, and the charts branch for each stage is in its `config.yaml`. The edge from charts to Assets is observed. What Assets holds of charts is that pinned commit, and what it should hold is the head of the stage's branch, so the answer is whether the newest Assets tag was built from today's head, and which tag first contains a given charts commit.
+* **Before v2.16 (directly).** The edge from charts to Rancher is observed, and what Rancher holds is a charts branch name in `build.yaml`, which the line's `branch` map turns into the stage held (dev or release). Rancher does not say which commit, so the commit is an **estimate**: the newest commit of that charts branch at or before the time of the Rancher commit, a lower bound ("at least this much") since an image built later holds the head at that later time. It is shown labelled as an estimate and never as a pinned fact.
+* **Which edge applies to which line.** An edge may say `since` and `until`, a range of the consumer's lines, as steps and images do, validated against `RancherLines`. The edge into Rancher says `until: v2.15` and the edge into Assets reaches only the lines Assets lists.
+
 ## Reading a hop
 
 * **No new strategy.** What a hop holds is read by the edge that already names it: `build-yaml-bump` on Rancher's `build.yaml` has a read half (`yamlBump`'s `Check`, which reads a file at a commit and writes nothing), and `rancher-assets.project.yaml` already has that edge. Read-only comes from the project being unowned, not from a second strategy: `gero ship` refuses an unowned producer, and `Holdings` and `Sources` read it. Reading `lock.yaml` at a ref in stretch 2 is a small helper over the file reader and the key-path code of `yamlBump`, not a strategy, and the quoting rule for a key that contains a dot (the line `2.16`) is settled there.
-* **Assets from charts (stretch 2).** The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
+* **Assets from charts (stretch 2).** See [Charts as a project](#charts-as-a-project-stretch-2-draft). The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
 * **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, read as for any `yamlBump` edge, and its tag is parsed by the scheme. The stage of the tag held is shown, and neither stage is a warning.
 
 ## What the reports show
@@ -120,6 +127,9 @@ Not built:
 
 None for stretch 1. For the later stretches:
 
+* The key in Rancher's `build.yaml` that names the charts branch before v2.16, and whether it holds the branch name alone.
+* The read of a pinned commit in Assets' `lock.yaml`: a new small read-only strategy or something simpler, and what the "release" is that a pin is compared with (the head of the stage's branch).
+* Whether `since` and `until` on an edge is all the line-range an edge needs.
 * Whether the key path for the `lock.yaml` read needs a quoting rule for keys that contain a dot, such as the line `2.16`.
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
 * Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag". The answer is traced through the `lock.yaml` at that tag, which records the commit the generated Dockerfile used, to the contents of `rancher/charts` at that commit. It belongs to stretch 2, with the charts-to-Assets connection.
