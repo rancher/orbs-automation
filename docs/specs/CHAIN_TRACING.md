@@ -37,14 +37,14 @@ All of it is additive: a config without these keys behaves as it does today.
 
   A line's `branch` is the first stage's branch, so everything that asks for "the branch of a line" keeps its answer. A producer's edge names the stage it lands on (`stage:`, default the first), so a producer of ours lands on `dev` and the release team promotes to `release`.
 * **Lines in tags.** `branching: perLineTag` says the lines of a project are found in its tags and not in per-line branches, and `tagScheme` names how those tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. `tagScheme` is required with `perLineTag`, and a project with per-line branches keeps the default, semver. The stage names are the same as in the charts repo, `dev` and `release`, so an edge between same-named stages needs no mapping.
-* **Stewardship: `repo.owned` and `repo.managedBy`, two fields that work together.** `owned` says whether `gero` ships from the repository: it is true when the repository's workflows run `gero` ([APP_CONFIG](APP_CONFIG.md)), and false, the default, when shipping to its downstream is not ours. `managedBy` says which team is responsible for the project, and is `orbs` when unset. The four combinations:
+* **Stewardship: `repo.owned` and `repo.managedBy`, two fields that work together.** `owned` says whether `gero` ships from the repository: it is true when the repository's workflows run `gero` ([APP_CONFIG](APP_CONFIG.md)), and false, the default, when shipping to its downstream is not ours. `managedBy` says which team is responsible for the project. It is `orbs` when `owned` is true and `managedBy` is unset; for an unowned project there is no default, and an unset `managedBy` is reported as unspecified and never assumed to be ORBS. The four combinations:
 
   | `owned` | `managedBy` | What it means |
   |---|---|---|
-  | true | `orbs` (the default) | Ours in full: `gero` ships its downstream, and ORBS is responsible for the project. |
+  | true | `orbs` (the default when owned) | Ours in full: `gero` ships its downstream, and ORBS is responsible for the project. |
   | true | another team | A project we help ship with `gero` tooling: its workflows run `gero`, and the other team stays responsible for it. |
   | false | another team | Not ours: its downstream is shipped by that team's own tooling, and `gero` observes. |
-  | false | `orbs` | ORBS's own, with no `gero` workflows in it yet: observed until there are. |
+  | false | `orbs`, written out | ORBS's own, with no `gero` workflows in it yet: observed until there are. |
 
   **Every edge from an unowned project is observed:** `gero` reads where it stands, and `gero ship` never opens a PR for it. An edge into an unowned project is written as usual, which is how `rancher/rancher` receives its bumps. `managedBy` does not change what is written: it is who is responsible, shown in reports and in the message when `gero ship` declines an observed edge. **To adopt `gero` for a repository the release team manages,** set `owned: true` and change its workflows to call `gero` commands; `managedBy` keeps naming the team that is responsible, and its edges become ours to ship.
 * **A stage on an edge** means two things. On a managed edge it is the stage the edge writes (the consumer's first by default). On an observed edge it is the stage the edge follows, and by default it is every stage, paired by name. On `assets → rancher`, `stage: release` is the stream Rancher is expected to hold.
@@ -85,7 +85,7 @@ Everything. The order it is built in: the config additions and validation with t
 
 ## Open questions
 
-* Whether an unowned project must say `managedBy` outright, so that `orbs` is never assumed for a repository that plainly is not ORBS's, and how the team name is spelled.
+* Whether an unowned project must say `managedBy` outright, and not only be reported as unspecified when it does not, and how the team name is spelled.
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
 * Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag", or the image's contents have to be read.
 * How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.
