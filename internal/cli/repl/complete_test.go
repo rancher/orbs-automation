@@ -113,7 +113,7 @@ func TestLsNeverCompletesOutsideTheWorkingDirectory(t *testing.T) {
 }
 
 func TestTheCommandsWithNothingToCompleteSayNothing(t *testing.T) {
-	for _, line := range []string{"pwd ", "exit ", "shell ", "pwd x"} {
+	for _, line := range []string{"pwd ", "exit ", "shell ", "clear ", "pwd x"} {
 		assert.Empty(t, complete(t, t.TempDir(), line), line)
 	}
 }
