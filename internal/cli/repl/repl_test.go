@@ -238,7 +238,7 @@ func TestLoopShowsThePromptRunsLinesAndKeepsGoingAfterAnError(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "gero> /work\ngero> gero> gero> /work\ngero> ", out.String())
-	assert.Equal(t, "bad line\n", errOut.String())
+	assert.Equal(t, "Error: bad line\n", errOut.String())
 }
 
 func TestLoopEndsAtEndOfInput(t *testing.T) {
