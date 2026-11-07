@@ -1,6 +1,6 @@
 # Application Config
 
-**Status:** implemented for the loader, defaults, the update dispatcher's checks and the checks listed under Validation. The kind and field names are not final, and everything in `config/` is a mock until the v0.x POC review ([PHASES](../PHASES.md)).
+**Status:** implemented for the loader, defaults, the update dispatcher's checks and the checks listed under Validation. The kind and field names are not final, and everything in `config/` is a mock until the POC review at the end of v0.x ([PHASES](../PHASES.md)).
 
 The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The real files, field reference and defaults table are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`config-mock/`](../../config-mock/) and [`mock-repos/`](../../mock-repos/). The types are `internal/config`, and the loader, defaults and structural validation are `internal/config/loader`, reachable only through `internal/workspace` ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)). What depends on a strategy is checked by `internal/updatedispatcher`.
 

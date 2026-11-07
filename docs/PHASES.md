@@ -18,7 +18,7 @@ Milestones are tied to `gero` version tags, and each headline tag has an **audie
 
 | Tag | Name | Who builds it | Audience | What we say | Gate |
 |---|---|---|---|---|---|
-| **v0.x** | Solo foundation and POC | The author | Nobody outside the team | Nothing | POC accepted by the team, then the chain flow runs for real from a workstation |
+| **v0.x** | Solo foundation and POC | The author | Nobody outside the team | Nothing | The chain flow runs for real from a workstation, then the POC is accepted by the team |
 | **v1.0.0** | Foundation and a headline automated chain | The author, with team review | The wider organization, to a limited degree | "We have a tool, it already automates a multi-repo release chain from a workstation, and the team is building on it" | Peer-ready and the chain flow runs for real from a workstation |
 | **v1.x** | Team build-out, CI and tracking | The team | The team, and early users | Progress updates | Real flows run through `gero` in CI and are tracked; stable tags only |
 | **v2.0.0** | Complete | The team | The wider organization and leadership | "Most of the release work we did by hand is now automated" | A real release cycle run through `gero` |
@@ -42,10 +42,10 @@ Two flows, in order:
 | v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show` (the settings and where each came from) and `gero config resolve repos`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for the repos the POC flow touches (`rancher`, `scc-operator`, `shell`), written and corrected up front; those for the chain flow (`kuberlr-kubectl`, BRO, `rancher/charts`) are written with v0.8 to v0.10, and everything for them stays in `config-mock/` until then | none |
 | v0.2 | **Read-only insight:** tag classification, the line map (`gero lines resolve`), a project's releases and who has picked them up (`gero repo status`, which also names what each line can have next), and the release-line rules in one place (`internal/git/releasetag`) for every command to share | v0.1 |
 | v0.3 | **Update dispatcher, `yamlBump` and the workstation bump:** target, branch resolution from the line map, named strategy, steps with a commit for each, per-consumer `pullRequests` conventions, deterministic branches, reuse and supersede of open PRs, `--refresh`, preconditions, a release for each line, fan-out with per-target status. The commands that make the pieces by hand: `repo branch`, `repo tag`. Used by the team beside the existing script | v0.2 |
-| | **POC review with the team:** show the POC flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before going further | v0.3 |
-| v0.4 | **More strategies:** `chartsPackageBump`, run in dry-run beside today's scripts | POC review |
+| v0.4 | **More strategies:** `chartsPackageBump`, run in dry-run beside today's scripts | v0.3 |
 | v0.5 | **Multi-hop chains by hand:** the line map (`gero lines resolve`) and `gero repo status` follow a chain through every hop to its end, and the tag step between hops is `gero repo tag`; each hop is a `gero ship` once the one before it has merged and been tagged. Watching a whole chain without doing that by hand is the tracker, v1.2 | v0.4 |
 | v0.6 | **The chain flow runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0 | v0.5 |
+| | **POC review with the team,** at the end of v0.x, when the author is done with it: show the POC flow and the chain flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before v1.0.0 | v0.6 |
 
 ### Decides in v0.x
 
