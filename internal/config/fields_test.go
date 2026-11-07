@@ -23,13 +23,14 @@ import (
 // caller has read the raw value (docs/specs/WORKSPACE.md, "Raw and effective
 // values").
 var fieldClasses = map[string]string{
-	"Project.Name":          "plain",
-	"Project.Repo":          "plain",
-	"Project.Release":       "plain",
-	"Project.PullRequests":  "plain",
-	"Project.Images":        "resolved:Project.EffectiveImages",
-	"Project.UpdateMethods": "plain",
-	"Project.Downstream":    "plain",
+	"Project.Name":             "plain",
+	"Project.Repo":             "plain",
+	"Project.Release":          "plain",
+	"Project.PullRequests":     "plain",
+	"Project.Images":           "resolved:Project.EffectiveImages",
+	"Project.FinalDestination": "plain",
+	"Project.UpdateMethods":    "plain",
+	"Project.Downstream":       "plain",
 
 	"Repo.Name":          "plain",
 	"Repo.Owned":         "plain",

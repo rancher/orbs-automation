@@ -31,6 +31,12 @@ type Project struct {
 	Release      Release      `yaml:"release"`
 	PullRequests PullRequests `yaml:"pullRequests"`
 	Images       []Image      `yaml:"images"`
+	// FinalDestination marks the one project that releases end in, such as
+	// rancher/rancher: the others ship to it, directly or through another project,
+	// and it ships to none. Only that project sets it, and at most one project may,
+	// so a view of how the lines connect has an end to start from without knowing a
+	// project by name.
+	FinalDestination bool `yaml:"finalDestination"`
 	// UpdateMethods are the ways this project takes an update, which it owns;
 	// Downstream are the projects it ships to, with which of their methods.
 	UpdateMethods []UpdateMethod `yaml:"updateMethods"`
