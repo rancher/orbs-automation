@@ -277,3 +277,34 @@ func subjects(commits []workdir.CommitInfo) []string {
 	}
 	return out
 }
+
+func TestRunEachCommitHasTheFilesItChanged(t *testing.T) {
+	g := &fakeGit{files: map[string][]string{"commit1": {"build.yaml"}, "commit2": {"generated/a.go", "generated/b.go"}}}
+	w := work(t, g)
+	inv := invocation(t, nil, []config.Step{{Run: config.Command{"gen"}}})
+
+	out, err := Run(bg, &fakeRunner{}, Input{
+		Work: w, Invocation: inv, Branch: "main", Message: "Update to v0.5.3",
+		Release:     updatedispatcher.Release{Tag: "v0.5.3", Version: "0.5.3", Image: "rancher/scc-operator", SourceRepo: "rancher/scc-operator"},
+		StepMessage: stepMessage,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, out.Commits, 2)
+	assert.Equal(t, []string{"build.yaml"}, out.Commits[0].Files)
+	assert.Equal(t, []string{"generated/a.go", "generated/b.go"}, out.Commits[1].Files)
+}
+
+func TestRunTheCommitCallbackGetsTheFilesToo(t *testing.T) {
+	g := &fakeGit{files: map[string][]string{"commit1": {"build.yaml"}}}
+	w := work(t, g)
+	var seen []workdir.CommitInfo
+	in := input(w, invocation(t, nil, nil))
+	in.OnCommit = func(c workdir.CommitInfo) { seen = append(seen, c) }
+
+	_, err := Run(bg, &fakeRunner{}, in)
+
+	require.NoError(t, err)
+	require.Len(t, seen, 1)
+	assert.Equal(t, []string{"build.yaml"}, seen[0].Files)
+}
