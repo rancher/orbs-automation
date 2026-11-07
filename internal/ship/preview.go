@@ -80,10 +80,31 @@ func renderPreview(in previewInput) (Preview, error) {
 	if err != nil {
 		return Preview{}, fmt.Errorf("body: %w", err)
 	}
+	steps, err := stepPreviews(in)
+	if err != nil {
+		return Preview{}, err
+	}
 	return Preview{
 		Branch: renderedPrefix + tag + "-" + branchLabel, Title: title, Labels: prs.Labels,
-		CommitMessage: commit, Body: body,
+		CommitMessage: commit, Body: body, Steps: steps,
 	}, nil
+}
+
+// stepPreviews is the commit each step would make, if it changes files, with the
+// message a run gives it (stepMessage), so the preview shows what will be written.
+func stepPreviews(in previewInput) ([]StepPreview, error) {
+	var out []StepPreview
+	for _, ref := range in.steps {
+		message, err := stepMessage(in)(updatedispatcher.Unit{Kind: updatedispatcher.UnitStep, Phase: ref.Phase, Index: ref.Index, Run: ref.Step.Run})
+		if err != nil {
+			return nil, fmt.Errorf("commit message for %s: %w", strings.Join(ref.Step.Run, " "), err)
+		}
+		out = append(out, StepPreview{
+			Phase: string(ref.Phase), Run: strings.Join(ref.Step.Run, " "),
+			BeforeEdit: ref.Phase == updatedispatcher.MethodPreEdit || ref.Phase == updatedispatcher.EdgePreEdit, CommitMessage: message,
+		})
+	}
+	return out, nil
 }
 
 // textVars are the variables of the texts that only need to know what the bump
@@ -107,12 +128,9 @@ func textVars(in previewInput) map[string]string {
 
 // stepMessage returns the function that makes the commit message of a step that
 // changed files: what ran and where it fits in the bump, from the embedded
-// template.
-//
-// TODO(step-commits): the preview shows the edit's commit message only. The
-// commits of the steps are known once the steps have run, and what a step will
-// change is not known before, so they are not previewed; the preview could say
-// "then one commit per step that changes files" and list the steps.
+// template. The preview (stepPreviews) and a run (Apply) both use it, so what is
+// previewed is what is committed; whether a step changes files, and so commits at
+// all, is only known once it has run.
 func stepMessage(in previewInput) func(updatedispatcher.Unit) (string, error) {
 	return func(u updatedispatcher.Unit) (string, error) {
 		vars := textVars(in)
