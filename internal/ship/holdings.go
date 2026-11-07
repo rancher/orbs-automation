@@ -46,6 +46,9 @@ type Holding struct {
 	Head   string `json:"head,omitempty"` // the commit at the head of the branch on the host
 	// Current is what the branch holds now, as the strategy reads it.
 	Current string `json:"current,omitempty"`
+	// Stage is the stage of the release the branch holds, for a producer whose tags
+	// carry one (dev or release), and empty otherwise.
+	Stage string `json:"stage,omitempty"`
 	// Stable is how that stands against the latest stable release that goes to the
 	// branch, and Newest against the newest release of any kind, which is the same
 	// release when no prerelease is newer.
