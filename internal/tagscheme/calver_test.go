@@ -14,7 +14,10 @@ import (
 func assets() config.Project {
 	return config.Project{
 		Name: "rancher-assets", Repo: config.Repo{Name: "rancher/rancher-assets"},
-		Release: config.Release{Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*"},
+		Release: config.Release{
+			Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*",
+			Lines: []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}},
+		},
 	}
 }
 
@@ -62,9 +65,9 @@ func TestCalverValid(t *testing.T) {
 	}
 }
 
-func TestCalverLinesAreFoundInTheTagsNewestFirst(t *testing.T) {
-	assert.Equal(t, []string{"v2.16", "v2.15", "v2.14"}, calverFor(t).Lines(assetsTags()))
-	assert.Empty(t, calverFor(t).Lines(nil), "no tags, no lines: the config lists none")
+func TestCalverLinesAreTheOnesTheConfigListsWhateverTheTags(t *testing.T) {
+	assert.Equal(t, []string{"v2.16", "v2.15"}, calverFor(t).Lines(assetsTags()), "v2.14 has tags and is not listed")
+	assert.Equal(t, []string{"v2.16", "v2.15"}, calverFor(t).Lines(nil))
 }
 
 func TestCalverLineOf(t *testing.T) {
@@ -108,10 +111,18 @@ func TestCalverLatestOfEveryLineIsTheNewestByDate(t *testing.T) {
 	assert.Equal(t, "v2.16-20261101T0900Z-dev", got.Prerelease.Name)
 }
 
-func TestCalverLatestOfALineWithNoTagsIsEmpty(t *testing.T) {
+func TestCalverLatestOfALineWithNoTagsOrNotListedIsEmpty(t *testing.T) {
 	s := calverFor(t)
 	assert.Equal(t, git.Latest{}, s.Latest(assetsTags(), "v2.13"))
 	assert.Equal(t, git.Latest{}, s.Latest(nil, "v2.16"))
+	assert.Equal(t, git.Latest{}, s.Latest(assetsTags(), "v2.14"), "it has a tag, and the project is not used for the line")
+}
+
+func TestCalverLatestOfEveryLineLeavesOutTheLinesNotListed(t *testing.T) {
+	got := calverFor(t).Latest(tags("v2.14-20270101T0000Z", "v2.16-20261029T0000Z"), "")
+
+	require.NotNil(t, got.Stable)
+	assert.Equal(t, "v2.16-20261029T0000Z", got.Stable.Name, "v2.14 is newer by date and is not a line of the project")
 }
 
 func TestCalverIsStableIsTheReleaseStage(t *testing.T) {
