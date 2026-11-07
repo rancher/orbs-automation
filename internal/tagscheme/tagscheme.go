@@ -34,6 +34,9 @@ type Scheme interface {
 	Latest(tags []git.Tag, line string) git.Latest
 	// IsStable reports whether a tag is not a prerelease.
 	IsStable(tag string) bool
+	// Stage is the stage a tag is of (config.StageDev or config.StageRelease), or ""
+	// for a scheme whose tags carry none, and for a name that is not a release.
+	Stage(tag string) string
 	// Compare orders two tags: negative when a is older, zero when they are equal
 	// or either is not a release tag of the scheme.
 	Compare(a, b string) int
@@ -101,6 +104,8 @@ func (s semverScheme) series(line string) (string, bool) {
 	}
 	return "", false
 }
+
+func (semverScheme) Stage(string) string { return "" }
 
 func (semverScheme) IsStable(tag string) bool { return !semver.Classify(tag).HasPrerelease }
 
@@ -179,6 +184,8 @@ func (c calverScheme) newest(tags []git.Tag, lines []string, stage string) *stam
 	}
 	return best
 }
+
+func (calverScheme) Stage(string) string { return "" }
 
 func (c calverScheme) IsStable(tag string) bool {
 	t, ok := c.inner.Parse(tag)
