@@ -7,9 +7,14 @@
 package linesresolve
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
@@ -118,11 +123,274 @@ type Also struct {
 	ShipsTo   []Link `json:"shipsTo,omitempty"`
 }
 
-// Resolve builds the map from the config and the engine, at the time now.
-//
-// STUB: builds nothing until a later commit.
+// Resolve builds the map from the config and the engine, at the time now. The
+// hub is the project named in opts, else the one the lines document is named for
+// (rancher), and every project connected to it on a line is connected by the
+// routes of the engine, which are the ones gero ship ships down, so the map and a
+// run agree. One hop from the hub is followed; a project that has a line but no
+// direct link to the hub on it is listed with its own connections.
 func Resolve(cfg config.Config, engine *updatedispatcher.Engine, opts Options, now time.Time) (Result, error) {
-	return Result{}, nil
+	if cfg.Lines == nil {
+		return Result{}, errors.New("the config has no RancherLines document, so there are no lines to map")
+	}
+	hub, err := hubOf(cfg, opts.Hub)
+	if err != nil {
+		return Result{}, err
+	}
+	doc, err := selectLines(cfg.Lines.Lines, opts, now)
+	if err != nil {
+		return Result{}, err
+	}
+	m := mapper{cfg: cfg, engine: engine, hub: hub}
+	res := Result{Hub: hub.Repo.Name, HubName: hub.Name}
+	for _, l := range doc {
+		line := m.line(l, now)
+		res.Gaps = append(res.Gaps, line.Gaps...)
+		res.Lines = append(res.Lines, line)
+	}
+	return res, nil
+}
+
+// hubOf finds the project the lines are connected through: the one named, else the
+// one the lines document is named for, else rancher/rancher.
+func hubOf(cfg config.Config, name string) (config.Project, error) {
+	find := func(key string) (config.Project, bool) {
+		for _, p := range cfg.Projects {
+			if p.Name == key || strings.EqualFold(p.Repo.Name, key) {
+				return p, true
+			}
+		}
+		return config.Project{}, false
+	}
+	if name != "" {
+		if p, ok := find(name); ok {
+			return p, nil
+		}
+		return config.Project{}, fmt.Errorf("%w: %q is not a project in the config", ErrNoHub, name)
+	}
+	for _, key := range []string{cfg.Lines.Name, "rancher/rancher"} {
+		if key == "" {
+			continue
+		}
+		if p, ok := find(key); ok {
+			return p, nil
+		}
+	}
+	return config.Project{}, fmt.Errorf("%w: the lines document %q names no project and there is no rancher/rancher; name one with --hub", ErrNoHub, cfg.Lines.Name)
+}
+
+var phases = []string{config.PhaseDevelopment, config.PhaseGA, config.PhaseEOM, config.PhaseEOL}
+
+// selectLines is the lines of the document that the options keep, newest first.
+func selectLines(all []config.Line, opts Options, now time.Time) ([]config.Line, error) {
+	lines := slices.Clone(all)
+	slices.SortStableFunc(lines, func(a, b config.Line) int { return -compareLineIDs(a.ID, b.ID) })
+	for _, p := range opts.Phases {
+		if !slices.Contains(phases, p) {
+			return nil, fmt.Errorf("%q is not a phase: it is %s", p, strings.Join(phases, ", "))
+		}
+	}
+	var want []string
+	for _, id := range opts.Lines {
+		id = withV(id)
+		if !slices.ContainsFunc(lines, func(l config.Line) bool { return strings.EqualFold(l.ID, id) }) {
+			ids := make([]string, len(lines))
+			for i, l := range lines {
+				ids[i] = l.ID
+			}
+			return nil, fmt.Errorf("%s is not a Rancher line: they are %s", id, strings.Join(ids, ", "))
+		}
+		want = append(want, strings.ToLower(id))
+	}
+	var out []config.Line
+	for _, l := range lines {
+		if len(want) > 0 && !slices.Contains(want, strings.ToLower(l.ID)) {
+			continue
+		}
+		if len(opts.Phases) > 0 && !slices.Contains(opts.Phases, l.PhaseAt(now)) {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out, nil
+}
+
+// compareLineIDs orders line ids such as v2.9 and v2.16 by their numbers.
+func compareLineIDs(a, b string) int {
+	an, bn := lineNumbers(a), lineNumbers(b)
+	for i := 0; i < len(an) && i < len(bn); i++ {
+		if c := cmp.Compare(an[i], bn[i]); c != 0 {
+			return c
+		}
+	}
+	return cmp.Or(cmp.Compare(len(an), len(bn)), strings.Compare(a, b))
+}
+
+func lineNumbers(id string) []int {
+	var out []int
+	for _, part := range strings.Split(strings.TrimPrefix(strings.ToLower(id), "v"), ".") {
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return out
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+func withV(id string) string {
+	if !strings.HasPrefix(strings.ToLower(id), "v") {
+		return "v" + id
+	}
+	return id
+}
+
+// mapper holds what is the same for every line.
+type mapper struct {
+	cfg    config.Config
+	engine *updatedispatcher.Engine
+	hub    config.Project
+}
+
+// line connects one Rancher line to the hub and to the rest.
+func (m mapper) line(l config.Line, now time.Time) Line {
+	out := Line{
+		ID: l.ID, Phase: l.PhaseAt(now),
+		Dates:      Dates{GA: date(l.Dates.GA), EOM: date(l.Dates.EOM), EOL: date(l.Dates.EOL)},
+		Kubernetes: Kubernetes{Min: l.Kubernetes.Min, Max: l.Kubernetes.Max},
+	}
+	hubNode, hubHas := nodeOf(m.hub, l.ID)
+	if hubHas {
+		out.Hub = &hubNode
+	}
+	linked := map[string]bool{m.hub.Name: true}
+	for _, p := range m.cfg.Projects {
+		if p.Name == m.hub.Name {
+			continue
+		}
+		for _, r := range m.engine.RoutesFrom(p) {
+			if r.Consumer.Name != m.hub.Name {
+				continue
+			}
+			link, gap, ok := m.feedsHub(p, r, l.ID, hubNode, hubHas)
+			if gap != "" {
+				out.Gaps = append(out.Gaps, gap)
+			}
+			if ok {
+				out.TakesFrom = append(out.TakesFrom, link)
+				linked[p.Name] = true
+			}
+		}
+	}
+	if hubHas {
+		for _, r := range m.engine.RoutesFrom(m.hub) {
+			if link, ok := shipsTo(m.hub, r, l.ID); ok {
+				out.ShipsTo = append(out.ShipsTo, link)
+				linked[r.Consumer.Name] = true
+			}
+		}
+	}
+	for _, p := range m.cfg.Projects {
+		node, has := nodeOf(p, l.ID)
+		if !has || linked[p.Name] {
+			continue
+		}
+		also := Also{Node: node}
+		for _, in := range m.engine.RoutesInto(p) {
+			if link, ok := producerLink(in.Producer, in.Route, l.ID); ok {
+				also.TakesFrom = append(also.TakesFrom, link)
+			}
+		}
+		for _, r := range m.engine.RoutesFrom(p) {
+			if link, ok := shipsTo(p, r, l.ID); ok {
+				also.ShipsTo = append(also.ShipsTo, link)
+			}
+		}
+		out.Also = append(out.Also, also)
+	}
+	return out
+}
+
+// feedsHub says whether producer p ships to the hub's branch for the line by route
+// r, and when it should but cannot, why (a gap). A producer with no lines of its own
+// ships every release to every release branch of the hub, so it feeds the line the
+// hub's branch is one of them. One that follows lines feeds the line it has, and has
+// a gap for one it lacks.
+func (m mapper) feedsHub(p config.Project, r updatedispatcher.Route, line string, hubNode Node, hubHas bool) (Link, string, bool) {
+	universal := r.Edge.AcceptLines(p) == config.AcceptLinesUniversal
+	pl, pHas := nodeOf(p, line)
+	switch {
+	case !hubHas && pHas && !universal:
+		return Link{}, fmt.Sprintf("%s has the line %s, which %s does not have, so nothing of it ships there", p.Name, line, m.hub.Name), false
+	case !hubHas:
+		return Link{}, "", false
+	case universal:
+		branches, err := r.BranchesFor(p, "")
+		if err != nil || !slices.Contains(branches, hubNode.Branch) {
+			return Link{}, "", false
+		}
+		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Universal: true}, "", true
+	case !pHas:
+		return Link{}, fmt.Sprintf("%s has no line %s, so nothing of it ships to %s %s", p.Name, line, m.hub.Name, line), false
+	}
+	branches, err := r.BranchesFor(p, line)
+	if err != nil || !slices.Contains(branches, hubNode.Branch) {
+		return Link{}, fmt.Sprintf("%s %s does not reach %s %s (%v)", p.Name, line, m.hub.Name, line, err), false
+	}
+	return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Series: pl.Series, Branch: pl.Branch}, "", true
+}
+
+// producerLink is the link of a producer on a line, as the project it ships to has
+// it: universal, or its series and branch for the line. It is false for a producer
+// that follows lines and has none.
+func producerLink(p config.Project, r updatedispatcher.Route, line string) (Link, bool) {
+	if r.Edge.AcceptLines(p) == config.AcceptLinesUniversal {
+		return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Universal: true}, true
+	}
+	pl, ok := nodeOf(p, line)
+	if !ok {
+		return Link{}, false
+	}
+	return Link{Project: p.Repo.Name, Name: p.Name, Method: r.Method.Name, Series: pl.Series, Branch: pl.Branch}, true
+}
+
+// shipsTo is the link to the consumer of route r that a release of p for the line
+// goes to, with the consumer's branches. It is false when none can be worked out,
+// such as a consumer that does not have the line.
+func shipsTo(p config.Project, r updatedispatcher.Route, line string) (Link, bool) {
+	arg := line
+	if r.Edge.AcceptLines(p) == config.AcceptLinesUniversal {
+		arg = ""
+	}
+	branches, err := r.BranchesFor(p, arg)
+	if err != nil {
+		return Link{}, false
+	}
+	return Link{Project: r.Consumer.Repo.Name, Name: r.Consumer.Name, Method: r.Method.Name, Branches: branches}, true
+}
+
+// nodeOf is the project's own place on a line: false when it has no such line. The
+// series is only set when the project writes one of its own for the line.
+func nodeOf(p config.Project, line string) (Node, bool) {
+	for _, l := range p.Release.Lines {
+		if !strings.EqualFold(l.Line, line) {
+			continue
+		}
+		branch, _ := p.BranchOfLine(l.Line)
+		n := Node{Project: p.Repo.Name, Name: p.Name, Branch: branch, IsDefaultBranch: branch == p.Repo.DefaultBranch && (l.Branch == "" || p.Release.Branching == config.BranchingSingle)}
+		if l.Version != "" {
+			n.Series = l.Version
+		}
+		return n, true
+	}
+	return Node{}, false
+}
+
+func date(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02")
 }
 
 // Run writes the map to w in the format the settings ask for.
