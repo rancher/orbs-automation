@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
@@ -195,9 +196,13 @@ func (r resolution) eachLine(in Input) (selection, error) {
 			lines = append(lines, canonical.Line)
 		}
 	} else {
-		for _, l := range r.producer.Release.Lines {
-			if _, ok := r.consumerLine(l.Line); ok {
-				lines = append(lines, l.Line)
+		scheme, err := tagscheme.For(r.producer)
+		if err != nil {
+			return selection{}, err
+		}
+		for _, line := range scheme.Lines(r.tags) {
+			if _, ok := r.consumerLine(line); ok {
+				lines = append(lines, line)
 			}
 		}
 	}

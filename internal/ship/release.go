@@ -3,10 +3,11 @@ package ship
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/tagscheme"
 )
 
 var (
@@ -29,31 +30,27 @@ type Release struct {
 	Stable bool   `json:"stable"`
 }
 
-// TODO(releasetag): ResolveRelease, latest and lineSeries below are release-line
-// policy that is pure, as is internal/git/releasetag, which holds the rest of it
-// (what a line's newest tag is, what it could have next, which tags it may not
-// have). Fold them in there, with their tests, and let ship call it, so a line's
-// "latest" has one definition for ship, repo tag and repo status. releasetag.Newest
-// is the any-kind newest; the stable-or-prerelease choice here is its sibling.
-// Do it as its own step, with the ship tests as the proof, since ErrNoRelease and
-// the accept rule are ship's own to keep. See docs/specs/REPO_STATUS.md.
-
 // ResolveRelease picks the release to ship from the producer's tags on the
 // host. arg is a tag, used as given; a release line of the producer, which
 // resolves to its latest tag; or empty, the producer's latest tag. A line or an
 // empty arg resolves to the latest stable tag, or with prerelease to the latest
 // of any kind. accept is the consumer's accept.when for this source: an explicit
-// prerelease tag needs prerelease unless the consumer accepts all releases.
+// prerelease tag needs prerelease unless the consumer accepts all releases. What
+// a tag, a line and the latest are is the producer's tag scheme's to say
+// (internal/tagscheme).
 func ResolveRelease(producer config.Project, tags []git.Tag, arg string, prerelease bool, accept string) (Release, error) {
-	pattern := producer.Release.TagPattern
+	scheme, err := tagscheme.For(producer)
+	if err != nil {
+		return Release{}, err
+	}
 	var tag *git.Tag
-	switch _, isVersion := semver.Parse(arg); {
+	switch {
 	case arg == "":
-		tag = latest(tags, pattern, prerelease)
+		tag = newest(scheme.Latest(tags, ""), prerelease)
 		if tag == nil {
 			return Release{}, fmt.Errorf("%w: %s has no release tags", ErrNoRelease, producer.Repo.Name)
 		}
-	case isVersion:
+	case scheme.Valid(arg):
 		for i := range tags {
 			if tags[i].Name == arg {
 				tag = &tags[i]
@@ -62,45 +59,24 @@ func ResolveRelease(producer config.Project, tags []git.Tag, arg string, prerele
 		if tag == nil {
 			return Release{}, fmt.Errorf("%w: %s has no tag %s", ErrNoRelease, producer.Repo.Name, arg)
 		}
-		if semverPre(arg) && !prerelease && accept != config.AcceptAll {
+		if !scheme.IsStable(arg) && !prerelease && accept != config.AcceptAll {
 			return Release{}, fmt.Errorf("%w: %s is a prerelease and the consumer takes stable releases only; pass --prerelease to ship it", ErrPrerelease, arg)
 		}
 	default:
-		series, ok := lineSeries(producer, arg)
-		if !ok {
+		if !slices.Contains(scheme.Lines(tags), arg) {
 			return Release{}, fmt.Errorf("%w: %q is neither a tag nor a release line of %s", ErrNoRelease, arg, producer.Repo.Name)
 		}
-		var inLine []git.Tag
-		for _, t := range tags {
-			if git.InSeries(t.Name, series) {
-				inLine = append(inLine, t)
-			}
-		}
-		if tag = latest(inLine, pattern, prerelease); tag == nil {
+		if tag = newest(scheme.Latest(tags, arg), prerelease); tag == nil {
 			return Release{}, fmt.Errorf("%w: %s has no tags in line %s", ErrNoRelease, producer.Repo.Name, arg)
 		}
 	}
-	return Release{Tag: tag.Name, Commit: tag.Commit, Line: producer.LineOf(tag.Name), Stable: !semverPre(tag.Name)}, nil
+	return Release{Tag: tag.Name, Commit: tag.Commit, Line: scheme.LineOf(tag.Name), Stable: scheme.IsStable(tag.Name)}, nil
 }
 
-// latest picks the highest stable tag, or with prerelease the highest of any
-// kind, among the tags that match the pattern.
-func latest(tags []git.Tag, pattern string, prerelease bool) *git.Tag {
-	l := git.LatestReleases(tags, pattern)
+// newest picks the latest stable tag, or with prerelease the latest of any kind.
+func newest(l git.Latest, prerelease bool) *git.Tag {
 	if prerelease && l.Prerelease != nil {
 		return l.Prerelease
 	}
 	return l.Stable
 }
-
-// lineSeries returns the series of the producer's line named line.
-func lineSeries(p config.Project, line string) (string, bool) {
-	for _, l := range p.Release.Lines {
-		if l.Line == line {
-			return l.Series(), true
-		}
-	}
-	return "", false
-}
-
-func semverPre(tag string) bool { return semver.Classify(tag).HasPrerelease }
