@@ -10,7 +10,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/task/createtag"
+	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,7 +259,7 @@ func TestRunATagThatIsInTheCloneOnAnotherCommitIsNeverMoved(t *testing.T) {
 
 	err := g.run(shell(), "text", false, plain())
 
-	require.ErrorIs(t, err, createtag.ErrTagExists)
+	require.ErrorIs(t, err, releasetag.ErrTagExists)
 	assert.Empty(t, g.git.made)
 }
 
@@ -270,7 +270,7 @@ func TestRunATagTheHostHasOnAnotherCommitIsNeverMoved(t *testing.T) {
 
 	err := g.run(ws, "text", false, plain())
 
-	require.ErrorIs(t, err, createtag.ErrTagExists)
+	require.ErrorIs(t, err, releasetag.ErrTagExists)
 	assert.Empty(t, g.git.made)
 }
 
@@ -281,7 +281,7 @@ func TestRunATagTheLineCannotHaveIsAnErrorBeforeAnyWriteOrQuestion(t *testing.T)
 
 	err := g.run(shell(), "text", false, opts)
 
-	require.ErrorIs(t, err, createtag.ErrNotInSeries)
+	require.ErrorIs(t, err, releasetag.ErrNotInSeries)
 	assert.Empty(t, g.git.made)
 	assert.NotContains(t, g.out.String(), "[y/N]")
 }
@@ -390,7 +390,7 @@ func TestRunStableRefusesToPromoteWhenTheBranchHasMovedOn(t *testing.T) {
 
 	err := g.run(ws, "text", false, opts)
 
-	require.ErrorIs(t, err, createtag.ErrMovedSincePrerelease)
+	require.ErrorIs(t, err, releasetag.ErrMovedSincePrerelease)
 	assert.Empty(t, g.git.made)
 }
 
@@ -403,7 +403,7 @@ func TestRunAProjectThatRequiresAPrereleaseHasNoStableAfterAStable(t *testing.T)
 
 	err := g.run(ws, "text", false, opts)
 
-	require.ErrorIs(t, err, createtag.ErrNeedsPrerelease)
+	require.ErrorIs(t, err, releasetag.ErrNeedsPrerelease)
 	assert.Empty(t, g.git.made)
 }
 
@@ -416,7 +416,7 @@ func TestRunANamedStableTagOfAProjectThatRequiresAPrereleaseNeedsOneOnTheHead(t 
 
 	err := g.run(ws, "text", false, opts)
 
-	require.ErrorIs(t, err, createtag.ErrNeedsPrerelease)
+	require.ErrorIs(t, err, releasetag.ErrNeedsPrerelease)
 	assert.Empty(t, g.git.made)
 }
 
@@ -443,7 +443,7 @@ func TestRunWithNothingNewOnTheHeadChoosesNothing(t *testing.T) {
 
 	err := g.run(ws, "text", false, opts)
 
-	require.ErrorIs(t, err, createtag.ErrNothingNew)
+	require.ErrorIs(t, err, releasetag.ErrNothingNew)
 	assert.Empty(t, g.git.made)
 }
 

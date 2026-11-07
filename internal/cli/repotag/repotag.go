@@ -1,5 +1,6 @@
 // Package repotag holds the logic of gero repo tag: making a tag on the head of
-// the upstream branch of a release line, with the createtag task. It is
+// the upstream branch of a release line: the tag is chosen and checked by
+// internal/git/releasetag and made by the createtag task. It is
 // framework-free: cmd/ owns the cobra wiring (docs/specs/TASK_COMMANDS.md).
 package repotag
 
@@ -16,6 +17,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
@@ -186,7 +188,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	}
 	tag, promotes := opts.Tag, ""
 	if tag == "" {
-		chosen, err := createtag.Choose(createtag.Choice{
+		chosen, err := releasetag.Choose(releasetag.Choice{
 			Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series, Commit: head.Commit,
 			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: project.Release.RequiresPrerelease,
 		})
@@ -208,11 +210,11 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if hasLocal {
 		tags = append(slices.Clone(tags), git.Tag{Name: tag, Commit: local})
 	}
-	in := createtag.Input{
-		Repo: slug, CloneDir: clone.Path, Tag: tag, Commit: head.Commit, Tags: tags,
+	in := createtag.Input{CloneDir: clone.Path, Input: releasetag.Input{
+		Repo: slug, Tag: tag, Commit: head.Commit, Tags: tags,
 		Pattern: project.Release.TagPattern, Series: series, RequiresPrerelease: project.Release.RequiresPrerelease,
-	}
-	decision, err := createtag.Check(in)
+	}}
+	decision, err := releasetag.Check(in.Input)
 	if err != nil {
 		return err
 	}
