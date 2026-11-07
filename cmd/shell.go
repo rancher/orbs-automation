@@ -10,7 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addShell adds the command to root.
+func addShell(root *cobra.Command) {
 	shellCmd := &cobra.Command{
 		Use:   "shell",
 		Short: "Set up completion and the cd function in your shell",
@@ -100,7 +101,7 @@ Without a terminal, pass --yes to approve. --dry-run shows the change only.`,
 	}
 
 	shellCmd.AddCommand(initCmd, installCmd, uninstallCmd)
-	rootCmd.AddCommand(shellCmd)
+	root.AddCommand(shellCmd)
 }
 
 // isTerminal reports whether f is a terminal, so a question can be asked on it.

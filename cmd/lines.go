@@ -8,7 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addLines adds the command to root.
+func addLines(root *cobra.Command) {
 	linesCmd := &cobra.Command{
 		Use:   "lines",
 		Short: "Work with release lines",
@@ -53,5 +54,5 @@ repo status.`,
 	resolveCmd.Flags().StringVar(&hub, "hub", "", "the project to connect the lines through, instead of the one marked finalDestination")
 	resolveCmd.Flags().StringSliceVar(&phases, "phase", nil, "only the lines in these phases: development, ga, eom, eol")
 	linesCmd.AddCommand(resolveCmd)
-	rootCmd.AddCommand(linesCmd)
+	root.AddCommand(linesCmd)
 }

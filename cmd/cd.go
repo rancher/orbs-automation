@@ -8,8 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(&cobra.Command{
+// addCd adds the command to root.
+func addCd(root *cobra.Command) {
+	root.AddCommand(&cobra.Command{
 		Use:   "cd <name|owner/name>",
 		Short: "Print the directory of a project's local clone, for a shell function to cd into",
 		Long: `Print the local clone of a project, found only by your own config: a

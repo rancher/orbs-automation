@@ -9,7 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addShip adds the command to root.
+func addShip(root *cobra.Command) {
 	var in ship.Options
 	shipCmd := &cobra.Command{
 		Use:   "ship [project] [tag|line]",
@@ -99,5 +100,5 @@ with both flags it is a dry run.`,
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
-	rootCmd.AddCommand(shipCmd)
+	root.AddCommand(shipCmd)
 }

@@ -11,7 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addDoctor adds the command to root.
+func addDoctor(root *cobra.Command) {
 	home, _ := os.UserHomeDir()
 	doctorCmd := &cobra.Command{
 		Use:   "doctor [check...]",
@@ -67,7 +68,7 @@ failed or, with --strict, warned.`,
 	f.Duration("timeout", 10*time.Second, "bound for each check that needs the network")
 	f.Bool("strict", false, "exit non-zero on warnings too")
 	f.Bool("list-checks", false, "list the checks and exit")
-	rootCmd.AddCommand(doctorCmd)
+	root.AddCommand(doctorCmd)
 }
 
 // doctorFlags reads gero doctor's own flags into the plain values the logic takes.

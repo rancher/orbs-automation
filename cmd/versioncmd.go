@@ -8,8 +8,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	rootCmd.AddCommand(&cobra.Command{
+// addVersion adds the command to root.
+func addVersion(root *cobra.Command) {
+	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print the gero version",
 		Long: `Print the version, commit and build date of this gero binary. The text is

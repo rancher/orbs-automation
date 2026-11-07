@@ -20,20 +20,18 @@ const (
 
 func subCommandList() []*cobra.Command {
 	return []*cobra.Command{
-		reconcileCmd,
+		newReconcileCmd(),
 	}
 }
 
-func init() {
-	for _, cmd := range subCommandList() {
-		cmd.Use = fmt.Sprintf("%s:%s", groups.CIGroup.ID, cmd.Use)
-		cmd.GroupID = groups.CIGroup.ID
-		cmd.Annotations = map[string]string{ContextAnnotation: ContextCIOnly}
-	}
-}
-
+// RegisterSubcommands adds new instances of the CI commands to cmd, named with
+// the group prefix and marked CI-only. Each call builds them again, so a command
+// tree built for each REPL line shares no flag state with another.
 func RegisterSubcommands(cmd *cobra.Command) {
 	for _, subCmd := range subCommandList() {
+		subCmd.Use = fmt.Sprintf("%s:%s", groups.CIGroup.ID, subCmd.Use)
+		subCmd.GroupID = groups.CIGroup.ID
+		subCmd.Annotations = map[string]string{ContextAnnotation: ContextCIOnly}
 		cmd.AddCommand(subCmd)
 	}
 }

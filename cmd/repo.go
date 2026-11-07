@@ -14,7 +14,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addRepo adds the command to root.
+func addRepo(root *cobra.Command) {
 	repoCmd := &cobra.Command{
 		Use:   "repo",
 		Short: "Inspect version and tag facts for a repository",
@@ -264,5 +265,5 @@ else from the git repository in the current directory.`,
 			},
 		},
 	)
-	rootCmd.AddCommand(repoCmd)
+	root.AddCommand(repoCmd)
 }

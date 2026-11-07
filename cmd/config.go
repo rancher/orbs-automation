@@ -10,7 +10,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addConfig adds the command to root.
+func addConfig(root *cobra.Command) {
 	configCmd := &cobra.Command{
 		Use:   "config",
 		Short: "Validate and inspect the application config",
@@ -82,5 +83,5 @@ slug, or . for the project whose repository you are in) to look at only that.`,
 		},
 		resolveCmd,
 	)
-	rootCmd.AddCommand(configCmd)
+	root.AddCommand(configCmd)
 }

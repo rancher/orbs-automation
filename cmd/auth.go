@@ -7,7 +7,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addAuth adds the command to root.
+func addAuth(root *cobra.Command) {
 	authCmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Check how gero authenticates to GitHub",
@@ -42,5 +43,5 @@ A token that GitHub rejects is reported and the command exits non-zero.`,
 	}
 	statusCmd.Flags().String("hostname", "", "GitHub host to check (default: GH_HOST, then gh's config, then github.com)")
 	authCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(authCmd)
+	root.AddCommand(authCmd)
 }

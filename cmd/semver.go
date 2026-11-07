@@ -8,7 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addSemver adds the command to root.
+func addSemver(root *cobra.Command) {
 	semverCmd := &cobra.Command{
 		Use:   "semver",
 		Short: "Work with version strings",
@@ -31,5 +32,5 @@ release workflows rely on, not a strict SemVer validator.`,
 			return err
 		},
 	})
-	rootCmd.AddCommand(semverCmd)
+	root.AddCommand(semverCmd)
 }

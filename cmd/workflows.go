@@ -5,7 +5,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
+// addWorkflows adds the command to root.
+func addWorkflows(root *cobra.Command) {
 	workflowsCmd := &cobra.Command{
 		Use:   "workflows",
 		Short: "Render and check workflows in target repositories",
@@ -30,5 +31,5 @@ func init() {
 			},
 		},
 	)
-	rootCmd.AddCommand(workflowsCmd)
+	root.AddCommand(workflowsCmd)
 }
