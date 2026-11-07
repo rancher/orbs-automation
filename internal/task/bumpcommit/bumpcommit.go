@@ -77,6 +77,11 @@ func Run(ctx context.Context, runner updatedispatcher.StepRunner, in Input) (Out
 		}
 		subject, _, _ := strings.Cut(message, "\n")
 		commit := workdir.CommitInfo{Hash: hash, Subject: subject}
+		// The files are for the report. A failure to list them leaves them out and
+		// never fails a commit that was made.
+		if files, err := w.CommitFiles(ctx, hash); err == nil {
+			commit.Files = files
+		}
 		commits = append(commits, commit)
 		if in.OnCommit != nil {
 			in.OnCommit(commit)

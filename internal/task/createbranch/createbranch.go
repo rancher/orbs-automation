@@ -145,6 +145,9 @@ func settleExisting(ctx context.Context, g Git, in Input, commit string) (*workd
 			for i, f := range facts {
 				subject, _, _ := strings.Cut(f.Message, "\n")
 				existing[i] = workdir.CommitInfo{Hash: f.Hash, Subject: subject}
+				if files, err := g.CommitFiles(ctx, in.CloneDir, f.Hash); err == nil {
+					existing[i].Files = files // for the report, as for a commit just made
+				}
 			}
 			return workdir.NewExisting(g, in.CloneDir, in.Branch, existing), nil
 		}
