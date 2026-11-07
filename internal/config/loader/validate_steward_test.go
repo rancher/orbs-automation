@@ -43,6 +43,9 @@ func TestValidateStewardshipAndTagProblems(t *testing.T) {
 		{"perLineTag with lines", func(c *config.Config) {
 			producer(c).Release.Lines = []config.ProjectLine{{Line: "v2.16"}}
 		}, []string{`Project "b"`, "release.lines", "perLineTag"}},
+		{"perLineTag with the default scheme", func(c *config.Config) {
+			producer(c).Release.TagScheme = config.TagSchemeSemver
+		}, []string{"release.tagScheme", "perLineTag", "calverLineStage"}},
 		{"unknown tagScheme", func(c *config.Config) { producer(c).Release.TagScheme = "weekly" }, []string{"release.tagScheme", `"weekly"`}},
 		{"calver tags without perLineTag", func(c *config.Config) {
 			producer(c).Release.Branching = config.BranchingSingle

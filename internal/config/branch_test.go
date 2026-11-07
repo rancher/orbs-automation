@@ -91,3 +91,10 @@ func TestProjectBranchOfLine(t *testing.T) {
 	_, ok = Project{Repo: repo}.BranchOfLine("v2.15")
 	assert.False(t, ok, "no lines at all")
 }
+
+func TestProjectIsNotUniversalWhenItsLinesAreInItsTags(t *testing.T) {
+	p := Project{Release: Release{Branching: BranchingPerLineTag}}
+
+	assert.False(t, p.IsUniversal(), "a perLineTag project lists no lines and still follows them")
+	assert.Equal(t, AcceptLinesAll, Edge{}.AcceptLines(p), "so an edge from it maps each line to the consumer's branch for it")
+}
