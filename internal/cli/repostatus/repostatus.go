@@ -16,6 +16,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/git/releasetag"
+	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -191,35 +193,21 @@ func targets(p config.Project) []Target {
 // fill reads the latest tags and the head of t from refs, and compares them
 // with the clone, which may be nil.
 //
-// TODO(release-state): three things to build on this, in this order.
+// TODO(release-state): the consumers are what is left of the plan for this report
+// (below). The state and the next tags are worked out here from the host alone,
+// by internal/git/releasetag, which is also what gero repo tag asks.
 //
-//  1. Release in progress. A line has one when it has a pre-release newer than
-//     the latest stable tag (what LatestPrerelease already means), or commits
-//     past the latest tag (Unreleased > 0). Name the states (nothing
-//     released, released and quiet, work since release, pre-release open) and
-//     compute them from the facts here, not in the renderer.
-//  2. What comes next, from SemVer alone. The newest tag decides, through
-//     semver.Version.NextStable and NextPrerelease (internal/semver), which
-//     answer for a stable or a prerelease tag alike: after a stable tag the
-//     next is a prerelease of a higher version (patch, minor or major is the
-//     engineer's call, so list the candidates); after a prerelease it is
-//     another iteration (rc.N+1) or the stable of that version. Those know
-//     nothing of projects. What is allowed is decided here, with the project's
-//     requiresPrerelease: a project that requires a pre-release before every
-//     stable has no direct stable successor to a stable tag.
-//  3. Consumers. For each downstream the project ships to (Engine.RoutesFrom
-//     of the updates engine, internal/updatedispatcher), take the consumer
-//     branches a line goes to (Route.BranchesFor), look up each head commit
-//     (git.Refs.Branch of the consumer's UpstreamRefs) and read the pinned
-//     value there with the route's Invocation.Check over
-//     updatedispatcher.HostTree, which is exactly what gero ship does. Check
-//     with the latest stable as the release says up to date, behind or ahead
-//     (Check.Relation), and with the latest pre-release when it differs; a
-//     strategy that finds no pin is an error to report as "no pin found". A consumer on a pre-release of a version that is now stable is
-//     behind. This is the costly tier (a request per consumer and branch), so
-//     it runs only when asked for (see the spec: tiers behind flags).
-//
-// STUB: State and Next are not worked out until a later commit.
+//	Consumers. For each downstream the project ships to (Engine.RoutesFrom
+//	   of the updates engine, internal/updatedispatcher), take the consumer
+//	   branches a line goes to (Route.BranchesFor), look up each head commit
+//	   (git.Refs.Branch of the consumer's UpstreamRefs) and read the pinned
+//	   value there with the route's Invocation.Check over
+//	   updatedispatcher.HostTree, which is exactly what gero ship does. Check
+//	   with the latest stable as the release says up to date, behind or ahead
+//	   (Check.Relation), and with the latest pre-release when it differs; a
+//	   strategy that finds no pin is an error to report as "no pin found". A consumer on a pre-release of a version that is now stable is
+//	   behind. This is the costly tier (a request per consumer and branch), so
+//	   it runs only when asked for (see the spec: tiers behind flags).
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 	tags := refs.Tags
 	if t.Series != "" {
@@ -237,6 +225,13 @@ func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 			t.Head = b.Commit
 		}
 	}
+	if t.Head != "" {
+		c := releasetag.Choice{
+			Tags: refs.Tags, Pattern: p.Release.TagPattern, Series: t.Series, Commit: t.Head,
+			RequiresPrerelease: p.Release.RequiresPrerelease,
+		}
+		t.State, t.Next = string(releasetag.StateOf(c)), nextOf(c)
+	}
 	if clone == nil || t.Head == "" {
 		return
 	}
@@ -246,6 +241,50 @@ func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 		}
 	}
 	t.Local = compare(clone, t.Branch, t.Head)
+}
+
+// nextOf lists the tags a line could have next, as gero repo tag would make them.
+// When the newest tag is a prerelease both candidates are listed, the next one and
+// the promotion, each with the reason it is not available now when it is not, so
+// the engineer sees why and not a missing option. Otherwise it is the next
+// prerelease when that may be made now, and none when it may not.
+func nextOf(c releasetag.Choice) []Next {
+	newest := releasetag.Newest(releasetag.Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	open := false
+	if newest != nil {
+		v, _ := semver.Parse(newest.Name)
+		open = v.IsPrerelease()
+	}
+	var out []Next
+	for i, cand := range releasetag.Candidates(c) {
+		switch {
+		case errors.Is(cand.Err, releasetag.ErrNoBase):
+			continue
+		case !open && (i > 0 || cand.Err != nil):
+			continue
+		}
+		n := Next{Tag: cand.Tag, Kind: string(cand.Kind), Available: cand.Err == nil, Why: why(cand.Err)}
+		if cand.Promotes != nil {
+			n.Promotes = cand.Promotes.Name
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+// why says in a few words why a tag may not be made now.
+func why(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, releasetag.ErrNothingNew):
+		return "no new commits"
+	case errors.Is(err, releasetag.ErrMovedSincePrerelease):
+		return "the branch has moved since the rc"
+	case errors.Is(err, releasetag.ErrNeedsPrerelease):
+		return "needs an rc first"
+	}
+	return err.Error()
 }
 
 // newest is the tag releases are counted from: a pre-release is only there when
@@ -305,6 +344,9 @@ func tagInfo(t *git.Tag) *TagInfo {
 	return &TagInfo{Tag: t.Name, Commit: t.Commit}
 }
 
+// renderText is the report as sections that each answer one question: what the
+// lines of the project have and what they could have next (the host's facts, and
+// the meaning made of them), and how the local clone stands (the clone's facts).
 func renderText(st Status) string {
 	var b strings.Builder
 	b.WriteString(st.Slug + "\n")
@@ -312,21 +354,16 @@ func renderText(st Status) string {
 		fmt.Fprintf(&b, "  host: unavailable: %s\n", st.Error)
 		return b.String()
 	}
-	b.WriteString("\n")
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
 	perLine := len(st.Targets) > 0 && st.Targets[0].Line != ""
+	b.WriteString("\nReleases\n")
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	header := "BRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE\tSTATE\tNEXT"
 	if perLine {
-		fmt.Fprintln(w, "  LINE\tBRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE\tUNRELEASED\tLOCAL")
-	} else {
-		fmt.Fprintln(w, "  BRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE\tUNRELEASED\tLOCAL")
+		header = "LINE\t" + header
 	}
+	fmt.Fprintln(w, "  "+header)
 	for _, t := range st.Targets {
-		branch := t.Branch
-		if perLine && t.IsDefaultBranch {
-			branch += " (default branch)"
-		}
-		cells := []string{branch, headText(t.Head), tagText(t.LatestStable), tagText(t.LatestPrerelease),
-			countText(t.Unreleased), localText(t.Local)}
+		cells := []string{branchText(t, perLine), headText(t.Head), tagText(t.LatestStable), tagText(t.LatestPrerelease), stateText(t), nextText(t.Next)}
 		if perLine {
 			cells = append([]string{t.Line}, cells...)
 		}
@@ -335,8 +372,78 @@ func renderText(st Status) string {
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 	if st.Clone != "" {
 		fmt.Fprintf(&b, "\nLocal clone: unavailable: %s\n", st.Clone)
+		return b.String()
 	}
+	b.WriteString("\nLocal clone\n")
+	w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	header = "BRANCH\tUNRELEASED\tLOCAL"
+	if perLine {
+		header = "LINE\t" + header
+	}
+	fmt.Fprintln(w, "  "+header)
+	for _, t := range st.Targets {
+		cells := []string{branchText(t, perLine), countText(t.Unreleased), localText(t.Local)}
+		if perLine {
+			cells = append([]string{t.Line}, cells...)
+		}
+		fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
+	}
+	_ = w.Flush()
 	return b.String()
+}
+
+// branchText is the branch, with a note when it is the default branch because the
+// line has none of its own.
+func branchText(t Target, perLine bool) string {
+	if perLine && t.IsDefaultBranch {
+		return t.Branch + " (default branch)"
+	}
+	return t.Branch
+}
+
+// stateText says where a line stands in words, with the commits since the tag when
+// the clone could count them.
+func stateText(t Target) string {
+	since := ""
+	if t.Unreleased != nil && *t.Unreleased > 0 {
+		since = fmt.Sprintf(" (%d commits)", *t.Unreleased)
+	}
+	switch releasetag.State(t.State) {
+	case releasetag.StateNoRelease:
+		return "no release"
+	case releasetag.StateReleased:
+		return "released"
+	case releasetag.StateWorkSinceRelease:
+		return "work since release" + since
+	case releasetag.StateRCOpen:
+		return "rc open, head on the rc"
+	case releasetag.StateRCOpenWork:
+		return "rc open, work since the rc" + since
+	}
+	return "-"
+}
+
+// nextText lists the candidates: one that may be made as its tag, a promotion with
+// the prerelease it promotes, and one that may not be made now in parentheses with
+// the reason.
+func nextText(next []Next) string {
+	if len(next) == 0 {
+		return "-"
+	}
+	parts := make([]string, len(next))
+	for i, n := range next {
+		switch {
+		case n.Available && n.Promotes != "":
+			parts[i] = fmt.Sprintf("%s (promotes %s)", n.Tag, n.Promotes)
+		case n.Available:
+			parts[i] = n.Tag
+		case n.Promotes != "":
+			parts[i] = fmt.Sprintf("(%s promotes %s: %s)", n.Tag, n.Promotes, n.Why)
+		default:
+			parts[i] = fmt.Sprintf("(%s: %s)", n.Tag, n.Why)
+		}
+	}
+	return strings.Join(parts, " or ")
 }
 
 // headText renders the commit at a branch head, or says the host has no such

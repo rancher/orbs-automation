@@ -49,11 +49,18 @@ compares), use repo status.`,
 	statusCmd := &cobra.Command{
 		Use:   "status [name|owner/name]",
 		Short: "Show where the releases of a repository stand, as the host has them",
-		Long: `Print where the releases of a repository stand: for each release line (or
-the one release branch of a Project without lines), the commit at the head of
-the branch on the host, its latest stable and pre-release tags, the commits on
-the branch since the latest tag, and whether the local clone's branch is in
-sync, behind or ahead.
+		Long: `Print where the releases of a repository stand, in sections that each
+answer one question.
+
+Releases: for each release line (or the one release branch of a Project without
+lines), the commit at the head of the branch on the host, its latest stable and
+pre-release tags, STATE (no release, released, work since release, rc open with
+the head on the rc or past it) and NEXT, the tags gero repo tag could make:
+a prerelease, and when the newest tag is a prerelease the promotion too, each
+with the reason in parentheses when it may not be made now.
+
+Local clone: the commits on the branch since the latest tag, and whether the
+local clone's branch is in sync, behind or ahead.
 
 Name a Project (its config name, such as scc-operator, or its owner/name
 slug) to look at it, else the repository you are in is used (. says so
