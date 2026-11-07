@@ -94,7 +94,7 @@ In Go, `internal/calver` has a `Scheme` (its name, `Parse` of a tag name into a 
 
 ## Not built yet
 
-Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), and `gero ship` refusing a producer that is not owned; `config/rancher-assets.project.yaml` uses them. `internal/calver`, with the `calverLineStage` scheme. Not built: `yamlRead` and reading at a ref; then `internal/chain` with `lines resolve`; then `repo status`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
+Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), and `gero ship` refusing a producer that is not owned; `config/rancher-assets.project.yaml` uses them; and `internal/calver` with the `calverLineStage` scheme. Not built: `yamlRead` and reading at a ref; then `internal/chain` with `lines resolve`; then `repo status`. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
 
 ## Decided
 
