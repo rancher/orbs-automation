@@ -65,7 +65,7 @@ func (l logSink) Event(e domain.Event) {
 	case domain.EventSuperseded:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "superseded", about(e, slog.Int("pr", e.PR.Number))...)
 	case domain.EventCommit:
-		l.log.LogAttrs(ctx, slog.LevelInfo, "commit", about(e, slog.String("commit", e.Commit.Hash), slog.String("subject", e.Commit.Subject))...)
+		l.log.LogAttrs(ctx, slog.LevelInfo, "commit", about(e, slog.String("commit", e.Commit.Hash), slog.String("subject", e.Commit.Subject), slog.Int("files", len(e.Commit.Files)))...)
 	case domain.EventTargetDone:
 		level := slog.LevelInfo
 		attrs := about(e, slog.String("status", string(e.Result.Status)), slog.String("new_branch", e.Result.Branch))

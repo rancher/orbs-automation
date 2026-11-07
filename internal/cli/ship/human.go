@@ -59,6 +59,9 @@ func (h *humanSink) Event(e domain.Event) {
 		h.started(e)
 	case domain.EventCommit:
 		h.out.Line(fmt.Sprintf("    %s  %s", git.Short(e.Commit.Hash), e.Commit.Subject))
+		if files := filesText(e.Commit.Files); files != "" {
+			h.out.Line("             " + files) // under the subject: four spaces, the short hash and two more
+		}
 	case domain.EventPushed:
 		h.out.Line(fmt.Sprintf("  %s: pushed %s to %s", name(e), e.NewBranch, e.Remote))
 	case domain.EventPROpened:

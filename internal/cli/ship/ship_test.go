@@ -1268,7 +1268,7 @@ func TestRenderTextShowsTheFilesEachCommitChangedUnderIt(t *testing.T) {
 		"    abcdef0  Update scc-operator to v0.5.3\n             build.yaml\n",
 		"    1234567  Run `./scripts/generate-buildconfig`\n             12 files: generated/f1.go, generated/f2.go, generated/f3.go and 9 more\n",
 		"    fedcba9  Run `go mod tidy`\n             2 files: go.mod, go.sum\n",
-		"    0f0f0f0  Run `nothing`\n    ",
+		"    0f0f0f0  Run `nothing`\n  release/v2.15: committed",
 	} {
 		assert.Contains(t, out, want)
 	}
