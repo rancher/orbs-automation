@@ -571,3 +571,60 @@ func TestStatePath(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvNameOfADottedKeyUsesUnderscores(t *testing.T) {
+	assert.Equal(t, "GERO_REPL_PROMPT", EnvName("repl.prompt"))
+	assert.Equal(t, "repl-prompt", FlagName("repl.prompt"))
+	assert.Equal(t, "GERO_CONFIG_DIR", EnvName("configDir"), "the rule for the others is as it was")
+}
+
+func TestReplPromptDefaultsToTheDefaultTemplate(t *testing.T) {
+	s, err := Load(Inputs{})
+
+	require.NoError(t, err)
+	assert.Equal(t, DefaultReplPrompt, s.ReplPrompt)
+	assert.Equal(t, "gero{project: (%s)}> ", s.ReplPrompt)
+	assert.Equal(t, SourceDefault, s.Source("repl.prompt"))
+}
+
+func TestReplPromptPrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		file string
+		want string
+		src  Source
+	}{
+		{"file", nil, "repl:\n  prompt: \"{dir}$ \"\n", "{dir}$ ", SourceFile},
+		{"env beats file", map[string]string{"GERO_REPL_PROMPT": "{path}> "}, "repl:\n  prompt: \"{dir}$ \"\n", "{path}> ", SourceEnv},
+		{"env alone", map[string]string{"GERO_REPL_PROMPT": "> "}, "", "> ", SourceEnv},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := Inputs{Getenv: env(tt.env)}
+			if tt.file != "" {
+				in.UserFile = strings.NewReader(tt.file)
+			}
+
+			s, err := Load(in)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.ReplPrompt)
+			assert.Equal(t, tt.src, s.Source("repl.prompt"))
+		})
+	}
+}
+
+// The template is checked when the REPL starts, so a bad one does not make every
+// command fail to load its settings.
+func TestAnInvalidPromptTemplateDoesNotFailLoad(t *testing.T) {
+	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_REPL_PROMPT": "{nonsense"})})
+
+	assert.NoError(t, err)
+}
+
+func TestTheUserFileStillRejectsUnknownKeysUnderRepl(t *testing.T) {
+	_, err := Load(Inputs{UserFile: strings.NewReader("repl:\n  promt: x\n")})
+
+	assert.Error(t, err)
+}
