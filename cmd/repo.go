@@ -63,6 +63,13 @@ with the reason in parentheses when it may not be made now.
 Local clone: the commits on the branch since the latest tag, and whether the
 local clone's branch is in sync, behind or ahead.
 
+Sources and Consumers, for a Project that takes from others or ships to others
+(and left out for one that does neither): for each, the branches the releases go
+to, what each holds, the latest stable release, and whether it is current,
+behind, or on a prerelease. A source is a project that ships to this one, and
+a consumer a project this one ships to. Reading them costs a request for each
+branch, and --no-sources and --no-consumers skip them.
+
 Name a Project (its config name, such as scc-operator, or its owner/name
 slug) to look at it, else the repository you are in is used (. says so
 explicitly). The tags and heads are read from the host, so they are current

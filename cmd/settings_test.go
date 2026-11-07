@@ -215,3 +215,11 @@ func TestRepoTagHasAPushFlag(t *testing.T) {
 
 	assert.NotNil(t, tag.Flags().Lookup("push"))
 }
+
+func TestRepoStatusCanLeaveOutTheConsumersAndTheSources(t *testing.T) {
+	status, _, err := rootCmd.Find([]string{"repo", "status"})
+	require.NoError(t, err)
+
+	assert.NotNil(t, status.Flags().Lookup("no-consumers"))
+	assert.NotNil(t, status.Flags().Lookup("no-sources"))
+}

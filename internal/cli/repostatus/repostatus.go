@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -19,6 +20,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -35,12 +37,6 @@ type Workspace interface {
 	// release up reads with the same pieces gero ship uses.
 	ship.Reader
 	RepoPath(slug string) (workspace.RepoPath, error)
-	// TODO(release-state): consumer tracing adds UpstreamFile(ctx, slug, ref,
-	// path) here (workspace.Workspace has it) and Updates(), the engine of the
-	// updates config. Do not read a pin here by hand: gero ship reads what a
-	// consumer holds with the same pieces, so use them (see the TODO on fill).
-	// Keep it a separate interface if the fakes in the tests grow past a few
-	// methods.
 }
 
 // Clone is what Status reads from a local clone.
@@ -87,12 +83,6 @@ type Options struct {
 }
 
 // Target is one release branch and where its releases stand.
-//
-// TODO(release-state): Target is a flat row of facts. Per-line state
-// resolution wants a derived, named state on top of them (see the TODOs on
-// fill), and a Consumers field for the trace of who has picked the tags up.
-// Expect Target to split into the facts read (host, clone) and a State computed
-// from them by a function with no I/O, so the rules are table-tested.
 type Target struct {
 	// Line and Series are set for a project with a branch per line.
 	Line   string `json:"line,omitempty"`
@@ -201,15 +191,64 @@ func gatherWith(ctx context.Context, ws Workspace, open Opener, slugs []string, 
 // trace adds the consumers and the sources of p to the status, unless the options
 // skip them. What it reads is read by ship.Holdings and ship.Sources, which are the
 // pieces a run of gero ship reads a consumer with.
-//
-// STUB: adds nothing until a later commit.
-func trace(ctx context.Context, ws ship.Reader, p config.Project, opts Options, st *Status) {}
+func trace(ctx context.Context, ws ship.Reader, p config.Project, opts Options, st *Status) {
+	var problems []string
+	note := func(err error) {
+		if err != nil && !slices.Contains(problems, err.Error()) {
+			problems = append(problems, err.Error())
+		}
+	}
+	if !opts.NoConsumers {
+		var err error
+		st.Consumers, err = ship.Holdings(ctx, ws, p)
+		note(err)
+	}
+	if !opts.NoSources {
+		var err error
+		st.Sources, err = ship.Sources(ctx, ws, p)
+		note(err)
+	}
+	st.TraceError = strings.Join(problems, "; ")
+}
 
 // holdStatus says in a few words how what a consumer branch holds stands against
-// the releases that go to it.
-//
-// STUB: empty until a later commit.
-func holdStatus(h ship.Holding) string { return "" }
+// the releases that go to it: the latest stable, and when a newer prerelease
+// exists the newest. A Relation of newer means the release is newer than what the
+// branch holds, so the branch is behind.
+func holdStatus(h ship.Holding) string {
+	if h.Error != "" {
+		return "unreadable: " + h.Error
+	}
+	if h.Stable == nil {
+		return "-"
+	}
+	stable := h.Stable
+	if h.Newest != nil && h.Newest.Tag != stable.Tag {
+		newest := h.Newest
+		switch {
+		case newest.UpToDate:
+			return "current"
+		case stable.UpToDate:
+			return "on stable, " + newest.Tag + " is newer"
+		case stable.Relation == updatedispatcher.RelationNewer:
+			return "behind " + stable.Tag
+		case newest.Relation == updatedispatcher.RelationNewer:
+			return "on a prerelease, " + newest.Tag + " is newer"
+		case newest.Relation == updatedispatcher.RelationOlder:
+			return "ahead of " + newest.Tag
+		}
+		return "unknown"
+	}
+	switch {
+	case stable.UpToDate:
+		return "current"
+	case stable.Relation == updatedispatcher.RelationNewer:
+		return "behind " + stable.Tag
+	case stable.Relation == updatedispatcher.RelationOlder:
+		return "ahead of " + stable.Tag
+	}
+	return "unknown"
+}
 
 // targets lists the release branches of p, before anything is read.
 func targets(p config.Project) []Target {
@@ -224,24 +263,9 @@ func targets(p config.Project) []Target {
 	return ts
 }
 
-// fill reads the latest tags and the head of t from refs, and compares them
-// with the clone, which may be nil.
-//
-// TODO(release-state): the consumers are what is left of the plan for this report
-// (below). The state and the next tags are worked out here from the host alone,
-// by internal/git/releasetag, which is also what gero repo tag asks.
-//
-//	Consumers. For each downstream the project ships to (Engine.RoutesFrom
-//	   of the updates engine, internal/updatedispatcher), take the consumer
-//	   branches a line goes to (Route.BranchesFor), look up each head commit
-//	   (git.Refs.Branch of the consumer's UpstreamRefs) and read the pinned
-//	   value there with the route's Invocation.Check over
-//	   updatedispatcher.HostTree, which is exactly what gero ship does. Check
-//	   with the latest stable as the release says up to date, behind or ahead
-//	   (Check.Relation), and with the latest pre-release when it differs; a
-//	   strategy that finds no pin is an error to report as "no pin found". A consumer on a pre-release of a version that is now stable is
-//	   behind. This is the costly tier (a request per consumer and branch), so
-//	   it runs only when asked for (see the spec: tiers behind flags).
+// fill reads the latest tags and the head of t from refs, works out its state and
+// the tags it could have next from them (internal/git/releasetag, which is what
+// gero repo tag asks), and compares them with the clone, which may be nil.
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 	tags := refs.Tags
 	if t.Series != "" {
@@ -406,24 +430,66 @@ func renderText(st Status) string {
 	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 	if st.Clone != "" {
 		fmt.Fprintf(&b, "\nLocal clone: unavailable: %s\n", st.Clone)
-		return b.String()
+	} else {
+		b.WriteString("\nLocal clone\n")
+		w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		header = "BRANCH\tUNRELEASED\tLOCAL"
+		if perLine {
+			header = "LINE\t" + header
+		}
+		fmt.Fprintln(w, "  "+header)
+		for _, t := range st.Targets {
+			cells := []string{branchText(t, perLine), countText(t.Unreleased), localText(t.Local)}
+			if perLine {
+				cells = append([]string{t.Line}, cells...)
+			}
+			fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
+		}
+		_ = w.Flush()
 	}
-	b.WriteString("\nLocal clone\n")
-	w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	header = "BRANCH\tUNRELEASED\tLOCAL"
+	for _, src := range st.Sources {
+		renderHoldings(&b, fmt.Sprintf("Sources: %s (%s), %s", src.Name, src.Producer, src.Method), src.Error, src.Targets)
+	}
+	for _, c := range st.Consumers {
+		renderHoldings(&b, fmt.Sprintf("Consumers: %s (%s), %s", c.Name, c.Consumer, c.Method), c.Error, c.Targets)
+	}
+	if st.TraceError != "" {
+		fmt.Fprintf(&b, "\ncould not trace: %s\n", st.TraceError)
+	}
+	return b.String()
+}
+
+// renderHoldings is one consumer's or one source's section: what each branch holds
+// against the latest stable release, and how that stands.
+func renderHoldings(b *strings.Builder, heading, errText string, targets []ship.Holding) {
+	b.WriteString("\n" + heading + "\n")
+	if errText != "" {
+		fmt.Fprintf(b, "  unavailable: %s\n", errText)
+		return
+	}
+	perLine := slices.ContainsFunc(targets, func(h ship.Holding) bool { return h.Line != "" })
+	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
+	header := "BRANCH\tHEAD\tHOLDS\tLATEST STABLE\tSTATUS"
 	if perLine {
 		header = "LINE\t" + header
 	}
 	fmt.Fprintln(w, "  "+header)
-	for _, t := range st.Targets {
-		cells := []string{branchText(t, perLine), countText(t.Unreleased), localText(t.Local)}
+	for _, h := range targets {
+		latest := "-"
+		if h.Stable != nil {
+			latest = h.Stable.Tag
+		}
+		holds := h.Current
+		if holds == "" {
+			holds = "-"
+		}
+		cells := []string{h.Branch, headText(h.Head), holds, latest, holdStatus(h)}
 		if perLine {
-			cells = append([]string{t.Line}, cells...)
+			cells = append([]string{h.Line}, cells...)
 		}
 		fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
 	}
-	_ = w.Flush()
-	return b.String()
+	_ = w.Flush() // writes to a strings.Builder, which cannot fail
 }
 
 // branchText is the branch, with a note when it is the default branch because the
