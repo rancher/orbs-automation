@@ -69,7 +69,7 @@ func TestHeadingsAndLabelsAndColumnHeadsTakeTheirLook(t *testing.T) {
 	for _, h := range []string{"rancher/rancher", "Release lines", "Local clone"} {
 		assert.Contains(t, out, v.Style(style.Heading, h), h)
 	}
-	for _, label := range []string{"owned", "default branch", "release branching", "tag pattern", "path", "branch", "commit", "work tree"} {
+	for _, label := range []string{"owned", "managed by", "default branch", "release branching", "tag pattern", "path", "branch", "commit", "work tree"} {
 		assert.Contains(t, out, v.Style(style.Dim, label), label)
 	}
 	for _, head := range []string{"LINE", "SERIES", "BRANCH"} {

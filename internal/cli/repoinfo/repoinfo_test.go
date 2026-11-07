@@ -221,3 +221,46 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	_, err := Run(s, t.TempDir(), nil)
 	assert.ErrorContains(t, err, "not supported by repo info")
 }
+
+func TestInfoSaysWhoManagesTheProject(t *testing.T) {
+	tests := []struct {
+		name string
+		repo config.Repo
+		want string
+	}{
+		{"owned defaults to orbs", config.Repo{Name: "rancher/rancher", Owned: true, DefaultBranch: "main"}, "orbs"},
+		{"another team's name", config.Repo{Name: "rancher/rancher", ManagedBy: "release-team", DefaultBranch: "main"}, "release-team"},
+		{"unowned and unset is unspecified", config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ws := fixture()
+			p := ws.projects["rancher/rancher"]
+			p.Repo = tt.repo
+			ws.projects["rancher/rancher"] = p
+
+			got, err := gather(ws, opener(cloneOnMain, nil), nil)
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got.ManagedBy)
+		})
+	}
+}
+
+func TestRenderTextShowsManagedByNextToOwned(t *testing.T) {
+	out := renderText(Info{Slug: "rancher/rancher", Owned: true, ManagedBy: "orbs"}, nil)
+	assert.Regexp(t, `owned +yes\n +managed by +orbs\n`, out)
+
+	out = renderText(Info{Slug: "rancher/rancher-assets"}, nil)
+	assert.Regexp(t, `owned +no\n +managed by +unspecified\n`, out)
+}
+
+func TestInfoJSONCarriesManagedByAndLeavesItOutWhenUnspecified(t *testing.T) {
+	with, err := renderJSON(Info{Slug: "a/b", ManagedBy: "release-team"})
+	require.NoError(t, err)
+	assert.Contains(t, with, `"managedBy": "release-team"`)
+
+	without, err := renderJSON(Info{Slug: "a/b"})
+	require.NoError(t, err)
+	assert.NotContains(t, without, "managedBy")
+}
