@@ -130,7 +130,7 @@ func TestLsTakesOneTarget(t *testing.T) {
 
 func projects(keys map[string]string) ProjectDir {
 	return func(key string) (string, error) {
-		if dir, ok := keys[strings.TrimPrefix(key, "@")]; ok {
+		if dir, ok := keys[key]; ok {
 			return dir, nil
 		}
 		return "", errors.New("unknown project " + key)
@@ -260,4 +260,97 @@ func TestLoopReportsASplitErrorAndGoesOn(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, errOut.String())
 	assert.Contains(t, out.String(), "/work\n")
+}
+
+func TestCdMovesIntoTheProjectRoot(t *testing.T) {
+	clone := t.TempDir()
+	start := t.TempDir()
+	t.Chdir(start)
+	s := &Session{Dir: start, ProjectDir: projects(map[string]string{
+		"scc-operator": clone, "rancher/scc-operator": clone,
+	})}
+	for _, key := range []string{"scc-operator", "rancher/scc-operator"} {
+		s.Dir = start
+
+		out, exit, err := exec(t, s, "cd "+key)
+
+		require.NoError(t, err, key)
+		assert.False(t, exit, key)
+		assert.Empty(t, out, key)
+		assert.Equal(t, clone, s.Dir, key)
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		real, err := filepath.EvalSymlinks(clone)
+		require.NoError(t, err)
+		assert.Equal(t, real, wd, key+": the process moved, so commands see it")
+	}
+}
+
+func TestCdThenPwdAndLsSeeTheProject(t *testing.T) {
+	clone := tree(t)
+	start := t.TempDir()
+	t.Chdir(start)
+	s := &Session{Dir: start, ProjectDir: projects(map[string]string{"scc": clone})}
+
+	_, _, err := exec(t, s, "cd scc")
+	require.NoError(t, err)
+	pwd, _, _ := exec(t, s, "pwd")
+	ls, _, _ := exec(t, s, "ls")
+
+	assert.Equal(t, clone+"\n", pwd)
+	assert.Equal(t, "README.md\na.txt\ndocs/\ntest/\n", ls)
+}
+
+func TestCdRefusesWhatGeroCdRefuses(t *testing.T) {
+	start := t.TempDir()
+	t.Chdir(start)
+	// This is cdpath's rule, as the real lookup applies it.
+	refuse := func(key string) (string, error) {
+		if key == "." || key == "" {
+			return "", errors.New("name a project")
+		}
+		return "", errors.New("unknown project " + key)
+	}
+	s := &Session{Dir: start, ProjectDir: refuse}
+	for _, line := range []string{"cd", "cd .", "cd ..", "cd /tmp", "cd ./x", "cd @docs", "cd nothing", "cd a b"} {
+		_, _, err := exec(t, s, line)
+
+		require.Error(t, err, line)
+		assert.Equal(t, start, s.Dir, line+": a refused cd stays put")
+	}
+}
+
+func TestCdTakesNoPathsOrAt(t *testing.T) {
+	var asked []string
+	start := t.TempDir()
+	t.Chdir(start)
+	s := &Session{Dir: start, ProjectDir: func(key string) (string, error) {
+		asked = append(asked, key)
+		return "", errors.New("unknown")
+	}}
+
+	_, _, _ = exec(t, s, "cd @docs")
+	_, _, _ = exec(t, s, "ls @docs")
+
+	assert.Equal(t, []string{"@docs", "docs"}, asked, "cd asks for the word as typed, ls for the project without the @")
+}
+
+func TestCdWithoutAProjectLookupFails(t *testing.T) {
+	s := &Session{Dir: "/work"}
+
+	_, _, err := exec(t, s, "cd scc")
+
+	require.Error(t, err)
+	assert.Equal(t, "/work", s.Dir)
+}
+
+func TestCdIntoAMissingCloneStaysPut(t *testing.T) {
+	start := t.TempDir()
+	t.Chdir(start)
+	s := &Session{Dir: start, ProjectDir: projects(map[string]string{"gone": filepath.Join(start, "nope")})}
+
+	_, _, err := exec(t, s, "cd gone")
+
+	require.Error(t, err)
+	assert.Equal(t, start, s.Dir)
 }
