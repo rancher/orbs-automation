@@ -303,3 +303,29 @@ func TestRenderEnvHasColor(t *testing.T) {
 
 	assert.Contains(t, out, "GERO_COLOR=never\n")
 }
+
+func TestEntriesShowTheReplPromptAndWhereItCameFrom(t *testing.T) {
+	tests := []struct {
+		name string
+		file string
+		env  map[string]string
+		want Entry
+	}{
+		{"default", "", nil, Entry{"repl.prompt", "gero{project: (%s)}> ", "default"}},
+		{"file", "repl:\n  prompt: \"{dir}$ \"\n", nil, Entry{"repl.prompt", "{dir}$ ", "file"}},
+		{"env", "", map[string]string{"GERO_REPL_PROMPT": "> "}, Entry{"repl.prompt", "> ", "env"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := byKey(Entries(load(t, tt.file, tt.env, nil), workspace.ConfigDir{}))
+
+			assert.Equal(t, tt.want, got["repl.prompt"])
+		})
+	}
+}
+
+func TestRenderEnvHasTheReplPrompt(t *testing.T) {
+	out := renderEnv(Entries(load(t, "repl:\n  prompt: \"{dir}$ \"\n", nil, nil), workspace.ConfigDir{}))
+
+	assert.Contains(t, out, "GERO_REPL_PROMPT={dir}$ \n")
+}
