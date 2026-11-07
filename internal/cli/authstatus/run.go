@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // Verifier proves a token works. It is defined here, where it is consumed, so
@@ -71,7 +72,7 @@ func run(ctx context.Context, s clicfg.Settings, hostname string, a github.Auth,
 	if err != nil && !errors.Is(err, github.ErrBadCredentials) {
 		return "", err
 	}
-	out, renderErr := Render(st, s.Output)
+	out, renderErr := Render(st, s.Output, style.New(s.Terminal))
 	if renderErr != nil {
 		return "", renderErr
 	}

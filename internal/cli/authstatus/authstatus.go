@@ -12,6 +12,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // Status is what gero auth status reports.
@@ -36,10 +37,10 @@ var hostSources = map[string]string{
 
 // Render formats st as clicfg.OutputText or clicfg.OutputJSON. The token is
 // not part of Status, so it cannot appear.
-func Render(st Status, format string) (string, error) {
+func Render(st Status, format string, view *style.Renderer) (string, error) {
 	switch format {
 	case clicfg.OutputText:
-		return renderText(st), nil
+		return renderText(st, view), nil
 	case clicfg.OutputJSON:
 		return renderJSON(st)
 	}
@@ -50,7 +51,8 @@ func unsupported(format string) error {
 	return fmt.Errorf("gero auth status does not support output format %q (use text or json)", format)
 }
 
-func renderText(st Status) string {
+func renderText(st Status, view *style.Renderer) string {
+	_ = view
 	login := st.Login
 	switch {
 	case !st.Valid:

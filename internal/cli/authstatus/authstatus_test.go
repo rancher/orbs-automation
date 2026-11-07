@@ -46,7 +46,7 @@ func TestRenderText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.st, clicfg.OutputText)
+			got, err := Render(tt.st, clicfg.OutputText, nil)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
@@ -56,7 +56,7 @@ func TestRenderText(t *testing.T) {
 
 func TestRenderJSON(t *testing.T) {
 	got, err := Render(Status{Host: "github.com", HostSource: "default", TokenSource: "GH_TOKEN", Valid: true, Login: "octocat"},
-		clicfg.OutputJSON)
+		clicfg.OutputJSON, nil)
 
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"host":"github.com","hostSource":"default","tokenSource":"GH_TOKEN","valid":true,"login":"octocat"}`, got)
@@ -66,7 +66,7 @@ func TestRenderJSON(t *testing.T) {
 }
 
 func TestRenderJSONRejectedTokenHasNoLogin(t *testing.T) {
-	got, err := Render(Status{Host: "github.com", HostSource: "default", TokenSource: "GH_TOKEN"}, clicfg.OutputJSON)
+	got, err := Render(Status{Host: "github.com", HostSource: "default", TokenSource: "GH_TOKEN"}, clicfg.OutputJSON, nil)
 
 	require.NoError(t, err)
 	assert.JSONEq(t, `{"host":"github.com","hostSource":"default","tokenSource":"GH_TOKEN","valid":false}`, got)
@@ -75,7 +75,7 @@ func TestRenderJSONRejectedTokenHasNoLogin(t *testing.T) {
 func TestRenderUnsupportedFormats(t *testing.T) {
 	for _, format := range []string{clicfg.OutputEnv, "yaml"} {
 		t.Run(format, func(t *testing.T) {
-			got, err := Render(Status{}, format)
+			got, err := Render(Status{}, format, nil)
 
 			require.Error(t, err)
 			assert.ErrorContains(t, err, format)
