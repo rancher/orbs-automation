@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -155,4 +156,28 @@ func TestProjectNamesAreTheConfigNamesSorted(t *testing.T) {
 func TestProjectNamesWithoutAConfigAreNone(t *testing.T) {
 	assert.Empty(t, projectNames(configOnly{err: errors.New("no config directory")}))
 	assert.Empty(t, projectNames(configOnly{}))
+}
+
+type inDir struct {
+	project config.Project
+	err     error
+	asked   []string
+}
+
+func (w *inDir) Project(key string) (config.Project, error) {
+	w.asked = append(w.asked, key)
+	return w.project, w.err
+}
+
+func TestTheProjectOfADirectoryIsTheNameOfTheOneItIsIn(t *testing.T) {
+	ws := &inDir{project: config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}}}
+
+	assert.Equal(t, "scc-operator", projectNameOf(ws))
+	assert.Equal(t, []string{"."}, ws.asked, "the one whose repository the directory is in")
+}
+
+func TestTheProjectOfADirectoryInNoneIsNothingAndSoIsAnyProblem(t *testing.T) {
+	for _, err := range []error{workspace.ErrNotProject, workspace.ErrNotFound, errors.New("no git here")} {
+		assert.Empty(t, projectNameOf(&inDir{err: err}), "%v", err)
+	}
 }

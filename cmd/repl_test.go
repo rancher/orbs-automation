@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/clicfg"
-
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -187,3 +187,60 @@ func (p *promptRecorder) ReadLine(prompt string) (string, error) {
 }
 
 func (*promptRecorder) Close() error { return nil }
+
+// replCmd is a command that runs the REPL on input, with settings that say it is a
+// capable terminal: runRepl is driven here without one.
+func replCmd(t *testing.T, s clicfg.Settings, input string) (*cobra.Command, *bytes.Buffer) {
+	t.Helper()
+	cmd := &cobra.Command{Use: "repl"}
+	cmd.SetContext(context.WithValue(context.Background(), settingsKey{}, s))
+	cmd.SetIn(strings.NewReader(input))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	return cmd, &out
+}
+
+func capable(prompt string) clicfg.Settings {
+	return clicfg.Settings{
+		Terminal:   clicfg.Terminal{StdinTTY: true, StdoutTTY: true, Cursor: true},
+		ReplPrompt: prompt,
+	}
+}
+
+func TestAnInvalidPromptTemplateStopsTheREPLBeforeItStartsAndNamesTheKey(t *testing.T) {
+	cmd, out := replCmd(t, capable("{branch}> "), "pwd\n")
+	var setenv []string
+	env := replEnv{getenv: func(string) string { return "" }, setenv: func(k, v string) error {
+		setenv = append(setenv, k+"="+v)
+		return nil
+	}}
+
+	err := runRepl(cmd, env)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "repl.prompt")
+	assert.Contains(t, err.Error(), "unknown placeholder {branch}")
+	assert.Empty(t, out.String(), "nothing ran")
+	assert.Empty(t, setenv, "the REPL did not start")
+}
+
+func TestTheREPLRunsLinesFromItsInputWithAValidTemplate(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	cmd, out := replCmd(t, capable(clicfg.DefaultReplPrompt), "pwd\nexit\n")
+	var setenv []string
+	env := replEnv{getenv: os.Getenv, setenv: func(k, v string) error {
+		setenv = append(setenv, k+"="+v)
+		return nil
+	}}
+
+	err := runRepl(cmd, env)
+
+	require.NoError(t, err)
+	wd, wdErr := os.Getwd()
+	require.NoError(t, wdErr)
+	assert.Contains(t, out.String(), wd)
+	assert.Equal(t, []string{"GERO_REPL=1"}, setenv)
+}
