@@ -38,7 +38,7 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `repo.defaultBranch` | `main` |
 | `release.branching` | `single` |
 | `release.tagPattern` | `"v*"` |
-| `release.tagScheme` | `semver`; only `perLineTag` may set another |
+| `release.tagScheme` | `semver`; `perLineTag` must set another, and no other branching may |
 | `release.requiresPrerelease` | off (opt-in) |
 | `release.lines` | `universal` |
 | `images` | one image named `repo.name`, in every registry (`dockerhub`, `prime-staging`, `prime-production`) |

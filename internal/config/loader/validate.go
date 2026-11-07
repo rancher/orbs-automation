@@ -190,8 +190,11 @@ func (v *validator) steward(where string, p config.Project) {
 	// config built by hand may not have been through it.
 	scheme := orDefault(p.Release.TagScheme, DefaultTagScheme)
 	v.oneOf(where, "release.tagScheme", scheme, config.TagSchemeSemver, config.TagSchemeCalverLineStage)
-	if scheme == config.TagSchemeCalverLineStage && !perLineTag {
+	switch {
+	case scheme != config.TagSchemeSemver && !perLineTag:
 		v.add("%s: release.tagScheme %q is for release.branching perLineTag", where, scheme)
+	case scheme == config.TagSchemeSemver && perLineTag:
+		v.add("%s: release.branching perLineTag needs a release.tagScheme that finds lines in tags, such as %s", where, config.TagSchemeCalverLineStage)
 	}
 }
 

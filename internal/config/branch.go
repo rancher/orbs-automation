@@ -20,9 +20,10 @@ func (p Project) Branch(l ProjectLine) (branch string, isDefault bool) {
 }
 
 // IsUniversal reports whether the Project is not tied to a Rancher line: it
-// lists no release.lines, and "universal" is the default (config/README.md).
+// lists no release.lines, and "universal" is the default (config/README.md). A
+// perLineTag project lists none and is not universal: its lines are in its tags.
 func (p Project) IsUniversal() bool {
-	return len(p.Release.Lines) == 0
+	return len(p.Release.Lines) == 0 && p.Release.Branching != BranchingPerLineTag
 }
 
 // ReleaseBranches returns the branches a release of the Project touches, once
