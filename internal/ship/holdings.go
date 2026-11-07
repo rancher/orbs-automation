@@ -23,6 +23,22 @@ type ConsumerHoldings struct {
 }
 
 // Holding is one consumer branch that releases of the project go to.
+//
+// TODO(release-state): two things gero repo status cannot say yet, both in
+// docs/specs/REPO_STATUS.md under Not built yet.
+//
+//  1. How many releases the branch is behind. Verdict says only newer, same or
+//     older. Count the producer's tags in the line's series that are newer than the
+//     version held (the version is in Current, which the strategy reads as the
+//     value, so it needs the strategy to hand back the version it found, as
+//     Check.Relation already compares them), using the tags resolveRoute has read
+//     (resolution.tags) and git.InSeries. See the TODO on git.LatestReleases for
+//     the per-series index to build once a second caller needs it.
+//  2. The open PR that bumps the branch, so "behind" can say a bump is proposed.
+//     gero ship finds it with pulls.Service (OpenForBase and OpenForHead) and the
+//     marker (ParseMarker, decidePublish in publish.go); reuse those, as a tier of
+//     its own behind a flag, since it costs a request for each branch and needs
+//     the token a private repository needs.
 type Holding struct {
 	// Line is the Rancher line of the consumer's branch, "" when it is in none.
 	Line   string `json:"line,omitempty"`

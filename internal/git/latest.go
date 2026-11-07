@@ -21,9 +21,9 @@ type Latest struct {
 }
 
 // TODO(release-state): this answers "what is newest" for one line or project.
-// Release-in-progress detection and consumer tracing in gero repo status also
-// need the tags between two releases (what has shipped since a version) and the
-// highest tag of each series at once. When a second caller needs them, return a
+// Telling how many releases a consumer is behind (see the TODO on ship.Holding and
+// docs/specs/REPO_STATUS.md) needs the tags between two releases (what has shipped
+// since a version) and the highest tag of each series at once. When a second caller needs them, return a
 // per-series index from one pass over the tags and not a call per line.
 
 // LatestReleases finds the highest stable and the highest prerelease tag among

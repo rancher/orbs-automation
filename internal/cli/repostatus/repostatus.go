@@ -77,6 +77,13 @@ type Status struct {
 
 // Options says which sections beyond the releases and the local clone to leave
 // out.
+//
+// TODO(release-state): a tier for the images a release publishes (the fourth
+// thing docs/specs/REPO_STATUS.md lists under Not built yet). It is an opt-in
+// flag like these, and a column or a line under Releases: the newest tag's
+// images as internal/registry.CheckProject reports them, which is what gero repo
+// images exist and gero ship already call. It costs a registry request for each
+// image and registry, so it is off by default.
 type Options struct {
 	NoConsumers bool // do not trace who has picked up what this project ships
 	NoSources   bool // do not trace what this project takes from others

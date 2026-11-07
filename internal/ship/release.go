@@ -29,6 +29,15 @@ type Release struct {
 	Stable bool   `json:"stable"`
 }
 
+// TODO(releasetag): ResolveRelease, latest and lineSeries below are release-line
+// policy that is pure, as is internal/git/releasetag, which holds the rest of it
+// (what a line's newest tag is, what it could have next, which tags it may not
+// have). Fold them in there, with their tests, and let ship call it, so a line's
+// "latest" has one definition for ship, repo tag and repo status. releasetag.Newest
+// is the any-kind newest; the stable-or-prerelease choice here is its sibling.
+// Do it as its own step, with the ship tests as the proof, since ErrNoRelease and
+// the accept rule are ship's own to keep. See docs/specs/REPO_STATUS.md.
+
 // ResolveRelease picks the release to ship from the producer's tags on the
 // host. arg is a tag, used as given; a release line of the producer, which
 // resolves to its latest tag; or empty, the producer's latest tag. A line or an
