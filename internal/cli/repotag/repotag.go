@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -72,6 +73,9 @@ type Options struct {
 	// Interactive says In is a terminal that the question can be asked on.
 	Interactive bool
 	In          io.Reader
+	// Style colors the text report and the question. Nil is plain, and so is a
+	// renderer built for a terminal without color; the JSON report is never styled.
+	Style *style.Renderer
 }
 
 // Result is what was done, as --json prints it.
@@ -137,6 +141,7 @@ func ParseArgs(args []string) (project, line, tag string) {
 // without one, and a push is git's, with the engineer's own credentials, so it is
 // the engineer that the host sees pushing the tag.
 func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
+	opts.Style = style.New(s.Terminal)
 	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, s.Output, s.DryRun, opts)
 }
 
@@ -257,7 +262,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 			}
 		}
 	}
-	return report(w, format, res)
+	return report(w, format, res, opts.Style)
 }
 
 // approve asks once, before anything is changed, to push the tag, unless --yes was
@@ -286,7 +291,8 @@ func approve(w io.Writer, format string, res Result, opts Options) error {
 }
 
 // report writes what was done.
-func report(w io.Writer, format string, res Result) error {
+func report(w io.Writer, format string, res Result, view *style.Renderer) error {
+	_ = view
 	if format == clicfg.OutputJSON {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")

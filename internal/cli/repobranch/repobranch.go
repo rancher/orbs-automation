@@ -17,6 +17,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -27,6 +28,9 @@ type Options struct {
 	Line    string // the release line, or a branch of the project
 	Name    string // the new branch
 	Switch  bool   // leave the checkout on the new branch
+	// Style colors the text report. Nil is plain, and so is a renderer built for a
+	// terminal without color; the JSON report is never styled.
+	Style *style.Renderer
 }
 
 // Result is what was done, as --json prints it.
@@ -67,6 +71,7 @@ func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts O
 		return fmt.Errorf("make a directory for a worktree: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
+	opts.Style = style.New(s.Terminal)
 	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, tmp, s.Output, s.DryRun, opts)
 }
 
@@ -123,7 +128,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
 	}
-	_, err = fmt.Fprint(w, render(res, len(work.Existing)))
+	_, err = fmt.Fprint(w, render(res, len(work.Existing), opts.Style))
 	return err
 }
 
@@ -149,7 +154,8 @@ func lineBranch(p config.Project, line string) (string, error) {
 }
 
 // render is the report in text.
-func render(r Result, existing int) string {
+func render(r Result, existing int, view *style.Renderer) string {
+	_ = view
 	short := r.Base[:min(len(r.Base), 8)]
 	switch {
 	case r.Existing:
