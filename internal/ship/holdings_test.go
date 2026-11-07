@@ -170,3 +170,49 @@ func TestHoldingsOfAProducerThatShipsNowhereAreNone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
+
+func TestSourcesAreWhatTheConsumerTakesFromEachProjectThatShipsToIt(t *testing.T) {
+	ws := withDevLine(loopFixture())
+	consumer := ws.links[0].Consumer
+
+	got, err := Sources(ctx, ws, consumer)
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	src := got[0]
+	assert.Equal(t, "rancher/scc-operator", src.Producer)
+	assert.Equal(t, "build-yaml-bump", src.Method)
+	assert.Empty(t, src.Error)
+	require.Len(t, src.Targets, 3, "the consumer's own branches")
+	var behind Holding
+	for _, h := range src.Targets {
+		if h.Branch == "release/v2.15" {
+			behind = h
+		}
+	}
+	assert.Equal(t, "rancher/scc-operator:v0.5.2", behind.Current)
+	require.NotNil(t, behind.Stable)
+	assert.Equal(t, "v0.5.3", behind.Stable.Tag)
+	assert.Equal(t, updatedispatcher.RelationNewer, behind.Stable.Relation)
+}
+
+func TestSourcesOfAProjectNothingShipsToAreNone(t *testing.T) {
+	ws := loopFixture()
+
+	got, err := Sources(ctx, ws, ws.producer)
+
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestSourcesASourceThatCannotBeTracedIsReportedWithItsError(t *testing.T) {
+	ws := loopFixture()
+	ws.refsErr = map[string]error{"rancher/scc-operator": errors.New("network down")}
+
+	got, err := Sources(ctx, ws, ws.links[0].Consumer)
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "rancher/scc-operator", got[0].Producer)
+	assert.Contains(t, got[0].Error, "network down")
+}
