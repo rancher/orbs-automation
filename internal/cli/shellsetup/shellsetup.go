@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/shellenv"
 )
 
@@ -34,6 +35,9 @@ type Options struct {
 	// In and Out are where the question is asked and answered.
 	In  io.Reader
 	Out io.Writer
+	// Terminal is what the terminal can do, for the look of the report and the
+	// question. The zero value has no color.
+	Terminal clicfg.Terminal
 	// Getenv and GOOS are the environment and runtime.GOOS.
 	Getenv func(string) string
 	GOOS   string

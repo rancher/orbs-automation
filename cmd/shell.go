@@ -64,7 +64,7 @@ changes the script without the profile being edited again. To do it by hand:
 			out, err := run(shellsetup.Options{
 				Shell: shell, Profile: profile, Yes: yes,
 				Interactive: termfacts.IsTerminal(os.Stdin), DryRun: settingsFrom(cmd).DryRun,
-				In: cmd.InOrStdin(), Out: cmd.OutOrStdout(),
+				In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), Terminal: settingsFrom(cmd).Terminal,
 				Getenv: os.Getenv, GOOS: runtime.GOOS,
 			})
 			if err != nil {
