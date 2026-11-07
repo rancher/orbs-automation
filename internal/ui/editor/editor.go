@@ -6,8 +6,16 @@
 package editor
 
 import (
+	"bufio"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/ergochat/readline"
 )
 
 // ErrInterrupt is returned by ReadLine when the person pressed Ctrl-C at the
@@ -30,12 +38,29 @@ type Complete func(line string) []string
 
 // NewPlain returns a Reader on in that writes the prompt to out and edits
 // nothing: the terminal's own line discipline is all there is.
-func NewPlain(in io.Reader, out io.Writer) Reader { return &plain{} }
+func NewPlain(in io.Reader, out io.Writer) Reader {
+	return &plain{sc: bufio.NewScanner(in), out: out}
+}
 
-type plain struct{}
+type plain struct {
+	sc  *bufio.Scanner
+	out io.Writer
+}
 
-func (*plain) ReadLine(string) (string, error) { return "", nil }
-func (*plain) Close() error                    { return nil }
+func (p *plain) ReadLine(prompt string) (string, error) {
+	if _, err := io.WriteString(p.out, prompt); err != nil {
+		return "", err
+	}
+	if !p.sc.Scan() {
+		if err := p.sc.Err(); err != nil {
+			return "", err
+		}
+		return "", io.EOF
+	}
+	return p.sc.Text(), nil // the scanner drops the newline, and a carriage return before it
+}
+
+func (*plain) Close() error { return nil }
 
 // Options are what the editor on a terminal is given.
 type Options struct {
@@ -48,13 +73,71 @@ type Options struct {
 }
 
 // New returns the Reader for a terminal: line editing, history and completion.
-func New(o Options) (Reader, error) { return NewPlain(o.In, o.Out), nil }
+// When what it reads is not a terminal it reads lines as they come and writes no
+// escape, so it can be driven without one.
+func New(o Options) (Reader, error) {
+	cfg := &readline.Config{
+		Stdin:           io.NopCloser(o.In), // the editor does not close the terminal's input
+		Stdout:          o.Out,
+		Stderr:          o.Out,
+		InterruptPrompt: "^C",
+		EOFPrompt:       "^D",
+	}
+	if o.HistoryFile != "" {
+		if err := os.MkdirAll(filepath.Dir(o.HistoryFile), 0o700); err != nil {
+			return nil, fmt.Errorf("make the directory of the history file: %w", err)
+		}
+		cfg.HistoryFile = o.HistoryFile
+	}
+	if o.Complete != nil {
+		cfg.AutoComplete = completer(o.Complete)
+	}
+	rl, err := readline.NewFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &terminal{rl: rl}, nil
+}
+
+type terminal struct{ rl *readline.Instance }
+
+func (t *terminal) ReadLine(prompt string) (string, error) {
+	t.rl.SetPrompt(prompt)
+	line, err := t.rl.ReadLine()
+	return line, translate(err)
+}
+
+func (t *terminal) Close() error { return t.rl.Close() }
+
+// completer is the editor's way of asking for completions.
+type completer Complete
+
+func (c completer) Do(line []rune, pos int) ([][]rune, int) {
+	return completions(line, pos, Complete(c))
+}
 
 // completions adapts a Complete to what the editor asks: the suffixes that finish
-// the word before pos, and the length of the word they finish.
+// the word before pos, and the length of the word they finish. A word is what
+// follows the last blank before pos.
 func completions(line []rune, pos int, complete Complete) (suffixes [][]rune, length int) {
-	return nil, 0
+	if complete == nil {
+		return nil, 0
+	}
+	pos = min(max(pos, 0), len(line))
+	before := string(line[:pos])
+	word := before[strings.LastIndexAny(before, " \t")+1:]
+	for _, candidate := range complete(before) {
+		if rest, ok := strings.CutPrefix(candidate, word); ok {
+			suffixes = append(suffixes, []rune(rest))
+		}
+	}
+	return suffixes, utf8.RuneCountInString(word)
 }
 
 // translate turns the editor library's errors into ours.
-func translate(err error) error { return err }
+func translate(err error) error {
+	if errors.Is(err, readline.ErrInterrupt) {
+		return ErrInterrupt
+	}
+	return err
+}
