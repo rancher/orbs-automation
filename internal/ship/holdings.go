@@ -172,8 +172,19 @@ type SourceHoldings struct {
 // source's latest stable release and its newest. Only this consumer is read, and
 // not the others the source also ships to. A source that cannot be traced has its
 // Error set and does not stop the others. A project nothing ships to has none.
-//
-// STUB: traces nothing until a later commit.
 func Sources(ctx context.Context, ws Reader, consumer config.Project) ([]SourceHoldings, error) {
-	return nil, nil
+	engine, engineErr := ws.Updates()
+	if engine == nil {
+		return nil, engineErr
+	}
+	routes := engine.RoutesInto(consumer)
+	if len(routes) == 0 {
+		return nil, engineErr
+	}
+	out := make([]SourceHoldings, len(routes))
+	for i, in := range routes {
+		held := holdRoute(ctx, ws, engine, in.Producer, in.Route)
+		out[i] = SourceHoldings{Producer: in.Producer.Repo.Name, Name: in.Producer.Name, Method: held.Method, Error: held.Error, Targets: held.Targets}
+	}
+	return out, nil
 }
