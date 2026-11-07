@@ -23,6 +23,7 @@ import (
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/steprun"
 	"github.com/rancher/orbs-automation/internal/ui"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -115,7 +116,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
 		}
 	}
-	return runTo(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, inputFrom(s, opts), opts.Preview)
+	return runToStyled(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Checker{}, ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
 }
 
 // inputFrom is what the user asked for, from the flags and the settings. The
@@ -150,6 +151,13 @@ func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, e
 // document at the end in json. Errors that come after the check (no clone, a
 // failed target, a blocked release) are returned after the report is written.
 func runTo(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) error {
+	return runToStyled(ctx, w, log, ws, prober, ex, format, in, full, style.Plain())
+}
+
+// runToStyled is runTo with the text report styled by st. The JSON report is
+// never styled.
+func runToStyled(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool, st *style.Renderer) error {
+	_ = st
 	if err := checkFormat(format); err != nil {
 		return err
 	}
@@ -221,6 +229,12 @@ func failedErr(p domain.Plan) error {
 }
 
 func renderText(p domain.Plan, full bool) string {
+	return renderTextStyled(p, full, style.Plain())
+}
+
+// renderTextStyled is renderText with the report styled by st.
+func renderTextStyled(p domain.Plan, full bool, st *style.Renderer) string {
+	_ = st
 	var buf bytes.Buffer
 	stream := ui.NewStream(&buf)
 	sink := newHumanSink(stream, full)
