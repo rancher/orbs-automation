@@ -95,11 +95,11 @@ func TestCalverALineWhoseDevTagsAreOlderThanItsReleaseHasNoPrerelease(t *testing
 }
 
 func TestCalverALineWithOnlyDevTagsHasNoStableAndItsNewestDevAsPrerelease(t *testing.T) {
-	got := calverFor(t).Latest(tags("v2.17-20261105T0800Z-dev", "v2.17-20261104T0800Z-dev"), "v2.17")
+	got := calverFor(t).Latest(tags("v2.16-20261105T0800Z-dev", "v2.16-20261104T0800Z-dev"), "v2.16")
 
 	assert.Nil(t, got.Stable)
 	require.NotNil(t, got.Prerelease)
-	assert.Equal(t, "v2.17-20261105T0800Z-dev", got.Prerelease.Name)
+	assert.Equal(t, "v2.16-20261105T0800Z-dev", got.Prerelease.Name)
 }
 
 func TestCalverLatestOfEveryLineIsTheNewestByDate(t *testing.T) {

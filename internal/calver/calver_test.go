@@ -94,20 +94,6 @@ func TestSelectOfALineOrStageWithNoTagsIsEmpty(t *testing.T) {
 	assert.Empty(t, Select(LineStage{}, nil, "v2.16", "dev"))
 }
 
-func TestLinesAreTheOnesTagsCarryNewestFirst(t *testing.T) {
-	assert.Equal(t, []string{"v2.16", "v2.15", "v2.14"}, Lines(LineStage{}, assetsTags))
-}
-
-func TestLinesSortByNumberAndNotAsText(t *testing.T) {
-	got := Lines(LineStage{}, []string{"v2.9-20250101T0000Z", "v2.10-20250601T0000Z", "v2.9-20250201T0000Z"})
-	assert.Equal(t, []string{"v2.10", "v2.9"}, got)
-}
-
-func TestLinesOfNoReleasesIsEmpty(t *testing.T) {
-	assert.Empty(t, Lines(LineStage{}, []string{"v2.16", "main"}))
-	assert.Empty(t, Lines(LineStage{}, nil))
-}
-
 func TestRegistry(t *testing.T) {
 	s, err := Builtin().Get("calverLineStage")
 	require.NoError(t, err)

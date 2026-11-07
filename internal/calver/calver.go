@@ -128,19 +128,3 @@ func Select(s Scheme, names []string, line, stage string) []Tag {
 	slices.SortFunc(out, func(a, b Tag) int { return s.Compare(b, a) })
 	return out
 }
-
-// Lines returns the lines the tags among names carry, newest line first.
-func Lines(s Scheme, names []string) []string {
-	var out []string
-	for _, name := range names {
-		if t, ok := s.Parse(name); ok && !slices.Contains(out, t.Line) {
-			out = append(out, t.Line)
-		}
-	}
-	// A line is a number, so v2.10 is after v2.9, which text order would not give.
-	slices.SortFunc(out, func(a, b string) int {
-		c, _ := config.CompareLines(b, a)
-		return c
-	})
-	return out
-}

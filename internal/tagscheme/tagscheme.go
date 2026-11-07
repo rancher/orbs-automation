@@ -8,6 +8,7 @@ package tagscheme
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/calver"
@@ -52,7 +53,7 @@ func For(p config.Project) (Scheme, error) {
 	if err != nil {
 		return nil, fmt.Errorf("project %s: %w", p.Name, err)
 	}
-	return calverScheme{inner: inner}, nil
+	return calverScheme{project: p, inner: inner}, nil
 }
 
 // semverScheme is the scheme of a project with per-line branches, and the default:
@@ -121,7 +122,8 @@ func (semverScheme) Compare(a, b string) int {
 // calverScheme is the scheme of a project that finds its lines in its tags, over a
 // scheme of internal/calver. A prerelease is a tag of the dev stage.
 type calverScheme struct {
-	inner calver.Scheme
+	project config.Project
+	inner   calver.Scheme
 }
 
 func (c calverScheme) Name() string { return c.inner.Name() }
@@ -131,7 +133,15 @@ func (c calverScheme) Valid(tag string) bool {
 	return ok
 }
 
-func (c calverScheme) Lines(tags []git.Tag) []string { return calver.Lines(c.inner, names(tags)) }
+// Lines are the lines the config lists, whatever the tags carry: the project is
+// used for those lines and not for the others its repository has tags of.
+func (c calverScheme) Lines([]git.Tag) []string {
+	var lines []string
+	for _, l := range c.project.Release.Lines {
+		lines = append(lines, l.Line)
+	}
+	return lines
+}
 
 func (c calverScheme) LineOf(tag string) string {
 	t, _ := c.inner.Parse(tag)
@@ -142,9 +152,12 @@ func (c calverScheme) LineOf(tag string) string {
 // when it is strictly newer than that: a dev tag of the same minute as a release,
 // which is the same commit, is not a newer one.
 func (c calverScheme) Latest(tags []git.Tag, line string) git.Latest {
-	lines := []string{line}
-	if line == "" {
-		lines = c.Lines(tags)
+	lines := c.Lines(tags)
+	if line != "" {
+		if !slices.Contains(lines, line) {
+			return git.Latest{}
+		}
+		lines = []string{line}
 	}
 	release := c.newest(tags, lines, config.StageRelease)
 	dev := c.newest(tags, lines, config.StageDev)

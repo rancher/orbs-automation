@@ -12,16 +12,20 @@ import (
 
 // assetsFixture is rancher-assets as the config has it: not owned, one branch, its
 // lines and stages in CalVer tags, and an edge to Rancher's build-yaml-bump for
-// defaultAssetsImage. Rancher holds a dev tag on v2.16's branch and a release tag
-// on v2.15's.
+// defaultAssetsImage. The project lists v2.16 and v2.15; v2.14 has a tag and a
+// Rancher branch with no such key. Rancher holds a dev tag on v2.16's branch and a
+// release tag on v2.15's.
 func assetsFixture() *fakeWorkspace {
 	producer := config.Project{
 		Name: "rancher-assets", Repo: config.Repo{Name: "rancher/rancher-assets", ManagedBy: "release-team", DefaultBranch: "main"},
-		Release: config.Release{Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*"},
-		Images:  []config.Image{{Name: "rancher/rancher-assets"}},
+		Release: config.Release{
+			Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*",
+			Lines: []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}},
+		},
+		Images: []config.Image{{Name: "rancher/rancher-assets"}},
 	}
 	l := riLink("yamlBump")
-	l.Consumer.Release.Lines = []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"}}
+	l.Consumer.Release.Lines = []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}
 	l.Edge.Params = map[string]string{"updateKey": "defaultAssetsImage", "value": "{image}:{tag}"}
 	return &fakeWorkspace{
 		producer: producer,
@@ -31,7 +35,7 @@ func assetsFixture() *fakeWorkspace {
 				"v2.16-20261030T1111Z-dev", "v2.16-20261101T0900Z-dev", "v2.16-20261029T0000Z",
 				"v2.15-20260915T1243Z", "v2.15-20260915T1243Z-dev", "v2.14-20260401T1000Z", "main-abc1234",
 			)},
-			"rancher/rancher": {Branches: []git.Branch{{Name: "main", Commit: "sha-main"}, {Name: "release/v2.15", Commit: "sha-215"}}},
+			"rancher/rancher": {Branches: []git.Branch{{Name: "main", Commit: "sha-main"}, {Name: "release/v2.15", Commit: "sha-215"}, {Name: "release/v2.14", Commit: "sha-214"}}},
 		},
 		files: map[string]string{
 			"rancher/rancher@sha-main:build.yaml": "defaultAssetsImage: rancher/rancher-assets:v2.16-20261030T1111Z-dev\n",
@@ -40,14 +44,14 @@ func assetsFixture() *fakeWorkspace {
 	}
 }
 
-func TestHoldingsOfAnAssetsProducerFollowTheLinesFoundInItsTags(t *testing.T) {
+func TestHoldingsOfAnAssetsProducerFollowTheLinesItListsThatRancherHas(t *testing.T) {
 	got, err := holdings(t, assetsFixture())
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Empty(t, got[0].Error)
 	hs := byBranch(t, got[0])
-	require.Len(t, hs, 2, "the lines both have: v2.14 is in the tags and not in Rancher's lines")
+	require.Len(t, hs, 2, "the lines both list: v2.14 is in Rancher's lines and has tags, and Assets is not used for it")
 	assert.Equal(t, "v2.16", hs["main"].Line)
 	assert.Equal(t, "v2.15", hs["release/v2.15"].Line)
 	assert.Equal(t, "rancher/rancher-assets:v2.16-20261030T1111Z-dev", hs["main"].Current)
