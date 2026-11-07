@@ -77,9 +77,22 @@ func TestSectionHeadingsAreHeadings(t *testing.T) {
 
 	out := renderTextStyled(styledPlans()["committed"], false, st)
 
-	for _, heading := range []string{"Targets", "Images", "PR", "Results", "Review:"} {
+	for _, heading := range []string{"Targets", "PR", "Results", "Review:"} {
 		assert.Contains(t, out, st.Style(style.Heading, heading), heading)
 	}
+}
+
+func TestARunStylesTheImagesSectionAndItsStatuses(t *testing.T) {
+	st := colored()
+	var out bytes.Buffer
+
+	err := runToStyled(context.Background(), &out, nil, readyWorkspace(),
+		fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false, st)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), st.Style(style.Heading, "Images"))
+	assert.Contains(t, out.String(), st.Style(style.OK, "found"))
+	assert.Contains(t, out.String(), st.Style(style.Dim, "IMAGE"), "column heads are secondary text")
 }
 
 func TestResultsAndTargetsTakeTheColorOfTheirStatus(t *testing.T) {

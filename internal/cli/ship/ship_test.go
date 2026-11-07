@@ -564,7 +564,7 @@ func TestRunToShowsTheBranchesBeforeTheSlowImageCheck(t *testing.T) {
 	var out bytes.Buffer
 	var seen string
 
-	err := runTo(context.Background(), &out, nil, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputText, in, false)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
 	assert.Contains(t, seen, "Ship rancher/scc-operator", "the title was already written")
@@ -578,7 +578,7 @@ func TestRunToTextIsTheReportRunWithReturns(t *testing.T) {
 	ws, prober := readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, nil, ws, prober, nil, clicfg.OutputText, in, false)
+	err := runPlain(context.Background(), &out, nil, ws, prober, nil, clicfg.OutputText, in)
 	want, wantErr := runWith(context.Background(), ws, prober, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
@@ -590,7 +590,7 @@ func TestRunToJSONIsOneDocumentAtTheEnd(t *testing.T) {
 	var out bytes.Buffer
 	var seen string
 
-	err := runTo(context.Background(), &out, nil, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputJSON, in, false)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), observingProber{out: &out, seen: &seen}, nil, clicfg.OutputJSON, in)
 
 	require.NoError(t, err)
 	assert.Empty(t, seen, "nothing was written while the run was going")
@@ -602,7 +602,7 @@ func TestRunToJSONIsOneDocumentAtTheEnd(t *testing.T) {
 func TestRunToReturnsTheErrorAfterTheReport(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in, false)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in)
 
 	require.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out.String(), "status  blocked", "the report was written first")
@@ -612,7 +612,7 @@ func TestRunToLogsTheEventsBesideTheTextReport(t *testing.T) {
 	var out, logs bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	err := runTo(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false)
+	err := runPlain(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "Targets", "the report is still written")
@@ -625,7 +625,7 @@ func TestRunToLogsTheEventsAndKeepsJSONOnStdoutAsOneDocument(t *testing.T) {
 	var out, logs bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	err := runTo(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in, false)
+	err := runPlain(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in)
 
 	require.NoError(t, err)
 	var plan domain.Plan
@@ -637,7 +637,7 @@ func TestRunToLogsTheEventsAndKeepsJSONOnStdoutAsOneDocument(t *testing.T) {
 func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
 }
@@ -795,8 +795,8 @@ func declining() *domain.Executor {
 func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-		declining(), clicfg.OutputText, in, false)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		declining(), clicfg.OutputText, in)
 
 	require.ErrorIs(t, err, domain.ErrDeclined)
 	assert.Contains(t, out.String(), "v2.16: a new PR", "what it was going to do was shown before it asked")
@@ -806,8 +806,8 @@ func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
 func TestRunToADeclinedRunInJSONStillWritesThePlan(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
-		declining(), clicfg.OutputJSON, in, false)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		declining(), clicfg.OutputJSON, in)
 
 	require.ErrorIs(t, err, domain.ErrDeclined)
 	var plan domain.Plan
@@ -818,8 +818,8 @@ func TestRunToADeclinedRunInJSONStillWritesThePlan(t *testing.T) {
 func TestRunToAnErrorBeforeAnyPlanIsJustTheError(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, nil, &fakeWorkspace{err: errors.New("no such project")}, fakeProber{},
-		nil, clicfg.OutputJSON, in, false)
+	err := runPlain(context.Background(), &out, nil, &fakeWorkspace{err: errors.New("no such project")}, fakeProber{},
+		nil, clicfg.OutputJSON, in)
 
 	require.Error(t, err)
 	assert.Empty(t, out.String(), "no document for a run that never made a plan")

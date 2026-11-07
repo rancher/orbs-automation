@@ -136,28 +136,21 @@ func checkFormat(format string) error {
 	return nil
 }
 
-// runWith is runTo, with the report returned as a string.
+// runWith is runToStyled with no color, with the report returned as a string.
 func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input) (string, error) {
 	var buf bytes.Buffer
-	err := runTo(ctx, &buf, nil, ws, prober, ex, format, in, false)
+	err := runToStyled(ctx, &buf, nil, ws, prober, ex, format, in, false, style.Plain())
 	return buf.String(), err
 }
 
-// runTo checks the state and, with an executor, makes the commits; nil is a
-// check only. The events of the run are also logged to log, when it is not nil,
-// whatever the format, so a JSON handler on stderr gives machine-readable
-// progress beside either report.
-// The report is written to w as the run goes in text, and as one
-// document at the end in json. Errors that come after the check (no clone, a
-// failed target, a blocked release) are returned after the report is written.
-func runTo(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool) error {
-	return runToStyled(ctx, w, log, ws, prober, ex, format, in, full, style.Plain())
-}
-
-// runToStyled is runTo with the text report styled by st. The JSON report is
-// never styled.
+// runToStyled checks the state and, with an executor, makes the commits; nil is
+// a check only. The events of the run are also logged to log, when it is not
+// nil, whatever the format, so a JSON handler on stderr gives machine-readable
+// progress beside either report. The report is written to w as the run goes in
+// text, styled by st, and as one document at the end in json, which is never
+// styled. Errors that come after the check (no clone, a failed target, a
+// blocked release) are returned after the report is written.
 func runToStyled(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool, st *style.Renderer) error {
-	_ = st
 	if err := checkFormat(format); err != nil {
 		return err
 	}
@@ -166,8 +159,8 @@ func runToStyled(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.W
 		fan    sinks
 	)
 	if format == clicfg.OutputText {
-		stream = ui.NewStream(w)
-		fan = append(fan, newHumanSink(stream, full))
+		stream = ui.NewStream(w, ui.WithWidth(st.Width))
+		fan = append(fan, newStyledSink(stream, full, st))
 	}
 	if log != nil {
 		fan = append(fan, logSink{log})
@@ -234,10 +227,9 @@ func renderText(p domain.Plan, full bool) string {
 
 // renderTextStyled is renderText with the report styled by st.
 func renderTextStyled(p domain.Plan, full bool, st *style.Renderer) string {
-	_ = st
 	var buf bytes.Buffer
-	stream := ui.NewStream(&buf)
-	sink := newHumanSink(stream, full)
+	stream := ui.NewStream(&buf, ui.WithWidth(st.Width))
+	sink := newStyledSink(stream, full, st)
 	for _, e := range replay(p) {
 		sink.Event(e)
 	}
