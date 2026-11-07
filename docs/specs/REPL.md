@@ -1,6 +1,6 @@
 # REPL
 
-**Status:** draft. Step 1 of the build order is built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `exit` and the working directory); there is no `gero repl` command yet.
+**Status:** draft. Step 1 of the build order is built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `exit` and the working directory); `gero repl` runs it, with the plain reader, behind the start checks.
 
 `gero repl` is an interactive prompt that runs `gero` commands one line at a time, with a few shell-like commands of its own so a user has less reason to leave it. It is not a shell: it is started from one, and exiting returns to it. The goal is fewer trips out, not a replacement for the user's shell.
 
@@ -101,7 +101,7 @@ The REPL loop, the REPL-only commands and the shell hand-off are in `internal/cl
 
 ## Not built yet
 
-Step 1 exists as the core only: `Session`, `Split`, `Exec` and `Loop`, with the runner and the project lookup of `ls` injected. The `gero repl` command in `cmd/`, which needs the tree built for each line, the TTY refusals and the real runner, is not written. In the order it is meant to land, stopping when users stop leaving:
+Step 1 is built: the core (`Session`, `Split`, `Exec`, `Loop`, with the runner and the project lookup of `ls` injected) and the `gero repl` command in `cmd/`, which makes the start checks, builds the tree for each line (`newRootCmd`), carries the global flags given to `gero repl` into every line, and turns Ctrl-C into a cancel of the running line. The REPL sets `GERO_REPL` in its own process, so a `repl` line typed at the prompt is refused. The terminal path has been run only under tests: the unit tests drive the line runner, and a real prompt has not been tried by hand. `help` is not yet its own command, `!` is deferred, and an unknown name gets cobra's error and not a suggestion of `!`. In the order it is meant to land, stopping when users stop leaving:
 
 1. The loop, `pwd`, `ls` and `exit`, with the working directory as state.
 2. `cd <project>`.
