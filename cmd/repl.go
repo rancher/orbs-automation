@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/cdpath"
 	"github.com/rancher/orbs-automation/internal/cli/repl"
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/spf13/cobra"
 )
 
@@ -108,4 +109,14 @@ func lineRunner(base []string, in io.Reader, out, errOut io.Writer) repl.Runner 
 		root.SetArgs(append(append([]string{}, base...), args...))
 		return root.ExecuteContext(ctx)
 	}
+}
+
+// treeComplete is what the command tree completes after words, for the word
+// being typed: cobra's own answer, the one gero shell install completes from in
+// a shell, taken from a tree built for the question.
+func treeComplete(words []string, toComplete string) []string { return nil }
+
+// replCompletion is the completion of a line typed at the REPL of sess.
+func replCompletion(s clicfg.Settings, sess *repl.Session) repl.Completion {
+	return repl.Completion{}
 }

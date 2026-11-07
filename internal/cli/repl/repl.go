@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui/editor"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
@@ -242,6 +243,9 @@ func Loop(ctx context.Context, r editor.Reader, out, errOut io.Writer, s *Sessio
 		}
 	}
 }
+
+// UseTerminal sets how the prompt looks from what the terminal can do.
+func (s *Session) UseTerminal(t clicfg.Terminal) {}
 
 // prompt is what is shown before each line: the default prompt, in the look of
 // a prompt when the terminal has color. The space after it is not styled, so
