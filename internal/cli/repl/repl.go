@@ -222,11 +222,13 @@ func (s *Session) projectDir(key string) (string, error) {
 func Loop(ctx context.Context, r editor.Reader, out, errOut io.Writer, s *Session) error {
 	for {
 		line, err := r.ReadLine(s.prompt())
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				_, werr := io.WriteString(out, "\n")
-				return werr
-			}
+		switch {
+		case errors.Is(err, io.EOF):
+			_, werr := io.WriteString(out, "\n")
+			return werr
+		case errors.Is(err, editor.ErrInterrupt):
+			continue // Ctrl-C clears the line, and is never the way out
+		case err != nil:
 			return err
 		}
 		exit, err := s.Exec(ctx, out, line)
@@ -242,12 +244,18 @@ func Loop(ctx context.Context, r editor.Reader, out, errOut io.Writer, s *Sessio
 }
 
 // prompt is what is shown before each line: the default prompt, in the look of
-// a prompt when the terminal has color.
-func (s *Session) prompt() string { return Prompt() }
+// a prompt when the terminal has color. The space after it is not styled, so
+// nothing of the style reaches what is typed, and it stays one line of plain
+// text and complete SGR escapes, which is all the editor measures
+// (docs/specs/REPL.md).
+func (s *Session) prompt() string {
+	text := strings.TrimSuffix(Prompt(), " ")
+	return s.Style.Style(style.Prompt, text) + " "
+}
 
 // NewReader is the line reader for gero repl on a terminal: line editing, history
 // kept in historyFile (none when empty) and completion with complete (none when
 // nil).
 func NewReader(in io.Reader, out io.Writer, historyFile string, complete editor.Complete) (editor.Reader, error) {
-	return editor.NewPlain(in, out), nil
+	return editor.New(editor.Options{In: in, Out: out, HistoryFile: historyFile, Complete: complete})
 }
