@@ -7,6 +7,9 @@
 package tagscheme
 
 import (
+	"fmt"
+
+	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/semver"
@@ -35,9 +38,17 @@ type Scheme interface {
 	Compare(a, b string) int
 }
 
-// For returns the scheme of a project.
+// For returns the scheme of a project: the one release.tagScheme names for a
+// perLineTag project, and semver for every other.
 func For(p config.Project) (Scheme, error) {
-	return semverScheme{project: p}, nil
+	if p.Release.Branching != config.BranchingPerLineTag {
+		return semverScheme{project: p}, nil
+	}
+	inner, err := calver.Builtin().Get(p.Release.TagScheme)
+	if err != nil {
+		return nil, fmt.Errorf("project %s: %w", p.Name, err)
+	}
+	return calverScheme{inner: inner}, nil
 }
 
 // semverScheme is the scheme of a project with per-line branches, and the default:
@@ -100,3 +111,23 @@ func (semverScheme) Compare(a, b string) int {
 	}
 	return semver.Compare(x, y)
 }
+
+// calverScheme is the scheme of a project that finds its lines in its tags, over a
+// scheme of internal/calver. A prerelease is a tag of the dev stage.
+type calverScheme struct {
+	inner calver.Scheme
+}
+
+func (c calverScheme) Name() string { return c.inner.Name() }
+
+func (calverScheme) Valid(string) bool { return false }
+
+func (calverScheme) Lines([]git.Tag) []string { return nil }
+
+func (calverScheme) LineOf(string) string { return "" }
+
+func (calverScheme) Latest([]git.Tag, string) git.Latest { return git.Latest{} }
+
+func (calverScheme) IsStable(string) bool { return false }
+
+func (calverScheme) Compare(_, _ string) int { return 0 }
