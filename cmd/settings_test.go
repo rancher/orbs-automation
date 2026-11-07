@@ -70,6 +70,12 @@ func TestFlagLookup(t *testing.T) {
 		{"-vv is debug", []string{"-vv"}, "log", "debug", true},
 		{"-v -v is debug", []string{"-v", "-v"}, "log", "debug", true},
 		{"-vvv stays debug", []string{"-vvv"}, "log", "debug", true},
+		{"no color flags leaves color unset", nil, "color", "", false},
+		{"color", []string{"--color", "always"}, "color", "always", true},
+		{"no-color is color never", []string{"--no-color"}, "color", "never", true},
+		{"explicit color beats no-color", []string{"--no-color", "--color", "always"}, "color", "always", true},
+		{"explicit auto beats no-color", []string{"--color=auto", "--no-color"}, "color", "auto", true},
+		{"no-color=false is not never", []string{"--no-color=false"}, "color", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -230,4 +236,20 @@ func TestLinesResolveTakesAHubAndPhases(t *testing.T) {
 
 	assert.NotNil(t, resolve.Flags().Lookup("hub"))
 	assert.NotNil(t, resolve.Flags().Lookup("phase"))
+}
+
+func TestLoadSettingsNoColorTurnsTheTerminalOff(t *testing.T) {
+	old := terminalFacts
+	t.Cleanup(func() { terminalFacts = old })
+	terminalFacts = func() clicfg.Facts { return clicfg.Facts{StdinTTY: true, StdoutTTY: true} }
+	e := map[string]string{"TERM": "xterm-256color"}
+
+	on := flagged(t)
+	require.NoError(t, loadSettings(env(e), t.TempDir())(on, nil))
+	off := flagged(t, "--no-color")
+	require.NoError(t, loadSettings(env(e), t.TempDir())(off, nil))
+
+	assert.Equal(t, clicfg.Profile256, settingsFrom(on).Terminal.Profile, "on by default at a capable terminal")
+	assert.Equal(t, clicfg.ProfileNone, settingsFrom(off).Terminal.Profile)
+	assert.Equal(t, clicfg.ColorNever, settingsFrom(off).Color)
 }

@@ -275,3 +275,31 @@ func TestRenderResolveHintStaysOutOfMachineFormats(t *testing.T) {
 		assert.NotContains(t, out, "config resolve", format)
 	}
 }
+
+func TestEntriesShowColorAndWhereItCameFrom(t *testing.T) {
+	tests := []struct {
+		name  string
+		file  string
+		env   map[string]string
+		flags map[string]string
+		want  Entry
+	}{
+		{"default is auto", "", nil, nil, Entry{"color", "auto", "default"}},
+		{"file", "color: never\n", nil, nil, Entry{"color", "never", "file"}},
+		{"env", "", map[string]string{"GERO_COLOR": "always"}, nil, Entry{"color", "always", "env"}},
+		{"flag", "", nil, map[string]string{"color": "never"}, Entry{"color", "never", "flag"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), workspace.ConfigDir{}))
+
+			assert.Equal(t, tt.want, got["color"])
+		})
+	}
+}
+
+func TestRenderEnvHasColor(t *testing.T) {
+	out := renderEnv(Entries(load(t, "color: never\n", nil, nil), workspace.ConfigDir{}))
+
+	assert.Contains(t, out, "GERO_COLOR=never\n")
+}

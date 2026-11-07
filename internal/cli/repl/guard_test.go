@@ -96,3 +96,16 @@ func TestTheLineSeesTheParentContext(t *testing.T) {
 
 	assert.ErrorIs(t, err, context.Canceled)
 }
+
+// The terminal says whether it can move the cursor, and the REPL takes its word
+// for it: clicfg reads TERM once, and nothing here looks again.
+func TestRefuseTakesCursorControlFromTheTerminal(t *testing.T) {
+	tty := clicfg.Terminal{StdinTTY: true, StdoutTTY: true}
+
+	err := Refuse(env(map[string]string{"TERM": "xterm"}), tty, false)
+	require.Error(t, err, "the terminal cannot do cursor control, whatever TERM says here")
+	assert.Contains(t, err.Error(), "cursor")
+
+	tty.Cursor = true
+	assert.NoError(t, Refuse(env(nil), tty, false), "and when it can, TERM is not read again")
+}

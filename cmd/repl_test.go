@@ -83,7 +83,7 @@ func TestReplRefusesInCI(t *testing.T) {
 
 func TestBaseFlagsCarriesWhatWasGivenToRepl(t *testing.T) {
 	root := newRootCmd()
-	root.SetArgs([]string{"repl", "--dry-run", "--config-dir", "/cfg", "-vv"})
+	root.SetArgs([]string{"repl", "--dry-run", "--config-dir", "/cfg", "-vv", "--color", "never", "--no-color"})
 	var got []string
 	for _, c := range root.Commands() {
 		if c.Name() == "repl" {
@@ -94,7 +94,7 @@ func TestBaseFlagsCarriesWhatWasGivenToRepl(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 
-	assert.Equal(t, []string{"--config-dir=/cfg", "--dry-run=true", "--verbose=2"}, got)
+	assert.Equal(t, []string{"--config-dir=/cfg", "--color=never", "--no-color=true", "--dry-run=true", "--verbose=2"}, got)
 }
 
 // A renamed global flag must be renamed in globalFlags, or it would not reach
