@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // ErrNeedsApproval is returned when the run is going to push and open PRs, and
@@ -70,7 +71,8 @@ func differ(n int) string {
 // yes without asking. Without a terminal it is an error, so a forgotten flag in
 // CI is a loud failure and not a hang or a silent yes. Otherwise it writes the
 // question to out and reads the answer from in, and only y or yes is yes.
-func confirmer(in io.Reader, out io.Writer, interactive, yes bool) func(context.Context, domain.Confirmation) (bool, error) {
+func confirmer(in io.Reader, out io.Writer, interactive, yes bool, st *style.Renderer) func(context.Context, domain.Confirmation) (bool, error) {
+	_ = st
 	return func(_ context.Context, c domain.Confirmation) (bool, error) {
 		if yes {
 			return true, nil

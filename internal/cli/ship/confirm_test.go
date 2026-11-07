@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,7 @@ func TestQuestionWithNothingToOpenIsAboutTheClosing(t *testing.T) {
 func TestConfirmerYesSaysYesWithoutAsking(t *testing.T) {
 	var out bytes.Buffer
 
-	ok, err := confirmer(strings.NewReader(""), &out, false, true)(context.Background(), opening("main"))
+	ok, err := confirmer(strings.NewReader(""), &out, false, true, style.Plain())(context.Background(), opening("main"))
 
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -64,7 +65,7 @@ func TestConfirmerYesSaysYesWithoutAsking(t *testing.T) {
 func TestConfirmerWithoutATerminalIsAnErrorNotASilentYes(t *testing.T) {
 	var out bytes.Buffer
 
-	ok, err := confirmer(strings.NewReader("y\n"), &out, false, false)(context.Background(), opening("main"))
+	ok, err := confirmer(strings.NewReader("y\n"), &out, false, false, style.Plain())(context.Background(), opening("main"))
 
 	require.ErrorIs(t, err, ErrNeedsApproval)
 	assert.False(t, ok)
@@ -78,7 +79,7 @@ func TestConfirmerAsksOnTheTerminalAndOnlyYesIsYes(t *testing.T) {
 	} {
 		var out bytes.Buffer
 
-		ok, err := confirmer(strings.NewReader(answer), &out, true, false)(context.Background(), opening("main"))
+		ok, err := confirmer(strings.NewReader(answer), &out, true, false, style.Plain())(context.Background(), opening("main"))
 
 		require.NoError(t, err, "%q", answer)
 		assert.Equal(t, want, ok, "%q", answer)

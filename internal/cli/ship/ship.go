@@ -105,7 +105,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 				return err
 			}
 			ex.Publish = &domain.Publisher{Git: domain.GitCLI{}, Remote: remote}
-			ex.Confirm = confirmer(opts.In, w, opts.Interactive, opts.Yes)
+			ex.Confirm = confirmer(opts.In, w, opts.Interactive, opts.Yes, style.New(s.Terminal))
 		case s.DryRun && errors.Is(err, github.ErrNoToken):
 			// A dry run can still say what it would commit; it just cannot look at
 			// the open PRs without a token.
