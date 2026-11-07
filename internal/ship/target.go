@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
@@ -55,13 +54,9 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 		tp.Warnings = append(tp.Warnings, "this is a downgrade: "+message)
 	}
 	pre, post := r.invocation.Steps(target.Branch)
-	var steps []config.Step
-	for _, ref := range append(pre, post...) {
-		steps = append(steps, ref.Step)
-	}
 	preview, err := renderPreview(previewInput{
 		producer: r.producer, consumer: r.route.Consumer, release: sp.release, target: target,
-		check: chk, steps: steps, userPrefix: in.BranchPrefix,
+		check: chk, steps: append(pre, post...), userPrefix: in.BranchPrefix,
 	})
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("render the PR: %w", err)

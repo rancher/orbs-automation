@@ -81,7 +81,10 @@ func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 
 func TestRenderPreviewListsThePostEditCommands(t *testing.T) {
 	in := previewFixture()
-	in.steps = []config.Step{{Run: config.Command{"scripts/generate-buildconfig"}}, {Run: config.Command{"go", "generate", "./..."}}}
+	in.steps = []updatedispatcher.StepRef{
+		{Phase: updatedispatcher.MethodPostEdit, Step: config.Step{Run: config.Command{"scripts/generate-buildconfig"}}},
+		{Phase: updatedispatcher.MethodPostEdit, Index: 1, Step: config.Step{Run: config.Command{"go", "generate", "./..."}}},
+	}
 	got, err := renderPreview(in)
 	require.NoError(t, err)
 	assert.Contains(t, got.Body, "- Ran `scripts/generate-buildconfig`")

@@ -27,9 +27,9 @@ type previewInput struct {
 	consumer   config.Project
 	release    Release
 	target     Target
-	check      updatedispatcher.Check // what the strategy found: the file, the old and new values and the change
-	steps      []config.Step          // the commands that run around the edit for this branch, in order
-	userPrefix string                 // the user's branchPrefix setting, which replaces the project's whole
+	check      updatedispatcher.Check     // what the strategy found: the file, the old and new values and the change
+	steps      []updatedispatcher.StepRef // the steps that run around the edit for this branch, in order, with their phase
+	userPrefix string                     // the user's branchPrefix setting, which replaces the project's whole
 }
 
 // renderPreview fills the texts. The branch name is a prefix, then the tag and
@@ -113,8 +113,8 @@ func stepMessage(in previewInput) func(updatedispatcher.Unit) (string, error) {
 // post-edit commands that run, one bullet each.
 func changes(in previewInput) string {
 	lines := []string{"- " + in.check.Change.Description}
-	for _, step := range in.steps {
-		lines = append(lines, "- Ran `"+strings.Join(step.Run, " ")+"`")
+	for _, ref := range in.steps {
+		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")
 	}
 	return strings.Join(lines, "\n")
 }
