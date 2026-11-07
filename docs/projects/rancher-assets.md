@@ -41,4 +41,5 @@ Both: consumes `rancher/charts` (with two other chart repos we do not care about
 * The Assets to Rancher hop is **already automated by the release team's own scripts**, the same family `gero ship` replaces for BRO and shell. For `gero` it starts as an observed hop: `gero ship` must not open a competing PR for it.
 * A tag scheme has to give the line, the stage and the timestamp order, and the stage names differ (`release` for the charts branch, no suffix for the prod tag).
 * A line is a tag prefix here and not a branch, so a project can have lines without per-line branches.
-* The image tag Rancher holds can be a dev tag, which a chain view should show as a warning.
+* The image tag Rancher holds can be a dev tag, which is normal until the release team cuts a stable one, so a chain view shows its stage and does not warn.
+* **One tag is three things.** Each image tag is a git tag on the repository, a published GitHub release of the same name, and the release's assets: the image lists and metadata. Chain tracing reads only the tag today. A later check that the release exists and is published, or that a chart version appears in its image lists, has the release to read, and the image lists are the likely answer to which chart versions an image holds (see the open question in [CHAIN_TRACING](../specs/CHAIN_TRACING.md)).
