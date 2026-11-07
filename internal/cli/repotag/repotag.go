@@ -16,9 +16,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/github"
-	"github.com/rancher/orbs-automation/internal/github/tags"
 	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -65,7 +64,9 @@ type Options struct {
 	// not used with a tag.
 	Stable bool
 	Bump   Bump
-	Yes    bool // go on without asking
+	// Push sends the tag to the upstream as well, after asking once.
+	Push bool
+	Yes  bool // go on without asking before a push
 	// Interactive says In is a terminal that the question can be asked on.
 	Interactive bool
 	In          io.Reader
@@ -81,9 +82,12 @@ type Result struct {
 	Newest string `json:"newest,omitempty"`
 	// Promotes is the prerelease that a stable tag is the promotion of.
 	Promotes string `json:"promotes,omitempty"`
-	// Action is "tagged", "already tagged" (it was on the commit), or "would tag"
-	// for a dry run.
+	// Action is "tagged" (in the clone only), "tagged and pushed", "pushed" (the tag
+	// was in the clone already), "already tagged" (the host has it), or for a dry
+	// run "would tag", "would tag and push" or "would push".
 	Action string `json:"action"`
+	// Remote is the upstream remote the tag was or would be pushed to.
+	Remote string `json:"remote,omitempty"`
 	DryRun bool   `json:"dryRun,omitempty"`
 }
 
@@ -91,7 +95,21 @@ type Result struct {
 // defined here, where it is consumed.
 type Workspace interface {
 	Project(key string) (config.Project, error)
+	RepoPath(slug string) (workspace.RepoPath, error)
+	UpstreamFor(slug string) string
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
+}
+
+// Git is what the command needs from git, on top of making the tag. It is
+// defined here, where it is consumed.
+type Git interface {
+	createtag.Git
+	// Fetch fetches one branch of the remote into the clone and returns its commit.
+	Fetch(ctx context.Context, dir, remote, branch string) (string, error)
+	// TagCommit is the commit a local tag is on, and false when there is none.
+	TagCommit(ctx context.Context, dir, name string) (commit string, found bool, err error)
+	// PushTag sends a tag to the remote, never forced.
+	PushTag(ctx context.Context, dir, remote, name string) error
 }
 
 // ParseArgs reads the positional arguments of gero repo tag: [project] <line>
@@ -111,93 +129,21 @@ func ParseArgs(args []string) (project, line, tag string) {
 	return args[0], args[1], args[2]
 }
 
-// Run makes the tag opts names, and writes the report to w in the format the
-// settings ask for. The token is only asked for when a tag is to be made.
+// Run makes the tag opts names in the engineer's clone, and with --push sends it
+// to the upstream, and writes the report to w in the format the settings ask for.
+// Nothing here needs a GitHub token: the head and the tags are read from the host
+// without one, and a push is git's, with the engineer's own credentials.
+//
+// STUB: does nothing until a later commit.
 func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
-	newRemote := func() (createtag.Remote, error) {
-		creds, err := github.Resolve(github.GoGh{}, "")
-		if err != nil {
-			return nil, fmt.Errorf("making a tag needs a GitHub token: %w", err)
-		}
-		return tags.New(creds)
-	}
-	return run(ctx, w, workspace.Open(s, cwd), newRemote, s.Output, s.DryRun, opts)
+	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, s.Output, s.DryRun, opts)
 }
 
-// run is Run over its dependencies. The head of the line's branch and the tags
-// are read from the host, so a tag is always on what is live there and a clone
-// is not involved. What would be done is settled by the task's check before
-// anything is asked, so a tag the line cannot have is an error and not a
-// question, and a dry run needs no token.
-func run(ctx context.Context, w io.Writer, ws Workspace, newRemote func() (createtag.Remote, error), format string, dryRun bool, opts Options) error {
-	if format != clicfg.OutputText && format != clicfg.OutputJSON {
-		return fmt.Errorf("output format %q is not supported by repo tag: use text or json", format)
-	}
-	if opts.Tag != "" && (opts.Stable || opts.Bump != BumpPatch) {
-		return ErrTagAndChoice
-	}
-	project, err := ws.Project(opts.Project)
-	if err != nil {
-		return err
-	}
-	slug := project.Repo.Name
-	branch, series, err := lineBranch(project, opts.Line)
-	if err != nil {
-		return err
-	}
-	refs, err := ws.UpstreamRefs(ctx, slug)
-	if err != nil {
-		return fmt.Errorf("read the branches and tags of %s: %w", slug, err)
-	}
-	head, ok := refs.Branch(branch)
-	if !ok {
-		return fmt.Errorf("%s has no branch %s on the host", slug, branch)
-	}
-	tag, promotes := opts.Tag, ""
-	if tag == "" {
-		chosen, err := createtag.Choose(createtag.Choice{
-			Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series, Commit: head.Commit,
-			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: project.Release.RequiresPrerelease,
-		})
-		if err != nil {
-			return err
-		}
-		tag = chosen.Tag
-		if chosen.Promotes != nil {
-			promotes = chosen.Promotes.Name
-		}
-	}
-	in := createtag.Input{
-		Repo: slug, Tag: tag, Commit: head.Commit, Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series,
-		RequiresPrerelease: project.Release.RequiresPrerelease,
-	}
-	decision, err := createtag.Check(in)
-	if err != nil {
-		return err
-	}
-	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, DryRun: dryRun}
-	if decision.Newest != nil {
-		res.Newest = decision.Newest.Name
-	}
-	switch {
-	case decision.Action == createtag.Already:
-		res.Action = "already tagged"
-	case dryRun:
-		res.Action = "would tag"
-	default:
-		if err := approve(w, format, res, opts); err != nil {
-			return err
-		}
-		remote, err := newRemote()
-		if err != nil {
-			return err
-		}
-		if _, err := createtag.Run(ctx, remote, in); err != nil {
-			return err
-		}
-		res.Action = "tagged"
-	}
-	return report(w, format, res)
+// run is Run over its dependencies.
+//
+// STUB: does nothing until a later commit.
+func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, dryRun bool, opts Options) error {
+	return nil
 }
 
 // approve asks once, before the tag is made, unless --yes was given. Without a

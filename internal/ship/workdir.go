@@ -74,6 +74,18 @@ type GitCLI struct{}
 
 var _ Git = GitCLI{}
 
+func (GitCLI) CreateTag(ctx context.Context, dir, name, commit string) error {
+	return gitcli.CreateTag(ctx, dir, name, commit)
+}
+
+func (GitCLI) TagCommit(ctx context.Context, dir, name string) (string, bool, error) {
+	return gitcli.TagCommit(ctx, dir, name)
+}
+
+func (GitCLI) PushTag(ctx context.Context, dir, remote, name string) error {
+	return gitcli.PushTag(ctx, dir, remote, name)
+}
+
 func (GitCLI) Fetch(ctx context.Context, dir, remote, branch string) (string, error) {
 	return gitcli.Fetch(ctx, dir, remote, branch)
 }
