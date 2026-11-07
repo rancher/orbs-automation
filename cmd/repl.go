@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
@@ -70,7 +71,10 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 		close(sigs)
 	}()
 	sess.Run = repl.Interruptible(sigs, lineRunner(baseFlags(cmd), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()))
-	reader, err := repl.NewReader(cmd.InOrStdin(), cmd.OutOrStdout(), "", nil)
+	sess.UseTerminal(s.Terminal)
+	home, _ := os.UserHomeDir()
+	history := clicfg.StatePath(env.getenv, home, "repl_history")
+	reader, err := repl.NewReader(cmd.InOrStdin(), cmd.OutOrStdout(), history, replCompletion(s, sess).Complete)
 	if err != nil {
 		return err
 	}
@@ -114,9 +118,34 @@ func lineRunner(base []string, in io.Reader, out, errOut io.Writer) repl.Runner 
 // treeComplete is what the command tree completes after words, for the word
 // being typed: cobra's own answer, the one gero shell install completes from in
 // a shell, taken from a tree built for the question.
-func treeComplete(words []string, toComplete string) []string { return nil }
+func treeComplete(words []string, toComplete string) []string {
+	var out bytes.Buffer
+	root := newRootCmd()
+	root.SilenceErrors = true
+	root.SetOut(&out)
+	root.SetErr(io.Discard)
+	root.SetArgs(append(append([]string{cobra.ShellCompRequestCmd}, words...), toComplete))
+	if err := root.Execute(); err != nil {
+		return nil
+	}
+	var candidates []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if line == "" || strings.HasPrefix(line, ":") { // the last line is ":" and the directive
+			continue
+		}
+		word, _, _ := strings.Cut(line, "\t") // cobra adds a description after a tab
+		candidates = append(candidates, word)
+	}
+	return candidates
+}
 
-// replCompletion is the completion of a line typed at the REPL of sess.
+// replCompletion is the completion of a line typed at the REPL of sess: the
+// tree, the REPL's own commands, the projects of the config and the directories
+// of wherever the session is.
 func replCompletion(s clicfg.Settings, sess *repl.Session) repl.Completion {
-	return repl.Completion{}
+	return repl.Completion{
+		Tree:     treeComplete,
+		Projects: func() []string { return repl.ProjectNames(s, sess.Dir) },
+		Dir:      func() string { return sess.Dir },
+	}
 }
