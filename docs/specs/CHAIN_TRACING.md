@@ -73,7 +73,7 @@ A scheme is code, named in config and claimed from one registry, as update strat
 
 * **`yamlRead`** is a strategy that reads one key of one file at a ref, a branch head, a tag or a commit, and writes nothing. It shares the key-path code of `yamlBump`, and its key may use `{line}`, `{minor}` and `{stage}`. A strategy offers writing through a separate small interface, so a read-only one cannot be asked to write.
 * **Assets from charts (stretch 2).** The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
-* **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, read as for any `yamlBump` edge, and its tag is parsed by the scheme. A tag of the `dev` stage held where `release` is expected is a warning.
+* **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, read as for any `yamlBump` edge, and its tag is parsed by the scheme. The stage of the tag held is shown, and neither stage is a warning.
 
 ## What the reports show
 
@@ -84,7 +84,7 @@ A scheme is code, named in config and claimed from one registry, as update strat
 
 ## Where it lives
 
-* `internal/config` holds the stages, `managedBy`, `perLineTag`, `tagScheme` and the edge's stage, and validates them: `perLineTag` has a known scheme, an observed edge's stage is one the producer's scheme can give, and `managedBy`, when set, is a lowercase slug (`orbs`). For stretch 2: stage names are unique, each branch pattern has `{line}`, and a managed edge's stage exists on its consumer.
+* `internal/config` holds the stages, `managedBy`, `perLineTag`, `tagScheme` and the edge's stage, and validates them: `perLineTag` has a known scheme, an observed edge's stage, when set, is one the producer's scheme can give, and `managedBy`, when set, is a lowercase slug (`orbs`). For stretch 2: stage names are unique, each branch pattern has `{line}`, and a managed edge's stage exists on its consumer.
 * `internal/calver` is pure: the schemes and nothing else.
 * `internal/chain` is a pure, cycle-safe walk over the project graph that returns a tree. It asks the graph for edges and a small reader interface for what a hop holds, and has fakes in tests, as the packages that read GitHub do.
 * `internal/updatedispatcher` registers `yamlRead`, and `internal/ship` skips edges from an unowned project.
@@ -114,5 +114,3 @@ Later stretches:
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
 * Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag", or the image's contents have to be read.
 * How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.
-* Whether a held `dev` tag is a warning or an error, and which Rancher branch each Assets line maps to when the release team's own map is hardcoded.
-* Whether the key path for `yamlRead` needs a quoting rule for keys that contain a dot, such as the line `2.16`.
