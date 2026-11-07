@@ -184,7 +184,7 @@ func Loop(ctx context.Context, in io.Reader, out, errOut io.Writer, s *Session) 
 		}
 		exit, err := s.Exec(ctx, out, sc.Text())
 		if err != nil {
-			if _, werr := fmt.Fprintln(errOut, err); werr != nil {
+			if _, werr := fmt.Fprintln(errOut, "Error:", err); werr != nil {
 				return werr
 			}
 		}
