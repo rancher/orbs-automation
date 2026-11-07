@@ -155,3 +155,25 @@ func (m *memoTree) ReadFile(ctx context.Context, path string) ([]byte, error) {
 	m.files[path] = memoFile{data, err}
 	return data, err
 }
+
+// SourceHoldings is what a project takes from one project that ships to it: the
+// same read as ConsumerHoldings, seen from the consumer's end.
+type SourceHoldings struct {
+	Producer string `json:"producer"` // the repository, owner/name
+	Name     string `json:"name"`     // its config name
+	Method   string `json:"method"`   // the consumer's method it ships with
+	// Error is why the source could not be traced, as for ConsumerHoldings.
+	Error   string    `json:"error,omitempty"`
+	Targets []Holding `json:"targets,omitempty"`
+}
+
+// Sources traces what the consumer takes: for each project that ships to it, the
+// consumer's own branches that its releases go to, and what each holds against the
+// source's latest stable release and its newest. Only this consumer is read, and
+// not the others the source also ships to. A source that cannot be traced has its
+// Error set and does not stop the others. A project nothing ships to has none.
+//
+// STUB: traces nothing until a later commit.
+func Sources(ctx context.Context, ws Reader, consumer config.Project) ([]SourceHoldings, error) {
+	return nil, nil
+}
