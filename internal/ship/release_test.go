@@ -20,7 +20,7 @@ func tags(names ...string) []git.Tag {
 func lined() config.Project {
 	return config.Project{
 		Name: "kuberlr-kubectl",
-		Repo: config.Repo{Name: "rancher/kuberlr-kubectl"},
+		Repo: config.Repo{Name: "rancher/kuberlr-kubectl", Owned: true},
 		Release: config.Release{TagPattern: "v*", Lines: []config.ProjectLine{
 			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
 		}},
@@ -28,7 +28,7 @@ func lined() config.Project {
 }
 
 func universal() config.Project {
-	return config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}, Release: config.Release{TagPattern: "v*"}}
+	return config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true}, Release: config.Release{TagPattern: "v*"}}
 }
 
 var sccTags = tags("v0.5.2", "v0.5.3-rc.1", "v0.5.3", "v0.6.0-rc.1", "main-abc1234")

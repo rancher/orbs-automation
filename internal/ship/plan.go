@@ -23,6 +23,9 @@ var (
 	// ErrNoTargets is returned when no consumer branch can be worked out for the
 	// release, and none was named.
 	ErrNoTargets = errors.New("no target branch for the release")
+	// ErrNotOwned is returned when the producer is not an owned project: gero reads
+	// where its releases stand and never opens a PR for them.
+	ErrNotOwned = errors.New("not owned")
 	// ErrBranchNotFound is returned when the consumer's repository has no branch
 	// of the name.
 	ErrBranchNotFound = errors.New("no such branch")

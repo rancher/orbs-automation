@@ -47,7 +47,7 @@ func invocationFor(t *testing.T, post []config.Step) updatedispatcher.Invocation
 func invocationSteps(t *testing.T, pre, post []config.Step) updatedispatcher.Invocation {
 	t.Helper()
 	producer := config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"},
+		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true},
 		Downstream: []config.Edge{{To: "rancher", Method: "build-yaml-bump",
 			Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"}}},
 	}

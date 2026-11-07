@@ -533,7 +533,7 @@ func linedLoop(t *testing.T) *fakeWorkspace {
 	t.Helper()
 	ws := loopFixture()
 	producer := config.Project{
-		Name: "kuberlr", Repo: config.Repo{Name: "rancher/kuberlr", DefaultBranch: "main"},
+		Name: "kuberlr", Repo: config.Repo{Name: "rancher/kuberlr", Owned: true, DefaultBranch: "main"},
 		Release: config.Release{TagPattern: "v*", Lines: []config.ProjectLine{
 			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
 		}},

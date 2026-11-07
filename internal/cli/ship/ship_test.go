@@ -32,7 +32,7 @@ type fakeWorkspace struct {
 
 func sccProducer() config.Project {
 	return config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}, Release: config.Release{TagPattern: "v*"},
+		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true}, Release: config.Release{TagPattern: "v*"},
 		Downstream: []config.Edge{{
 			To: "rancher", Method: "build-yaml-bump",
 			Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"},
