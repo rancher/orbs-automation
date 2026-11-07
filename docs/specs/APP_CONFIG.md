@@ -71,7 +71,7 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 * a method has a name and a strategy, its params have unique keys, and a key is not both fixed under `with` and offered under `allowedParams`
 * a step has a command, its `since` and `until` are lines in `RancherLines` with `since` not after `until`, and `from` is only on an edge's step (the producer's own files only for an owned project)
 * an edge's `lines` is `all` or `universal` when set
-* `repo.managedBy`, when set, is a lowercase slug; `release.branching` is `single`, `perLine` or `perLineTag`; a `perLineTag` project lists no `release.lines`; `release.tagScheme` is a known scheme and is not `semver` only with `perLineTag`; and an edge's `stage`, when set, is on an edge from an unowned project and is a stage its producer's scheme gives ([CHAIN_TRACING](CHAIN_TRACING.md))
+* `repo.managedBy`, when set, is a lowercase slug; `release.branching` is `single`, `perLine` or `perLineTag`; a `perLineTag` project lists no `release.lines`; `release.tagScheme` is a known scheme, and a scheme other than `semver` is only for `perLineTag`; and an edge's `stage`, when set, is on an edge from an unowned project and is a stage its producer's scheme gives ([CHAIN_TRACING](CHAIN_TRACING.md))
 * each line's `dates` are in order (`ga <= eom <= eol`, and an `eom` needs a `ga`), and a `phase` override, when set, is one of `development`, `ga`, `eom`, `eol`. A project's `release.lines` entry with no `branch` is accepted only while the line's derived phase is `development`, so this check depends on the date it runs
 * a `gero.yaml` in a repo contains only allowed kinds
 * repo slugs are unique

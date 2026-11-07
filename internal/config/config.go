@@ -45,8 +45,13 @@ type Project struct {
 
 // Repo identifies the project's repository.
 type Repo struct {
-	Name          string `yaml:"name"` // owner/name slug
-	Owned         bool   `yaml:"owned"`
+	Name string `yaml:"name"` // owner/name slug
+	// Owned says whether gero ships from the repository: its workflows run gero.
+	// An edge from an unowned project is only observed.
+	Owned bool `yaml:"owned"`
+	// ManagedBy is the team responsible for the project, as a lowercase slug. Read
+	// it through Project.Steward, which defaults it for an owned project.
+	ManagedBy     string `yaml:"managedBy"`
 	DefaultBranch string `yaml:"defaultBranch"`
 }
 
@@ -60,7 +65,8 @@ type Image struct {
 
 // Release is the project's release policy.
 type Release struct {
-	Branching          string        `yaml:"branching"` // how its release branches are laid out: single (one branch) or perLine (one for each Rancher line)
+	Branching          string        `yaml:"branching"` // how its release branches are laid out: single (one branch), perLine (one for each Rancher line) or perLineTag (one branch, the lines are in its tags)
+	TagScheme          string        `yaml:"tagScheme"` // how its tags spell a line: semver, or another scheme with perLineTag
 	TagPattern         string        `yaml:"tagPattern"`
 	RequiresPrerelease bool          `yaml:"requiresPrerelease"`
 	Lines              []ProjectLine `yaml:"lines"`
@@ -117,6 +123,7 @@ type Edge struct {
 	Method   string            `yaml:"method"` // one of the consumer's update methods
 	Params   map[string]string `yaml:"params"`
 	Lines    string            `yaml:"lines"` // how releases map to the consumer's branches; omitted is derived
+	Stage    string            `yaml:"stage"` // an observed edge only: the producer's stage to follow; omitted follows whatever the consumer holds
 	PreEdit  []Step            `yaml:"preEdit"`
 	PostEdit []Step            `yaml:"postEdit"`
 }

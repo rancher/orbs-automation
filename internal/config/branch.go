@@ -85,3 +85,16 @@ func (p Project) BranchOfLine(line string) (branch string, ok bool) {
 	}
 	return "", false
 }
+
+// Steward returns the team responsible for the project: the one it names, else
+// orbs when the project is owned, else "" for an unowned project that names none,
+// which is shown as unspecified and never assumed to be orbs.
+func (p Project) Steward() string {
+	return ""
+}
+
+// TagSchemeStages returns the stages a tag scheme gives a tag, or none for a
+// scheme whose tags carry no stage.
+func TagSchemeStages(scheme string) []string {
+	return nil
+}

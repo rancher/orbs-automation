@@ -34,10 +34,12 @@ var fieldClasses = map[string]string{
 
 	"Repo.Name":          "plain",
 	"Repo.Owned":         "plain",
+	"Repo.ManagedBy":     "resolved:Project.Steward",
 	"Repo.DefaultBranch": "default",
 
 	"Release.Branching":          "default",
 	"Release.TagPattern":         "default",
+	"Release.TagScheme":          "default",
 	"Release.RequiresPrerelease": "plain",
 	"Release.Lines":              "resolved:Project.IsUniversal",
 
@@ -62,6 +64,7 @@ var fieldClasses = map[string]string{
 	"Edge.Method":   "plain",
 	"Edge.Params":   "plain",
 	"Edge.Lines":    "resolved:Edge.AcceptLines",
+	"Edge.Stage":    "plain",
 	"Edge.PreEdit":  "plain",
 	"Edge.PostEdit": "plain",
 
