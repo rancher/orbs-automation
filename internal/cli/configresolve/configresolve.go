@@ -8,10 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -98,37 +98,34 @@ func projectSlugs(ws Workspace, cfg config.Config, want []string) ([]string, err
 }
 
 func renderText(rows []workspace.RepoPath, view *style.Renderer) string {
-	_ = view
-	var b strings.Builder
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "SLUG\tPATH\tSOURCE")
+	table := [][]string{{view.Style(style.Dim, "SLUG"), view.Style(style.Dim, "PATH"), view.Style(style.Dim, "SOURCE")}}
 	var notFound, ambiguous bool
 	for _, r := range rows {
 		path, source := r.Path, r.Source
 		switch {
 		case errors.Is(r.Err, workspace.ErrRepoAmbiguous):
-			path = fmt.Sprintf("(ambiguous: %s)", strings.Join(r.Candidates, ", "))
+			path = view.Style(style.Warn, fmt.Sprintf("(ambiguous: %s)", strings.Join(r.Candidates, ", ")))
 			ambiguous = true
 		case r.Err != nil:
-			path = "(not found)"
+			path = view.Style(style.Error, "(not found)")
 			notFound = true
 		}
 		if source == "" {
-			source = "-"
+			source = view.Style(style.Dim, "-")
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", r.Slug, path, source)
+		table = append(table, []string{r.Slug, path, source})
 	}
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	out := ui.Align(table, view.Width)
 	if notFound || ambiguous {
-		b.WriteString("\n")
+		out += "\n"
 	}
 	if notFound {
-		b.WriteString("not found: " + HintNotFound + "\n")
+		out += view.Style(style.Dim, "not found: "+HintNotFound) + "\n"
 	}
 	if ambiguous {
-		b.WriteString("ambiguous: " + HintAmbiguous + "\n")
+		out += view.Style(style.Dim, "ambiguous: "+HintAmbiguous) + "\n"
 	}
-	return b.String()
+	return out
 }
 
 func renderJSON(rows []workspace.RepoPath) (string, error) {
