@@ -427,3 +427,10 @@ func ForceBranch(ctx context.Context, dir, name, commit string) error {
 	_, err := inDir(ctx, dir, "branch", "--quiet", "--force", name, commit)
 	return err
 }
+
+// CommitFiles lists the paths a commit changed, relative to the top of the clone,
+// in git's order: `git diff-tree` against its first parent, or against nothing for
+// a root commit. A merge lists what it changed from its first parent.
+//
+// STUB: lists nothing until a later commit.
+func CommitFiles(ctx context.Context, dir, commit string) ([]string, error) { return nil, nil }
