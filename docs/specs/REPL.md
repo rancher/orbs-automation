@@ -155,7 +155,12 @@ Steps 1 to 5 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the r
 4. History, line editing and completion (built). The editor is `ergochat/readline` behind `internal/ui/editor`; history is `$XDG_STATE_HOME/gero/repl_history`, else `~/.local/state/gero/repl_history`, one file of the user's own (directory mode 0700); completion is cobra's own answer for the tree (the one `gero shell install` completes from), the REPL-only commands, project names for `cd` and `ls @`, and directories under the working directory for `ls`; Ctrl-C clears the line and never leaves, and Ctrl-D leaves. The prompt is the plain default in the look of a prompt where the terminal has color (one line, styled by the renderer).
 5. The prompt template (built): `repl.prompt` in the user file or `GERO_REPL_PROMPT`, with the placeholders `{project}`, `{dir}` and `{path}`. The default is `gero{project: (%s)}> `, so the project's config name is in the prompt inside one. The template is parsed once, when the REPL starts, and a bad one stops it there with an error naming the key and where its value came from; the session looks the project of the working directory up at the start and after each `cd`, and never for a line.
 
-Not built from the spec, besides `!`: the `help` command, and the suggestion that an unknown name points to `shell` (today it is cobra's unknown-command error).
+**The REPL is complete enough for v1, and what is left waits** (decided). Nothing below is scheduled. Each is taken up after v1 if the team asks for it once they are using the REPL, so what gets built is what they run into:
+
+* **`help`.** Today it is cobra's help, which does not list `pwd`, `ls` or `exit`, and describes the tree's `gero shell` (completion setup) where the REPL's `shell` is the child shell. The first thing to try is a short block of the REPL's own commands before cobra's help, with `help <command>` left to cobra; a REPL-only help is the larger option.
+* **An unknown name.** Today it is cobra's unknown-command error. The spec's version is a one-line hint that points to `help` and `shell`, not a full help screen.
+* **Showing that the last line failed** in the prompt, and which placeholders a user asks for next.
+* **`!<command line>`** and **marking the prompt of the child `shell`** ([Deferred ideas](#deferred-ideas)).
 
 `!<command line>` is deferred until after v1 ([Deferred ideas](#deferred-ideas)). `shell` is the one way to the user's shell for now.
 
@@ -175,4 +180,4 @@ Not built from the spec, besides `!`: the `help` command, and the suggestion tha
 * **Keyboard shortcuts** (decided). Ctrl-D at an empty prompt leaves, and Ctrl-C clears the line or cancels the running command and never leaves. The editor adds the usual ones (Ctrl-A, Ctrl-E, Ctrl-K, Ctrl-U, Ctrl-W, Ctrl-L, Ctrl-R for history search and the arrow keys). There is no Ctrl-X exit: Ctrl-D is the way out, and Ctrl-X stays the editor's own prefix key. What each does on a real terminal is checked by hand.
 * The prompt's syntax, placeholder set and key name, `repl.prompt`, are decided (above). Still open: whether it needs a way to show that the last line failed, and which placeholders a user asks for next. Only `%s` is special in the text of a placeholder: `%%` is not an escape, and stays as typed.
 * Which front end (decided): an editor on a loop, `ergochat/readline` behind `internal/ui/editor`, with lipgloss v2 for the look of the prompt. Still **(unverified)** on a real terminal: prompt redraw with color, wide characters, paste, window resize, and Ctrl-C and Ctrl-D in practice.
-* Which phase the REPL belongs to, if any ([PHASES](../PHASES.md)). It is not scheduled.
+* Which phase the REPL belongs to, if any ([PHASES](../PHASES.md)). It is not scheduled: steps 1 to 5 are built, and the rest waits for v1 and the team's use.
