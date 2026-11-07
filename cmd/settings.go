@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/cmd/ci"
 	"github.com/rancher/orbs-automation/internal/cli/cigate"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
+	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/spf13/cobra"
 )
@@ -92,7 +93,7 @@ func loadSettingsForDoctor(getenv func(string) string, home string) func(*cobra.
 // terminalFacts is what the process knows about its terminal, which Load cannot
 // read itself. It is a variable so a test can give another.
 var terminalFacts = func() clicfg.Facts {
-	return clicfg.Facts{StdinTTY: isTerminal(os.Stdin), StdoutTTY: isTerminal(os.Stdout)}
+	return termfacts.Detect(os.Stdin, os.Stdout)
 }
 
 // settingsLoader is loadSettings, optionally without reading the user file.

@@ -71,7 +71,7 @@ A spike built one confirm-and-table program per option in a scratch module (`huh
 
 ## Not built yet
 
-* Styling itself: the `color` setting and `Settings.Terminal` are built, and no command reads them yet. The terminal's width is not filled in (`Facts.Width` is always 0). The TTY test is `isTerminal` in `cmd/`, which is true for any character device, `/dev/null` included, so `x/term` is the better check when a prompt or a table needs one.
+* Styling itself: the `color` setting and `Settings.Terminal` are built, and no command reads them yet. The TTY and width checks are `internal/cli/termfacts`, on `golang.org/x/term`, so `/dev/null`, a pipe and a file are not terminals; what is one is checked by hand on a real terminal.
 * The prompt and TUI side of `internal/ui`; `ui.Output` and `ui.Stream` exist.
 * Handing the logger to every command: `ship` gets one built in `cmd/`, and the others do not log yet.
 

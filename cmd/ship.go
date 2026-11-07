@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/cli/ship"
+	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/spf13/cobra"
 )
 
@@ -85,7 +86,7 @@ with both flags it is a dry run.`,
 			s := settingsFrom(cmd)
 			in.Yes = s.NonInteractive // --yes and --non-interactive, or GERO_NON_INTERACTIVE
 			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
-			in.In, in.Interactive = cmd.InOrStdin(), isTerminal(os.Stdin)
+			in.In, in.Interactive = cmd.InOrStdin(), termfacts.IsTerminal(os.Stdin)
 			return ship.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
 		},
 	}

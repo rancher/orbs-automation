@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
 	"github.com/rancher/orbs-automation/internal/cli/repotag"
+	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/spf13/cobra"
 )
 
@@ -185,7 +186,7 @@ every stable tag. A promotion says which prerelease it is.`,
 			}
 			return repotag.Run(ctx, cmd.OutOrStdout(), s, cwd, repotag.Options{
 				Project: project, Line: line, Tag: tag, Stable: stable, Bump: bump, Push: push, Yes: s.NonInteractive,
-				In: cmd.InOrStdin(), Interactive: isTerminal(os.Stdin),
+				In: cmd.InOrStdin(), Interactive: termfacts.IsTerminal(os.Stdin),
 			})
 		},
 	}

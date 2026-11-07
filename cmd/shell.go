@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	"github.com/rancher/orbs-automation/internal/cli/shellsetup"
+	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/spf13/cobra"
 )
 
@@ -62,7 +63,7 @@ changes the script without the profile being edited again. To do it by hand:
 		return func(cmd *cobra.Command, _ []string) error {
 			out, err := run(shellsetup.Options{
 				Shell: shell, Profile: profile, Yes: yes,
-				Interactive: isTerminal(os.Stdin), DryRun: settingsFrom(cmd).DryRun,
+				Interactive: termfacts.IsTerminal(os.Stdin), DryRun: settingsFrom(cmd).DryRun,
 				In: cmd.InOrStdin(), Out: cmd.OutOrStdout(),
 				Getenv: os.Getenv, GOOS: runtime.GOOS,
 			})
@@ -102,10 +103,4 @@ Without a terminal, pass --yes to approve. --dry-run shows the change only.`,
 
 	shellCmd.AddCommand(initCmd, installCmd, uninstallCmd)
 	root.AddCommand(shellCmd)
-}
-
-// isTerminal reports whether f is a terminal, so a question can be asked on it.
-func isTerminal(f *os.File) bool {
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
