@@ -128,3 +128,14 @@ func TestCalverComparesByDate(t *testing.T) {
 	assert.Zero(t, s.Compare("v2.16-20261030T1111Z", "v2.16-20261030T1111Z"))
 	assert.Zero(t, s.Compare("v2.16-20261030T1111Z", "main-abc1234"), "a name that is not a release has no order")
 }
+
+func TestCalverStageIsTheSuffix(t *testing.T) {
+	s := calverFor(t)
+	assert.Equal(t, "dev", s.Stage("v2.16-20261030T1111Z-dev"))
+	assert.Equal(t, "release", s.Stage("v2.16-20261029T0000Z"))
+	assert.Equal(t, "", s.Stage("main-abc1234"))
+}
+
+func TestSemverTagsCarryNoStage(t *testing.T) {
+	assert.Equal(t, "", semverFor(t, lined()).Stage("v8.1.0-rc.1"))
+}
