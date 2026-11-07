@@ -84,6 +84,7 @@ func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]git.B
 func (f *fakeGit) Config(context.Context, string, string) (string, error) { return f.email, nil }
 
 func (f *fakeGit) Commit(context.Context, string, workdir.GitCommit) (string, error) { return "", nil }
+func (f *fakeGit) CommitFiles(context.Context, string, string) ([]string, error)     { return nil, nil }
 func (f *fakeGit) Checkout(context.Context, string, string) error                    { return nil }
 func (f *fakeGit) RemoveWorktree(context.Context, string, string) error              { return nil }
 func (f *fakeGit) Discard(context.Context, string, []string) error                   { return nil }

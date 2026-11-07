@@ -52,6 +52,8 @@ type Git interface {
 	AddWorktree(ctx context.Context, dir, path, branch, commit string) error
 	RemoveWorktree(ctx context.Context, dir, path string) error
 	Commit(ctx context.Context, dir string, c GitCommit) (commit string, err error)
+	// CommitFiles lists the paths a commit changed.
+	CommitFiles(ctx context.Context, dir, commit string) ([]string, error)
 	Discard(ctx context.Context, dir string, created []string) error
 	Push(ctx context.Context, dir, remote, branch string) error
 	MergeBase(ctx context.Context, dir, a, b string) (string, error)
@@ -73,6 +75,10 @@ type Git interface {
 type GitCLI struct{}
 
 var _ Git = GitCLI{}
+
+func (GitCLI) CommitFiles(ctx context.Context, dir, commit string) ([]string, error) {
+	return gitcli.CommitFiles(ctx, dir, commit)
+}
 
 func (GitCLI) CreateTag(ctx context.Context, dir, name, commit string) error {
 	return gitcli.CreateTag(ctx, dir, name, commit)

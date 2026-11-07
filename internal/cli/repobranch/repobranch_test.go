@@ -111,6 +111,7 @@ func (f *fakeGit) Config(context.Context, string, string) (string, error) {
 }
 
 func (f *fakeGit) Commit(context.Context, string, workdir.GitCommit) (string, error) { return "", nil }
+func (f *fakeGit) CommitFiles(context.Context, string, string) ([]string, error)     { return nil, nil }
 
 func (f *fakeGit) Checkout(_ context.Context, _, branch string) error {
 	f.calls = append(f.calls, "checkout "+branch)

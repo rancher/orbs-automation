@@ -15,6 +15,9 @@ import (
 type CommitInfo struct {
 	Hash    string `json:"commit"`
 	Subject string `json:"subject"`
+	// Files are the paths the commit changed, relative to the top of the clone. They
+	// are empty when they could not be read, which does not fail the commit.
+	Files []string `json:"files,omitempty"`
 }
 
 // GitState is what the clone in a directory is in.
@@ -39,6 +42,8 @@ type GitCommit struct {
 type Git interface {
 	State(ctx context.Context, dir string) (GitState, error)
 	Commit(ctx context.Context, dir string, c GitCommit) (commit string, err error)
+	// CommitFiles lists the paths a commit changed.
+	CommitFiles(ctx context.Context, dir, commit string) ([]string, error)
 	Checkout(ctx context.Context, dir, branch string) error
 	DeleteBranch(ctx context.Context, dir, branch string) error
 	RemoveWorktree(ctx context.Context, dir, path string) error
@@ -102,6 +107,11 @@ func (w *Work) Commit(ctx context.Context, c GitCommit) (string, error) {
 	}
 	c.Stage = created
 	return w.g.Commit(ctx, w.Dir, c)
+}
+
+// CommitFiles lists the paths a commit made in the work directory changed.
+func (w *Work) CommitFiles(ctx context.Context, commit string) ([]string, error) {
+	return w.g.CommitFiles(ctx, w.Dir, commit)
 }
 
 // Finish ends the work. In place the clone goes back to the branch it started

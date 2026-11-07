@@ -26,6 +26,11 @@ type fakeGit struct {
 	commits    []workdir.GitCommit
 	nothingFor map[int]bool // the 1-based call numbers with nothing to commit
 	commitErr  error
+	files      map[string][]string // what each commit changed, by hash
+}
+
+func (f *fakeGit) CommitFiles(_ context.Context, _, commit string) ([]string, error) {
+	return f.files[commit], nil
 }
 
 func (f *fakeGit) State(context.Context, string) (workdir.GitState, error) {
