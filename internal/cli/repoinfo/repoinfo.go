@@ -42,6 +42,7 @@ type Opener func(dir string) (Clone, error)
 type Info struct {
 	Slug          string      `json:"slug"`
 	Owned         bool        `json:"owned"`
+	ManagedBy     string      `json:"managedBy,omitempty"` // the team responsible; empty when an unowned project names none
 	DefaultBranch string      `json:"defaultBranch"`
 	Release       ReleaseInfo `json:"release"`
 	Local         LocalInfo   `json:"local"`
