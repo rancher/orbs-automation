@@ -33,16 +33,19 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | Field | Default |
 |---|---|
 | `finalDestination` | `false`; only `rancher/rancher` sets it |
-| `repo.owned` | `false` |
+| `repo.owned` | `false`: `gero` does not ship from the repository |
+| `repo.managedBy` | `orbs` for an owned project; none for an unowned one, which is shown as unspecified |
 | `repo.defaultBranch` | `main` |
 | `release.branching` | `single` |
 | `release.tagPattern` | `"v*"` |
+| `release.tagScheme` | `semver`; only `perLineTag` may set another |
 | `release.requiresPrerelease` | off (opt-in) |
 | `release.lines` | `universal` |
 | `images` | one image named `repo.name`, in every registry (`dockerhub`, `prime-staging`, `prime-production`) |
 | `images[].registries` | every registry |
 | `images[].since` | none: the image is expected for every line |
 | `updateMethods[].accept.when` | `stable` |
+| `downstream[].stage` | none: an edge from an unowned project follows whatever stage the consumer holds |
 | `downstream[].lines` | `universal` when the producer lists no `release.lines`, else `all` (worked out when read, not filled in) |
 | `updateMethods[].preEdit`, `postEdit` | none |
 | `updateMethods[].allowedParams[].required` | true, unless the entry has a `default` |
@@ -54,7 +57,11 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 
 `finalDestination: true` marks the one project that releases end in, `rancher/rancher`: every other project ships to it, directly or through another project, and it ships to none. Only that project sets it and at most one project may, which the loader checks. It lets a view such as `gero lines resolve` start from the end of the line without knowing a project by name, and that view shows nothing as shipping on from it.
 
-`release.branching` is the layout of the project's own release branches, not a list of them: `single` keeps every release on the default branch, whatever lines it lists, and `perLine` keeps each Rancher line on the branch its `release.lines` entry names (the default branch for a line with none). It is separate from `release.lines`, which says which version series goes with which Rancher line.
+`release.branching` is the layout of the project's own release branches, not a list of them: `single` keeps every release on the default branch, whatever lines it lists, `perLine` keeps each Rancher line on the branch its `release.lines` entry names (the default branch for a line with none), and `perLineTag` keeps every release on the default branch and finds the lines in the tags (below). It is separate from `release.lines`, which says which version series goes with which Rancher line.
+
+`repo.owned` and `repo.managedBy` work together. `owned` says whether `gero` ships from the repository: it is true when the repository's workflows run `gero`. `managedBy` says which team is responsible for the project, as a lowercase slug (`orbs`, `release-team`). An owned project with no `managedBy` is `orbs`'s; an unowned project with none is shown as unspecified, and never assumed to be `orbs`'s. Every edge from an unowned project is observed: `gero` reads where it stands and `gero ship` never opens a PR for it. An edge into an unowned project is written as usual. To adopt `gero` for a repository another team manages, set `owned: true` and change its workflows to call `gero`; `managedBy` keeps naming their team ([CHAIN_TRACING](../docs/specs/CHAIN_TRACING.md)).
+
+`release.branching: perLineTag` is for a project whose releases are on one branch and whose Rancher lines show only in its tags, such as `rancher/rancher-assets`. It lists no `release.lines`, which the loader refuses: its lines are the lines its tags carry, found when a view reads the tags. `release.tagScheme` names how those tags spell a line (`semver` by default, or `calverLineStage` for `v2.16-20261030T1111Z` and `v2.16-20261030T1111Z-dev`). A `downstream` edge's `stage` is optional and only for an edge from an unowned project: it names a stage the producer's scheme gives (`dev` or `release` for `calverLineStage`), to follow only that stream.
 
 Documents use `apiVersion: gero/v1alpha1` until v1.0.0 of `gero`, when the shapes are agreed and become `gero/v1`. A change to a default after that is a breaking change and bumps `apiVersion`. A future `gero config show --resolved` would print every project with defaults filled in.
 

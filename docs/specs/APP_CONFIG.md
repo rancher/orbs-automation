@@ -1,6 +1,6 @@
 # Application Config
 
-**Status:** implemented for the loader, defaults, the update dispatcher's checks and the checks listed under Validation. The kind and field names are not final, and everything in `config/` is a mock until the POC review at the end of v0.x ([PHASES](../PHASES.md)).
+**Status:** implemented for the loader, defaults, the update dispatcher's checks and the checks listed under Validation, except what is under [Not built yet](#not-built-yet). The kind and field names are not final, and everything in `config/` is a mock until the POC review at the end of v0.x ([PHASES](../PHASES.md)).
 
 The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The real files, field reference and defaults table are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`config-mock/`](../../config-mock/) and [`mock-repos/`](../../mock-repos/). The types are `internal/config`, and the loader, defaults and structural validation are `internal/config/loader`, reachable only through `internal/workspace` ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)). What depends on a strategy is checked by `internal/updatedispatcher`.
 
@@ -71,6 +71,7 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 * a method has a name and a strategy, its params have unique keys, and a key is not both fixed under `with` and offered under `allowedParams`
 * a step has a command, its `since` and `until` are lines in `RancherLines` with `since` not after `until`, and `from` is only on an edge's step (the producer's own files only for an owned project)
 * an edge's `lines` is `all` or `universal` when set
+* `repo.managedBy`, when set, is a lowercase slug; `release.branching` is `single`, `perLine` or `perLineTag`; a `perLineTag` project lists no `release.lines`; `release.tagScheme` is a known scheme and is not `semver` only with `perLineTag`; and an edge's `stage`, when set, is on an edge from an unowned project and is a stage its producer's scheme gives ([CHAIN_TRACING](CHAIN_TRACING.md))
 * each line's `dates` are in order (`ga <= eom <= eol`, and an `eom` needs a `ga`), and a `phase` override, when set, is one of `development`, `ga`, `eom`, `eol`. A project's `release.lines` entry with no `branch` is accepted only while the line's derived phase is `development`, so this check depends on the date it runs
 * a `gero.yaml` in a repo contains only allowed kinds
 * repo slugs are unique
@@ -89,6 +90,7 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 * Cycle warnings across several projects.
 * `gero config show --resolved`.
 * `gero doctor` checking the dispatcher's findings as `config validate` does.
+* `repo.managedBy`, `release.branching: perLineTag`, `release.tagScheme` and an edge's `stage`, with their checks, are being added for chain tracing ([CHAIN_TRACING](CHAIN_TRACING.md)).
 * The `chartsPackageBump` strategy, which the mock configs name.
 
 ## Open questions
