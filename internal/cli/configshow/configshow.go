@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -109,10 +109,7 @@ func Render(s clicfg.Settings, dir workspace.ConfigDir, format string) (string, 
 }
 
 func renderText(es []Entry, st *style.Renderer) string {
-	_ = st
-	var b strings.Builder
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "KEY\tVALUE\tSOURCE")
+	rows := [][]string{{st.Style(style.Dim, "KEY"), st.Style(style.Dim, "VALUE"), st.Style(style.Dim, "SOURCE")}}
 	search := false
 	for _, e := range es {
 		search = search || e.Key == "repos.search"
@@ -122,14 +119,19 @@ func renderText(es []Entry, st *style.Renderer) string {
 			if h, ok := hints[e.Key]; ok && e.Source == clicfg.SourceDefault.String() {
 				v = "(" + h + ")"
 			}
+			v = st.Style(style.Dim, v)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", e.Key, v, e.Source)
+		source := e.Source
+		if source == clicfg.SourceDefault.String() {
+			source = st.Style(style.Dim, source)
+		}
+		rows = append(rows, []string{e.Key, v, source})
 	}
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	out := ui.Align(rows, st.Width)
 	if search {
-		b.WriteString("\nrun `gero config resolve repos` to see where each repo resolves\n")
+		out += "\n" + st.Style(style.Dim, "run `gero config resolve repos` to see where each repo resolves") + "\n"
 	}
-	return b.String()
+	return out
 }
 
 func renderJSON(es []Entry) (string, error) {
