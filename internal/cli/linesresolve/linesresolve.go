@@ -21,6 +21,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -397,13 +398,13 @@ func date(t time.Time) string {
 
 // Run writes the map to w in the format the settings ask for.
 func Run(_ context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
-	return run(w, workspace.Open(s, cwd), s.Output, opts, time.Now())
+	return run(w, workspace.Open(s, cwd), s.Output, opts, time.Now(), style.New(s.Terminal))
 }
 
 // run is Run over its dependencies. An engine that is only partly usable (an
 // update method that is not) still routes the edges that are, so it is used and
 // the problem is left to gero doctor and gero config validate.
-func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time) error {
+func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time, view *style.Renderer) error {
 	if format != clicfg.OutputText && format != clicfg.OutputJSON {
 		return fmt.Errorf("output format %q is not supported by lines resolve: use text or json", format)
 	}
@@ -424,14 +425,15 @@ func run(w io.Writer, ws Workspace, format string, opts Options, now time.Time) 
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
 	}
-	_, err = io.WriteString(w, renderText(res))
+	_, err = io.WriteString(w, renderText(res, view))
 	return err
 }
 
 // renderText is the map as text: a block for each line, newest first, with the
 // hub's branch, what it takes from and ships to, the projects also on the line
 // and the gaps, and a count of the gaps at the end.
-func renderText(r Result) string {
+func renderText(r Result, view *style.Renderer) string {
+	_ = view
 	var b strings.Builder
 	fmt.Fprintf(&b, "Release lines, through %s\n", r.Hub)
 	for _, l := range r.Lines {

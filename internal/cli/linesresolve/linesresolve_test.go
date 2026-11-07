@@ -365,7 +365,7 @@ func workspaceOf(t *testing.T) fakeWorkspace {
 func rendered(t *testing.T, format string, opts Options) (string, error) {
 	t.Helper()
 	var b strings.Builder
-	err := run(&b, workspaceOf(t), format, opts, now)
+	err := run(&b, workspaceOf(t), format, opts, now, nil)
 	return b.String(), err
 }
 
@@ -442,13 +442,13 @@ func TestRunJSONIsTheResult(t *testing.T) {
 func TestRunErrorsComeBackBeforeAnythingIsWritten(t *testing.T) {
 	var b strings.Builder
 	ws := workspaceOf(t)
-	assert.Error(t, run(&b, ws, "env", Options{}, now), "an output format it does not support")
+	assert.Error(t, run(&b, ws, "env", Options{}, now, nil), "an output format it does not support")
 	ws.cfgErr = errors.New("no config directory")
-	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now), "no config directory")
+	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now, nil), "no config directory")
 	ws = workspaceOf(t)
 	ws.engine = nil
 	ws.engineErr = errors.New("method x is not usable")
-	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now), "not usable")
+	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now, nil), "not usable")
 	assert.Empty(t, b.String())
 }
 
@@ -457,7 +457,7 @@ func TestRunAnEngineThatIsPartlyUsableIsStillUsed(t *testing.T) {
 	ws.engineErr = errors.New("method y of charts is not usable")
 	var b strings.Builder
 
-	err := run(&b, ws, "text", Options{Lines: []string{"v2.15"}}, now)
+	err := run(&b, ws, "text", Options{Lines: []string{"v2.15"}}, now, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, b.String(), "shell")
