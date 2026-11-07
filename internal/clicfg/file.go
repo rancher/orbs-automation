@@ -15,6 +15,7 @@ import (
 type fileConfig struct {
 	ConfigDir    string    `yaml:"configDir"`
 	Output       string    `yaml:"output"`
+	Color        string    `yaml:"color"`
 	Upstream     string    `yaml:"upstream"`
 	Fork         string    `yaml:"fork"`
 	GitHubUser   string    `yaml:"githubUser"`

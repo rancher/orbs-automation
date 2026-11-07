@@ -68,6 +68,7 @@ type Inputs struct {
 	UserFile     io.Reader           // nil: no user file
 	UserFileName string              // used in error messages only
 	Home         string              // expands a leading "~" in paths
+	Facts        Facts               // what the process knows of its terminal
 }
 
 // RepoOverride holds per-repo settings from repos.overrides.
@@ -88,6 +89,8 @@ type Repos struct {
 type Settings struct {
 	ConfigDir    string // central application config directory
 	Output       string // OutputText or OutputJSON
+	Color        string // ColorAuto, ColorAlways or ColorNever
+	Terminal     Terminal
 	LogLevel     string // LogDebug, LogInfo, LogWarn or LogError
 	Upstream     string // remote treated as the real source
 	Fork         string // remote holding the developer's fork
