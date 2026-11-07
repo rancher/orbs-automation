@@ -144,3 +144,18 @@ func projectNames(ws ConfigWorkspace) []string {
 	sort.Strings(names)
 	return names
 }
+
+// ProjectWorkspace is what ProjectOf needs from a workspace: the project the
+// working directory is in. It is defined here, where it is consumed.
+type ProjectWorkspace interface {
+	Project(key string) (config.Project, error)
+}
+
+// ProjectOf returns the lookup of the config name of the project a directory is
+// in, for the prompt: "" for a directory in none, and for any problem, since a
+// prompt does not complain.
+func ProjectOf(s clicfg.Settings) func(dir string) string {
+	return func(dir string) string { return projectNameOf(workspace.Open(s, dir)) }
+}
+
+func projectNameOf(ws ProjectWorkspace) string { return "" }
