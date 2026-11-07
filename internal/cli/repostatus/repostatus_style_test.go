@@ -99,7 +99,9 @@ func TestWhereALineStandsTakesTheLookOfIt(t *testing.T) {
 
 	assert.Contains(t, lines, v.Style(style.OK, "in sync"))
 	assert.Contains(t, lines, v.Style(style.Warn, "rc open, work since the rc (7 commits)"))
-	assert.Contains(t, lines, v.Style(style.Dim, "rc open, head on the rc"), "the other line of the fixture is not on work")
+	onTheRC := fixture()
+	onTheRC.branches[0].Commit = "sha-v2.13.0-rc.10"
+	assert.Contains(t, renderText(status(t, onTheRC, opener(syncedClone(), nil)), v), v.Style(style.Dim, "rc open, head on the rc"))
 	assert.Contains(t, sources, v.Style(style.Warn, "behind v0.5.3"))
 	assert.Contains(t, sources, v.Style(style.Warn, "on stable, v0.6.0-rc.1 is newer"))
 }

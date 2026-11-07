@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
@@ -20,6 +19,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -414,75 +414,57 @@ func tagInfo(t *git.Tag) *TagInfo {
 // lines of the project have and what they could have next (the host's facts, and
 // the meaning made of them), and how the local clone stands (the clone's facts).
 func renderText(st Status, view *style.Renderer) string {
-	_ = view
 	var b strings.Builder
-	b.WriteString(st.Slug + "\n")
+	b.WriteString(view.Style(style.Heading, st.Slug) + "\n")
 	if st.Error != "" {
-		fmt.Fprintf(&b, "  host: unavailable: %s\n", st.Error)
+		b.WriteString("  " + view.Style(style.Error, "host: unavailable: "+st.Error) + "\n")
 		return b.String()
 	}
 	perLine := len(st.Targets) > 0 && st.Targets[0].Line != ""
-	b.WriteString("\nReleases\n")
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	header := "BRANCH\tHEAD\tLATEST STABLE\tLATEST PRE-RELEASE\tSTATE\tNEXT"
-	if perLine {
-		header = "LINE\t" + header
-	}
-	fmt.Fprintln(w, "  "+header)
+	b.WriteString("\n" + view.Style(style.Heading, "Releases") + "\n")
+	table := [][]string{heads(view, perLine, "BRANCH", "HEAD", "LATEST STABLE", "LATEST PRE-RELEASE", "STATE", "NEXT")}
 	for _, t := range st.Targets {
-		cells := []string{branchText(t, perLine), headText(t.Head), tagText(t.LatestStable), tagText(t.LatestPrerelease), stateText(t), nextText(t.Next)}
-		if perLine {
-			cells = append([]string{t.Line}, cells...)
+		cells := []string{
+			branchText(t, perLine), headCell(view, t.Head), dashed(view, tagText(t.LatestStable)),
+			dashed(view, tagText(t.LatestPrerelease)), styledBy(view, stateRole, stateText(t)), nextCell(view, t.Next),
 		}
-		fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
+		table = append(table, row(perLine, t.Line, cells))
 	}
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	b.WriteString(ui.Align(table, view.Width))
 	if st.Clone != "" {
-		fmt.Fprintf(&b, "\nLocal clone: unavailable: %s\n", st.Clone)
+		b.WriteString("\n" + view.Style(style.Warn, "Local clone: unavailable: "+st.Clone) + "\n")
 	} else {
-		b.WriteString("\nLocal clone\n")
-		w = tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-		header = "BRANCH\tUNRELEASED\tLOCAL"
-		if perLine {
-			header = "LINE\t" + header
-		}
-		fmt.Fprintln(w, "  "+header)
+		b.WriteString("\n" + view.Style(style.Heading, "Local clone") + "\n")
+		table = [][]string{heads(view, perLine, "BRANCH", "UNRELEASED", "LOCAL")}
 		for _, t := range st.Targets {
-			cells := []string{branchText(t, perLine), countText(t.Unreleased), localText(t.Local)}
-			if perLine {
-				cells = append([]string{t.Line}, cells...)
-			}
-			fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
+			table = append(table, row(perLine, t.Line, []string{
+				branchText(t, perLine), dashed(view, countText(t.Unreleased)), styledBy(view, localRole, localText(t.Local)),
+			}))
 		}
-		_ = w.Flush()
+		b.WriteString(ui.Align(table, view.Width))
 	}
 	for _, src := range st.Sources {
-		renderHoldings(&b, fmt.Sprintf("Sources: %s (%s), %s", src.Name, src.Producer, src.Method), src.Error, src.Targets)
+		renderHoldings(&b, view, fmt.Sprintf("Sources: %s (%s), %s", src.Name, src.Producer, src.Method), src.Error, src.Targets)
 	}
 	for _, c := range st.Consumers {
-		renderHoldings(&b, fmt.Sprintf("Consumers: %s (%s), %s", c.Name, c.Consumer, c.Method), c.Error, c.Targets)
+		renderHoldings(&b, view, fmt.Sprintf("Consumers: %s (%s), %s", c.Name, c.Consumer, c.Method), c.Error, c.Targets)
 	}
 	if st.TraceError != "" {
-		fmt.Fprintf(&b, "\ncould not trace: %s\n", st.TraceError)
+		b.WriteString("\n" + view.Style(style.Warn, "could not trace: "+st.TraceError) + "\n")
 	}
 	return b.String()
 }
 
 // renderHoldings is one consumer's or one source's section: what each branch holds
 // against the latest stable release, and how that stands.
-func renderHoldings(b *strings.Builder, heading, errText string, targets []ship.Holding) {
-	b.WriteString("\n" + heading + "\n")
+func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText string, targets []ship.Holding) {
+	b.WriteString("\n" + view.Style(style.Heading, heading) + "\n")
 	if errText != "" {
-		fmt.Fprintf(b, "  unavailable: %s\n", errText)
+		b.WriteString("  " + view.Style(style.Error, "unavailable: "+errText) + "\n")
 		return
 	}
 	perLine := slices.ContainsFunc(targets, func(h ship.Holding) bool { return h.Line != "" })
-	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
-	header := "BRANCH\tHEAD\tHOLDS\tLATEST STABLE\tSTATUS"
-	if perLine {
-		header = "LINE\t" + header
-	}
-	fmt.Fprintln(w, "  "+header)
+	table := [][]string{heads(view, perLine, "BRANCH", "HEAD", "HOLDS", "LATEST STABLE", "STATUS")}
 	for _, h := range targets {
 		latest := "-"
 		if h.Stable != nil {
@@ -492,13 +474,116 @@ func renderHoldings(b *strings.Builder, heading, errText string, targets []ship.
 		if holds == "" {
 			holds = "-"
 		}
-		cells := []string{h.Branch, headText(h.Head), holds, latest, holdStatus(h)}
-		if perLine {
-			cells = append([]string{h.Line}, cells...)
-		}
-		fmt.Fprintf(w, "  %s\n", strings.Join(cells, "\t"))
+		table = append(table, row(perLine, h.Line, []string{
+			h.Branch, headCell(view, h.Head), dashed(view, holds), dashed(view, latest), styledBy(view, holdRole, holdStatus(h)),
+		}))
 	}
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	b.WriteString(ui.Align(table, view.Width))
+}
+
+// heads is a row of column heads, as secondary text, indented under its
+// section, with a LINE column in front when the targets are lines.
+func heads(view *style.Renderer, perLine bool, names ...string) []string {
+	cells := make([]string, 0, len(names)+1)
+	if perLine {
+		cells = append(cells, "LINE")
+	}
+	cells = append(cells, names...)
+	for i, c := range cells {
+		cells[i] = view.Style(style.Dim, c)
+	}
+	cells[0] = "  " + cells[0]
+	return cells
+}
+
+// row is a row of cells, indented under its section, with the line in front
+// when the targets are lines.
+func row(perLine bool, line string, cells []string) []string {
+	if perLine {
+		cells = append([]string{line}, cells...)
+	}
+	out := append([]string{}, cells...)
+	out[0] = "  " + out[0]
+	return out
+}
+
+// styledBy is text in the look role gives it, when it gives one.
+func styledBy(view *style.Renderer, role func(string) (style.Role, bool), text string) string {
+	if r, ok := role(text); ok {
+		return view.Style(r, text)
+	}
+	return text
+}
+
+// dashed is text, or a dash for none as secondary text.
+func dashed(view *style.Renderer, text string) string {
+	if text == "-" {
+		return view.Style(style.Dim, text)
+	}
+	return text
+}
+
+// headCell is a branch head, or an error when the host has no such branch.
+func headCell(view *style.Renderer, commit string) string {
+	text := headText(commit)
+	if commit == "" {
+		return view.Style(style.Error, text)
+	}
+	return text
+}
+
+// nextCell is the candidates for the next release: a dash or what may not be
+// made now is secondary text, and what may be made is not.
+func nextCell(view *style.Renderer, next []Next) string {
+	text := nextText(next)
+	if text == "-" || strings.HasPrefix(text, "(") {
+		return view.Style(style.Dim, text)
+	}
+	return text
+}
+
+// stateRole is the look of where a line stands.
+func stateRole(text string) (style.Role, bool) {
+	switch {
+	case text == "released":
+		return style.OK, true
+	case strings.HasPrefix(text, "work since release"), strings.HasPrefix(text, "rc open, work since"):
+		return style.Warn, true
+	case text == "no release", text == "-", strings.HasPrefix(text, "rc open"):
+		return style.Dim, true
+	}
+	return style.Dim, false
+}
+
+// localRole is the look of how a branch of the clone compares with the host's.
+func localRole(text string) (style.Role, bool) {
+	switch {
+	case text == "in sync":
+		return style.OK, true
+	case strings.HasPrefix(text, "diverged"), strings.HasPrefix(text, "unreadable"):
+		return style.Error, true
+	case strings.HasPrefix(text, "behind"), strings.HasPrefix(text, "ahead"), text == "no local branch":
+		return style.Warn, true
+	case text == "-":
+		return style.Dim, true
+	}
+	return style.Dim, false
+}
+
+// holdRole is the look of how a branch stands against the latest release.
+func holdRole(text string) (style.Role, bool) {
+	switch {
+	case text == "current":
+		return style.OK, true
+	case strings.HasPrefix(text, "unreadable"), text == "unknown":
+		return style.Error, true
+	case strings.HasPrefix(text, "behind"), strings.HasPrefix(text, "ahead"),
+		strings.HasPrefix(text, "on stable"), strings.HasPrefix(text, "on a prerelease"):
+		return style.Warn, true
+	case text == "-":
+		return style.Dim, true
+	}
+	return style.Dim, false
 }
 
 // branchText is the branch, with a note when it is the default branch because the
