@@ -63,6 +63,8 @@ All of it is additive: a config without these keys behaves as it does today.
 
 A scheme is code, named in config and claimed from one registry, as update strategies are, and it is table-tested on real tags. It answers four questions: which line a tag is for, which stage, in what order tags of one line and stage come, and which tag is the newest.
 
+In Go, `internal/calver` has a `Scheme` (its name, `Parse` of a tag name into a `Tag` with its line, stage and UTC time, and `Compare` of two tags of one line and stage), a registry of the schemes gero has that is listed explicitly as `updatedispatcher.Builtin` is, and two functions over a scheme and a list of tag names: `Select` (the tags of a line and stage, newest first) and `Lines` (the lines the tags carry, newest first). It works on names and takes no `git` type, so it needs no repository. `semver` is not in it: a project that keeps the default has per-line branches and no scheme to ask.
+
 **`calverLineStage`** (the Assets tags):
 * The format is `v{minor}-{YYYYMMDD}T{HHMM}Z`, with `-dev` after it for dev. The date is UTC and to the minute, and it is the commit time of the commit that was released, not the build time. Prod and dev tags of one commit share it.
 * The stage is the suffix: `-dev` is `dev` and none is `release`. The line is the `v{minor}` prefix.
