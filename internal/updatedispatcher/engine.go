@@ -108,6 +108,21 @@ func (e *Engine) RoutesFrom(producer config.Project) []Route {
 	return out
 }
 
+// IncomingRoute is a way into a consumer: the producer whose edge names it, and
+// the route that edge is.
+type IncomingRoute struct {
+	Producer config.Project
+	Route
+}
+
+// RoutesInto returns the routes into the consumer, in the config order of the
+// producers and of their edges: the reverse view of RoutesFrom, for what a project
+// takes and not what it ships. An edge whose method was not built is left out, as
+// RoutesFrom leaves it out.
+//
+// STUB: none until a later commit.
+func (e *Engine) RoutesInto(consumer config.Project) []IncomingRoute { return nil }
+
 func (e *Engine) route(edge config.Edge) (Route, bool) {
 	for _, p := range e.projects {
 		if p.Name != edge.To && !strings.EqualFold(p.Repo.Name, edge.To) {
