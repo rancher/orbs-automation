@@ -231,7 +231,7 @@ func TestLoadIgnoresUnrelatedFiles(t *testing.T) {
 // fixtures, so its count is pinned; the real one grows as projects are onboarded,
 // so it is only required to hold the projects the rest of the tests lean on.
 func TestLoadRepoConfigDirs(t *testing.T) {
-	for dir, wantProjects := range map[string]int{"../../../config": 0, "../../../config-mock": 7} {
+	for dir, wantProjects := range map[string]int{"../../../config": 0, "../../../config-mock": 8} {
 		t.Run(dir, func(t *testing.T) {
 			got, err := Load(os.DirFS(dir))
 

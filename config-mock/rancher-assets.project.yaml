@@ -1,0 +1,36 @@
+# MOCK config for review. Shape is not final.
+# Synced with config/rancher-assets.project.yaml. Unowned and managed by the
+# release team: gero observes its edge to rancher and never opens a PR for it.
+# Its Rancher lines are in its tags (v2.16-20261030T1111Z, -dev for the dev stage),
+# not in branches, and it lists only the lines it is used for.
+# Charts feeds it from v2.16 on (through lock.yaml); that edge waits for stretch 2
+# of docs/specs/CHAIN_TRACING.md.
+apiVersion: gero/v1alpha1
+kind: Project
+name: rancher-assets
+spec:
+  repo:
+    name: rancher/rancher-assets
+    owned: false
+    managedBy: release-team
+  release:
+    requiresPrerelease: true
+    branching: perLineTag
+    tagScheme: calverLineStage
+    lines:
+      - line: v2.16
+  pullRequests:
+    title: "[{branch}] Update {source} to {version}"
+    branchPrefix: "bot/{source}-"
+    labels:
+      - status/auto-created
+      - team/release-team
+  downstream:
+    - to: rancher
+      method: build-yaml-bump
+      # stage: omitted, so the edge follows whichever stage rancher holds (dev or release)
+      params:
+        updateKey: defaultAssetsImage
+        value: "{image}:{tag}"
+  images:
+    - name: rancher/rancher-assets

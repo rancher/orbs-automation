@@ -1,11 +1,18 @@
 # MOCK config for review. Shape is not final.
-# Not owned (the default), so we cannot put config in this repo: all of it lives centrally.
+# Unowned and managed by the release team, so all of its config lives centrally,
+# and its edge to rancher is observed. Only what the loader supports today: one
+# branch per line (the dev tier), and a direct edge to rancher on every line.
+# Stretch 2 of docs/specs/CHAIN_TRACING.md changes this: a branch for each stage
+# (dev-v2.16, release-v2.16), an edge into rancher-assets from v2.16 on, and the
+# edge into rancher only until v2.15. See config/rancher-charts.project.yaml (WIP).
 apiVersion: gero/v1alpha1
 kind: Project
 name: rancher-charts
 spec:
   repo:
     name: rancher/charts
+    owned: false
+    managedBy: release-team
   release:
     branching: perLine
     lines:
@@ -17,6 +24,8 @@ spec:
         branch: dev-v2.14
       - line: v2.13
         branch: dev-v2.13
+      - line: v2.12
+        branch: dev-v2.12
   # Conventions every producer follows when opening PRs here (labels default to none).
   pullRequests:
     title: "[{branch}] {package} {chartVersion} {action}"   # action: bump (prerelease) | UnRC (stable)
@@ -30,7 +39,7 @@ spec:
       accept:
         when: all                   # RC bumps and stable "UnRC" bumps both
   downstream:
-    - to: rancher-rancher
+    - to: rancher
       method: build-yaml-bump-all
       params:
         updateKey: webhookVersion   # key varies per chart

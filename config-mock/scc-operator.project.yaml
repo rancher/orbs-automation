@@ -1,4 +1,4 @@
-# MOCK config for review. Shape is not final.
+# MOCK config for review. Shape is not final. Synced with config/scc-operator.project.yaml.
 # One release line (main + v* tags) serving every Rancher line, no release branches.
 # Defaults apply: branches single, tagPattern "v*", lines follow the producer (universal here, since it lists none). requiresPrerelease
 # is opted in because stable must come from a commit that already has an RC.
@@ -12,7 +12,7 @@ spec:
   release:
     requiresPrerelease: true
   downstream:
-    - to: rancher-rancher
+    - to: rancher
       method: build-yaml-bump
       params:
         updateKey: defaultSccOperatorImage
