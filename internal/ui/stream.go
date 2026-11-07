@@ -27,7 +27,13 @@ type Stream struct {
 
 // NewStream returns a Stream that writes to w. Tables are indented by two
 // spaces, as the reports of gero are.
-func NewStream(w io.Writer) *Stream { return &Stream{w: w, indent: "  "} }
+func NewStream(w io.Writer, opts ...Option) *Stream {
+	s := &Stream{w: w, indent: "  "}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
 
 // Line prints a line now, or holds it while a table is open. A newline is added.
 func (s *Stream) Line(text string) {
