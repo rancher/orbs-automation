@@ -4,11 +4,8 @@
 package ui
 
 import (
-	"bytes"
-	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 )
 
 // Stream writes lines as they are given, except while a table is open: a table
@@ -18,6 +15,7 @@ import (
 type Stream struct {
 	w      io.Writer
 	indent string
+	width  func(string) int // how wide a cell is; nil counts runes
 	err    error
 
 	open bool       // a table is open
@@ -69,13 +67,15 @@ func (s *Stream) EndTable() {
 		return
 	}
 	if len(s.rows) > 1 {
-		var buf bytes.Buffer
-		w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-		for _, row := range s.rows {
-			_, _ = fmt.Fprintln(w, s.indent+strings.Join(row, "\t"))
+		rows := make([][]string, len(s.rows))
+		for i, row := range s.rows {
+			if len(row) == 0 {
+				rows[i] = []string{s.indent}
+				continue
+			}
+			rows[i] = append([]string{s.indent + row[0]}, row[1:]...)
 		}
-		_ = w.Flush() // into a buffer, which cannot fail
-		s.write(buf.String())
+		s.write(Align(rows, s.width))
 	}
 	held := s.held
 	s.open, s.rows, s.held = false, nil, nil
