@@ -185,7 +185,10 @@ func (c calverScheme) newest(tags []git.Tag, lines []string, stage string) *stam
 	return best
 }
 
-func (calverScheme) Stage(string) string { return "" }
+func (c calverScheme) Stage(tag string) string {
+	t, _ := c.inner.Parse(tag)
+	return t.Stage
+}
 
 func (c calverScheme) IsStable(tag string) bool {
 	t, ok := c.inner.Parse(tag)
