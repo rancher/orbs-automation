@@ -1,6 +1,6 @@
 # REPL
 
-**Status:** draft. Steps 1 and 2 of the build order are built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `cd`, `exit` and the working directory); `gero repl` runs it, with the plain reader, behind the start checks.
+**Status:** draft. Steps 1 to 3 of the build order are built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `cd`, `shell`, `exit` and the working directory); `gero repl` runs it, with the plain reader, behind the start checks.
 
 `gero repl` is an interactive prompt that runs `gero` commands one line at a time, with a few shell-like commands of its own so a user has less reason to leave it. It is not a shell: it is started from one, and exiting returns to it. The goal is fewer trips out, not a replacement for the user's shell.
 
@@ -109,11 +109,11 @@ The REPL loop, the REPL-only commands and the shell hand-off are in `internal/cl
 
 ## Not built yet
 
-Steps 1 and 2 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the runner and the project lookup of `cd` and `ls` injected) and the `gero repl` command in `cmd/`, which makes the start checks, builds the tree for each line (`newRootCmd`), carries the global flags given to `gero repl` into every line, and turns Ctrl-C into a cancel of the running line. `cd <project>` asks the same `cdpath` lookup as `gero cd` and then calls `os.Chdir` itself, so the process's working directory is the REPL's and commands see it. The REPL sets `GERO_REPL` in its own process, so a `repl` line typed at the prompt is refused. The terminal path has been run only under tests: the unit tests drive the line runner, and a real prompt has not been tried by hand. `help` is not yet its own command, `!` is deferred, and an unknown name gets cobra's error and not a suggestion of `!`. In the order it is meant to land, stopping when users stop leaving:
+Steps 1 to 3 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the runner and the project lookup of `cd` and `ls` injected) and the `gero repl` command in `cmd/`, which makes the start checks, builds the tree for each line (`newRootCmd`), carries the global flags given to `gero repl` into every line, and turns Ctrl-C into a cancel of the running line. `cd <project>` asks the same `cdpath` lookup as `gero cd` and then calls `os.Chdir` itself, so the process's working directory is the REPL's and commands see it. `shell` is `repl.Session.shell`: it checks `$SHELL`, marks the environment and calls `execx.Passthrough` through an injected function, tested with a fake and, for the real hand-off, with a non-interactive `sh`. A real interactive child on a terminal has not been tried by hand. The REPL sets `GERO_REPL` in its own process, so a `repl` line typed at the prompt is refused. The terminal path has been run only under tests: the unit tests drive the line runner, and a real prompt has not been tried by hand. `help` is not yet its own command, `!` is deferred, and an unknown name gets cobra's error and not a suggestion of `!`. In the order it is meant to land, stopping when users stop leaving:
 
 1. The loop, `pwd`, `ls` and `exit`, with the working directory as state.
 2. `cd <project>` (built).
-3. `shell`, with `GERO_REPL` in its child's environment and the `execx` `Passthrough` entry point (decided above, not yet built). The REPL already sets `GERO_REPL` in its own process, so a nested `gero repl` is refused today.
+3. `shell` (built), with `GERO_REPL` in its child's environment and the `execx` `Passthrough` entry point. The REPL already sets `GERO_REPL` in its own process, so a nested `gero repl` is refused today.
 4. History, line editing and completion.
 5. The prompt template, `repl.prompt` and its placeholders, which also puts the project in the prompt for a user who wants it. Until then the prompt is the plain default.
 
