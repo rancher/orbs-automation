@@ -9,10 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -165,9 +165,8 @@ func local(ws Workspace, open Opener, slug string) LocalInfo {
 }
 
 func renderText(i Info, view *style.Renderer) string {
-	_ = view
 	var b strings.Builder
-	section(&b, i.Slug, func(row func(label, value string)) {
+	section(&b, view, i.Slug, func(row func(label, value string)) {
 		row("owned", yesNo(i.Owned))
 		row("default branch", i.DefaultBranch)
 		row("release branching", i.Release.Branching)
@@ -175,39 +174,39 @@ func renderText(i Info, view *style.Renderer) string {
 		row("requires prerelease", yesNo(i.Release.RequiresPrerelease))
 	})
 	if len(i.Release.Lines) > 0 {
-		renderLines(&b, i)
+		renderLines(&b, view, i)
 	}
-	renderLocal(&b, i.Local)
+	renderLocal(&b, view, i.Local)
 	return b.String()
 }
 
-// section writes a heading and, under it, rows of aligned label and value.
-func section(b *strings.Builder, heading string, rows func(row func(label, value string))) {
+// section writes a heading and, under it, rows of aligned label and value. The
+// labels are secondary text.
+func section(b *strings.Builder, view *style.Renderer, heading string, rows func(row func(label, value string))) {
 	if b.Len() > 0 {
 		b.WriteString("\n")
 	}
-	b.WriteString(heading + "\n")
-	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
-	rows(func(label, value string) { fmt.Fprintf(w, "  %s\t%s\n", label, value) })
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	b.WriteString(view.Style(style.Heading, heading) + "\n")
+	var table [][]string
+	rows(func(label, value string) { table = append(table, []string{"  " + view.Style(style.Dim, label), value}) })
+	b.WriteString(ui.Align(table, view.Width))
 }
 
-func renderLines(b *strings.Builder, i Info) {
-	b.WriteString("\nRelease lines\n")
-	w := tabwriter.NewWriter(b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "  LINE\tSERIES\tBRANCH")
+func renderLines(b *strings.Builder, view *style.Renderer, i Info) {
+	b.WriteString("\n" + view.Style(style.Heading, "Release lines") + "\n")
+	table := [][]string{{"  " + view.Style(style.Dim, "LINE"), view.Style(style.Dim, "SERIES"), view.Style(style.Dim, "BRANCH")}}
 	for _, l := range i.Release.Lines {
 		branch := l.Branch
 		if l.IsDefaultBranch {
 			branch += " (default branch)"
 		}
-		fmt.Fprintf(w, "  %s\t%s\t%s\n", l.Line, l.Series, branch)
+		table = append(table, []string{"  " + l.Line, l.Series, branch})
 	}
-	_ = w.Flush()
+	b.WriteString(ui.Align(table, view.Width))
 }
 
-func renderLocal(b *strings.Builder, l LocalInfo) {
-	section(b, "Local clone", func(row func(label, value string)) {
+func renderLocal(b *strings.Builder, view *style.Renderer, l LocalInfo) {
+	section(b, view, "Local clone", func(row func(label, value string)) {
 		if l.Path != "" {
 			row("path", fmt.Sprintf("%s (%s)", l.Path, l.Source))
 		}
@@ -218,10 +217,14 @@ func renderLocal(b *strings.Builder, l LocalInfo) {
 			row("commit", l.Commit)
 		}
 		if l.Branch != "" && l.Error == "" {
-			row("work tree", map[bool]string{true: "changes or an operation in progress", false: "clean"}[l.Dirty])
+			if l.Dirty {
+				row("work tree", view.Style(style.Warn, "changes or an operation in progress"))
+			} else {
+				row("work tree", view.Style(style.OK, "clean"))
+			}
 		}
 		if l.Error != "" {
-			row("state", "unavailable: "+l.Error)
+			row("state", view.Style(style.Error, "unavailable: "+l.Error))
 		}
 	})
 }
