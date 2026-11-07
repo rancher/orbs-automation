@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/ui/editor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -234,7 +235,7 @@ func TestLoopShowsThePromptRunsLinesAndKeepsGoingAfterAnError(t *testing.T) {
 	s := &Session{Dir: "/work", Run: func(context.Context, string, []string) error { return errors.New("bad line") }}
 	var out, errOut bytes.Buffer
 
-	err := Loop(context.Background(), strings.NewReader("pwd\nrepo status\n\npwd\nexit\npwd\n"), &out, &errOut, s)
+	err := Loop(context.Background(), editor.NewPlain(strings.NewReader("pwd\nrepo status\n\npwd\nexit\npwd\n"), &out), &out, &errOut, s)
 
 	require.NoError(t, err)
 	assert.Equal(t, "gero> /work\ngero> gero> gero> /work\ngero> ", out.String())
@@ -245,7 +246,7 @@ func TestLoopEndsAtEndOfInput(t *testing.T) {
 	s := &Session{Dir: "/work"}
 	var out, errOut bytes.Buffer
 
-	err := Loop(context.Background(), strings.NewReader("pwd\n"), &out, &errOut, s)
+	err := Loop(context.Background(), editor.NewPlain(strings.NewReader("pwd\n"), &out), &out, &errOut, s)
 
 	require.NoError(t, err)
 	assert.Equal(t, "gero> /work\ngero> \n", out.String())
@@ -255,7 +256,7 @@ func TestLoopReportsASplitErrorAndGoesOn(t *testing.T) {
 	s := &Session{Dir: "/work"}
 	var out, errOut bytes.Buffer
 
-	err := Loop(context.Background(), strings.NewReader("ls \"oops\npwd\n"), &out, &errOut, s)
+	err := Loop(context.Background(), editor.NewPlain(strings.NewReader("ls \"oops\npwd\n"), &out), &out, &errOut, s)
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, errOut.String())

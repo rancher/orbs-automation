@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/ui/editor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -138,7 +139,7 @@ func TestLoopGoesOnAfterTheShellReturns(t *testing.T) {
 	s := &Session{Dir: "/work", Env: []string{"SHELL=" + userShell(t)}, StartShell: fakeShell(&calls, nil)}
 	var out, errOut bytes.Buffer
 
-	err := Loop(context.Background(), strings.NewReader("shell\npwd\nexit\n"), &out, &errOut, s)
+	err := Loop(context.Background(), editor.NewPlain(strings.NewReader("shell\npwd\nexit\n"), &out), &out, &errOut, s)
 
 	require.NoError(t, err)
 	assert.Len(t, calls, 1)

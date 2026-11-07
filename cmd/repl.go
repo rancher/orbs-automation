@@ -69,7 +69,12 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 		close(sigs)
 	}()
 	sess.Run = repl.Interruptible(sigs, lineRunner(baseFlags(cmd), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr()))
-	return repl.Loop(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), sess)
+	reader, err := repl.NewReader(cmd.InOrStdin(), cmd.OutOrStdout(), "", nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = reader.Close() }()
+	return repl.Loop(cmd.Context(), reader, cmd.OutOrStdout(), cmd.ErrOrStderr(), sess)
 }
 
 // globalFlags are the names addGlobalFlags declares, the only flags that can be

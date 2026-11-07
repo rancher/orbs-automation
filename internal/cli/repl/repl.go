@@ -5,7 +5,6 @@
 package repl
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +13,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rancher/orbs-automation/internal/ui/editor"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // Runner runs one line of the command tree, already split into words and
@@ -36,6 +38,8 @@ type Session struct {
 	// environment of the shell it starts, and StartShell starts it.
 	Env        []string
 	StartShell ShellFunc
+	// Style is how the prompt looks. Nil is plain.
+	Style *style.Renderer
 }
 
 // ErrGeroPrefix is returned for a line that starts with gero.
@@ -213,19 +217,19 @@ func (s *Session) projectDir(key string) (string, error) {
 	return s.ProjectDir(key)
 }
 
-// Loop reads lines from in until it ends or a line leaves the REPL, showing the
-// prompt and results on out and the errors of lines on errOut.
-func Loop(ctx context.Context, in io.Reader, out, errOut io.Writer, s *Session) error {
-	sc := bufio.NewScanner(in)
+// Loop reads lines from r until it ends or a line leaves the REPL, showing the
+// results on out and the errors of lines on errOut. The prompt is shown by r.
+func Loop(ctx context.Context, r editor.Reader, out, errOut io.Writer, s *Session) error {
 	for {
-		if _, err := io.WriteString(out, Prompt()); err != nil {
+		line, err := r.ReadLine(s.prompt())
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				_, werr := io.WriteString(out, "\n")
+				return werr
+			}
 			return err
 		}
-		if !sc.Scan() {
-			_, err := io.WriteString(out, "\n")
-			return errors.Join(err, sc.Err())
-		}
-		exit, err := s.Exec(ctx, out, sc.Text())
+		exit, err := s.Exec(ctx, out, line)
 		if err != nil {
 			if _, werr := fmt.Fprintln(errOut, "Error:", err); werr != nil {
 				return werr
@@ -235,4 +239,15 @@ func Loop(ctx context.Context, in io.Reader, out, errOut io.Writer, s *Session) 
 			return nil
 		}
 	}
+}
+
+// prompt is what is shown before each line: the default prompt, in the look of
+// a prompt when the terminal has color.
+func (s *Session) prompt() string { return Prompt() }
+
+// NewReader is the line reader for gero repl on a terminal: line editing, history
+// kept in historyFile (none when empty) and completion with complete (none when
+// nil).
+func NewReader(in io.Reader, out io.Writer, historyFile string, complete editor.Complete) (editor.Reader, error) {
+	return editor.NewPlain(in, out), nil
 }
