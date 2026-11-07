@@ -132,4 +132,15 @@ func ProjectNames(s clicfg.Settings, cwd string) []string {
 	return projectNames(workspace.Open(s, cwd))
 }
 
-func projectNames(ws ConfigWorkspace) []string { return nil }
+func projectNames(ws ConfigWorkspace) []string {
+	cfg, err := ws.Config()
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(cfg.Projects))
+	for _, p := range cfg.Projects {
+		names = append(names, p.Name)
+	}
+	sort.Strings(names)
+	return names
+}
