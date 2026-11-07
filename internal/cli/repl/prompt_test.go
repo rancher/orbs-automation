@@ -1,10 +1,13 @@
 package repl
 
 import (
+	"context"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -145,4 +148,118 @@ func TestPromptTemplateOfTheDefaultSettingsIsTheDefaultPrompt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "gero> ", tmpl.Render(Values{Dir: "/w"}))
 	assert.Equal(t, "gero (shell)> ", tmpl.Render(Values{Project: "shell", Dir: "/w"}))
+}
+
+// whereAmI is a ProjectOf that knows two directories and counts what it was asked.
+type whereAmI struct {
+	projects map[string]string
+	asked    []string
+}
+
+func (w *whereAmI) of(dir string) string {
+	w.asked = append(w.asked, dir)
+	return w.projects[dir]
+}
+
+func promptsOf(t *testing.T, s *Session, steps ...step) []string {
+	t.Helper()
+	r := &scripted{steps: steps}
+	require.NoError(t, Loop(context.Background(), r, io.Discard, io.Discard, s))
+	return r.prompts
+}
+
+func TestThePromptNamesTheProjectTheSessionStartedIn(t *testing.T) {
+	w := &whereAmI{projects: map[string]string{"/src/scc": "scc-operator"}}
+	tmpl, err := ParseTemplate(clicfg.DefaultReplPrompt)
+	require.NoError(t, err)
+	s := &Session{Dir: "/src/scc", Template: tmpl, ProjectOf: w.of}
+
+	prompts := promptsOf(t, s)
+
+	assert.Equal(t, []string{"gero (scc-operator)> "}, prompts)
+}
+
+func TestThePromptOutsideAProjectIsThePlainOne(t *testing.T) {
+	w := &whereAmI{}
+	tmpl, err := ParseTemplate(clicfg.DefaultReplPrompt)
+	require.NoError(t, err)
+
+	prompts := promptsOf(t, &Session{Dir: "/work", Template: tmpl, ProjectOf: w.of})
+
+	assert.Equal(t, []string{"gero> "}, prompts)
+}
+
+func TestWithoutATemplateOrALookupThePromptIsTheDefaultOne(t *testing.T) {
+	assert.Equal(t, []string{"gero> "}, promptsOf(t, &Session{Dir: "/work"}))
+}
+
+// The project is worked out when the directory changes and at the start, and
+// not on every line: the prompt is drawn each time and must stay cheap.
+func TestTheProjectIsLookedUpAtTheStartAndAfterACdAndNotOnEveryLine(t *testing.T) {
+	start := t.TempDir()
+	clone := t.TempDir()
+	t.Chdir(start)
+	w := &whereAmI{projects: map[string]string{clone: "rancher"}}
+	tmpl, err := ParseTemplate(clicfg.DefaultReplPrompt)
+	require.NoError(t, err)
+	s := &Session{Dir: start, Template: tmpl, ProjectOf: w.of, ProjectDir: projects(map[string]string{"rancher": clone})}
+
+	prompts := promptsOf(t, s, step{"pwd", nil}, step{"pwd", nil}, step{"cd rancher", nil}, step{"pwd", nil}, step{"pwd", nil})
+
+	assert.Equal(t, []string{start, clone}, w.asked, "once at the start, once for the cd, none for the five lines")
+	assert.Equal(t, []string{
+		"gero> ", "gero> ", "gero> ", "gero (rancher)> ", "gero (rancher)> ", "gero (rancher)> ",
+	}, prompts)
+}
+
+func TestAFailedCdDoesNotLookTheProjectUpAgain(t *testing.T) {
+	start := t.TempDir()
+	t.Chdir(start)
+	w := &whereAmI{}
+	s := &Session{Dir: start, ProjectOf: w.of, ProjectDir: projects(nil)}
+
+	_ = promptsOf(t, s, step{"cd nowhere", nil})
+
+	assert.Equal(t, []string{start}, w.asked)
+}
+
+func TestThePathPlaceholderUsesTheHomeOfTheSession(t *testing.T) {
+	tmpl, err := ParseTemplate("{path}$ ")
+	require.NoError(t, err)
+
+	prompts := promptsOf(t, &Session{Dir: "/home/dan/src", Home: "/home/dan", Template: tmpl})
+
+	assert.Equal(t, []string{"~/src$ "}, prompts)
+}
+
+func TestTheTemplatesTrailingSpaceIsNotStyledAndThePromptStaysOneLine(t *testing.T) {
+	v := style.New(clicfg.Terminal{StdoutTTY: true, Profile: clicfg.Profile256})
+	tmpl, err := ParseTemplate("[{dir}]> ")
+	require.NoError(t, err)
+
+	prompts := promptsOf(t, &Session{Dir: "/src/scc", Template: tmpl, Style: v})
+
+	require.Len(t, prompts, 1)
+	assert.Equal(t, v.Style(style.Prompt, "[scc]>")+" ", prompts[0])
+	assert.NotContains(t, prompts[0], "\n")
+}
+
+func TestATemplateWithNoTrailingSpaceIsStyledWhole(t *testing.T) {
+	v := style.New(clicfg.Terminal{StdoutTTY: true, Profile: clicfg.Profile256})
+	tmpl, err := ParseTemplate("{dir}$")
+	require.NoError(t, err)
+
+	prompts := promptsOf(t, &Session{Dir: "/src/scc", Template: tmpl, Style: v})
+
+	assert.Equal(t, []string{v.Style(style.Prompt, "scc$")}, prompts)
+}
+
+func TestAnEmptyPromptIsNothingAndNeverEscapes(t *testing.T) {
+	v := style.New(clicfg.Terminal{StdoutTTY: true, Profile: clicfg.Profile256})
+	tmpl, err := ParseTemplate("")
+	require.NoError(t, err)
+
+	prompts := promptsOf(t, &Session{Dir: "/", Template: tmpl, Style: v})
+
+	assert.Equal(t, []string{""}, prompts, "no empty escape pair around nothing")
 }
