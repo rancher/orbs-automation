@@ -33,6 +33,7 @@ linters:
             - github.com/go-git/go-git
             - go.yaml.in/yaml/v3
             - golang.org/x/net/html
+            - golang.org/x/term
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
         # internal/errs for exit-code errors and its own subpackages.
@@ -104,6 +105,17 @@ linters:
           deny:
             - pkg: golang.org/x/net/html
               desc: the HTML parser is only allowed in internal/lifecycle (docs/specs/DEPENDENCY_POLICY.md)
+        # The terminal checks (is this a TTY, how wide) stay in one package, so
+        # the rest of gero asks it and never the library
+        # (docs/specs/DEPENDENCY_POLICY.md).
+        noxterm:
+          list-mode: lax
+          files:
+            - "!**/internal/cli/termfacts/**"
+            - "!$test"
+          deny:
+            - pkg: golang.org/x/term
+              desc: golang.org/x/term is only allowed in internal/cli/termfacts (docs/specs/DEPENDENCY_POLICY.md)
         # Central config is loaded, defaulted and validated only by
         # internal/workspace, so no command can use config that skipped them
         # (docs/specs/WORKSPACE.md, docs/specs/PROJECT_LAYOUT.md).
