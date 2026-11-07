@@ -26,7 +26,7 @@ func Refuse(getenv func(string) string, term clicfg.Terminal, ci bool) error {
 	case getenv(EnvRepl) != "":
 		return errors.New("already in a gero repl (" + EnvRepl + " is set): exit it first, or use your shell")
 	}
-	if t := getenv("TERM"); t == "" || t == "dumb" {
+	if !term.Cursor {
 		return errors.New("gero repl needs a terminal that can move the cursor, and TERM is unset or dumb. " +
 			"Use your shell instead")
 	}

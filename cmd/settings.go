@@ -42,6 +42,11 @@ func flagLookup(cmd *cobra.Command) clicfg.FlagLookup {
 				return clicfg.OutputJSON, true
 			}
 		}
+		if name == "color" && !flags.Changed("color") {
+			if no, err := flags.GetBool("no-color"); err == nil && no {
+				return clicfg.ColorNever, true
+			}
+		}
 		if name == "log" {
 			n, err := flags.GetCount("verbose")
 			switch {

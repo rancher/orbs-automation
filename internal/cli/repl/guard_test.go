@@ -21,18 +21,18 @@ func TestRefuse(t *testing.T) {
 		name    string
 		env     map[string]string
 		tty, ci bool
+		cursor  bool
 		want    string // empty: it starts
 	}{
-		{"a terminal", map[string]string{"TERM": "xterm-256color"}, true, false, ""},
-		{"no terminal", map[string]string{"TERM": "xterm"}, false, false, "terminal"},
-		{"CI", map[string]string{"TERM": "xterm"}, true, true, "CI"},
-		{"inside a REPL", map[string]string{"TERM": "xterm", "GERO_REPL": "1"}, true, false, "GERO_REPL"},
-		{"TERM unset", map[string]string{}, true, false, "TERM"},
-		{"TERM dumb", map[string]string{"TERM": "dumb"}, true, false, "TERM"},
+		{"a terminal", nil, true, false, true, ""},
+		{"no terminal", nil, false, false, true, "terminal"},
+		{"CI", nil, true, true, true, "CI"},
+		{"inside a REPL", map[string]string{"GERO_REPL": "1"}, true, false, true, "GERO_REPL"},
+		{"no cursor control", nil, true, false, false, "TERM"},
 	}
 	require.NotEmpty(t, rows)
 	for _, r := range rows {
-		err := Refuse(env(r.env), clicfg.Terminal{StdinTTY: r.tty, StdoutTTY: r.tty}, r.ci)
+		err := Refuse(env(r.env), clicfg.Terminal{StdinTTY: r.tty, StdoutTTY: r.tty, Cursor: r.cursor}, r.ci)
 
 		if r.want == "" {
 			assert.NoError(t, err, r.name)
