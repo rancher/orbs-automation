@@ -119,9 +119,17 @@ type IncomingRoute struct {
 // producers and of their edges: the reverse view of RoutesFrom, for what a project
 // takes and not what it ships. An edge whose method was not built is left out, as
 // RoutesFrom leaves it out.
-//
-// STUB: none until a later commit.
-func (e *Engine) RoutesInto(consumer config.Project) []IncomingRoute { return nil }
+func (e *Engine) RoutesInto(consumer config.Project) []IncomingRoute {
+	var out []IncomingRoute
+	for _, producer := range e.projects {
+		for _, edge := range producer.Downstream {
+			if r, ok := e.route(edge); ok && r.Consumer.Name == consumer.Name {
+				out = append(out, IncomingRoute{Producer: producer, Route: r})
+			}
+		}
+	}
+	return out
+}
 
 func (e *Engine) route(edge config.Edge) (Route, bool) {
 	for _, p := range e.projects {
