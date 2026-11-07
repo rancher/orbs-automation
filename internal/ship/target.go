@@ -8,19 +8,31 @@ import (
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
+// head is the consumer's branch as the host has it, and its files at that
+// commit. It is the first thing read of a target, by a run and by gero repo
+// status alike.
+func (r resolution) head(ws Reader, branch string) (Target, updatedispatcher.Tree, error) {
+	consumerSlug := r.route.Consumer.Repo.Name
+	head, ok := r.consumerRefs.Branch(branch)
+	if !ok {
+		return Target{}, nil, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, branch)
+	}
+	target := Target{Branch: head.Name, Commit: head.Commit}
+	return target, updatedispatcher.HostTree(ws, consumerSlug, target.Commit), nil
+}
+
 // checkTarget reads what one consumer branch holds and decides what a bump of it
 // would be: nothing, blocked, or a PR, with the PR previewed. The images are the
 // release's and are checked once by the caller. It returns an error when the
 // branch or its file cannot be read.
-func (r resolution) checkTarget(ctx context.Context, ws Workspace, sp spec, in Input) (TargetPlan, error) {
+func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Input) (TargetPlan, error) {
 	branch := sp.branch
 	consumerSlug := r.route.Consumer.Repo.Name
-	head, ok := r.consumerRefs.Branch(branch)
-	if !ok {
-		return TargetPlan{}, fmt.Errorf("%w: %s has no branch %s", ErrBranchNotFound, consumerSlug, branch)
+	target, tree, err := r.head(ws, branch)
+	if err != nil {
+		return TargetPlan{}, err
 	}
-	target := Target{Branch: head.Name, Commit: head.Commit}
-	chk, err := r.invocation.Check(ctx, updatedispatcher.HostTree(ws, consumerSlug, target.Commit), r.relOf(sp.release))
+	chk, err := r.invocation.Check(ctx, tree, r.relOf(sp.release))
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("read %s of %s: %w", target.Branch, consumerSlug, err)
 	}

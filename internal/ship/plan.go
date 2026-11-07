@@ -28,9 +28,11 @@ var (
 	ErrBranchNotFound = errors.New("no such branch")
 )
 
-// Workspace is what the state check needs from the invocation's workspace. It
-// is defined here, where it is consumed, so tests can use a fake.
-type Workspace interface {
+// Reader is what reading the state of a bump needs from the invocation's
+// workspace: the projects and the update methods, and what the host has. It is
+// all that gero repo status needs to trace the consumers. It is defined here,
+// where it is consumed, so tests can use a fake.
+type Reader interface {
 	// Project returns the project of a config name or slug, or the one the working
 	// directory is in when the key is empty.
 	Project(key string) (config.Project, error)
@@ -42,6 +44,12 @@ type Workspace interface {
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// UpstreamFile reads a file of a repository at a commit from its host.
 	UpstreamFile(ctx context.Context, slug, ref, path string) ([]byte, error)
+}
+
+// Workspace is what a run needs from the invocation's workspace: what is read
+// from the host, and the engineer's clone of the consumer and where to push.
+type Workspace interface {
+	Reader
 	// CloneDir is the directory of the engineer's clone of a repository, or an
 	// error saying how to get one.
 	CloneDir(slug string) (string, error)

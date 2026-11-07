@@ -29,7 +29,7 @@ type resolution struct {
 // resolve finds the producer, picks the route to ship down, binds the edge's
 // params to the consumer's method and resolves the release from the producer's
 // tags on the host.
-func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
+func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 	producer, err := ws.Project(in.Project)
 	if err != nil {
 		return resolution{}, err
@@ -46,6 +46,14 @@ func resolve(ctx context.Context, ws Workspace, in Input) (resolution, error) {
 	if err != nil {
 		return resolution{}, err
 	}
+	return resolveRoute(ctx, ws, engine, producer, route)
+}
+
+// resolveRoute is resolve for a route that is already chosen: it binds the edge
+// to the consumer's method and reads the producer's tags and the consumer's
+// branches from the host. It is how gero repo status traces every consumer of a
+// project with the same pieces that ship one release to one.
+func resolveRoute(ctx context.Context, ws Reader, engine *updatedispatcher.Engine, producer config.Project, route updatedispatcher.Route) (resolution, error) {
 	inv, err := engine.Invoke(route)
 	if err != nil {
 		return resolution{}, err
