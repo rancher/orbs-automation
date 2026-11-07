@@ -10,11 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/registry"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -80,26 +80,43 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 	return registry.CheckProject(ctx, p, c, tag), nil
 }
 
+// statusRole is the look of the status of an image in a registry.
+func statusRole(status string) (style.Role, bool) {
+	switch status {
+	case string(registry.Found):
+		return style.OK, true
+	case string(registry.NotFound), string(registry.Unreachable):
+		return style.Error, true
+	case Skipped:
+		return style.Dim, true
+	}
+	return style.Dim, false
+}
+
 func renderText(r Report, view *style.Renderer) string {
-	_ = view
 	var b strings.Builder
 	kind := "stable"
 	if !r.Stable {
 		kind = "prerelease"
 	}
-	fmt.Fprintf(&b, "%s %s (%s)\n\n", r.Project, r.Tag, kind)
+	b.WriteString(view.Style(style.Heading, fmt.Sprintf("%s %s (%s)", r.Project, r.Tag, kind)) + "\n\n")
 	if len(r.Rows) == 0 {
 		for _, w := range r.Warnings {
-			b.WriteString("Warning: " + w + "\n\n")
+			b.WriteString(view.Style(style.Warn, "Warning: "+w) + "\n\n")
 		}
-		b.WriteString("No image is expected for this tag.\n")
+		b.WriteString(view.Style(style.Dim, "No image is expected for this tag.") + "\n")
 		return b.String()
 	}
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "IMAGE\tREGISTRY\tSTATUS\tREFERENCE")
+	table := [][]string{{
+		view.Style(style.Dim, "IMAGE"), view.Style(style.Dim, "REGISTRY"),
+		view.Style(style.Dim, "STATUS"), view.Style(style.Dim, "REFERENCE"),
+	}}
 	var notFound, unreachable int
 	for _, row := range r.Rows {
 		status := row.Status
+		if role, ok := statusRole(status); ok {
+			status = view.Style(role, status)
+		}
 		if row.Detail != "" {
 			status += " (" + row.Detail + ")"
 		}
@@ -109,15 +126,15 @@ func renderText(r Report, view *style.Renderer) string {
 		case string(registry.Unreachable):
 			unreachable++
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", row.Image, row.Label, status, row.Reference)
+		table = append(table, []string{row.Image, row.Label, status, row.Reference})
 	}
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
+	b.WriteString(ui.Align(table, view.Width))
 	b.WriteString("\n")
 	for _, w := range r.Warnings {
-		b.WriteString("Warning: " + w + "\n\n")
+		b.WriteString(view.Style(style.Warn, "Warning: "+w) + "\n\n")
 	}
 	if notFound+unreachable == 0 {
-		b.WriteString("All required images were found.\n")
+		b.WriteString(view.Style(style.OK, "All required images were found.") + "\n")
 		return b.String()
 	}
 	var parts []string
@@ -127,7 +144,7 @@ func renderText(r Report, view *style.Renderer) string {
 	if unreachable > 0 {
 		parts = append(parts, fmt.Sprintf("%d unreachable", unreachable))
 	}
-	b.WriteString(strings.Join(parts, ", ") + ": the release is not fully published.\n")
+	b.WriteString(view.Style(style.Error, strings.Join(parts, ", ")+": the release is not fully published.") + "\n")
 	return b.String()
 }
 
