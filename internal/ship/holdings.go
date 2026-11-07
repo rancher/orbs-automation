@@ -3,8 +3,10 @@ package ship
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
@@ -133,7 +135,13 @@ func (r resolution) holding(ctx context.Context, ws Reader, sp spec, newest Rele
 		return h
 	}
 	h.Current = chk.Current
-	h.Stable = verdict(sp.release, chk)
+	scheme, err := tagscheme.For(r.producer)
+	if err != nil {
+		h.Error = err.Error()
+		return h
+	}
+	h.Stage = scheme.Stage(heldTag(chk.Current))
+	h.Stable = verdict(scheme, sp.release, chk)
 	switch {
 	case newest.Tag == "":
 	case newest.Tag == sp.release.Tag:
@@ -141,14 +149,40 @@ func (r resolution) holding(ctx context.Context, ws Reader, sp spec, newest Rele
 		h.Newest = &same
 	default:
 		if chkNewest, err := r.invocation.Check(ctx, tree, r.relOf(newest)); err == nil {
-			h.Newest = verdict(newest, chkNewest)
+			h.Newest = verdict(scheme, newest, chkNewest)
 		}
 	}
 	return h
 }
 
-func verdict(rel Release, chk updatedispatcher.Check) *Verdict {
-	return &Verdict{Tag: rel.Tag, Want: chk.Want, UpToDate: chk.UpToDate, Relation: chk.Relation}
+// verdict is the check's answer for a release. When the strategy could not order
+// the value it read against the release, as it cannot for a tag that is no
+// version, the producer's tag scheme does: the tag inside the value against the
+// release's own.
+func verdict(scheme tagscheme.Scheme, rel Release, chk updatedispatcher.Check) *Verdict {
+	v := &Verdict{Tag: rel.Tag, Want: chk.Want, UpToDate: chk.UpToDate, Relation: chk.Relation}
+	held := heldTag(chk.Current)
+	if v.Relation == updatedispatcher.RelationUnknown && scheme.Valid(held) && scheme.Valid(rel.Tag) {
+		switch c := scheme.Compare(rel.Tag, held); {
+		case c > 0:
+			v.Relation = updatedispatcher.RelationNewer
+		case c < 0:
+			v.Relation = updatedispatcher.RelationOlder
+		default:
+			v.Relation = updatedispatcher.RelationSame
+		}
+	}
+	return v
+}
+
+// heldTag is the tag in a value a strategy read: what follows the last colon of an
+// image reference such as rancher/rancher-assets:v2.16-20261030T1111Z-dev, or the
+// whole value when it has none.
+func heldTag(value string) string {
+	if i := strings.LastIndex(value, ":"); i >= 0 {
+		return value[i+1:]
+	}
+	return value
 }
 
 // memoTree reads each file of a tree once, so a branch can be compared with
