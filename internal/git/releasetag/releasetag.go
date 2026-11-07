@@ -120,7 +120,7 @@ func Check(in Input) (Decision, error) {
 	return Decision{Action: Create, Newest: newest}, nil
 }
 
-// newestOf is the newest tag of the line, of any kind: of the series when there
+// Newest is the newest tag of the line, of any kind: of the series when there
 // is one, else of every tag the pattern matches. A tag that is not a version, such
 // as the rolling main-<sha> ones, does not count.
 func Newest(in Input) *git.Tag {
@@ -366,6 +366,23 @@ const (
 // its branch, and the rest of it is not used. "On the tag" is the head's commit
 // being the tag's, which the host alone can say, with no clone. It is "" when
 // there is no head, since there is then no branch to be in a state.
-//
-// STUB: always ""; the states are not worked out until a later commit.
-func StateOf(c Choice) State { return "" }
+func StateOf(c Choice) State {
+	if c.Commit == "" {
+		return ""
+	}
+	newest := Newest(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	if newest == nil {
+		return StateNoRelease
+	}
+	v, _ := semver.Parse(newest.Name)
+	onTag := newest.Commit == c.Commit
+	switch {
+	case v.IsPrerelease() && onTag:
+		return StateRCOpen
+	case v.IsPrerelease():
+		return StateRCOpenWork
+	case onTag:
+		return StateReleased
+	}
+	return StateWorkSinceRelease
+}
