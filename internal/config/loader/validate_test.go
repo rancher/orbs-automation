@@ -184,6 +184,26 @@ func TestValidateProblems(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsOneFinalDestinationOrNone(t *testing.T) {
+	c := valid()
+	require.NoError(t, Validate(c), "none")
+
+	c.Projects[0].FinalDestination = true
+	require.NoError(t, Validate(c), "one")
+}
+
+func TestValidateRefusesTwoFinalDestinations(t *testing.T) {
+	c := valid()
+	c.Projects[0].FinalDestination, c.Projects[1].FinalDestination = true, true
+
+	err := Validate(c)
+
+	require.Error(t, err)
+	for _, want := range []string{"finalDestination", `"a"`, `"b"`, "only one"} {
+		assert.ErrorContains(t, err, want)
+	}
+}
+
 func TestValidateAcceptsPushToAndBotLabels(t *testing.T) {
 	for _, role := range []string{"", "fork", "upstream"} {
 		c := valid()
