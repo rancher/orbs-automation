@@ -9,6 +9,7 @@ package tagscheme
 import (
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/semver"
 )
 
 // Scheme answers the questions of one way of naming releases.
@@ -47,14 +48,55 @@ type semverScheme struct {
 
 func (semverScheme) Name() string { return config.TagSchemeSemver }
 
-func (semverScheme) Valid(string) bool { return false }
+func (semverScheme) Valid(tag string) bool {
+	_, ok := semver.Parse(tag)
+	return ok
+}
 
-func (semverScheme) Lines([]git.Tag) []string { return nil }
+func (s semverScheme) Lines([]git.Tag) []string {
+	var lines []string
+	for _, l := range s.project.Release.Lines {
+		lines = append(lines, l.Line)
+	}
+	return lines
+}
 
-func (semverScheme) LineOf(string) string { return "" }
+func (s semverScheme) LineOf(tag string) string { return s.project.LineOf(tag) }
 
-func (semverScheme) Latest([]git.Tag, string) git.Latest { return git.Latest{} }
+func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
+	if line != "" {
+		series, ok := s.series(line)
+		if !ok {
+			return git.Latest{}
+		}
+		var inLine []git.Tag
+		for _, t := range tags {
+			if git.InSeries(t.Name, series) {
+				inLine = append(inLine, t)
+			}
+		}
+		tags = inLine
+	}
+	return git.LatestReleases(tags, s.project.Release.TagPattern)
+}
 
-func (semverScheme) IsStable(string) bool { return false }
+// series is the version series of the project's line of that name.
+func (s semverScheme) series(line string) (string, bool) {
+	for _, l := range s.project.Release.Lines {
+		if l.Line == line {
+			return l.Series(), true
+		}
+	}
+	return "", false
+}
 
-func (semverScheme) Compare(_, _ string) int { return 0 }
+func (semverScheme) IsStable(tag string) bool { return !semver.Classify(tag).HasPrerelease }
+
+func (semverScheme) Compare(a, b string) int {
+	x, okA := semver.Parse(a)
+	y, okB := semver.Parse(b)
+	if !okA || !okB {
+		return 0
+	}
+	return semver.Compare(x, y)
+}
