@@ -1,10 +1,12 @@
 package repl
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,11 +37,11 @@ func fakeTree(asked *[][]string) func([]string, string) []string {
 	}
 }
 
-func projectNames() []string { return []string{"scc-operator", "shell", "rancher"} }
+func someProjects() []string { return []string{"scc-operator", "shell", "rancher"} }
 
 func complete(t *testing.T, dir, line string) []string {
 	t.Helper()
-	c := Completion{Tree: fakeTree(nil), Projects: projectNames, Dir: func() string { return dir }}
+	c := Completion{Tree: fakeTree(nil), Projects: someProjects, Dir: func() string { return dir }}
 	return c.Complete(line)
 }
 
@@ -129,4 +131,28 @@ func TestACompletionIsSortedSoTheListIsStable(t *testing.T) {
 
 	require.NotEmpty(t, got)
 	assert.IsIncreasing(t, got)
+}
+
+type configOnly struct {
+	cfg config.Config
+	err error
+}
+
+func (c configOnly) Config() (config.Config, error) { return c.cfg, c.err }
+
+func TestProjectNamesAreTheConfigNamesSorted(t *testing.T) {
+	ws := configOnly{cfg: config.Config{Projects: []config.Project{
+		{Name: "shell", Repo: config.Repo{Name: "rancher/shell"}},
+		{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher"}},
+		{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}},
+	}}}
+
+	got := projectNames(ws)
+
+	assert.Equal(t, []string{"rancher", "scc-operator", "shell"}, got)
+}
+
+func TestProjectNamesWithoutAConfigAreNone(t *testing.T) {
+	assert.Empty(t, projectNames(configOnly{err: errors.New("no config directory")}))
+	assert.Empty(t, projectNames(configOnly{}))
 }
