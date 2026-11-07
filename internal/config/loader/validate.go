@@ -3,6 +3,7 @@ package loader
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -126,10 +127,11 @@ func (v *validator) images(where string, p config.Project, phases map[string]str
 func (v *validator) project(p config.Project, phases map[string]string, haveLines bool) {
 	where := fmt.Sprintf("Project %q", p.Name)
 	v.repo(where, p.Repo)
-	v.oneOf(where, "release.branching", p.Release.Branching, config.BranchingSingle, config.BranchingPerLine)
+	v.oneOf(where, "release.branching", p.Release.Branching, config.BranchingSingle, config.BranchingPerLine, config.BranchingPerLineTag)
 	if p.Release.TagPattern == "" {
 		v.add("%s: release.tagPattern is required", where)
 	}
+	v.steward(where, p)
 
 	v.images(where, p, phases, haveLines)
 	v.methods(where, p, phases, haveLines)
@@ -172,6 +174,29 @@ func (v *validator) project(p config.Project, phases map[string]string, haveLine
 	}
 
 }
+
+// steward checks what says who ships a project and how its tags spell a line:
+// managedBy is a team slug, a perLineTag project finds its lines in its tags and so
+// lists none, and a tag scheme other than semver belongs to perLineTag.
+func (v *validator) steward(where string, p config.Project) {
+	if team := p.Repo.ManagedBy; team != "" && !teamSlug.MatchString(team) {
+		v.add("%s: repo.managedBy %q must be a lowercase slug such as orbs or release-team", where, team)
+	}
+	perLineTag := p.Release.Branching == config.BranchingPerLineTag
+	if perLineTag && len(p.Release.Lines) > 0 {
+		v.add("%s: release.lines must be empty for release.branching perLineTag: its lines are found in its tags", where)
+	}
+	// An empty scheme is the default, semver: this runs after WithDefaults, and a
+	// config built by hand may not have been through it.
+	scheme := orDefault(p.Release.TagScheme, DefaultTagScheme)
+	v.oneOf(where, "release.tagScheme", scheme, config.TagSchemeSemver, config.TagSchemeCalverLineStage)
+	if scheme == config.TagSchemeCalverLineStage && !perLineTag {
+		v.add("%s: release.tagScheme %q is for release.branching perLineTag", where, scheme)
+	}
+}
+
+// teamSlug is what a team is called in managedBy: lowercase words joined by dashes.
+var teamSlug = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // oneFinalDestination checks that at most one project is marked as the end of the
 // line, since a second would leave the view of the lines two places to start from.

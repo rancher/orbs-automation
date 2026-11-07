@@ -79,8 +79,27 @@ func (v *validator) edges(where string, p config.Project, phases map[string]stri
 		if e.Lines != "" {
 			v.oneOf(at, "lines", e.Lines, config.AcceptLinesAll, config.AcceptLinesUniversal)
 		}
+		if e.Stage != "" {
+			v.stage(at, p, e.Stage)
+		}
 		v.steps(at, "preEdit", e.PreEdit, true, p.Repo.Owned, phases, haveLines)
 		v.steps(at, "postEdit", e.PostEdit, true, p.Repo.Owned, phases, haveLines)
+	}
+}
+
+// stage checks the stage of an observed edge: only an edge from an unowned project
+// is observed, and the stage is one its producer's tag scheme gives. For an owned
+// producer a stage would mean the consumer's stage the edge writes, which is not
+// built yet.
+func (v *validator) stage(at string, producer config.Project, stage string) {
+	stages := config.TagSchemeStages(orDefault(producer.Release.TagScheme, DefaultTagScheme))
+	switch {
+	case producer.Repo.Owned:
+		v.add("%s: stage is only for an edge from a project that is not owned, whose edges are observed", at)
+	case len(stages) == 0:
+		v.add("%s: stage needs a producer whose release.tagScheme gives stages, and %s's does not", at, producer.Name)
+	default:
+		v.oneOf(at, "stage", stage, stages...)
 	}
 }
 

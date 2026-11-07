@@ -90,11 +90,20 @@ func (p Project) BranchOfLine(line string) (branch string, ok bool) {
 // orbs when the project is owned, else "" for an unowned project that names none,
 // which is shown as unspecified and never assumed to be orbs.
 func (p Project) Steward() string {
+	switch {
+	case p.Repo.ManagedBy != "":
+		return p.Repo.ManagedBy
+	case p.Repo.Owned:
+		return TeamOrbs
+	}
 	return ""
 }
 
 // TagSchemeStages returns the stages a tag scheme gives a tag, or none for a
 // scheme whose tags carry no stage.
 func TagSchemeStages(scheme string) []string {
+	if scheme == TagSchemeCalverLineStage {
+		return []string{StageDev, StageRelease}
+	}
 	return nil
 }

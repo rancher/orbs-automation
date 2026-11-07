@@ -34,6 +34,9 @@ func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 	if err != nil {
 		return resolution{}, err
 	}
+	if !producer.Repo.Owned {
+		return resolution{}, notOwned(producer)
+	}
 	engine, engineErr := ws.Updates()
 	if engine == nil {
 		return resolution{}, engineErr
@@ -260,4 +263,13 @@ func pickRoute(producer config.Project, routes []updatedispatcher.Route, to, met
 		return updatedispatcher.Route{}, fmt.Errorf("%w: %s has no route to %q: it ships to %s", ErrNoConsumer, producer.Name, strings.TrimSpace(to+" "+method), describe(routes))
 	}
 	return updatedispatcher.Route{}, fmt.Errorf("%w for %s: %s; choose with --to and --method", ErrAmbiguousConsumer, producer.Name, describe(matches))
+}
+
+// notOwned says why gero does not ship from an unowned project, naming the team
+// that does when the config does.
+func notOwned(p config.Project) error {
+	if team := p.Steward(); team != "" {
+		return fmt.Errorf("%w: %s is not owned, so gero only observes it, and %s ships its releases", ErrNotOwned, p.Name, team)
+	}
+	return fmt.Errorf("%w: %s is not owned, so gero only observes it", ErrNotOwned, p.Name)
 }

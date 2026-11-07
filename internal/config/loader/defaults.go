@@ -9,6 +9,7 @@ const (
 	DefaultBranch     = "main"
 	DefaultBranching  = config.BranchingSingle
 	DefaultTagPattern = "v*"
+	DefaultTagScheme  = config.TagSchemeSemver
 	DefaultAcceptWhen = config.AcceptStable
 )
 
@@ -24,6 +25,7 @@ func projectDefaults(p config.Project) config.Project {
 	p.Repo = repoDefaults(p.Repo)
 	p.Release.Branching = orDefault(p.Release.Branching, DefaultBranching)
 	p.Release.TagPattern = orDefault(p.Release.TagPattern, DefaultTagPattern)
+	p.Release.TagScheme = orDefault(p.Release.TagScheme, DefaultTagScheme)
 	p.UpdateMethods = mapSlice(p.UpdateMethods, methodDefaults)
 	return p
 }
