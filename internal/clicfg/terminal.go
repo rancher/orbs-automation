@@ -1,5 +1,7 @@
 package clicfg
 
+import "strings"
+
 // The values of the color setting.
 const (
 	ColorAuto   = "auto"
@@ -39,7 +41,53 @@ type Terminal struct {
 }
 
 // ResolveTerminal works out the Terminal from the color setting, the
-// environment and the facts of the process.
+// environment and the facts of the process. Color is on by default: auto means
+// as much as the terminal supports. The order is in
+// docs/specs/CLI_OUTPUT.md#terminal-capabilities.
 func ResolveTerminal(color string, getenv func(string) string, f Facts) Terminal {
-	return Terminal{}
+	term := getenv("TERM")
+	t := Terminal{
+		StdinTTY: f.StdinTTY, StdoutTTY: f.StdoutTTY, Width: f.Width,
+		Cursor: term != "" && term != "dumb",
+	}
+	depth := colorDepth(getenv)
+	switch color {
+	case ColorNever:
+	case ColorAlways:
+		t.Profile = forced(depth)
+	default:
+		switch force := getenv("CLICOLOR_FORCE"); {
+		case getenv("NO_COLOR") != "":
+		case force != "" && force != "0":
+			t.Profile = forced(depth)
+		case f.StdoutTTY:
+			t.Profile = depth
+		}
+	}
+	return t
+}
+
+// colorDepth is the color the environment says the terminal has: truecolor from
+// COLORTERM, 256 or 16 colors from TERM, and none for TERM unset or dumb.
+func colorDepth(getenv func(string) string) Profile {
+	if ct := getenv("COLORTERM"); ct == "truecolor" || ct == "24bit" {
+		return ProfileTrueColor
+	}
+	switch term := getenv("TERM"); {
+	case strings.Contains(term, "256color"):
+		return Profile256
+	case term == "" || term == "dumb":
+		return ProfileNone
+	}
+	return Profile16
+}
+
+// forced is the depth to use when color was asked for: what the environment
+// says, and at least the 16 basic colors, since the terminal's silence is not a
+// refusal.
+func forced(depth Profile) Profile {
+	if depth == ProfileNone {
+		return Profile16
+	}
+	return depth
 }

@@ -151,6 +151,13 @@ var scalars = []scalar{
 		fromFile: func(f *fileConfig) string { return f.Output },
 	},
 	{
+		name:     "color",
+		def:      ColorAuto,
+		validate: validateColor,
+		field:    func(s *Settings) *string { return &s.Color },
+		fromFile: func(f *fileConfig) string { return f.Color },
+	},
+	{
 		// Flag and env only: -v and -vv map onto it in cmd/, and there is no
 		// user-file key.
 		name:     "log",
@@ -169,6 +176,13 @@ var scalars = []scalar{
 func validateOutput(v string) error {
 	if v != OutputText && v != OutputJSON && v != OutputEnv {
 		return fmt.Errorf("must be %q, %q or %q, got %q", OutputText, OutputJSON, OutputEnv, v)
+	}
+	return nil
+}
+
+func validateColor(v string) error {
+	if v != ColorAuto && v != ColorAlways && v != ColorNever {
+		return fmt.Errorf("must be %q, %q or %q, got %q", ColorAuto, ColorAlways, ColorNever, v)
 	}
 	return nil
 }
@@ -237,6 +251,8 @@ func Load(in Inputs) (Settings, error) {
 		*k.field(&s) = v
 		s.sources[k.name] = src
 	}
+
+	s.Terminal = ResolveTerminal(s.Color, getenv, in.Facts)
 
 	if s.DryRun, s.sources["dryRun"], err = loadBool("dryRun", in.Flags, getenv, "dry-run"); err != nil {
 		return Settings{}, err
