@@ -7,11 +7,10 @@ package authstatus
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
-	"text/tabwriter"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
@@ -52,21 +51,18 @@ func unsupported(format string) error {
 }
 
 func renderText(st Status, view *style.Renderer) string {
-	_ = view
-	login := st.Login
+	login, role := st.Login, style.OK
 	switch {
 	case !st.Valid:
-		login = "token rejected by GitHub"
+		login, role = "token rejected by GitHub", style.Error
 	case st.Installation:
 		login = "installation token"
 	}
-	var b strings.Builder
-	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "Host:\t%s (%s)\n", st.Host, hostLabel(st.HostSource))
-	fmt.Fprintf(w, "Token:\t%s\n", github.DescribeTokenSource(st.TokenSource))
-	fmt.Fprintf(w, "Login:\t%s\n", login)
-	_ = w.Flush() // writes to a strings.Builder, which cannot fail
-	return b.String()
+	return ui.Align([][]string{
+		{view.Style(style.Dim, "Host:"), fmt.Sprintf("%s (%s)", st.Host, hostLabel(st.HostSource))},
+		{view.Style(style.Dim, "Token:"), github.DescribeTokenSource(st.TokenSource)},
+		{view.Style(style.Dim, "Login:"), view.Style(role, login)},
+	}, view.Width)
 }
 
 func hostLabel(source string) string {
