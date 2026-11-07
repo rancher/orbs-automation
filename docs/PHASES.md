@@ -34,7 +34,7 @@ Until v1.0.0 the tool is not announced. From v1.0.0 only stable tags are release
 **Owner:** the author, building a foundation others can build on, plus two real flows end to end. Not announced outside the team. v1.0.0 is about **automation**: the flows run from an engineer's workstation, and CI and tracking follow in v1.x. It is not about file generation.
 
 Two flows, in order:
-* **Flow A, `scc-operator` into `rancher/rancher` (the POC).** One release line fanning out to every active Rancher branch. It exercises the update dispatcher, `yamlBump`, per-target status, the tracker and the reconciler with the fewest moving parts. `shell` takes the same route with a series for each line. An engineer runs the bump with `gero ship` from their own clone; in CI it stays a bash script triggered by a stable tag until `gero ci:ship` replaces it in v1.x. Its job is to prove to the team that the approach is good.
+* **Flow A, `scc-operator` into `rancher/rancher` (the POC).** One release line fanning out to every active Rancher branch. It exercises the update dispatcher, `yamlBump` and per-target status with the fewest moving parts. `shell` takes the same route with a series for each line. An engineer runs the bump with `gero ship` from their own clone; in CI it stays a bash script triggered by a stable tag until `gero ci:ship` replaces it in v1.x. Its job is to prove to the team that the approach is good.
 * **Flow B, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: `yamlBump`, `chartsPackageBump` (the most complex strategy), multi-hop chains and the tag step between hops, run by hand.
 
 | Label | Work | Depends on |
@@ -44,12 +44,12 @@ Two flows, in order:
 | v0.3 | **Update dispatcher, `yamlBump` and the workstation bump:** target, branch resolution from the line map, named strategy, steps with a commit for each, per-consumer `pullRequests` conventions, deterministic branches, reuse and supersede of open PRs, `--refresh`, preconditions, a release for each line, fan-out with per-target status. The commands that make the pieces by hand: `repo branch`, `repo tag`. Used by the team beside the existing script | v0.2 |
 | | **POC review with the team:** show Flow A from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before going further | v0.3 |
 | v0.4 | **More strategies:** `chartsPackageBump`, run in dry-run beside today's scripts | POC review |
-| v0.5 | **Multi-hop chains:** chain views and the tag step between hops, run by hand with `gero ship` and `gero repo tag`; the line map follows a chain through another project to its end | v0.4 |
+| v0.5 | **Multi-hop chains by hand:** the line map (`gero lines resolve`) and `gero repo status` follow a chain through every hop to its end, and the tag step between hops is `gero repo tag`; each hop is a `gero ship` once the one before it has merged and been tagged. Watching a whole chain without doing that by hand is the tracker, v1.2 | v0.4 |
 | v0.6 | **Flow B runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0 | v0.5 |
 
 ### Decides in v0.x
 
-Final kind and field names; whether chains are built up front or hop by hop; whether the path through `rancher/charts` into `rancher/rancher` is modeled so the line map connects it; how producers align on consumer PR conventions.
+Final kind and field names; whether the path through `rancher/charts` into `rancher/rancher` is modeled so the line map connects it; how producers align on consumer PR conventions.
 
 ---
 
@@ -86,7 +86,7 @@ Planning labels, not promises, roughly in dependency order. Only stable tags are
 
 **Parallelism.** Three streams can run side by side after v1.0.0: CI and tracking (v1.1 to v1.4), standardization (v1.5 to v1.7) and release trains (v1.8, which needs the reconciler of v1.3). They meet at v1.9.
 
-**Decides along the way:** who makes the clone for `gero ci:ship` (the tool or the workflow's checkout, [CI_SHIP](specs/CI_SHIP.md#open-questions)); how the reconciler is triggered; the standard `VERSION.md` layout and whether older readers need the old formats; how stubs pin workflow versions; whether the reconciler reads repo config on every run or only central config; the override mechanism; which "branch for X" steps are automated and in what order.
+**Decides along the way:** whether the tracker builds a chain up front or reads it hop by hop; who makes the clone for `gero ci:ship` (the tool or the workflow's checkout, [CI_SHIP](specs/CI_SHIP.md#open-questions)); how the reconciler is triggered; the standard `VERSION.md` layout and whether older readers need the old formats; how stubs pin workflow versions; whether the reconciler reads repo config on every run or only central config; the override mechanism; which "branch for X" steps are automated and in what order.
 
 ## v2.0.0: Complete
 
