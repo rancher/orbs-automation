@@ -551,3 +551,23 @@ func TestLoadSignCommitsRejectsAnythingElse(t *testing.T) {
 	assert.Contains(t, err.Error(), "signCommits")
 	assert.Contains(t, err.Error(), "sometimes")
 }
+
+func TestStatePath(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		home string
+		want string
+	}{
+		{"home default", nil, "/home/dan", "/home/dan/.local/state/gero/repl_history"},
+		{"xdg", map[string]string{"XDG_STATE_HOME": "/xdg"}, "/home/dan", "/xdg/gero/repl_history"},
+		{"xdg without a home", map[string]string{"XDG_STATE_HOME": "/xdg"}, "", "/xdg/gero/repl_history"},
+		{"the config home is not the state home", map[string]string{"XDG_CONFIG_HOME": "/cfg"}, "/home/dan", "/home/dan/.local/state/gero/repl_history"},
+		{"nowhere to put it", nil, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, StatePath(env(tt.env), tt.home, "repl_history"))
+		})
+	}
+}
