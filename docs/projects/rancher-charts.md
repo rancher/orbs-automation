@@ -21,6 +21,10 @@ Consumer. Seen only from the producer side (BRO's `push-to-charts`, frameworks-a
 * BRO: GitHub App (Vault OIDC, `repositories: charts`), clones with `oauth2:$GH_TOKEN`. Also reads `rancher/org` for a freeze check.
 * frameworks-automation: a fine-grained `pull_requests--write` token per repo from Vault.
 
+## Seen from rancher-assets
+* `rancher-assets` reads the heads of `dev-vX` and `release-vX` for each line (its `config.yaml`) and pins the commits in `lock.yaml`. A promotion from `dev` to `release` is not in that repo: it shows up as a changed `release` commit after the next bump. See [rancher-assets](rancher-assets.md).
+* So the two branch families are tiers of one line: our packages land on `dev-vX`, and the release team promotes to `release-vX`. Chain tracing models them as stages of the project ([CHAIN_TRACING](../specs/CHAIN_TRACING.md), stretch 2).
+
 ## Implications for the tool
 * One shared implementation of the chart bump (version arithmetic, patch refresh, `make` steps), replacing the two divergent copies.
 * Standardize producers on the charts PR title format and labels.

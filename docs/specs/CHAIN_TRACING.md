@@ -1,8 +1,8 @@
 # Chain tracing
 
-**Status:** draft. Only the config fields for stretch 1 are built, as [Not built yet](#not-built-yet) says. Items marked **(leaning)** are proposals, and **(unverified)** needs a small spike.
+**Status:** draft. Stretch 1 (Assets and Rancher) is implemented; stretches 2 and 3 are not designed in detail, as [Not built yet](#not-built-yet) says.
 
-`gero lines resolve` and `gero repo status` answer "what is the state of this whole release chain?" from the central config and from what GitHub already holds, with no tracker. Following one hop is built. This spec is how they follow a chain through every hop, including the hop through the Rancher Assets image that connects `rancher/charts` to `rancher/rancher`, which we do not own. What the chain looks like today is in [rancher-assets](../projects/rancher-assets.md) and [rancher-charts](../projects/rancher-charts.md).
+`gero lines resolve` and `gero repo status` answer "what is the state of this whole release chain?" from the central config and from what GitHub already holds, with no tracker. One hop is followed from any project. This spec is how they follow a chain through every hop, including the hop through the Rancher Assets image that connects `rancher/charts` to `rancher/rancher`, which we do not own. What the chain looks like today is in [rancher-assets](../projects/rancher-assets.md) and [rancher-charts](../projects/rancher-charts.md).
 
 ## The chain of one line
 
@@ -22,11 +22,11 @@ Our own hop is the first one. The others are the release team's, and `gero` read
 
 The chain is traced from its far end back, one stretch at a time, and each stretch is finished before the next starts:
 
-1. **Assets and Rancher.** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. This is the simplest hop to read, and it establishes the shared release scheme, observed edges and the walk.
+1. **Assets and Rancher (implemented).** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. This is the simplest hop to read, and it establishes the shared release scheme, observed edges and the walk.
 2. **Charts to Assets.** Which charts commit an Assets tag was built from, and the dev and release tiers of `rancher/charts`.
 3. **Our projects to charts.** BRO's tag into a charts bump, and `chartsPackageBump`.
 
-Only stretch 1 is specified in detail below. Stages (the tiers of `rancher/charts`) and the reading of `lock.yaml` belong to stretch 2, are kept here as the direction, and are marked as such.
+Stretch 1 is what the rest of this spec describes as built. Stages (the tiers of `rancher/charts`), the reading of `lock.yaml`, the walk through several hops (`internal/chain`) and `--depth` belong to stretch 2, and are kept here as the direction, marked as such.
 
 ## What the config adds
 
@@ -65,8 +65,8 @@ A scheme is code, named in config and claimed from one registry, as update strat
 
 In Go there are two layers.
 
-* **`internal/calver`** is the tag format of `calverLineStage` and nothing else: `Parse` of a tag name into a `Tag` with its line, stage and UTC time, `Compare` of two tags of one line and stage, `Select` (the tags of a line and stage, newest first) and `Lines`. It works on names and takes no `git` type.
-* **`internal/tagscheme`** is the one thing every reader of a project's releases asks, and is chosen from the project by `release.branching` and `release.tagScheme`. A `Scheme` answers: the lines of the project (`Lines`, the ones its config lists), the line a tag is in (`LineOf`), the newest stable and the newest prerelease of a line (`Latest`: for semver a stable and a prerelease tag, for `calverLineStage` the `release` stage and the `dev` stage, since a dev tag is a prerelease), whether a tag is stable (`IsStable`), and the order of two tags of a line (`Compare`: semver order, or for CalVer the date, since a newer date with the same line prefix is a newer image). The semver implementation is what `git.InSeries`, `git.LatestReleases` and `ship`'s `lineSeries` do today, moved behind it unchanged, and the CalVer one is `internal/calver`. `ship`, `repo status`, `repo tag` and `lines resolve` call the scheme and carry no scheme code of their own, so `ship` has no CalVer code in it. What tag could be made next (`internal/git/releasetag`) is for tags a person makes, stays semver, and does not apply to a `perLineTag` project, whose tags its own CI makes. This is the `TODO(releasetag)` in `internal/ship/release.go`.
+* **`internal/calver`** is the tag format of `calverLineStage` and nothing else: `Parse` of a tag name into a `Tag` with its line, stage and UTC time, `Compare` of two tags of one line and stage, and `Select` (the tags of a line and stage, newest first). It works on names and takes no `git` type.
+* **`internal/tagscheme`** is the one thing every reader of a project's releases asks, and is chosen from the project by `release.branching` and `release.tagScheme`. A `Scheme` answers: the lines of the project (`Lines`, the ones its config lists), the line a tag is in (`LineOf`), the newest stable and the newest prerelease of a line (`Latest`: for semver a stable and a prerelease tag, for `calverLineStage` the `release` stage and the `dev` stage, since a dev tag is a prerelease), whether a tag is stable (`IsStable`), and the order of two tags of a line (`Compare`: semver order, or for CalVer the date, since a newer date with the same line prefix is a newer image). The semver implementation is what `git.InSeries`, `git.LatestReleases` and `ship`'s `lineSeries` do today, moved behind it unchanged, and the CalVer one is `internal/calver`. `ship` (the choice of a release, and what a consumer holds against it) and `repo status` (a project's own latest tags) call it and carry no scheme code of their own, so `ship` has no CalVer code in it. `lines resolve` reads the config alone, and `repo tag` and what tag could be made next (`internal/git/releasetag`) are for tags a person makes: they stay semver and do not apply to a `perLineTag` project, whose tags its own CI makes. The release-line policy that `ship` had of its own is this scheme now.
 
 **`calverLineStage`** (the Assets tags):
 * The format is `v{minor}-{YYYYMMDD}T{HHMM}Z`, with `-dev` after it for dev. The date is UTC and to the minute, and it is the commit time of the commit that was released, not the build time. Prod and dev tags of one commit share it.
@@ -82,22 +82,27 @@ In Go there are two layers.
 
 ## What the reports show
 
-* `gero lines resolve` shows a line's chain as a tree from the hub back through every hop, with a hop that does not fit the line reported as a gap at the hop where it breaks. A project reached only through another is no longer under `also`.
-* `gero repo status` shows each hop's holdings through the chain, to a depth that `--depth` caps, with a hop that cannot be read reported on its own and the rest still shown.
-* An observed hop is marked as observed.
-* **Both directions.** From Rancher: the Assets tag each branch holds, with its line, stage and age against the newest tag of that line and stage. From Assets: the Rancher branches that hold a given tag, found by reading `build.yaml` on each Rancher branch of the line.
+* **`gero repo status`** of a project shows what each consumer branch holds of its releases, and of a project shows what it takes from each source: for Assets and Rancher the Assets tag held on each listed line, whether it is behind the newest release or dev tag (by date), and the stage held in `--json`. The same read gives both directions, from Rancher and from Assets. A project whose lines are in its tags has a row for each line it lists, with its newest release tag as latest stable and a newer dev tag as latest pre-release, and no state or next tag ([REPO_STATUS](REPO_STATUS.md)). A hop that cannot be read is reported on its own and the rest is still shown.
+* **`gero lines resolve`** shows Assets as a source of Rancher on the lines Assets lists and says nothing of it on the others ([LINES_RESOLVE](LINES_RESOLVE.md)). It reads the config and never the network.
+* **Stretch 2:** `lines resolve` shows a line's chain as a tree from the hub back through every hop, with a hop that does not fit the line reported as a gap where it breaks, a project reached only through another is no longer under `also`, and `repo status` follows the chain to a depth that `--depth` caps. An observed hop is marked as observed.
 
 ## Where it lives
 
-* `internal/config` holds the stages, `managedBy`, `perLineTag`, `tagScheme` and the edge's stage, and validates them: `perLineTag` has a known scheme, an observed edge's stage, when set, is one the producer's scheme can give, and `managedBy`, when set, is a lowercase slug (`orbs`). For stretch 2: stage names are unique, each branch pattern has `{line}`, and a managed edge's stage exists on its consumer.
+* `internal/config` holds `managedBy`, `perLineTag`, `tagScheme` and the edge's stage (and stages, in stretch 2), and validates them: `perLineTag` lists lines with no branch or version and has a scheme of its own, an observed edge's stage, when set, is one the producer's scheme can give, and `managedBy`, when set, is a lowercase slug (`orbs`). For stretch 2: stage names are unique, each branch pattern has `{line}`, and a managed edge's stage exists on its consumer.
 * `internal/calver` is pure: the tag format and nothing else. `internal/tagscheme` is the shared release scheme, with the semver implementation and a CalVer one on `internal/calver`.
-* `internal/chain` is a pure, cycle-safe walk over the project graph that returns a tree. It asks the graph for edges and a small reader interface for what a hop holds, and has fakes in tests, as the packages that read GitHub do.
-* `internal/ship` skips edges from an unowned project and asks the scheme for releases, lines and order.
-* `internal/cli/linesresolve` and `internal/cli/repostatus` use the walk, and the per-run list of a repository's refs is read once and kept for the run.
+* `internal/ship` refuses an unowned producer, and asks the scheme for releases, lines and order; `internal/cli/repostatus` asks it for a project's latest tags.
+* **Stretch 2:** `internal/chain` is a pure, cycle-safe walk over the project graph that returns a tree. It asks the graph for edges and a small reader interface for what a hop holds, and has fakes in tests, as the packages that read GitHub do. `internal/cli/linesresolve` and `internal/cli/repostatus` use it, and the per-run list of a repository's refs is read once and kept for the run. It waits for stretch 2 because the only second hop, charts to Assets, has no project config yet, so the walk would have one real hop to follow.
 
 ## Not built yet
 
-Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: perLineTag` with its listed lines, `release.tagScheme` and an observed edge's `stage`) with their checks, the steward of a project (`Project.Steward`), `gero ship` refusing a producer that is not owned, `config/rancher-assets.project.yaml`, `internal/calver` (the `calverLineStage` format), and `internal/tagscheme` (the shared scheme, with semver and CalVer, called by `ship` and `repo status`). `gero repo status` of `rancher-assets` and of `rancher` already shows the hop: the Assets tag Rancher holds on each listed line, whether it is behind the newest release or dev tag by date, and the stage held in `--json`. Not built: `internal/chain` with `lines resolve` following every hop; `repo tag` calling the scheme. Stretches 2 and 3, including stages and `chartsPackageBump`, are designed when stretch 1 is done.
+Stretch 1 is implemented: the config fields (`repo.managedBy`, `release.branching: perLineTag` with its listed lines, `release.tagScheme` and an observed edge's `stage`) and their checks, `Project.Steward`, `gero ship` refusing an unowned producer, `gero repo info` showing who manages a project, `internal/calver`, `internal/tagscheme`, `repo status` in both directions and `lines resolve` for Assets.
+
+Not built:
+
+* Stretch 2: `internal/chain` and the tree in `lines resolve`, `--depth`, the charts project config with stages, reading `lock.yaml` at a ref, and checking a held tag's stage against the release team's rule.
+* Stretch 3: `chartsPackageBump` and BRO's tag into a charts bump.
+* `repo status`'s `UNRELEASED` count and `LOCAL` comparison for a CalVer project are the generic ones (commits since the newest tag), and have not been checked against how Assets tags move.
+* `repo tag` and `releasetag` do not use the scheme: they are for tags a person makes.
 
 ## Decided
 
@@ -106,14 +111,14 @@ Built: the config fields for stretch 1 (`repo.managedBy`, `release.branching: pe
 * **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. The stage of a held tag is shown as a fact, and never as a warning or a failure: Rancher holds a `dev` Assets tag (a prerelease) until the release team cuts a stable one, so no stage is wrong there.
 * **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which a read of `lock.yaml` at a ref can do. It belongs to stretch 2: first to check a held tag's stage against the rule, and later, if the release team adopts `gero` for Assets, to make the rule part of a `ship` decision.
 * **Lines are listed.** A `perLineTag` project lists its lines, as any project does, without branch or version. Assets is used from v2.16 on and may stop being used, so the list says which lines it is for, and nothing discovers lines from tags.
+* **No `yamlRead`.** The read half of `yamlBump` reads what a hop holds, and ownership keeps it read-only.
+* **A line judged by what a project declares.** A `perLineTag` project is judged on the lines it lists: `lines resolve` shows no gap for one it does not. A per-line project's missing line is still a gap.
+* **The walk waits.** `internal/chain` waits for stretch 2, when there is a second hop to follow.
 * **Branch of an Assets line is Rancher's.** The walk goes from a line to the hub's branch for it (from the hub's own `lines`), reads `build.yaml` there, and parses the Assets tag, whose line must match. Nothing maps lines between the two projects.
 
 ## Open questions
 
-Stretch 1:
-
-
-Later stretches:
+None for stretch 1. For the later stretches:
 
 * Whether the key path for the `lock.yaml` read needs a quoting rule for keys that contain a dot, such as the line `2.16`.
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
