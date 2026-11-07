@@ -24,8 +24,8 @@ internal/config/     application config types, their effective getters and the e
 internal/config/loader/  application config loader: YAML decoding, defaults, validation (workspace only)
 internal/workspace/  the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (WORKSPACE)
 internal/ui/         output and prompt seam, plain-text implementation first: Output and Stream exist, prompts do not yet   (CLI_OUTPUT)
-internal/ui/style/   the one importer of lipgloss: named styles and the Renderer built from clicfg.Terminal; plain when color is off   (CLI_OUTPUT, not built yet)
-internal/ui/editor/  the one importer of ergochat/readline: the line reader seam, with a plain bufio implementation, for gero repl   (REPL, not built yet)
+internal/ui/style/   the one importer of lipgloss: named styles and the Renderer built from clicfg.Terminal; plain when color is off   (CLI_OUTPUT)
+internal/ui/editor/  the one importer of ergochat/readline: the line reader seam, with a plain bufio implementation, for gero repl   (REPL)
 internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR, make a tag), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch, bumpcommit and createtag are built
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/releasetag/  the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
