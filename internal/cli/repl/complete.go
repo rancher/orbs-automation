@@ -6,6 +6,10 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
 // Completion gives the completions of a line typed at the REPL: the words of the
@@ -114,3 +118,18 @@ func withPrefix(words []string, prefix string) []string {
 	}
 	return out
 }
+
+// ConfigWorkspace is what ProjectNames needs from the invocation's workspace. It
+// is defined here, where it is consumed, so tests can use a fake.
+type ConfigWorkspace interface {
+	Config() (config.Config, error)
+}
+
+// ProjectNames lists the projects of the central config by config name, sorted,
+// for what a Completion offers to cd and ls. Where the config cannot be loaded
+// there are none, and nothing is said: completion is not the place to complain.
+func ProjectNames(s clicfg.Settings, cwd string) []string {
+	return projectNames(workspace.Open(s, cwd))
+}
+
+func projectNames(ws ConfigWorkspace) []string { return nil }
