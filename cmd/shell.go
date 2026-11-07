@@ -96,7 +96,7 @@ Without a terminal, pass --yes to approve. --dry-run shows the change only.`,
 		RunE:  setup(shellsetup.Uninstall),
 	}
 	for _, c := range []*cobra.Command{installCmd, uninstallCmd} {
-		c.Flags().StringVar(&shell, "shell", "", "the shell to set up (bash or zsh); default is the one in $SHELL")
+		c.Flags().StringVar(&shell, "shell", "", "the shell to set up (bash, zsh, fish or powershell); default is the one in $SHELL")
 		c.Flags().StringVar(&profile, "profile", "", "the profile file to edit; default is the shell's usual one")
 		c.Flags().BoolVarP(&yes, "yes", "y", false, "approve the change without asking")
 	}

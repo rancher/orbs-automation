@@ -175,8 +175,7 @@ linters:
         # Commands reach the repository on disk through internal/workspace, so
         # a repo is found and a slug resolved by one rule everywhere
         # (docs/specs/PROJECT_LAYOUT.md, docs/specs/WORKSPACE.md).
-        # Loading central config is not denied yet: depguard works per package,
-        # and commands will need the internal/config types.
+        # Loading central config is denied separately, by oneconfigdoor below.
         oneDoor:
           list-mode: lax
           files:
