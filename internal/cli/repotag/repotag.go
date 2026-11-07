@@ -276,7 +276,9 @@ func approve(w io.Writer, format string, res Result, opts Options) error {
 	if !opts.Interactive || format != clicfg.OutputText {
 		return ErrNeedsApproval
 	}
-	if _, err := fmt.Fprintf(w, "Push the tag %s to %s? [y/N] ", res.what(), res.Remote); err != nil {
+	// The question is what the user is to read, and the choices are not.
+	question := opts.Style.Style(style.Heading, fmt.Sprintf("Push the tag %s to %s?", res.what(), res.Remote))
+	if _, err := fmt.Fprintf(w, "%s %s ", question, opts.Style.Style(style.Dim, "[y/N]")); err != nil {
 		return err
 	}
 	line, err := bufio.NewReader(opts.In).ReadString('\n')
@@ -292,32 +294,32 @@ func approve(w io.Writer, format string, res Result, opts Options) error {
 
 // report writes what was done.
 func report(w io.Writer, format string, res Result, view *style.Renderer) error {
-	_ = view
 	if format == clicfg.OutputJSON {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 		return enc.Encode(res)
 	}
 	where := res.what()
-	hint := fmt.Sprintf("  to send it: git push %s %s\n", res.Remote, res.Tag)
+	hint := "  " + view.Style(style.Dim, fmt.Sprintf("to send it: git push %s %s", res.Remote, res.Tag)) + "\n"
+	dim := func(text string) string { return view.Style(style.Dim, text) + "\n" }
 	var err error
 	switch res.Action {
 	case "tagged":
-		_, err = fmt.Fprintf(w, "Tagged %s\n%s", where, hint)
+		_, err = fmt.Fprintf(w, "%s %s\n%s", view.Style(style.OK, "Tagged"), where, hint)
 	case "tagged and pushed":
-		_, err = fmt.Fprintf(w, "Tagged and pushed %s to %s\n  https://github.com/%s/releases/tag/%s\n", where, res.Remote, res.Project, res.Tag)
+		_, err = fmt.Fprintf(w, "%s %s to %s\n  https://github.com/%s/releases/tag/%s\n", view.Style(style.OK, "Tagged and pushed"), where, res.Remote, res.Project, res.Tag)
 	case "pushed":
-		_, err = fmt.Fprintf(w, "Pushed %s to %s (it was in your clone already)\n", where, res.Remote)
+		_, err = fmt.Fprintf(w, "%s %s to %s (it was in your clone already)\n", view.Style(style.OK, "Pushed"), where, res.Remote)
 	case "in your clone":
-		_, err = fmt.Fprintf(w, "%s is already in your clone on %s at %s\n%s", res.Tag, res.Branch, short(res.Commit), hint)
+		_, err = fmt.Fprintf(w, "%s%s", dim(fmt.Sprintf("%s is already in your clone on %s at %s", res.Tag, res.Branch, short(res.Commit))), hint)
 	case "would tag":
-		_, err = fmt.Fprintf(w, "Would tag %s in your clone   (nothing was changed)\n", where)
+		_, err = fmt.Fprint(w, dim(fmt.Sprintf("Would tag %s in your clone   (nothing was changed)", where)))
 	case "would tag and push":
-		_, err = fmt.Fprintf(w, "Would tag %s in your clone and push it to %s   (nothing was changed)\n", where, res.Remote)
+		_, err = fmt.Fprint(w, dim(fmt.Sprintf("Would tag %s in your clone and push it to %s   (nothing was changed)", where, res.Remote)))
 	case "would push":
-		_, err = fmt.Fprintf(w, "Would push %s to %s, as it is in your clone already   (nothing was changed)\n", where, res.Remote)
+		_, err = fmt.Fprint(w, dim(fmt.Sprintf("Would push %s to %s, as it is in your clone already   (nothing was changed)", where, res.Remote)))
 	default:
-		_, err = fmt.Fprintf(w, "%s is already tagged on %s at %s in %s: nothing to do\n", res.Tag, res.Branch, short(res.Commit), res.Project)
+		_, err = fmt.Fprint(w, dim(fmt.Sprintf("%s is already tagged on %s at %s in %s: nothing to do", res.Tag, res.Branch, short(res.Commit), res.Project)))
 	}
 	return err
 }

@@ -153,9 +153,9 @@ func lineBranch(p config.Project, line string) (string, error) {
 	return "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Repo.Name, line, strings.Join(lines, ", "))
 }
 
-// render is the report in text.
+// render is the report in text. What was made is green, what only would be is
+// secondary text, and so is the hint to switch to the branch.
 func render(r Result, existing int, view *style.Renderer) string {
-	_ = view
 	short := r.Base[:min(len(r.Base), 8)]
 	switch {
 	case r.Existing:
@@ -163,11 +163,12 @@ func render(r Result, existing int, view *style.Renderer) string {
 		if existing == 1 {
 			noun = "commit"
 		}
-		return fmt.Sprintf("%s already exists in %s with %d %s of ours on %s: nothing to do\n", r.Branch, r.Project, existing, noun, r.From)
+		return view.Style(style.Dim, fmt.Sprintf("%s already exists in %s with %d %s of ours on %s: nothing to do", r.Branch, r.Project, existing, noun, r.From)) + "\n"
 	case r.DryRun:
-		return fmt.Sprintf("Would create %s at %s (%s) in %s\n", r.Branch, r.From, short, r.Project)
+		return fmt.Sprintf("%s %s at %s (%s) in %s\n", view.Style(style.Dim, "Would create"), r.Branch, r.From, short, r.Project)
 	case r.Switched:
-		return fmt.Sprintf("Created %s at %s (%s) in %s, and switched to it\n", r.Branch, r.From, short, r.Project)
+		return fmt.Sprintf("%s %s at %s (%s) in %s, and switched to it\n", view.Style(style.OK, "Created"), r.Branch, r.From, short, r.Project)
 	}
-	return fmt.Sprintf("Created %s at %s (%s) in %s\n  git switch %s\n", r.Branch, r.From, short, r.Project, r.Branch)
+	return fmt.Sprintf("%s %s at %s (%s) in %s\n  %s\n", view.Style(style.OK, "Created"), r.Branch, r.From, short, r.Project,
+		view.Style(style.Dim, "git switch "+r.Branch))
 }
