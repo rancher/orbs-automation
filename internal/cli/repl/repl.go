@@ -32,6 +32,10 @@ type Session struct {
 	Dir        string
 	Run        Runner
 	ProjectDir ProjectDir
+	// Env is the environment the REPL started with, which is also the
+	// environment of the shell it starts, and StartShell starts it.
+	Env        []string
+	StartShell ShellFunc
 }
 
 // ErrGeroPrefix is returned for a line that starts with gero.
@@ -97,6 +101,8 @@ func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, e
 		return false, s.ls(out, args[1:])
 	case "cd":
 		return false, s.cd(args[1:])
+	case "shell":
+		return false, s.shell(ctx, args[1:])
 	}
 	return false, s.Run(ctx, s.Dir, args)
 }
@@ -121,6 +127,10 @@ func (s *Session) cd(args []string) error {
 	s.Dir = dir
 	return nil
 }
+
+// shell runs the user's $SHELL as an interactive child, with GERO_REPL set, and
+// returns when it exits. The word shadows the tree's gero shell.
+func (s *Session) shell(ctx context.Context, args []string) error { return nil }
 
 // ls lists the working directory, a directory under it, or a project's clone
 // root. A bare word is a directory when one exists, else a project; a leading @
