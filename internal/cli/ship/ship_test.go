@@ -1281,3 +1281,34 @@ func TestFilesText(t *testing.T) {
 	assert.Equal(t, "4 files: a, b, c, d", filesText([]string{"a", "b", "c", "d"}))
 	assert.Equal(t, "5 files: a, b, c and 2 more", filesText([]string{"a", "b", "c", "d", "e"}))
 }
+
+func TestRenderTextWithThePreviewShowsTheCommitEachStepWouldMake(t *testing.T) {
+	p := previewPlan()
+	p.Targets[0].Line = "v2.15"
+	p.Targets[0].Preview.Steps = []domain.StepPreview{
+		{Phase: "method preEdit", Run: "scripts/prepare", BeforeEdit: true, CommitMessage: "Run `scripts/prepare`\n\nPart of updating scc-operator to v0.5.3: the method preEdit step.\n\nAutomation: gero ship\n"},
+		{Phase: "edge postEdit", Run: "scripts/generate-buildconfig", CommitMessage: "Run `scripts/generate-buildconfig`\n\nAutomation: gero ship\n"},
+	}
+
+	out := renderText(p, true)
+
+	for _, want := range []string{
+		"Step commits (v2.15)",
+		"a step's commit is made only if it changes files",
+		"before the edit  Run `scripts/prepare`  (method preEdit)",
+		"after the edit   Run `scripts/generate-buildconfig`  (edge postEdit)",
+	} {
+		assert.Contains(t, out, want)
+	}
+}
+
+func TestRenderTextWithoutThePreviewFlagLeavesTheStepCommitsOut(t *testing.T) {
+	p := previewPlan()
+	p.Targets[0].Preview.Steps = []domain.StepPreview{{Phase: "edge postEdit", Run: "gen", CommitMessage: "Run `gen`"}}
+
+	assert.NotContains(t, renderText(p, false), "Step commits")
+}
+
+func TestRenderTextWithNoStepsHasNoStepCommitsBlock(t *testing.T) {
+	assert.NotContains(t, renderText(previewPlan(), true), "Step commits")
+}
