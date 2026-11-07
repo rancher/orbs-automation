@@ -119,6 +119,15 @@ Steps 1 to 3 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the r
 
 `!<command line>` stays deferred, and builds on what `shell` settles: the `Passthrough` entry point, the whole environment passed through, and the `$SHELL` rules above. It adds the `$SHELL -c` line, the question of its exit status and its tests, and with it the `gero shell` setup commands become reachable from the REPL.
 
+## Deferred ideas
+
+**Marking the prompt of the child `shell`.** A user in a `shell` started from the REPL may want its prompt to say so. Not built, and not scheduled: nothing forces it out of the box without cost, so it stays an idea. What is known:
+
+* **`GERO_REPL=1` is the hook.** It is in the child's environment for this. A user can put `${GERO_REPL:+(gero) }` in their own `PS1` today.
+* **Setting `PS1` on the child does not work.** `PS1` is normally a shell variable and not exported, and `~/.bashrc` or `~/.zshrc` (and oh-my-zsh, starship, powerlevel10k) set it after the shell starts, so a value from the environment is overwritten for most users. Fish and PowerShell have no `PS1`.
+* **Option, preferred if it is ever done: an opt-in snippet in the block `gero shell install` manages** ([SHELL_SETUP](SHELL_SETUP.md)), prefixing the prompt for bash and zsh, with a fish equivalent, only when `GERO_REPL` is set. A prompt framework that redraws the prompt later can still overwrite it, and for those the documented route is the framework's own environment-variable module keyed on `GERO_REPL`.
+* **Option, advised against: start the child with an rc file of ours** (`bash --rcfile`, a temporary `ZDOTDIR` for zsh). It would force the marker, but it is shell-specific, changes how the user's shell starts, rewrites a prompt without being asked, and breaks the rule that `shell` runs the user's `$SHELL` as is.
+
 ## Open questions
 
 * **Keyboard shortcuts.** What works today comes from the terminal's own line discipline, because the plain reader reads whole lines: Ctrl-D at an empty prompt is end of input and leaves, Ctrl-C clears the line or cancels the running command, and Ctrl-U, Ctrl-W and Backspace edit the line as in any cooked-mode program. Nothing else can work without raw mode, since a key like Ctrl-X is not delivered until Enter. Ctrl-X as an exit key is therefore decided with the editor in step 4, where it competes with the editor's own bindings (in emacs-style editors Ctrl-X is a prefix, and Ctrl-X Ctrl-C is the usual exit), so the choice there is between that chord and Ctrl-D alone **(unverified)**. History search (Ctrl-R), Ctrl-A and Ctrl-E, and Ctrl-L to clear the screen come with the same library.
