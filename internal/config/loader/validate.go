@@ -164,6 +164,17 @@ func (v *validator) project(p config.Project, phases map[string]string, haveLine
 		seen[l.Line] = true
 		phase, known := phases[l.Line]
 		switch {
+		case p.Release.Branching == config.BranchingPerLineTag:
+			// One branch holds every line, so a line has none of its own and no series.
+			if l.Branch != "" {
+				v.add("%s: a perLineTag project has one branch, so line %q has no branch", at, l.Line)
+			}
+			if l.Version != "" {
+				v.add("%s: a perLineTag project's lines are in its tags, so line %q has no version", at, l.Line)
+			}
+			if !haveLines || !known {
+				v.add("%s: line %q is not in RancherLines", at, l.Line)
+			}
 		case !haveLines:
 			v.add("%s: line %q needs a RancherLines document, and there is none", at, l.Line)
 		case !known:
@@ -176,15 +187,15 @@ func (v *validator) project(p config.Project, phases map[string]string, haveLine
 }
 
 // steward checks what says who ships a project and how its tags spell a line:
-// managedBy is a team slug, a perLineTag project finds its lines in its tags and so
-// lists none, and a tag scheme other than semver belongs to perLineTag.
+// managedBy is a team slug, a perLineTag project lists the lines it is used for, and
+// a tag scheme other than semver belongs to perLineTag.
 func (v *validator) steward(where string, p config.Project) {
 	if team := p.Repo.ManagedBy; team != "" && !teamSlug.MatchString(team) {
 		v.add("%s: repo.managedBy %q must be a lowercase slug such as orbs or release-team", where, team)
 	}
 	perLineTag := p.Release.Branching == config.BranchingPerLineTag
-	if perLineTag && len(p.Release.Lines) > 0 {
-		v.add("%s: release.lines must be empty for release.branching perLineTag: its lines are found in its tags", where)
+	if perLineTag && len(p.Release.Lines) == 0 {
+		v.add("%s: release.lines is required for release.branching perLineTag: list the lines the project is used for", where)
 	}
 	// An empty scheme is the default, semver: this runs after WithDefaults, and a
 	// config built by hand may not have been through it.
