@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/semver"
 	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
@@ -260,7 +261,16 @@ func holdStatus(h ship.Holding) string {
 
 // targets lists the release branches of p, before anything is read.
 func targets(p config.Project) []Target {
-	if p.Release.Branching != config.BranchingPerLine {
+	switch p.Release.Branching {
+	case config.BranchingPerLineTag:
+		// Every line is on the one branch, and has no series: its tags say which.
+		var ts []Target
+		for _, l := range p.Release.Lines {
+			ts = append(ts, Target{Line: l.Line, Branch: p.Repo.DefaultBranch, IsDefaultBranch: true})
+		}
+		return ts
+	case config.BranchingPerLine:
+	default:
 		return []Target{{Branch: p.Repo.DefaultBranch, IsDefaultBranch: true}}
 	}
 	var ts []Target
@@ -275,23 +285,20 @@ func targets(p config.Project) []Target {
 // the tags it could have next from them (internal/git/releasetag, which is what
 // gero repo tag asks), and compares them with the clone, which may be nil.
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
-	tags := refs.Tags
-	if t.Series != "" {
-		tags = nil
-		for _, tag := range refs.Tags {
-			if git.InSeries(tag.Name, t.Series) {
-				tags = append(tags, tag)
-			}
-		}
+	scheme, err := tagscheme.For(p)
+	if err != nil {
+		return
 	}
-	latest := git.LatestReleases(tags, p.Release.TagPattern)
+	latest := scheme.Latest(refs.Tags, t.Line)
 	t.LatestStable, t.LatestPrerelease = tagInfo(latest.Stable), tagInfo(latest.Prerelease)
 	for _, b := range refs.Branches {
 		if b.Name == t.Branch {
 			t.Head = b.Commit
 		}
 	}
-	if t.Head != "" {
+	// What tag could be made next is for tags a person makes. A project whose tags
+	// its own CI makes has no next one.
+	if t.Head != "" && p.Release.Branching != config.BranchingPerLineTag {
 		c := releasetag.Choice{
 			Tags: refs.Tags, Pattern: p.Release.TagPattern, Series: t.Series, Commit: t.Head,
 			RequiresPrerelease: p.Release.RequiresPrerelease,
