@@ -8,6 +8,7 @@ package tagscheme
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/config"
@@ -120,14 +121,86 @@ type calverScheme struct {
 
 func (c calverScheme) Name() string { return c.inner.Name() }
 
-func (calverScheme) Valid(string) bool { return false }
+func (c calverScheme) Valid(tag string) bool {
+	_, ok := c.inner.Parse(tag)
+	return ok
+}
 
-func (calverScheme) Lines([]git.Tag) []string { return nil }
+func (c calverScheme) Lines(tags []git.Tag) []string { return calver.Lines(c.inner, names(tags)) }
 
-func (calverScheme) LineOf(string) string { return "" }
+func (c calverScheme) LineOf(tag string) string {
+	t, _ := c.inner.Parse(tag)
+	return t.Line
+}
 
-func (calverScheme) Latest([]git.Tag, string) git.Latest { return git.Latest{} }
+// Latest is the newest tag of the release stage, and the newest of the dev stage
+// when it is strictly newer than that: a dev tag of the same minute as a release,
+// which is the same commit, is not a newer one.
+func (c calverScheme) Latest(tags []git.Tag, line string) git.Latest {
+	lines := []string{line}
+	if line == "" {
+		lines = c.Lines(tags)
+	}
+	release := c.newest(tags, lines, config.StageRelease)
+	dev := c.newest(tags, lines, config.StageDev)
+	var out git.Latest
+	if release != nil {
+		out.Stable = &release.tag
+	}
+	if dev != nil && (release == nil || dev.at.After(release.at)) {
+		out.Prerelease = &dev.tag
+	}
+	return out
+}
 
-func (calverScheme) IsStable(string) bool { return false }
+// stamped is a tag of the host with the time its name carries.
+type stamped struct {
+	tag git.Tag
+	at  time.Time
+}
 
-func (calverScheme) Compare(_, _ string) int { return 0 }
+// newest is the newest tag of a stage among the lines, by the time in its name.
+func (c calverScheme) newest(tags []git.Tag, lines []string, stage string) *stamped {
+	byName := make(map[string]git.Tag, len(tags))
+	for _, t := range tags {
+		if _, dup := byName[t.Name]; !dup {
+			byName[t.Name] = t
+		}
+	}
+	var best *stamped
+	for _, line := range lines {
+		selected := calver.Select(c.inner, names(tags), line, stage)
+		if len(selected) == 0 {
+			continue
+		}
+		if top := selected[0]; best == nil || top.Time.After(best.at) {
+			best = &stamped{tag: byName[top.Name], at: top.Time}
+		}
+	}
+	return best
+}
+
+func (c calverScheme) IsStable(tag string) bool {
+	t, ok := c.inner.Parse(tag)
+	return ok && t.Stage == config.StageRelease
+}
+
+// Compare orders by the date in the names, so a newer date with the same line is a
+// newer image, and the prod and dev tags of one commit, which share a date, are
+// equal.
+func (c calverScheme) Compare(a, b string) int {
+	x, okA := c.inner.Parse(a)
+	y, okB := c.inner.Parse(b)
+	if !okA || !okB {
+		return 0
+	}
+	return x.Time.Compare(y.Time)
+}
+
+func names(tags []git.Tag) []string {
+	out := make([]string, len(tags))
+	for i, t := range tags {
+		out[i] = t.Name
+	}
+	return out
+}
