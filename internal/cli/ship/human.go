@@ -41,6 +41,9 @@ func newStyledSink(out ui.Output, full bool, st *style.Renderer) *humanSink {
 	return &humanSink{out: out, full: full, st: st}
 }
 
+// label is the name of a field in a line, as secondary text.
+func (h *humanSink) label(text string) string { return h.st.Style(style.Dim, text) }
+
 // heading shows a heading.
 func (h *humanSink) heading(text string) { h.out.Line(h.st.Style(style.Heading, text)) }
 
@@ -107,13 +110,13 @@ func (h *humanSink) Event(e domain.Event) {
 			h.out.Line("             " + files) // under the subject: four spaces, the short hash and two more
 		}
 	case domain.EventPushed:
-		h.out.Line(fmt.Sprintf("  %s: pushed %s to %s", name(e), e.NewBranch, e.Remote))
+		h.out.Line(fmt.Sprintf("  %s: %s %s to %s", name(e), h.st.Style(style.OK, "pushed"), e.NewBranch, e.Remote))
 	case domain.EventPROpened:
-		h.out.Line(fmt.Sprintf("  %s: opened #%d %s", name(e), e.PR.Number, e.PR.URL))
+		h.out.Line(fmt.Sprintf("  %s: %s #%d %s", name(e), h.status("opened"), e.PR.Number, e.PR.URL))
 	case domain.EventSuperseded:
-		h.out.Line(fmt.Sprintf("  %s: closed #%d", name(e), e.PR.Number))
+		h.out.Line(fmt.Sprintf("  %s: %s #%d", name(e), h.st.Style(style.Dim, "closed"), e.PR.Number))
 	case domain.EventRefreshed:
-		h.out.Line(fmt.Sprintf("  %s: refreshed #%d %s", name(e), e.PR.Number, e.PR.URL))
+		h.out.Line(fmt.Sprintf("  %s: %s #%d %s", name(e), h.status("refreshed"), e.PR.Number, e.PR.URL))
 	case domain.EventTargetDone:
 		h.done(e)
 	case domain.EventDone:
@@ -136,7 +139,7 @@ func (h *humanSink) resolved(p *domain.Plan) {
 		h.heading(fmt.Sprintf("Ship %s to %s", p.Producer, p.Consumer))
 	}
 	for _, note := range p.Notes {
-		h.out.Line("  left out  " + note)
+		h.out.Line("  " + h.label("left out") + "  " + note)
 	}
 	h.out.Line("")
 	h.header = *p
@@ -146,13 +149,13 @@ func (h *humanSink) resolved(p *domain.Plan) {
 // first one, after the method and the wanted value that its read made known.
 func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 	if !h.inTargets {
-		method := fmt.Sprintf("  method  %s (%s", h.header.Method, h.header.Strategy)
+		method := fmt.Sprintf("  %s  %s (%s", h.label("method"), h.header.Method, h.header.Strategy)
 		if t.File != "" {
 			method += ", " + t.File
 		}
 		h.out.Line(method + ")")
 		if t.Want != "" && h.header.Uniform() {
-			h.out.Line("  want    " + t.Want)
+			h.out.Line("  " + h.label("want") + "    " + t.Want)
 			h.wantShown = true
 		}
 		h.out.Line("")
@@ -228,7 +231,7 @@ func (h *humanSink) actor(a *domain.Actor) {
 	if a.Signing {
 		signing = "commits signed"
 	}
-	line := fmt.Sprintf("  acting as  %s <%s>, %s", a.Name, a.Email, signing)
+	line := fmt.Sprintf("  %s  %s <%s>, %s", h.label("acting as"), a.Name, a.Email, signing)
 	if a.Login != "" {
 		line += ", PRs by " + a.Login
 	}
@@ -364,11 +367,11 @@ func (h *humanSink) done(e domain.Event) {
 		if r.Note != "" {
 			note = " (" + r.Note + ")"
 		}
-		h.out.Line(fmt.Sprintf("  %s: already open #%d %s%s%s", name(e), r.PR.Number, r.PR.URL, behind, note))
+		h.out.Line(fmt.Sprintf("  %s: %s #%d %s%s%s", name(e), h.status("already open"), r.PR.Number, r.PR.URL, behind, note))
 	case domain.ResultWouldRefresh:
-		h.out.Line(fmt.Sprintf("  %s: would refresh #%d", name(e), r.PR.Number))
+		h.out.Line(fmt.Sprintf("  %s: %s #%d", name(e), h.status("would refresh"), r.PR.Number))
 	default:
-		h.out.Line(fmt.Sprintf("  %s: %s", name(e), r.Status))
+		h.out.Line(fmt.Sprintf("  %s: %s", name(e), h.status(string(r.Status))))
 	}
 }
 
@@ -380,12 +383,12 @@ func (h *humanSink) summary(p *domain.Plan) {
 	}
 	h.out.Line("")
 	if !h.wantShown && p.Want != "" {
-		h.out.Line("  want    " + p.Want)
+		h.out.Line("  " + h.label("want") + "    " + p.Want)
 	}
 	if p.Push != nil {
-		h.out.Line(fmt.Sprintf("  push to  %s (%s), as %s", p.Push.Role, p.Push.Remote, p.Push.Source))
+		h.out.Line(fmt.Sprintf("  %s  %s (%s), as %s", h.label("push to"), p.Push.Role, p.Push.Remote, p.Push.Source))
 	}
-	h.out.Line("  status  " + h.status(string(p.Status)))
+	h.out.Line("  " + h.label("status") + "  " + h.status(string(p.Status)))
 	for _, blocker := range p.Blockers {
 		h.out.Line(h.st.Style(style.Warn, "  blocked: "+blocker))
 	}

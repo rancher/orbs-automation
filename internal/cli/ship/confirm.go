@@ -72,7 +72,6 @@ func differ(n int) string {
 // CI is a loud failure and not a hang or a silent yes. Otherwise it writes the
 // question to out and reads the answer from in, and only y or yes is yes.
 func confirmer(in io.Reader, out io.Writer, interactive, yes bool, st *style.Renderer) func(context.Context, domain.Confirmation) (bool, error) {
-	_ = st
 	return func(_ context.Context, c domain.Confirmation) (bool, error) {
 		if yes {
 			return true, nil
@@ -80,7 +79,9 @@ func confirmer(in io.Reader, out io.Writer, interactive, yes bool, st *style.Ren
 		if !interactive {
 			return false, ErrNeedsApproval
 		}
-		if _, err := fmt.Fprint(out, "\n"+question(c)); err != nil {
+		// The question is what the user is to read, and the choices are not.
+		text, _ := strings.CutSuffix(question(c), " [y/N] ")
+		if _, err := fmt.Fprint(out, "\n"+st.Style(style.Heading, text)+" "+st.Style(style.Dim, "[y/N]")+" "); err != nil {
 			return false, err
 		}
 		line, err := bufio.NewReader(in).ReadString('\n')
