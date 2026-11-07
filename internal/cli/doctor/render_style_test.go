@@ -125,3 +125,60 @@ func TestRunNeverStylesJSON(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, out, "\x1b")
 }
+
+func listed() []Check {
+	return []Check{
+		fakeCheck{name: "git", category: "dependencies"},
+		fakeCheck{name: "auth-api", category: "authentication", online: true},
+	}
+}
+
+func TestStyledCheckListIsThePlainListWithEscapesAdded(t *testing.T) {
+	plain, err := RenderChecks(listed(), clicfg.OutputText, nil)
+	require.NoError(t, err)
+
+	styled, err := RenderChecks(listed(), clicfg.OutputText, colored())
+
+	require.NoError(t, err)
+	assert.Equal(t, plain, strip(styled))
+	assert.NotEqual(t, plain, styled)
+}
+
+func TestNoColorIsThePlainCheckList(t *testing.T) {
+	plain, err := RenderChecks(listed(), clicfg.OutputText, nil)
+	require.NoError(t, err)
+
+	for who, v := range map[string]*style.Renderer{"plain": style.Plain(), "none": style.New(clicfg.Terminal{})} {
+		got, err := RenderChecks(listed(), clicfg.OutputText, v)
+
+		require.NoError(t, err, who)
+		assert.Equal(t, plain, got, who)
+	}
+	assert.NotContains(t, plain, "\x1b")
+}
+
+func TestTheCheckListHeadsAndCategoriesAreSecondaryText(t *testing.T) {
+	v := colored()
+
+	out, err := RenderChecks(listed(), clicfg.OutputText, v)
+
+	require.NoError(t, err)
+	for _, head := range []string{"NAME", "CATEGORY", "ONLINE", "DESCRIPTION"} {
+		assert.Contains(t, out, v.Style(style.Dim, head), head)
+	}
+	assert.Contains(t, out, v.Style(style.Dim, "dependencies"))
+	assert.Contains(t, out, v.Style(style.Dim, "no"), "a check that needs no network")
+	assert.Contains(t, out, "yes", "a check that does is not secondary")
+	assert.NotContains(t, out, v.Style(style.Dim, "yes"))
+}
+
+func TestTheJSONCheckListIsNeverStyled(t *testing.T) {
+	plain, err := RenderChecks(listed(), clicfg.OutputJSON, nil)
+	require.NoError(t, err)
+
+	got, err := RenderChecks(listed(), clicfg.OutputJSON, colored())
+
+	require.NoError(t, err)
+	assert.Equal(t, plain, got)
+	assert.NotContains(t, got, "\x1b")
+}
