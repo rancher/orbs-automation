@@ -21,7 +21,8 @@ import (
 type Runner func(ctx context.Context, cwd string, args []string) error
 
 // ProjectDir returns the clone root of the project named by its config name or
-// owner/name slug, for ls.
+// owner/name slug, for cd and ls. It is gero cd's own lookup and refuses what
+// gero cd refuses.
 type ProjectDir func(key string) (string, error)
 
 // Session is what the REPL carries between lines: the working directory. The
@@ -102,7 +103,24 @@ func (s *Session) Exec(ctx context.Context, out io.Writer, line string) (bool, e
 
 // cd moves the REPL into the clone root of the project named by its one
 // argument, and nothing else: no paths, no @, no argument.
-func (s *Session) cd(args []string) error { return nil }
+func (s *Session) cd(args []string) error {
+	if len(args) != 1 {
+		return errors.New("cd takes one project, by its config name or owner/name slug")
+	}
+	// The word goes as typed, "." and "@name" included: it is the project
+	// lookup of gero cd that refuses them.
+	dir, err := s.projectDir(args[0])
+	if err != nil {
+		return err
+	}
+	// The REPL owns the working directory, so it moves itself, and every command
+	// run after this reads the new one from the process.
+	if err := os.Chdir(dir); err != nil {
+		return err
+	}
+	s.Dir = dir
+	return nil
+}
 
 // ls lists the working directory, a directory under it, or a project's clone
 // root. A bare word is a directory when one exists, else a project; a leading @
@@ -136,8 +154,8 @@ func (s *Session) ls(out io.Writer, args []string) error {
 }
 
 func (s *Session) lsDir(target string) (string, error) {
-	if strings.HasPrefix(target, "@") {
-		return s.projectDir(target)
+	if key, ok := strings.CutPrefix(target, "@"); ok {
+		return s.projectDir(key)
 	}
 	dir, err := s.under(target)
 	if err != nil {

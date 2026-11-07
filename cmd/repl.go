@@ -58,7 +58,7 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 	}
 	sess := &repl.Session{Dir: cwd}
 	sess.ProjectDir = func(key string) (string, error) {
-		out, err := cdpath.Path(s, sess.Dir, []string{strings.TrimPrefix(key, "@")})
+		out, err := cdpath.Path(s, sess.Dir, []string{key})
 		return strings.TrimSuffix(out, "\n"), err
 	}
 	sigs := make(chan os.Signal, 1)

@@ -280,9 +280,9 @@ func TestCdMovesIntoTheProjectRoot(t *testing.T) {
 		assert.Equal(t, clone, s.Dir, key)
 		wd, err := os.Getwd()
 		require.NoError(t, err)
-		real, err := filepath.EvalSymlinks(clone)
+		want, err := filepath.EvalSymlinks(clone)
 		require.NoError(t, err)
-		assert.Equal(t, real, wd, key+": the process moved, so commands see it")
+		assert.Equal(t, want, wd, key+": the process moved, so commands see it")
 	}
 }
 

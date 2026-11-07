@@ -1,6 +1,6 @@
 # REPL
 
-**Status:** draft. Step 1 of the build order is built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `exit` and the working directory); `gero repl` runs it, with the plain reader, behind the start checks.
+**Status:** draft. Steps 1 and 2 of the build order are built as a core in `internal/cli/repl/` (the loop, `pwd`, `ls`, `cd`, `exit` and the working directory); `gero repl` runs it, with the plain reader, behind the start checks.
 
 `gero repl` is an interactive prompt that runs `gero` commands one line at a time, with a few shell-like commands of its own so a user has less reason to leave it. It is not a shell: it is started from one, and exiting returns to it. The goal is fewer trips out, not a replacement for the user's shell.
 
@@ -101,10 +101,10 @@ The REPL loop, the REPL-only commands and the shell hand-off are in `internal/cl
 
 ## Not built yet
 
-Step 1 is built: the core (`Session`, `Split`, `Exec`, `Loop`, with the runner and the project lookup of `ls` injected) and the `gero repl` command in `cmd/`, which makes the start checks, builds the tree for each line (`newRootCmd`), carries the global flags given to `gero repl` into every line, and turns Ctrl-C into a cancel of the running line. The REPL sets `GERO_REPL` in its own process, so a `repl` line typed at the prompt is refused. The terminal path has been run only under tests: the unit tests drive the line runner, and a real prompt has not been tried by hand. `help` is not yet its own command, `!` is deferred, and an unknown name gets cobra's error and not a suggestion of `!`. In the order it is meant to land, stopping when users stop leaving:
+Steps 1 and 2 are built: the core (`Session`, `Split`, `Exec`, `Loop`, with the runner and the project lookup of `cd` and `ls` injected) and the `gero repl` command in `cmd/`, which makes the start checks, builds the tree for each line (`newRootCmd`), carries the global flags given to `gero repl` into every line, and turns Ctrl-C into a cancel of the running line. `cd <project>` asks the same `cdpath` lookup as `gero cd` and then calls `os.Chdir` itself, so the process's working directory is the REPL's and commands see it. The REPL sets `GERO_REPL` in its own process, so a `repl` line typed at the prompt is refused. The terminal path has been run only under tests: the unit tests drive the line runner, and a real prompt has not been tried by hand. `help` is not yet its own command, `!` is deferred, and an unknown name gets cobra's error and not a suggestion of `!`. In the order it is meant to land, stopping when users stop leaving:
 
 1. The loop, `pwd`, `ls` and `exit`, with the working directory as state.
-2. `cd <project>`.
+2. `cd <project>` (built).
 3. `shell` and `GERO_REPL`.
 4. History, line editing and completion.
 5. The prompt template, `repl.prompt` and its placeholders, which also puts the project in the prompt for a user who wants it. Until then the prompt is the plain default.
@@ -113,6 +113,7 @@ Step 1 is built: the core (`Session`, `Split`, `Exec`, `Loop`, with the runner a
 
 ## Open questions
 
+* **Keyboard shortcuts.** What works today comes from the terminal's own line discipline, because the plain reader reads whole lines: Ctrl-D at an empty prompt is end of input and leaves, Ctrl-C clears the line or cancels the running command, and Ctrl-U, Ctrl-W and Backspace edit the line as in any cooked-mode program. Nothing else can work without raw mode, since a key like Ctrl-X is not delivered until Enter. Ctrl-X as an exit key is therefore decided with the editor in step 4, where it competes with the editor's own bindings (in emacs-style editors Ctrl-X is a prefix, and Ctrl-X Ctrl-C is the usual exit), so the choice there is between that chord and Ctrl-D alone **(unverified)**. History search (Ctrl-R), Ctrl-A and Ctrl-E, and Ctrl-L to clear the screen come with the same library.
 * The prompt's syntax, placeholder set and key name, `repl.prompt`, are **(leaning)** and are fixed when the template is built, along with whether it needs a way to show that the last line failed.
 * Which front end, an editor on a loop or a Bubble Tea program, and so which library, decided when the line editor is built, from a spike behind `internal/ui` **(unverified)**. The candidates are `chzyer/readline`, `reeflective/console`, a small raw-mode editor on `golang.org/x/term` (already in `go.sum`), and Bubble Tea v2 with `bubbles` and `lipgloss` v2 ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). The measure is the one used for prompts in [CLI_OUTPUT](CLI_OUTPUT.md): modules added, binary size and behavior without a TTY, plus two more for the second shape: whether a write command's stdin confirmation and Ctrl-C work unchanged inside it, and which package measures width.
 * Whether the passthrough passes the whole environment through, as the user's own shell would have it, or scrubs `GH_TOKEN` and `GITHUB_TOKEN` as `execx` does for every other child. Decided with the first of `!` and `shell` to be built. Passing it through matches what a user expects. Scrubbing keeps a token out of a program the user did not mean to give it to, though the user's shell already holds it.
