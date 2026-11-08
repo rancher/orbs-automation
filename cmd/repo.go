@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/branchtags"
 	"github.com/rancher/orbs-automation/internal/cli/imagesexist"
 	"github.com/rancher/orbs-automation/internal/cli/repobranch"
+	"github.com/rancher/orbs-automation/internal/cli/repoclone"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
 	"github.com/rancher/orbs-automation/internal/cli/repotag"
@@ -133,6 +134,50 @@ the repository you are in is used.`,
 		},
 	}
 	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
+	var cloneAll bool
+	var cloneInto string
+	cloneCmd := &cobra.Command{
+		Use:   "clone [project...]",
+		Short: "Clone the team's projects onto this machine",
+		Long: `Clone each named Project, or with --all every Project that is owned and not
+external (an external one needs its name), into <root>/<name>, where <name> is
+the repository's name. A project that is already cloned, wherever the user file
+says it is or a repos.search directory finds it, is skipped.
+
+The root is --into, else GERO_REPOS_CLONE_ROOT, else repos.cloneRoot in the user
+file. A repos.paths entry for a project says where that one goes instead, and
+needs no root. gero init asks for the root.
+
+Clones are made over SSH, with your own git, so your SSH agent and keys are
+used. When the user file has a fork remote and githubUser and the fork exists,
+it is cloned as the fork remote and the upstream is added; when the fork does not
+exist the upstream alone is cloned, under the upstream remote's name, and the
+report says so. One project failing does not stop the others, and the exit is 1.
+
+The projects come from the central config in centralConfigDir (or ./config).
+A workstation with none needs it cloned first: the central bundle reader is not
+built yet. --dry-run says what would be cloned and reads the host for forks.`,
+		Example: `  # Everything the team owns, under the configured root
+  gero repo clone --all
+
+  # Two projects, somewhere else
+  gero repo clone --into ~/src rancher scc-operator`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			return repoclone.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, repoclone.Options{
+				Projects: args, All: cloneAll, Into: cloneInto,
+			})
+		},
+	}
+	cloneCmd.Flags().BoolVar(&cloneAll, "all", false, "clone every project that is owned and not external")
+	cloneCmd.Flags().StringVar(&cloneInto, "into", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
 	var push, yes, nonInteractive, stable, minor, major bool
 	tagCmd := &cobra.Command{
 		Use:   "tag [project] <line> [tag]",
@@ -240,6 +285,7 @@ is not found or a registry could not be reached.`,
 		infoCmd,
 		statusCmd,
 		branchCmd,
+		cloneCmd,
 		tagCmd,
 		&cobra.Command{
 			Use:     "build-tags",
