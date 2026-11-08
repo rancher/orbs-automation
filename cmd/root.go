@@ -47,7 +47,7 @@ without manual intervention, with gh-style commands: gero <category> <action>.`,
 	root.AddGroup(&groups.CIGroup)
 	ci.RegisterSubcommands(root)
 	for _, add := range []func(*cobra.Command){
-		addAuth, addCd, addConfig, addDoctor, addLines, addRepl, addRepo, addShell,
+		addAuth, addCd, addConfig, addDoctor, addInit, addLines, addRepl, addRepo, addShell,
 		addShip, addSemver, addVersion, addWorkflows,
 	} {
 		add(root)
