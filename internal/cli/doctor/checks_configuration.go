@@ -211,7 +211,7 @@ func (c userFileCheck) Run(context.Context) Result {
 	defer file.Close()
 	// Load the file the way every command does. The GERO_* variables are masked,
 	// so a bad value in the environment is not blamed on the file.
-	_, err = clicfg.Load(clicfg.Inputs{
+	s, err := clicfg.Load(clicfg.Inputs{
 		Getenv:       withoutGeroVars(getenv),
 		UserFile:     file,
 		UserFileName: path,
@@ -223,6 +223,15 @@ func (c userFileCheck) Run(context.Context) Result {
 			Message: err.Error(), // the loader names the file and the key
 			Remediation: "fix what the message names, or move the file aside to use the defaults; " +
 				"the keys are listed in docs/specs/CLI_CONFIG.md",
+		}
+	}
+	if len(s.Warnings) > 0 {
+		// The file loads, so commands run on its valid keys; what is not known is
+		// ignored, and probably a typo.
+		return Result{
+			Status:      StatusWarn,
+			Message:     strings.Join(s.Warnings, "; "),
+			Remediation: "fix or remove the keys the message names, as gero ignores them; the keys are listed in docs/specs/CLI_CONFIG.md",
 		}
 	}
 	return Result{Status: StatusOK, Message: path}

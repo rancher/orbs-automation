@@ -111,11 +111,11 @@ func Load(in Inputs) (Settings, error) {
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
-	fc, err := decodeFile(in.UserFile, in.UserFileName)
+	fc, warnings, err := decodeFile(in.UserFile, in.UserFileName)
 	if err != nil {
 		return Settings{}, err
 	}
-	s := Settings{sources: map[string]Source{}}
+	s := Settings{sources: map[string]Source{}, Warnings: warnings}
 	if s.CI, err = InCI(getenv); err != nil {
 		return Settings{}, err
 	}

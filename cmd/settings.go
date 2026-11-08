@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -125,6 +126,11 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 		}
 		if err := requireContext(cmd, s); err != nil {
 			return err
+		}
+		// A key the file has that gero does not know is ignored, not fatal, so
+		// say so: it is likely a typo, and the command runs without it.
+		for _, w := range s.Warnings {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
 		}
 		ctx := cmd.Context()
 		if ctx == nil {

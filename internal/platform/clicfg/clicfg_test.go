@@ -446,9 +446,12 @@ func TestLoadBotUser(t *testing.T) {
 	})
 
 	t.Run("the user file cannot set it", func(t *testing.T) {
-		_, err := Load(Inputs{Getenv: env(nil), UserFile: strings.NewReader("botUser: someone\n"), UserFileName: "config.yaml"})
+		s, err := Load(Inputs{Getenv: env(nil), UserFile: strings.NewReader("botUser: someone\n"), UserFileName: "config.yaml"})
 
-		require.Error(t, err)
+		require.NoError(t, err)
+		assert.Empty(t, s.BotUser, "the key is ignored")
+		require.Len(t, s.Warnings, 1)
+		assert.Contains(t, s.Warnings[0], "botUser")
 	})
 }
 
@@ -489,9 +492,11 @@ func TestLoadDryRunRejectsAnythingElse(t *testing.T) {
 }
 
 func TestLoadDryRunIsNotAUserFileKey(t *testing.T) {
-	_, err := Load(Inputs{UserFile: strings.NewReader("dryRun: true\n"), UserFileName: "config.yaml"})
-	require.Error(t, err, "a file that turned it on would turn it on for every run")
-	assert.Contains(t, err.Error(), "dryRun")
+	s, err := Load(Inputs{UserFile: strings.NewReader("dryRun: true\n"), UserFileName: "config.yaml"})
+	require.NoError(t, err)
+	assert.False(t, s.DryRun, "a file that turned it on would turn it on for every run")
+	require.Len(t, s.Warnings, 1)
+	assert.Contains(t, s.Warnings[0], "dryRun")
 }
 
 func TestLoadNonInteractive(t *testing.T) {
@@ -529,9 +534,11 @@ func TestLoadNonInteractiveRejectsAnythingElse(t *testing.T) {
 }
 
 func TestLoadNonInteractiveIsNotAUserFileKey(t *testing.T) {
-	_, err := Load(Inputs{UserFile: strings.NewReader("nonInteractive: true\n"), UserFileName: "config.yaml"})
-	require.Error(t, err, "a file that turned it on would answer yes to every question")
-	assert.Contains(t, err.Error(), "nonInteractive")
+	s, err := Load(Inputs{UserFile: strings.NewReader("nonInteractive: true\n"), UserFileName: "config.yaml"})
+	require.NoError(t, err)
+	assert.False(t, s.NonInteractive, "a file that turned it on would answer yes to every question")
+	require.Len(t, s.Warnings, 1)
+	assert.Contains(t, s.Warnings[0], "nonInteractive")
 }
 
 func TestLoadSignCommits(t *testing.T) {
@@ -641,10 +648,12 @@ func TestAnInvalidPromptTemplateDoesNotFailLoad(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestTheUserFileStillRejectsUnknownKeysUnderRepl(t *testing.T) {
-	_, err := Load(Inputs{UserFile: strings.NewReader("repl:\n  promt: x\n")})
+func TestTheUserFileStillWarnsOfUnknownKeysUnderRepl(t *testing.T) {
+	s, err := Load(Inputs{UserFile: strings.NewReader("repl:\n  promt: x\n")})
 
-	assert.Error(t, err)
+	require.NoError(t, err)
+	require.Len(t, s.Warnings, 1)
+	assert.Contains(t, s.Warnings[0], "promt")
 }
 
 func TestLoadUnknownKeysAreWarningsAndTheValidKeysStillLoad(t *testing.T) {

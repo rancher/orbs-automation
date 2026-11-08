@@ -63,21 +63,27 @@ func (*fileConfig) SetDefaults() {}
 // layer each came from.
 func (*fileConfig) Validate(config.Context, *config.Report) {}
 
-// decodeFile parses the user file strictly through the config engine: an unknown
-// key is an error. A nil reader or an empty file is an empty config.
-func decodeFile(r io.Reader, name string) (fileConfig, error) {
-	var fc fileConfig
+// decodeFile parses the user file through the config engine. A key it does not
+// know is not an error: the keys it does know are kept, and each unknown one is
+// a warning, in warnings, so one typo does not cost the valid keys beside it.
+// Anything else wrong with the file is an error. A nil reader or an empty file is
+// an empty config.
+func decodeFile(r io.Reader, name string) (fc fileConfig, warnings []string, err error) {
 	if r == nil {
-		return fc, nil
+		return fc, nil, nil
 	}
 	data, err := io.ReadAll(r)
 	if err != nil {
-		return fileConfig{}, fmt.Errorf("%s: %w", userFileLabel(name), err)
+		return fileConfig{}, nil, fmt.Errorf("%s: %w", userFileLabel(name), err)
 	}
-	if err := config.Load(userFileLabel(name), data, &fc, config.Context{}).Err(); err != nil {
-		return fileConfig{}, err
+	report := config.LoadTolerant(userFileLabel(name), data, &fc, config.Context{})
+	if err := report.Err(); err != nil {
+		return fileConfig{}, nil, err
 	}
-	return fc, nil
+	for _, f := range report.Warnings() {
+		warnings = append(warnings, f.Error())
+	}
+	return fc, warnings, nil
 }
 
 // UserFile is an empty value of the type the user file decodes into, so a tool

@@ -57,7 +57,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 ### The file
 
 * Path: `$XDG_CONFIG_HOME/gero/config.yaml`, else `~/.config/gero/config.yaml`. `GERO_CONFIG` overrides the path. We do not use `os.UserConfigDir` because it points at `~/Library/Application Support` on macOS, and `~/.gero` was rejected to match `gh`'s layout.
-* Optional. A missing file is fine; a malformed file, or one with an unknown key, is a loud error naming the file and key.
+* Optional. A missing file is fine; a malformed file, or a key with a value that is not allowed, is a loud error naming the file and key. A key gero does not know (a typo, or one from a newer gero) is not: it is ignored, the keys that are valid still apply, and every command prints `warning: <file>: line N: unknown key "x", ignored` on stderr. The schema still marks it, so an editor underlines it.
 * `gero config show` lists the file it loaded as `userFile`, first in the table, with `env` as its source when `GERO_CONFIG` named it and `default` otherwise, or `(none)` when no file applies. `gero doctor` checks that the file loads ([DOCTOR](DOCTOR.md)).
 * `gero init` writes a first file: the four keys `githubUser`, `fork`, `upstream` and `branchPrefix`, after the schema comment. It will not replace a file that exists unless `--force` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
 * No secrets. Tokens stay with `gh` or the environment.
@@ -102,7 +102,7 @@ File-only keys, all **(leaning)**:
 | `repos.overrides.<slug>.pushTo` | Per-repo `pushTo`, which beats the project's and the user's own |
 
 ```yaml
-# All keys optional. Unknown keys are an error. No secrets.
+# All keys optional. Unknown keys are warned about and ignored. No secrets.
 # "~" and $ENV are expanded in paths; relative paths are an error.
 configDir: ~/GitProjects/SUSE/orbs-automation/config
 output: text
