@@ -101,9 +101,9 @@ Would open PR from my-fix into main on rancher/scc-operator   (nothing was sent)
 
 ## `gero ship bump` **(leaning)**
 
-`gero ship` keeps its meaning: a bare call with a project and a release or line runs the whole process, and its flags are its own. `bump` is a subcommand of it for the one step that applies the consumer's update method for a release to a branch and commits it (the edit and its commits are never separated), so `ship` is the command that does everything and `ship bump` the part of it that changes files. Cobra reads `bump` as the subcommand when it is the first argument, so no project may be named `bump`; none is.
+`gero ship` keeps its meaning: a bare call with a project and a release or line runs the whole process, and its flags are its own. `bump` is a subcommand of it for the one step that writes the consumer's holdings of a release into a branch and commits it (the edit and its commits are never separated), so `ship` is the command that does everything and `ship bump` the part of it that changes files. Cobra reads `bump` as the subcommand when it is the first argument, so no project may be named `bump`; none is.
 
-What it needs is not decided: which branch it commits onto (the checked-out one, which must not be the target it is for), how the consumer and the update method are chosen (`--to` and `--method` as in `ship`), and whether it may be run in a temporary worktree.
+What it needs is not decided: which branch it commits onto (the checked-out one, which must not be the target it is for), how the consumer is chosen (`--to` as in `ship`), and whether it may be run in a temporary worktree.
 
 ## Where the code goes
 
@@ -115,7 +115,7 @@ Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds t
 
 ## Open questions
 
-* What `ship bump` commits onto, and how it picks the consumer and method (above).
+* What `ship bump` commits onto, and how it picks the consumer (above).
 * Whether `repo branch` gets `--from <ref>`.
 * For `repo tag`: whether the default bump after a stable is always a patch with `--minor` and `--major` for the rest, and the name `--stable` for the promotion. Whether an annotated or signed tag is ever wanted, which the API does not make.
 * Whether a later token such as `@` should stand for the checked-out branch where a branch is a positional, which none is now.
