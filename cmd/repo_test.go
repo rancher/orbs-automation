@@ -95,3 +95,43 @@ func TestRepoBranchWiring(t *testing.T) {
 		assert.Contains(t, stdout, "release line")
 	})
 }
+
+// Wiring only: the logic is tested in internal/cli/repoclone.
+func TestRepoCloneWiring(t *testing.T) {
+	t.Run("needs project names or --all", func(t *testing.T) {
+		_, _, err := execRoot(t, "repo", "clone")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Contains(t, err.Error(), "--all")
+	})
+
+	t.Run("--all and names are not both taken", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "clone", "--all", "rancher")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Empty(t, stdout)
+	})
+
+	t.Run("without a central config it says where it reads one and clones nothing", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		stdout, _, err := execRoot(t, "repo", "clone", "--into", t.TempDir(), "rancher")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Contains(t, err.Error(), "central config")
+		assert.Empty(t, stdout)
+	})
+
+	// Last: cobra keeps the help flag set on the command between runs.
+	t.Run("the help has --all and --into", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "clone", "--help")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "--all")
+		assert.Contains(t, stdout, "--into")
+		assert.Contains(t, stdout, "GERO_REPOS_CLONE_ROOT")
+	})
+}
