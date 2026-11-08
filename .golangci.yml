@@ -36,6 +36,7 @@ linters:
             - golang.org/x/term
             - charm.land/lipgloss
             - github.com/ergochat/readline
+            - github.com/invopop/jsonschema
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
         # internal/platform/errs for exit-code errors and its own subpackages.
@@ -167,10 +168,21 @@ linters:
             - "!**/internal/appconfig/**"
             - "!**/internal/chain/**"
             - "!**/internal/chainload/**"
+            - "!**/tools/genschema/**"
             - "!$test"
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/apis/v1alpha2
-              desc: a version of the config API is only allowed in internal/appconfig, internal/chain and internal/chainload; read the chain graph (docs/design/CHAIN_MODEL.md)
+              desc: a version of the config API is only allowed in internal/appconfig, internal/chain, internal/chainload and tools/genschema; read the chain graph (docs/design/CHAIN_MODEL.md)
+        # The JSON Schema generator is a developer tool: only tools/genschema imports
+        # it, so the gero binary does not link it (docs/specs/DEPENDENCY_POLICY.md).
+        nojsonschema:
+          list-mode: lax
+          files:
+            - "!**/tools/genschema/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/invopop/jsonschema
+              desc: invopop/jsonschema is only allowed in tools/genschema (docs/specs/DEPENDENCY_POLICY.md)
         # go-gh is used for token and host resolution only, through
         # internal/platform/github.GoGh. Its pkg/api is not approved
         # (docs/specs/DEPENDENCY_POLICY.md).
