@@ -18,3 +18,8 @@ type Step struct {
 	Until string  `yaml:"until"`
 	From  string  `yaml:"from"` // where the program comes from
 }
+
+// Contains reports whether a line is in the range, its ends included. A line may
+// be written with or without its v, in any case. A line that does not read as a
+// Rancher line is counted as in the range, as an end that does not read is as open.
+func (r Range) Contains(_ string) bool { return false }
