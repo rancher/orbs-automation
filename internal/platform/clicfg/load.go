@@ -195,6 +195,17 @@ func Load(in Inputs) (Settings, error) {
 	if s.Repos, err = resolveRepos(fc.Repos, in.Home, getenv); err != nil {
 		return Settings{}, fmt.Errorf("%s: %w", label, err) // the repos keys exist only in the file
 	}
+	if s.Repos.CloneRoot != "" {
+		s.sources["repos.cloneRoot"] = SourceFile
+	}
+	// repos.cloneRoot is the one repos key with an environment variable: gero repo
+	// clone takes --into, then this, then the file (docs/specs/CLI_CONFIG.md).
+	if ev := getenv(EnvName("repos.cloneRoot")); ev != "" {
+		if s.Repos.CloneRoot, err = absPath(EnvName("repos.cloneRoot"), ev, in.Home, getenv); err != nil {
+			return Settings{}, err
+		}
+		s.sources["repos.cloneRoot"] = SourceEnv
+	}
 	return s, nil
 }
 

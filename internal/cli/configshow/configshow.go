@@ -67,7 +67,7 @@ func Entries(s clicfg.Settings, dir workspace.CentralConfigDir) []Entry {
 		es = append(es, Entry{"repos.search", strings.Join(s.Repos.Search, ","), clicfg.SourceFile.String()})
 	}
 	if s.Repos.CloneRoot != "" {
-		es = append(es, Entry{"repos.cloneRoot", s.Repos.CloneRoot, clicfg.SourceFile.String()})
+		es = append(es, entry(s, "repos.cloneRoot", s.Repos.CloneRoot))
 	}
 	for _, slug := range sortedKeys(s.Repos.Paths) {
 		es = append(es, Entry{"repos.paths." + slug, s.Repos.Paths[slug], clicfg.SourceFile.String()})
