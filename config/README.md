@@ -55,6 +55,6 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 | `at.format` | `yaml` |
 | `holds.form` | `{tag}` |
 
-The kinds are also published as JSON Schema in [`../generated/jsonschema/`](../generated/jsonschema/), for an editor to validate a file as it is written ([APP_CONFIG](../docs/specs/APP_CONFIG.md#json-schemas)).
+The kinds are also published as JSON Schema in [`../generated/jsonschema/`](../generated/jsonschema/), for an editor to validate a file as it is written (each file here starts with the `yaml-language-server` comment that points at them) ([APP_CONFIG](../docs/specs/APP_CONFIG.md#json-schemas)).
 
 `gero config validate` loads this directory, checks every document and the set, and reports each problem naming the file and the document, with a line for each warning.

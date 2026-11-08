@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # scc-operator: owned, one stream for every line (universal), one image.
 apiVersion: gero/v1alpha2
 kind: Project

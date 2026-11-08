@@ -76,7 +76,13 @@ The kinds are described as JSON Schema (draft 2020-12) so an editor can validate
 * They are derived from the Go types by `tools/genschema`, which reads the same `yaml` tags the decoder does, so a key and a nesting cannot differ. Descriptions are the Go comments. The allowed values of a field are built from the constants the rules check, in the tool's `hints.go`.
 * A schema checks the shape of one document: its keys, types, allowed values and the envelope. It does not check what only the set can, such as a ref that resolves or a unique name, nor the rules that depend on other fields; `gero config validate` does.
 * Regenerate with `go run ./tools/genschema` from the repository root. A test fails when the committed files are stale.
-* To use one, point the editor's YAML support at the file, for example with a first-line comment for the YAML language server: `# yaml-language-server: $schema=<path or URL of the schema>`. Wiring it into each editor is left to whoever wants it.
+* To use one, point the editor's YAML support at the file. The files in `config/` start with a comment the YAML language server reads, for the combined schema on the `main` branch:
+
+  ```yaml
+  # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+  ```
+
+  A user file takes `user-config.schema.json` the same way. Other editors are wired in their own settings, and whoever wants that does it.
 
 ## Not built yet
 

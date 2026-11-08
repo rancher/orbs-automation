@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # rancher: the destination, owned by every team. It holds components in one build file;
 # an older line also keeps a charts branch in its Dockerfile.
 apiVersion: gero/v1alpha2
