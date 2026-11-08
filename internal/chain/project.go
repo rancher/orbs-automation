@@ -13,6 +13,8 @@ type Project struct {
 	streams []*Stream
 
 	artifacts []*Artifact
+	held      []*Holding
+	sourced   []*Holding
 }
 
 // Name is the name of the document.
@@ -47,11 +49,11 @@ func (p *Project) Streams() []*Stream { return p.streams }
 func (p *Project) Artifacts() []*Artifact { return p.artifacts }
 
 // Held returns the holdings in the project's repo, in the order read.
-func (p *Project) Held() []*Holding { return nil }
+func (p *Project) Held() []*Holding { return p.held }
 
 // Sourced returns the holdings, in other projects or its own, of something of the
 // project, in the order read.
-func (p *Project) Sourced() []*Holding { return nil }
+func (p *Project) Sourced() []*Holding { return p.sourced }
 
 // StreamOf returns the stream a tag is a release of: the first of the project's
 // streams whose pattern the tag matches and none of whose excludes it matches. It
@@ -83,6 +85,36 @@ func (p *Project) Lines() []string {
 		ids = append(ids, bl.Line)
 	}
 	return ids
+}
+
+// lists reports whether the project lists the line for its branches: a single
+// layout keeps every line on its one branch, so it lists every line.
+func (p *Project) lists(line string) bool {
+	if p.single() {
+		return true
+	}
+	return p.listsExplicitly(line)
+}
+
+// listsExplicitly reports whether the line is one of the project's branch lines.
+func (p *Project) listsExplicitly(line string) bool {
+	for _, id := range p.Lines() {
+		if lineKey(id) == lineKey(line) {
+			return true
+		}
+	}
+	return false
+}
+
+// serves reports whether a stream of the project serves the line, or the project
+// lists it itself.
+func (p *Project) serves(line string) bool {
+	for _, s := range p.streams {
+		if s.Serves(line) {
+			return true
+		}
+	}
+	return p.listsExplicitly(line)
 }
 
 // lineKey writes a line id the one way lines are compared: lowercase, with its v.

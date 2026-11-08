@@ -10,6 +10,7 @@ import (
 // Graph is the whole config, joined.
 type Graph struct {
 	projects []*Project
+	holdings []*Holding
 	byName   map[string]*Project // lowercase name
 	bySlug   map[string]*Project // lowercase owner/name
 	lines    []v1alpha2.Line
@@ -38,6 +39,34 @@ func Build(cfg appconfig.Config) *Graph {
 		s.artifacts = append(s.artifacts, a)
 		s.project.artifacts = append(s.project.artifacts, a)
 	}
+	artifacts := map[string]*Artifact{}
+	for _, p := range g.projects {
+		for _, a := range p.artifacts {
+			artifacts[a.Name()] = a
+		}
+	}
+	holdings := map[string]*Holding{}
+	for _, doc := range cfg.Holdings {
+		h := &Holding{Doc: doc, holder: g.byName[strings.ToLower(doc.Refs["project"][0])]}
+		if names := doc.Refs["artifact"]; len(names) == 1 {
+			h.artifact = artifacts[names[0]]
+			h.producer = h.artifact.stream.project
+		} else {
+			h.producer = g.byName[strings.ToLower(doc.Refs["from"][0])]
+		}
+		g.holdings = append(g.holdings, h)
+		holdings[doc.Name] = h
+		h.holder.held = append(h.holder.held, h)
+		h.producer.sourced = append(h.producer.sourced, h)
+	}
+	for _, doc := range cfg.Edits {
+		e := &Edit{Doc: doc}
+		for _, name := range doc.Refs["holding"] {
+			h := holdings[name]
+			e.holdings = append(e.holdings, h)
+			h.edits = append(h.edits, e)
+		}
+	}
 	if cfg.Lines != nil {
 		g.lines = cfg.Lines.Spec.Lines
 	}
@@ -59,7 +88,7 @@ func (g *Graph) Project(key string) *Project {
 }
 
 // Holdings returns every Holding, in the order read.
-func (g *Graph) Holdings() []*Holding { return nil }
+func (g *Graph) Holdings() []*Holding { return g.holdings }
 
 // Lines returns the Rancher lines, as listed, or none when the config has none.
 func (g *Graph) Lines() []v1alpha2.Line { return g.lines }
