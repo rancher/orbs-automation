@@ -57,7 +57,8 @@ func hasSetError(rep config.Report, label, path, want string) bool {
 func TestAValidSetHasNoFindings(t *testing.T) {
 	rep := validateSet(t,
 		doc("Project", "p", "", projectSpec),
-		doc("Stream", "s", "{project: p}", streamSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "s", "{project: q}", streamSpec),
 		doc("Artifact", "a", "{stream: s}", artifactSpec),
 		doc("Holding", "h", "{project: p, artifact: a}", holdingSpec),
 		doc("Edit", "e", "{holding: [h]}", "  postEdit:\n    - {run: x}\n"),
@@ -423,19 +424,20 @@ func TestTheStagesAHoldingNamesAreStagesOfTheProjectsInvolved(t *testing.T) {
 	assetsStream := doc("Stream", "assets", "{project: assets}", "  scheme: calverLineStage\n  lines: [{line: v2.16}]\n")
 	chartStream := doc("Stream", "chart", "{project: charts}", "  scheme: chartVersion\n  lines: [{line: v2.16, series: \"111.x\"}]\n")
 	chartArtifact := doc("Artifact", "chart-file", "{stream: chart}", "  kind: file\n  name: chart-{version}.tgz\n")
+	holder := doc("Project", "holder", "", "  repo: {name: acme/holder}\n  branches:\n    layout: perLine\n    stages: [dev, stable]\n    lines: [{line: v2.16, branch: {dev: d, stable: s}}]\n")
 	plain := doc("Project", "plain", "", "  repo: {name: acme/plain}\n")
 	lines := doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n")
 	at := "  at: {file: f.yaml, key: '.a.{stage}'}\n"
 
 	t.Run("a stage of the holder", func(t *testing.T) {
-		h := doc("Holding", "h", "{project: charts, artifact: chart-file}", at+"  holds: {kind: release, stage: dev}\n")
+		h := doc("Holding", "h", "{project: holder, artifact: chart-file}", at+"  holds: {kind: release, stage: dev}\n")
 
-		assert.Empty(t, validateSet(t, lines, charts, chartStream, chartArtifact, h).Findings)
+		assert.Empty(t, validateSet(t, lines, charts, holder, chartStream, chartArtifact, h).Findings)
 	})
 	t.Run("a stage the holder does not have", func(t *testing.T) {
-		h := doc("Holding", "h", "{project: charts, artifact: chart-file}", at+"  holds: {kind: release, stage: nightly}\n")
+		h := doc("Holding", "h", "{project: holder, artifact: chart-file}", at+"  holds: {kind: release, stage: nightly}\n")
 
-		rep := validateSet(t, lines, charts, chartStream, chartArtifact, h)
+		rep := validateSet(t, lines, charts, holder, chartStream, chartArtifact, h)
 
 		assert.True(t, hasSetError(rep, `Holding "h"`, "spec.holds.stage", `"nightly" is not a stage of branches.stages`), "%v", rep.Findings)
 	})
