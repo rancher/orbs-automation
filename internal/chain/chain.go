@@ -5,6 +5,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/appconfig"
+	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
 // Graph is the whole config, joined.
@@ -14,12 +15,14 @@ type Graph struct {
 	byName   map[string]*Project // lowercase name
 	bySlug   map[string]*Project // lowercase owner/name
 	lines    []v1alpha2.Line
+	warnings []config.Finding
+	empty    bool
 }
 
 // Build joins the documents of a config that has passed every rule. A document
 // whose refs do not lead anywhere is not possible in such a config.
 func Build(cfg appconfig.Config) *Graph {
-	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}}
+	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty()}
 	for _, doc := range cfg.Projects {
 		p := &Project{Doc: doc, graph: g}
 		g.projects = append(g.projects, p)
