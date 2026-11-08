@@ -8,6 +8,7 @@ package assetfetch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -54,24 +55,78 @@ type Fetcher struct {
 	owner, repo string
 }
 
-// New returns a Fetcher for owner/repo.
-func New(owner, repo string, opts Options) *Fetcher {
-	return &Fetcher{owner: owner, repo: repo}
+// New returns a Fetcher for owner/repo. Requests, and redirects, go only to
+// GitHub's own hosts and to the base URL.
+func New(owner, repo string, o Options) *Fetcher {
+	opts := []ghrelease.Option{ghrelease.WithAllowedHosts("github.com", "githubusercontent.com")}
+	if o.BaseURL != "" {
+		opts = append(opts, ghrelease.WithBaseURL(o.BaseURL))
+	}
+	var c *ghrelease.Client
+	if o.HTTP != nil {
+		c = ghrelease.NewClientWithHTTP(o.HTTP, o.Token, opts...)
+	} else {
+		c = ghrelease.NewClient(o.Token, opts...)
+	}
+	return &Fetcher{client: c, owner: owner, repo: repo}
+}
+
+func release(r *ghrelease.Release) Release {
+	return Release{Tag: r.TagName, Prerelease: r.Prerelease, PublishedAt: r.PublishedAt}
 }
 
 // Latest is the newest stable release: a prerelease or a draft is never the
 // latest.
 func (f *Fetcher) Latest(ctx context.Context) (Release, error) {
-	return Release{}, nil
+	r, err := f.client.LatestReleaseInfo(ctx, f.owner, f.repo)
+	if err != nil {
+		return Release{}, err
+	}
+	return release(r), nil
 }
 
 // Release is the release with the tag.
 func (f *Fetcher) Release(ctx context.Context, tag string) (Release, error) {
-	return Release{}, nil
+	r, err := f.client.GetRelease(ctx, f.owner, f.repo, tag)
+	if err != nil {
+		return Release{}, err
+	}
+	return release(r), nil
 }
 
 // Asset downloads the asset called name of the release with the tag, and returns
 // its bytes only when they match the hash in the release's checksums.txt.
 func (f *Fetcher) Asset(ctx context.Context, tag, name string) ([]byte, error) {
-	return nil, nil
+	r, err := f.client.GetRelease(ctx, f.owner, f.repo, tag)
+	if err != nil {
+		return nil, err
+	}
+	var asset, sums *ghrelease.Asset
+	for i := range r.Assets {
+		switch r.Assets[i].Name {
+		case name:
+			asset = &r.Assets[i]
+		case ChecksumsName:
+			sums = &r.Assets[i]
+		}
+	}
+	if asset == nil {
+		return nil, fmt.Errorf("%w: %s is not on release %s", ErrAssetNotFound, name, tag)
+	}
+	if sums == nil {
+		return nil, fmt.Errorf("%w: release %s has no %s", ErrNoChecksum, tag, ChecksumsName)
+	}
+	hashes, err := f.client.FetchChecksums(ctx, sums.URL)
+	if err != nil {
+		return nil, fmt.Errorf("read %s of release %s: %w", ChecksumsName, tag, err)
+	}
+	want, ok := hashes[name]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s of release %s does not list %s", ErrNoChecksum, ChecksumsName, tag, name)
+	}
+	data, _, err := f.client.DownloadToBytes(asset.URL, ghrelease.DownloadOptions{ExpectedHash: want, Context: ctx})
+	if err != nil {
+		return nil, fmt.Errorf("download %s of release %s: %w", name, tag, err)
+	}
+	return data, nil
 }
