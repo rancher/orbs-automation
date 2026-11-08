@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/github"
 	platform "github.com/rancher/orbs-automation/internal/platform/selfupdate"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
@@ -114,4 +115,19 @@ func ask(in io.Reader, out io.Writer, question string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// Auth is where Build looks for a token. Tests replace it.
+var Auth github.Auth = github.GoGh{}
+
+// Build returns the Updater for the running gero, whose version is current. It
+// uses the engineer's GitHub token when there is one, and goes without when
+// there is none: the releases are fetched the same way either way, and a token
+// only lifts the rate limit and reaches a private repository.
+func Build(current string) (Updater, error) {
+	var token string
+	if creds, err := github.Resolve(Auth, ""); err == nil {
+		token = creds.Token
+	}
+	return platform.New(platform.Config{Current: current, Token: token})
 }
