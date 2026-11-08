@@ -3,9 +3,9 @@ package ship
 import (
 	"context"
 
+	"github.com/rancher/orbs-automation/internal/platform/workdir"
 	"github.com/rancher/orbs-automation/internal/task/bumpcommit"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
-	"github.com/rancher/orbs-automation/internal/workdir"
 )
 
 // ErrNothingChanged is returned by Apply.Run when the edit and the steps left

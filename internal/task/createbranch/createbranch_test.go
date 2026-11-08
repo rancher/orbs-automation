@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/workdir"
+	"github.com/rancher/orbs-automation/internal/platform/workdir"
 )
 
 var bg = context.Background()

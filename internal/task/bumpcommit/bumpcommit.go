@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/platform/workdir"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
-	"github.com/rancher/orbs-automation/internal/workdir"
 )
 
 // ErrNothingChanged is returned when the edit and the steps left nothing to

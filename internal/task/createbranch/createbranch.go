@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/workdir"
+	"github.com/rancher/orbs-automation/internal/platform/workdir"
 )
 
 var (
@@ -43,7 +43,7 @@ type Input struct {
 
 // Output is the branch that was made. Work is a handle on it, to commit to and to
 // end: it is shared with the tasks that go on from here, through
-// internal/workdir, and is not meant to be serialized.
+// internal/platform/workdir, and is not meant to be serialized.
 type Output struct {
 	Work *workdir.Work
 }
