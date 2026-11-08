@@ -154,26 +154,27 @@ linters:
             - pkg: github.com/rancher/orbs-automation/internal/config/loader
               desc: the config loader is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
         # go-gh is used for token and host resolution only, through
-        # internal/github.GoGh. Its pkg/api is not approved
+        # internal/platform/github.GoGh. Its pkg/api is not approved
         # (docs/specs/DEPENDENCY_POLICY.md).
         nogogh:
           list-mode: lax
           files:
-            - "!**/internal/github/gogh.go"
+            - "!**/internal/platform/github/gogh.go"
             - "!$test"
           deny:
             - pkg: github.com/cli/go-gh
-              desc: go-gh is only allowed in internal/github/gogh.go, and only pkg/auth (docs/specs/DEPENDENCY_POLICY.md)
-        # go-github types stay inside internal/github; the rest of gero sees
+              desc: go-gh is only allowed in internal/platform/github/gogh.go, and only pkg/auth (docs/specs/DEPENDENCY_POLICY.md)
+        # go-github types stay inside internal/platform/github; the rest of gero sees
         # narrow consumer-side interfaces (docs/specs/GITHUB_ACCESS.md).
         nogogithub:
           list-mode: lax
           files:
-            - "!**/internal/github/**"
+            - "!**/internal/platform/github/**"
+            - "!**/internal/github/**" # pulls, until it moves
             - "!$test"
           deny:
             - pkg: github.com/google/go-github
-              desc: go-github is only allowed in internal/github (docs/specs/GITHUB_ACCESS.md)
+              desc: go-github is only allowed in internal/platform/github (docs/specs/GITHUB_ACCESS.md)
         # Commands reach the repository on disk through internal/workspace, so
         # a repo is found and a slug resolved by one rule everywhere
         # (docs/specs/PROJECT_LAYOUT.md, docs/specs/WORKSPACE.md).

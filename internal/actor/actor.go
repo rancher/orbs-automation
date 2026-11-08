@@ -10,7 +10,7 @@ import (
 )
 
 // Credit is how gero names itself to people, for the "Created with" line in PR
-// and issue text. The HTTP User-Agent is separate (internal/github.UserAgent).
+// and issue text. The HTTP User-Agent is separate (internal/platform/github.UserAgent).
 const Credit = "gero (ORBS Team Automation)"
 
 // Identity is the author and committer of a commit.

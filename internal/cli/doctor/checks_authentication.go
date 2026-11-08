@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/cli/authstatus"
-	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/platform/github"
 )
 
 // authTokenCheck finds the GitHub token gero would use, without calling GitHub:
@@ -164,7 +164,7 @@ func (c rateLimitCheck) resets(at time.Time) string {
 	return fmt.Sprintf("resets in %dm", minutes)
 }
 
-// githubRateLimiter is the RateLimiter backed by internal/github, for the token
+// githubRateLimiter is the RateLimiter backed by internal/platform/github, for the token
 // every command would use.
 type githubRateLimiter struct{}
 

@@ -1,6 +1,6 @@
 # GitHub Access
 
-**Status:** implemented (`internal/github`): token and host resolution and the REST client. The reconciler's interface over the client is agreed, not built.
+**Status:** implemented (`internal/platform/github`): token and host resolution and the REST client. The reconciler's interface over the client is agreed, not built.
 
 How `gero` talks to GitHub and to git. Two Go libraries each do one job, and a subprocess is used only where it adds something. A spike (go-gh v2.17.0, go-github v93.0.0) confirmed the behavior below. Which modules are approved, and why, is in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md).
 
@@ -20,7 +20,7 @@ All go-gh use stays in `internal/github/gogh.go` (lint-enforced).
 
 ## REST: `google/go-github`
 
-Typed REST calls: PRs, labels and comments, user ids, and the rate limit today; issues, check runs and releases are planned. It is the main API client and its types stay inside `internal/github` (lint-enforced).
+Typed REST calls: PRs, labels and comments, user ids, and the rate limit today; issues, check runs and releases are planned. It is the main API client and its types stay inside `internal/platform/github` (lint-enforced).
 
 * Authenticate with `github.WithAuthToken(token)` using the token from `pkg/auth`. The token goes only to the client's own API origins, sent as `Authorization: Bearer`.
 * Tests inject a fake `http.RoundTripper` with `github.WithTransport`, so no network or port is needed.

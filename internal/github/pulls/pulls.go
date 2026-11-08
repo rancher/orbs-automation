@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	gogithub "github.com/google/go-github/v93/github"
-	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/platform/github"
 )
 
 // PR is a pull request as the callers need it.

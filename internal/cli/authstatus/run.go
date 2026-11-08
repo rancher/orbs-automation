@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
@@ -25,7 +25,7 @@ func Run(ctx context.Context, s clicfg.Settings, hostname string) (string, error
 	return run(ctx, s, hostname, github.GoGh{}, loginVerifier{})
 }
 
-// loginVerifier asks the host's API, through internal/github.
+// loginVerifier asks the host's API, through internal/platform/github.
 type loginVerifier struct{}
 
 func (loginVerifier) Login(ctx context.Context, c github.Credentials) (string, error) {

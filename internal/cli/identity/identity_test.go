@@ -7,7 +7,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/actor"
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

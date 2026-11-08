@@ -3,7 +3,7 @@
 // does.
 package buildinfo
 
-import "github.com/rancher/orbs-automation/internal/github"
+import "github.com/rancher/orbs-automation/internal/platform/github"
 
 // Apply sets the version that appears in gero's HTTP User-Agent.
 func Apply(version string) {

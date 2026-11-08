@@ -1,7 +1,7 @@
 // Package ghcli runs the gh binary, for the one thing gero needs from it
 // directly: telling the user, in gero doctor, whether gh is installed and which
 // one. Tokens are not fetched here: go-gh's pkg/auth runs "gh auth token" itself
-// (internal/github). Like internal/platform/git/gitcli, it starts the binary through
+// (internal/platform/github). Like internal/platform/git/gitcli, it starts the binary through
 // internal/platform/execx, the one package allowed to import os/exec (see .golangci.yml
 // and DEPENDENCY_POLICY).
 package ghcli

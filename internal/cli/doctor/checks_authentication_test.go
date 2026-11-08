@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/cli/authstatus"
-	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/stretchr/testify/assert"
 )
 
