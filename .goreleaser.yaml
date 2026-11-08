@@ -27,7 +27,7 @@ builds:
 
 archives:
     - id: gero
-      builds:
+      ids:
         - gero
       name_template: '{{ .Binary }}_{{ .Os }}_{{ .Arch }}'
 
