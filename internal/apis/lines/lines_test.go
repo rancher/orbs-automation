@@ -17,6 +17,15 @@ func TestValidIsALineAsItIsWrittenInConfig(t *testing.T) {
 	}
 }
 
+func TestANumberTooBigToReadIsNotALine(t *testing.T) {
+	for _, id := range []string{"v2.99999999999999999999", "v99999999999999999999.1"} {
+		assert.False(t, Valid(id), id)
+		_, ok := Parse(id)
+		assert.False(t, ok, id)
+		assert.True(t, (Range{Since: id}).Contains("v2.1"), "an end that is not a line is open: "+id)
+	}
+}
+
 func TestNormalizeWritesTheOneWayLinesAreCompared(t *testing.T) {
 	for in, want := range map[string]string{"v2.16": "v2.16", "2.16": "v2.16", "V2.16": "v2.16", "": "v"} {
 		assert.Equal(t, want, Normalize(in), "%q", in)
