@@ -173,6 +173,7 @@ func TestLoadFileErrors(t *testing.T) {
 		{"invalid output", "output: xml\n", "output"},
 		{"relative configDir", "configDir: rel/dir\n", "absolute"},
 		{"relative search path", "repos:\n  search: [rel]\n", "repos.search"},
+		{"relative cloneRoot", "repos:\n  cloneRoot: rel\n", "repos.cloneRoot"},
 		{"relative repo path", "repos:\n  paths:\n    rancher/rancher: rel\n", "repos.paths.rancher/rancher"},
 		{"bad slug in paths", "repos:\n  paths:\n    rancher: /x\n", "owner/name"},
 		{"bad slug in overrides", "repos:\n  overrides:\n    rancher:\n      upstream: u\n", "owner/name"},
@@ -210,6 +211,25 @@ func TestLoadExpandsPaths(t *testing.T) {
 	assert.Equal(t, "/home/dan/cfg", s.ConfigDir)
 	assert.Equal(t, []string{"/w/suse", "/home/dan"}, s.Repos.Search)
 	assert.Equal(t, "/home/dan/r", s.Repos.Paths["rancher/rancher"])
+}
+
+func TestLoadExpandsCloneRootAndKeepsItApartFromSearch(t *testing.T) {
+	s, err := Load(Inputs{
+		Home:     "/home/alice",
+		Getenv:   env(map[string]string{"WORK": "/w"}),
+		UserFile: file("repos:\n  search: [\"$WORK/suse\"]\n  cloneRoot: ~/src\n"),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/home/alice/src", s.Repos.CloneRoot)
+	assert.Equal(t, []string{"/w/suse"}, s.Repos.Search, "the clone root is not added to the search directories")
+}
+
+func TestLoadCloneRootIsEmptyWhenNotSet(t *testing.T) {
+	s, err := Load(Inputs{UserFile: file("repos:\n  search: [/w]\n")})
+
+	require.NoError(t, err)
+	assert.Empty(t, s.Repos.CloneRoot, "never inferred from the search directories")
 }
 
 func TestLoadTildeWithoutHome(t *testing.T) {

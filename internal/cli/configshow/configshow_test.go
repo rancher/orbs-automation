@@ -103,6 +103,11 @@ func TestEntries(t *testing.T) {
 			want: map[string]Entry{"pushTo": {"pushTo", "", "default"}},
 		},
 		{
+			name: "repos.cloneRoot",
+			file: "repos:\n  cloneRoot: /src\n",
+			want: map[string]Entry{"repos.cloneRoot": {"repos.cloneRoot", "/src", "file"}},
+		},
+		{
 			name: "repos sections",
 			file: "repos:\n  search: [/src]\n  paths:\n    rancher/rancher: /r\n  overrides:\n    rancher/scc-operator:\n      upstream: rancher\n",
 			want: map[string]Entry{
