@@ -21,7 +21,7 @@ How `gero` is built as a CLI: framework, command tree, global flags, context gat
 
 ## 2. Command tree and global flags
 
-Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only (gated by the `gero/context` annotation) or either ([execution contexts](../IMPLEMENTATION.md#execution-contexts)). A command marked workstation is built for an engineer's clone and is not gated by the annotation; `gero repl` refuses CI itself.
+Human-run commands are noun-verb chains, like `gh` (real parent commands such as `gero config validate`). CI-only commands are prefixed `ci:` and listed under a cobra help group, modeled on `ob-charts-tool`. **Context** is CI-only (gated by the `gero/context` annotation) or either ([execution contexts](../IMPLEMENTATION.md#execution-contexts)). A command built for an engineer's clone is not gated by the annotation, and `gero repl` refuses CI itself. A third value, `workstation-only`, marks a command that must not run in CI or inside `gero repl` (the first is `gero doctor self-update`): the same `PersistentPreRunE` refuses it there (`cigate.RequireWorkstation`), and the tree hides it from help and completion when it is built in either (`hideWorkstationOnly`). Each REPL line builds a fresh tree after `GERO_REPL` is set, so the hiding holds there too. The refusal is what enforces it; the hiding only keeps it out of sight, and both read environment variables that a person can set.
 
 | Command | Context | Notes |
 |---|---|---|

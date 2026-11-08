@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/rancher/orbs-automation/cmd/ci"
+	"github.com/rancher/orbs-automation/internal/cli/repl"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/spf13/cobra"
 )
 
@@ -27,5 +29,8 @@ func newDoctorSelfUpdate(hidden bool) *cobra.Command {
 // hideWorkstationOnly reports whether a tree built now hides the
 // workstation-only commands: in CI, or inside gero repl, where they cannot run.
 func hideWorkstationOnly(getenv func(string) string) bool {
-	return false
+	// A GERO_CONTEXT that is not valid is reported when the settings load, and
+	// leaves the command listed.
+	inCI, _ := clicfg.InCI(getenv)
+	return inCI || getenv(repl.EnvRepl) != ""
 }
