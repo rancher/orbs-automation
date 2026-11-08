@@ -29,7 +29,14 @@ type fileRepl struct {
 }
 
 type fileRepos struct {
-	Search    []string                    `yaml:"search"`
+	// Search lists the directories gero scans for clones that already exist, to
+	// depth 2, matching each to a project by its remote URL. It finds what is
+	// there and puts nothing there.
+	Search []string `yaml:"search"`
+	// CloneRoot is the one directory gero repo clone puts new clones in, as
+	// <root>/<name>. It is for clones that do not exist yet, and is never taken
+	// from Search.
+	CloneRoot string                      `yaml:"cloneRoot"`
 	Paths     map[string]string           `yaml:"paths"`
 	Overrides map[string]fileRepoOverride `yaml:"overrides"`
 }

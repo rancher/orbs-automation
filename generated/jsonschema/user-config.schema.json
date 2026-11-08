@@ -88,6 +88,9 @@
           },
           "type": "array"
         },
+        "cloneRoot": {
+          "type": "string"
+        },
         "paths": {
           "additionalProperties": {
             "type": "string"

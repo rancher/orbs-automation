@@ -47,7 +47,8 @@ type RepoOverride struct {
 
 // Repos locates local clones of the repositories named in the central config.
 type Repos struct {
-	Search    []string                // directories scanned for clones
+	Search    []string                // directories scanned for clones that exist
+	CloneRoot string                  // where new clones go, as <root>/<name>; never taken from Search
 	Paths     map[string]string       // slug (owner/name) to clone path
 	Overrides map[string]RepoOverride // slug to per-repo settings
 }
