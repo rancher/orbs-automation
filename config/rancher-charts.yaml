@@ -5,6 +5,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: rancher-charts
 spec:
+  aliases: ["charts"]
   repo: {name: rancher/charts, owned: false, managedBy: release-team}
   pullRequests: {title: "[{branch}] {package} {chartVersion} {action}", branchPrefix: "bot/{source}-"}
   branches:
