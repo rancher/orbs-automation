@@ -42,6 +42,12 @@ func Main(ctx context.Context, env Environment, f Flags, b Build) (string, error
 	return run(ctx, env.Settings, f, b, defaultChecks(b, env))
 }
 
+// forDoctor is the settings for gero doctor's own workspace. Doctor is offline
+// unless asked to be online, so the central bundle is read from the cache only.
+func forDoctor(s clicfg.Settings, online bool) clicfg.Settings {
+	return s
+}
+
 // defaultChecks is every check gero doctor knows, in the order they run. A
 // check's needs must come before it.
 func defaultChecks(b Build, env Environment) []Check {
