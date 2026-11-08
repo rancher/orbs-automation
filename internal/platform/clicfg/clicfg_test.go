@@ -621,6 +621,26 @@ func TestStatePath(t *testing.T) {
 	}
 }
 
+func TestCacheDir(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		home string
+		want string
+	}{
+		{"home default", nil, "/home/dan", "/home/dan/.cache/gero"},
+		{"xdg", map[string]string{"XDG_CACHE_HOME": "/xdg"}, "/home/dan", "/xdg/gero"},
+		{"xdg without a home", map[string]string{"XDG_CACHE_HOME": "/xdg"}, "", "/xdg/gero"},
+		{"the state home is not the cache home", map[string]string{"XDG_STATE_HOME": "/st"}, "/home/dan", "/home/dan/.cache/gero"},
+		{"nowhere to put it", nil, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, CacheDir(env(tt.env), tt.home))
+		})
+	}
+}
+
 func TestEnvNameOfADottedKeyUsesUnderscores(t *testing.T) {
 	assert.Equal(t, "GERO_REPL_PROMPT", EnvName("repl.prompt"))
 	assert.Equal(t, "repl-prompt", FlagName("repl.prompt"))
