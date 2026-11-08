@@ -3,6 +3,7 @@ package chain_test
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,4 +155,25 @@ func TestAProjectIsOwnedOrExternal(t *testing.T) {
 	assert.True(t, g.Project("theirs").External())
 	assert.False(t, g.Project("plain").Owned())
 	assert.False(t, g.Project("plain").External())
+}
+
+func TestTheLayoutAndStagesOfAProject(t *testing.T) {
+	g := chaintest.Load(t, chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"), project("a", perLine), project("s", "  repo: {name: acme/s}\n"))
+
+	assert.Equal(t, "perLine", g.Project("a").Layout())
+	assert.Equal(t, []string{"dev", "stable"}, g.Project("a").Stages())
+	assert.Equal(t, "single", g.Project("s").Layout())
+	assert.Empty(t, g.Project("s").Stages())
+}
+
+func TestTheLineBranchesOfAProject(t *testing.T) {
+	g := chaintest.Load(t, chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"), project("a", perLine), project("s", "  repo: {name: acme/s}\n"))
+
+	assert.Equal(t, []chain.LineBranch{
+		{Line: "v2.16", Branch: "main", IsDefault: true},
+		{Line: "v2.15", Branch: "release/v2.15"},
+		{Line: "v2.14", Pending: true},
+		{Line: "v2.13", Stages: map[string]string{"dev": "dev-v2.13", "stable": "release-v2.13"}},
+	}, g.Project("a").LineBranches())
+	assert.Empty(t, g.Project("s").LineBranches())
 }

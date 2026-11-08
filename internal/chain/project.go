@@ -214,3 +214,27 @@ func (p *Project) Owned() bool { return p.Doc.Spec.Repo.Owned }
 // External reports whether the repo is outside the organization: gero never ships
 // into it.
 func (p *Project) External() bool { return p.Doc.Spec.Repo.External }
+
+// Layout is how the project's releases are laid out over branches: single or
+// perLine.
+func (p *Project) Layout() string { return "" }
+
+// Stages are the stages of the project's branch layout, for a layout whose stages
+// are branches.
+func (p *Project) Stages() []string { return nil }
+
+// LineBranch is a listed line and where it is.
+type LineBranch struct {
+	Line string
+	// Branch is the branch of the line: the default branch when none is written
+	// (IsDefault), and empty when the line has none yet (Pending) or has one for
+	// each stage (Stages).
+	Branch    string
+	IsDefault bool
+	Pending   bool
+	Stages    map[string]string
+}
+
+// LineBranches returns the listed lines with their branches, in the order written;
+// none for a single layout, which lists none.
+func (p *Project) LineBranches() []LineBranch { return nil }

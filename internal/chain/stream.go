@@ -99,3 +99,10 @@ func (s *Stream) Lines() []string {
 	}
 	return ids
 }
+
+// Universal reports whether any release of the stream serves every line.
+func (s *Stream) Universal() bool { return false }
+
+// RequiresPrerelease reports whether a stable release of a version follows a
+// prerelease of it.
+func (s *Stream) RequiresPrerelease() bool { return false }

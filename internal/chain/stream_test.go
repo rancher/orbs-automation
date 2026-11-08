@@ -162,3 +162,18 @@ func TestTheLinesAStreamLists(t *testing.T) {
 	assert.Equal(t, []string{"v2.16", "v2.15"}, g.Project("a").Streams()[0].Lines())
 	assert.Empty(t, g.Project("a").Streams()[1].Lines())
 }
+
+func TestAStreamSaysWhetherItIsUniversalAndRequiresAPrerelease(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16"),
+		project("a", "  repo: {name: acme/a}\n"),
+		stream("u", "a", "  universal: true\n  requiresPrerelease: true\n"),
+		stream("l", "a", "  lines: [{line: v2.16, series: \"1.x\"}]\n"),
+	)
+	u, l := g.Project("a").Streams()[0], g.Project("a").Streams()[1]
+
+	assert.True(t, u.Universal())
+	assert.True(t, u.RequiresPrerelease())
+	assert.False(t, l.Universal())
+	assert.False(t, l.RequiresPrerelease())
+}
