@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
@@ -30,10 +30,10 @@ const (
 // Workspace is what Repos needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	Config() (config.Config, error)
-	// Project returns the Project with the given config name or owner/name
+	Chain() (*chain.Graph, error)
+	// ChainProject returns the Project with the given config name or owner/name
 	// slug, or the one in the working directory for "" or ".".
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 	RepoPaths(slugs []string) []workspace.RepoPath
 }
 
@@ -49,11 +49,11 @@ func repos(ws Workspace, format string, slugs []string, view *style.Renderer) (s
 	if format != clicfg.OutputText && format != clicfg.OutputJSON {
 		return "", fmt.Errorf("output format %q is not supported by config resolve repos: use text or json", format)
 	}
-	cfg, err := ws.Config()
+	g, err := ws.Chain()
 	if err != nil {
 		return "", err
 	}
-	asked, err := projectSlugs(ws, cfg, slugs)
+	asked, err := projectSlugs(ws, g, slugs)
 	if err != nil {
 		return "", err
 	}
@@ -75,24 +75,27 @@ func repos(ws Workspace, format string, slugs []string, view *style.Renderer) (s
 	return out, nil
 }
 
-// projectSlugs returns the slug of every Project in cfg, or just the ones named
+// projectSlugs returns the slug of every Project in g, or just the ones named
 // by want, each a config name, a slug or "." for the working directory's
-// Project, spelled as the config spells the slug. Externals have no rows.
-func projectSlugs(ws Workspace, cfg config.Config, want []string) ([]string, error) {
+// Project, spelled as the config spells the slug. A repo outside the organization
+// has no row.
+func projectSlugs(ws Workspace, g *chain.Graph, want []string) ([]string, error) {
 	if len(want) == 0 {
-		all := make([]string, len(cfg.Projects))
-		for i, p := range cfg.Projects {
-			all[i] = p.Repo.Name
+		all := make([]string, 0, len(g.Projects()))
+		for _, p := range g.Projects() {
+			if !p.External() {
+				all = append(all, p.Slug())
+			}
 		}
 		return all, nil
 	}
 	out := make([]string, 0, len(want))
 	for _, key := range want {
-		p, err := ws.Project(key)
+		p, err := ws.ChainProject(key)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, p.Repo.Name)
+		out = append(out, p.Slug())
 	}
 	return out, nil
 }

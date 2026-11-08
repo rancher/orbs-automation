@@ -20,7 +20,7 @@ func colored() *style.Renderer {
 
 func run(t *testing.T, format string, view *style.Renderer) string {
 	t.Helper()
-	out, err := repos(mixed(), format, nil, view)
+	out, err := repos(mixed(t), format, nil, view)
 	require.ErrorIs(t, err, ErrUnresolved)
 	return out
 }

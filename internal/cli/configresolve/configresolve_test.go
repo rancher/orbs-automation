@@ -9,7 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git/repo/repotest"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -19,39 +20,36 @@ import (
 
 // fakeWorkspace answers RepoPaths from rows and records what it was asked.
 type fakeWorkspace struct {
-	cfg    config.Config
-	cfgErr error
-	rows   map[string]workspace.RepoPath
-	asked  [][]string
+	graph    *chain.Graph
+	chainErr error
+	rows     map[string]workspace.RepoPath
+	asked    [][]string
 	// current is the slug of the Project the working directory is in, "" when it
 	// is in none.
 	current string
 }
 
-// Project is the real lookup: a key with a slash is a slug, any other a name,
-// and "" or "." is the working directory's Project.
-func (f *fakeWorkspace) Project(key string) (config.Project, error) {
-	if f.cfgErr != nil {
-		return config.Project{}, f.cfgErr
+// ChainProject is the real lookup: a key with a slash is a slug, any other a
+// name, and "" or "." is the working directory's Project.
+func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
+	if f.chainErr != nil {
+		return nil, f.chainErr
 	}
 	if key == "" || key == "." {
-		for _, p := range f.cfg.Projects {
-			if p.Repo.Name == f.current && f.current != "" {
+		for _, p := range f.graph.Projects() {
+			if p.Slug() == f.current && f.current != "" {
 				return p, nil
 			}
 		}
-		return config.Project{}, workspace.ErrNotProject
+		return nil, workspace.ErrNotProject
 	}
-	for _, p := range f.cfg.Projects {
-		if (strings.Contains(key, "/") && strings.EqualFold(p.Repo.Name, key)) ||
-			(!strings.Contains(key, "/") && strings.EqualFold(p.Name, key)) {
-			return p, nil
-		}
+	if p := f.graph.Project(key); p != nil {
+		return p, nil
 	}
-	return config.Project{}, fmt.Errorf("%q is %w", key, workspace.ErrUnknownProject)
+	return nil, fmt.Errorf("%q is %w", key, workspace.ErrUnknownProject)
 }
 
-func (f *fakeWorkspace) Config() (config.Config, error) { return f.cfg, f.cfgErr }
+func (f *fakeWorkspace) Chain() (*chain.Graph, error) { return f.graph, f.chainErr }
 
 func (f *fakeWorkspace) RepoPaths(slugs []string) []workspace.RepoPath {
 	f.asked = append(f.asked, slugs)
@@ -63,17 +61,22 @@ func (f *fakeWorkspace) RepoPaths(slugs []string) []workspace.RepoPath {
 	return out
 }
 
-func project(slug string) config.Project {
-	_, name, _ := strings.Cut(slug, "/")
-	return config.Project{Name: name, Repo: config.Repo{Name: slug}}
+// graphOf is a config of plain projects named by their slugs.
+func graphOf(t *testing.T, slugs ...string) *chain.Graph {
+	t.Helper()
+	var pairs []string
+	for _, slug := range slugs {
+		_, name, _ := strings.Cut(slug, "/")
+		pairs = append(pairs, name, slug)
+	}
+	return chaintest.Projects(t, pairs...)
 }
 
 // mixed has one row of each outcome.
-func mixed() *fakeWorkspace {
+func mixed(t *testing.T) *fakeWorkspace {
+	t.Helper()
 	return &fakeWorkspace{
-		cfg: config.Config{Projects: []config.Project{
-			project("rancher/rancher"), project("rancher/scc-operator"), project("rancher/charts"),
-		}},
+		graph: graphOf(t, "rancher/rancher", "rancher/scc-operator", "rancher/charts"),
 		rows: map[string]workspace.RepoPath{
 			"rancher/rancher": {Path: "/src/rancher", Source: workspace.PathScan},
 			"rancher/scc-operator": {
@@ -84,7 +87,7 @@ func mixed() *fakeWorkspace {
 }
 
 func TestReposTextTable(t *testing.T) {
-	out, err := repos(mixed(), clicfg.OutputText, nil, nil)
+	out, err := repos(mixed(t), clicfg.OutputText, nil, nil)
 
 	require.ErrorIs(t, err, ErrUnresolved)
 	lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
@@ -99,8 +102,8 @@ func TestReposTextTable(t *testing.T) {
 }
 
 func TestReposTextHintsOnlyForWhatWentWrong(t *testing.T) {
-	ws := mixed()
-	ws.cfg.Projects = ws.cfg.Projects[2:] // rancher/charts, not found
+	ws := mixed(t)
+	ws.graph = graphOf(t, "rancher/charts") // not found
 
 	out, _ := repos(ws, clicfg.OutputText, nil, nil)
 
@@ -109,8 +112,8 @@ func TestReposTextHintsOnlyForWhatWentWrong(t *testing.T) {
 }
 
 func TestReposAllResolvedIsNotAnError(t *testing.T) {
-	ws := mixed()
-	ws.cfg.Projects = ws.cfg.Projects[:1]
+	ws := mixed(t)
+	ws.graph = graphOf(t, "rancher/rancher")
 
 	out, err := repos(ws, clicfg.OutputText, nil, nil)
 
@@ -120,7 +123,7 @@ func TestReposAllResolvedIsNotAnError(t *testing.T) {
 }
 
 func TestReposJSON(t *testing.T) {
-	out, err := repos(mixed(), clicfg.OutputJSON, nil, nil)
+	out, err := repos(mixed(t), clicfg.OutputJSON, nil, nil)
 
 	require.ErrorIs(t, err, ErrUnresolved)
 	var got []struct {
@@ -143,15 +146,20 @@ func TestReposJSON(t *testing.T) {
 }
 
 func TestReposNoProjects(t *testing.T) {
-	out, err := repos(&fakeWorkspace{}, clicfg.OutputJSON, nil, nil)
+	out, err := repos(&fakeWorkspace{graph: graphOf(t)}, clicfg.OutputJSON, nil, nil)
 
 	require.NoError(t, err)
 	assert.JSONEq(t, "[]", out)
 }
 
 func TestReposAsksForProjectsOnly(t *testing.T) {
-	ws := mixed()
-	ws.cfg.Externals = []config.External{{Name: "kubernetes", Repo: config.Repo{Name: "kubernetes/kubernetes"}}}
+	ws := mixed(t)
+	ws.graph = chaintest.Load(t,
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher}\n"),
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator}\n"),
+		chaintest.Doc("Project", "charts", "", "  repo: {name: rancher/charts}\n"),
+		chaintest.Doc("Project", "kubernetes", "", "  repo: {name: kubernetes/kubernetes, external: true}\n"),
+	)
 
 	_, _ = repos(ws, clicfg.OutputText, nil, nil)
 
@@ -159,7 +167,7 @@ func TestReposAsksForProjectsOnly(t *testing.T) {
 }
 
 func TestReposOneSlug(t *testing.T) {
-	ws := mixed()
+	ws := mixed(t)
 
 	out, err := repos(ws, clicfg.OutputText, []string{"rancher/rancher"}, nil)
 
@@ -170,7 +178,7 @@ func TestReposOneSlug(t *testing.T) {
 }
 
 func TestReposOneSlugUsesTheConfigSpelling(t *testing.T) {
-	ws := mixed()
+	ws := mixed(t)
 
 	_, err := repos(ws, clicfg.OutputText, []string{"Rancher/Rancher"}, nil)
 
@@ -179,7 +187,7 @@ func TestReposOneSlugUsesTheConfigSpelling(t *testing.T) {
 }
 
 func TestReposUnknownSlug(t *testing.T) {
-	ws := mixed()
+	ws := mixed(t)
 
 	out, err := repos(ws, clicfg.OutputText, []string{"rancher/nope"}, nil)
 
@@ -191,7 +199,7 @@ func TestReposUnknownSlug(t *testing.T) {
 }
 
 func TestReposByProjectName(t *testing.T) {
-	ws := mixed()
+	ws := mixed(t)
 	out, err := repos(ws, clicfg.OutputText, []string{"scc-operator"}, nil)
 	assert.ErrorIs(t, err, ErrUnresolved, "that clone is ambiguous in the fixture")
 	assert.Equal(t, [][]string{{"rancher/scc-operator"}}, ws.asked, "a name is asked for by its slug")
@@ -199,7 +207,7 @@ func TestReposByProjectName(t *testing.T) {
 }
 
 func TestReposDotIsTheProjectTheWorkingDirectoryIsIn(t *testing.T) {
-	ws := mixed()
+	ws := mixed(t)
 	ws.current = "rancher/rancher"
 	out, err := repos(ws, clicfg.OutputText, []string{"."}, nil)
 	require.NoError(t, err)
@@ -208,7 +216,7 @@ func TestReposDotIsTheProjectTheWorkingDirectoryIsIn(t *testing.T) {
 }
 
 func TestReposDotOutsideAProject(t *testing.T) {
-	ws := mixed()
+	ws := mixed(t)
 	out, err := repos(ws, clicfg.OutputText, []string{"."}, nil)
 	assert.ErrorIs(t, err, workspace.ErrNotProject)
 	assert.Empty(t, out)
@@ -216,7 +224,7 @@ func TestReposDotOutsideAProject(t *testing.T) {
 }
 
 func TestReposOneSlugUnresolved(t *testing.T) {
-	out, err := repos(mixed(), clicfg.OutputText, []string{"rancher/charts"}, nil)
+	out, err := repos(mixed(t), clicfg.OutputText, []string{"rancher/charts"}, nil)
 
 	assert.ErrorIs(t, err, ErrUnresolved)
 	assert.Contains(t, out, "not found")
@@ -228,7 +236,7 @@ func TestReposConfigErrors(t *testing.T) {
 		"invalid config":      errors.New(`Project "a": repo.name "x" must be owner/name`),
 	} {
 		t.Run(name, func(t *testing.T) {
-			ws := &fakeWorkspace{cfgErr: cfgErr}
+			ws := &fakeWorkspace{chainErr: cfgErr}
 
 			out, err := repos(ws, clicfg.OutputText, nil, nil)
 
@@ -242,7 +250,7 @@ func TestReposConfigErrors(t *testing.T) {
 func TestReposRejectsOtherFormats(t *testing.T) {
 	for _, format := range []string{clicfg.OutputEnv, "yaml"} {
 		t.Run(format, func(t *testing.T) {
-			ws := mixed()
+			ws := mixed(t)
 
 			out, err := repos(ws, format, nil, nil)
 
@@ -256,15 +264,10 @@ func TestReposRejectsOtherFormats(t *testing.T) {
 
 func TestReposEndToEnd(t *testing.T) {
 	central, search := t.TempDir(), t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(central, "v1alpha2"), 0o750))
 	for _, slug := range []string{"rancher/rancher", "rancher/charts"} {
 		_, name, _ := strings.Cut(slug, "/")
-		require.NoError(t, os.WriteFile(filepath.Join(central, name+".project.yaml"), []byte(`apiVersion: gero/v1alpha1
-kind: Project
-name: `+name+`
-spec:
-  repo:
-    name: `+slug+`
-`), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(central, "v1alpha2", name+".yaml"), []byte(chaintest.Doc("Project", name, "", "  repo: {name: "+slug+"}\n")), 0o600))
 	}
 	repotest.NewRepoAt(t, filepath.Join(search, "rancher-src"), map[string]string{"upstream": "https://github.com/rancher/rancher.git"})
 	s := clicfg.Settings{
