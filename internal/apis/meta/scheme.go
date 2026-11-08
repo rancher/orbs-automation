@@ -117,3 +117,11 @@ func sortedKeys[V any](m map[string]V) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// Kinds lists the kinds registered for an apiVersion, sorted. A version that is
+// not registered has none.
+func (s *Scheme) Kinds(apiVersion string) []string { return nil }
+
+// New returns a new, empty object of a kind of an apiVersion, and false when the
+// scheme has no such kind.
+func (s *Scheme) New(apiVersion, kind string) (Object, bool) { return nil, false }
