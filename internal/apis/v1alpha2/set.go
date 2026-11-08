@@ -51,6 +51,8 @@ func ValidateSet(objs []Object, _ config.Context, r *config.Report) {
 	s := &set{objs: objs, names: map[string]map[string]bool{}, rep: r}
 	s.uniqueNames()
 	s.refs()
+	s.projects()
+	s.knownLines()
 }
 
 // uniqueNames reports each document whose name an earlier document of its kind
@@ -122,4 +124,79 @@ func sortedRefKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// projects reports a Project whose repo an earlier Project already has, and a
+// Project that is a final destination when an earlier one already is.
+func (s *set) projects() {
+	repos := map[string]string{} // repo name to the Project that has it
+	final := ""
+	for _, o := range s.objs {
+		p, ok := o.(*Project)
+		if !ok {
+			continue
+		}
+		r := s.at(o)
+		if first, dup := repos[p.Spec.Repo.Name]; dup {
+			r.Errorf("spec.repo.name", "%q is already the repo of Project %q", p.Spec.Repo.Name, first)
+		} else {
+			repos[p.Spec.Repo.Name] = p.Name
+		}
+		if p.Spec.FinalDestination {
+			if final != "" {
+				r.Errorf("spec.finalDestination", "only one Project is the final destination, and it is already Project %q", final)
+			} else {
+				final = p.Name
+			}
+		}
+		s.add(r)
+	}
+}
+
+// knownLines reports each line a document names that RancherLines does not list.
+func (s *set) knownLines() {
+	known := map[string]bool{}
+	for _, o := range s.objs {
+		if l, ok := o.(*RancherLines); ok {
+			for _, ln := range l.Spec.Lines {
+				known[ln.ID] = true
+			}
+		}
+	}
+	for _, o := range s.objs {
+		r := s.at(o)
+		check := func(path, id string) {
+			if id != "" && !known[id] {
+				r.Errorf(path, "%s is not in RancherLines", id)
+			}
+		}
+		checkSpan := func(path string, rng Range) {
+			check(path+".since", rng.Since)
+			check(path+".until", rng.Until)
+		}
+		switch o := o.(type) {
+		case *Project:
+			for i, bl := range o.Spec.Branches.Lines {
+				check(fmt.Sprintf("spec.branches.lines[%d].line", i), bl.Line)
+			}
+		case *Stream:
+			for i, sl := range o.Spec.Lines {
+				check(fmt.Sprintf("spec.lines[%d].line", i), sl.Line)
+			}
+		case *Artifact:
+			checkSpan("spec.lines", o.Spec.Lines)
+		case *Holding:
+			checkSpan("spec.holds.lines", o.Spec.Holds.Lines)
+		case *Edit:
+			for _, steps := range []struct {
+				path  string
+				steps []Step
+			}{{"spec.preEdit", o.Spec.PreEdit}, {"spec.postEdit", o.Spec.PostEdit}} {
+				for i, st := range steps.steps {
+					checkSpan(fmt.Sprintf("%s[%d]", steps.path, i), Range{Since: st.Since, Until: st.Until})
+				}
+			}
+		}
+		s.add(r)
+	}
 }
