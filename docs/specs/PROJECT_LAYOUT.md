@@ -48,7 +48,7 @@ internal/platform/errs/      error values shared across gero, such as NotImpleme
 internal/registry/  image existence checks in the registries a project publishes to   (IMAGES_EXIST)
 internal/platform/semver/    release tag classification, as the check-semver script did   (CHECK_SEMVER)
 internal/lifecycle/ reads Rancher's lifecycle dates from the SUSE lifecycle page; the only importer of golang.org/x/net/html
-internal/shellenv/  the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
+internal/platform/shellenv/  the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
 internal/steprun/   runs the pre-edit and post-edit steps of an update
 internal/...         domain packages as they arrive, such as the reconciler's
 test/integration/    separate Go module (own go.mod) for integration tests     (TESTING)

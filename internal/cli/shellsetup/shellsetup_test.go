@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/shellenv"
+	"github.com/rancher/orbs-automation/internal/platform/shellenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
