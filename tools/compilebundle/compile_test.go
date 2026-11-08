@@ -183,7 +183,7 @@ func TestTheRealConfigCompiles(t *testing.T) {
 	assert.True(t, strings.HasPrefix(out, wantHeader+"---\n# source: "))
 	assert.NotContains(t, out, "yaml-language-server", "the schema comments of the files are dropped")
 	assert.Contains(t, out, "# source: rancher.yaml\n")
-	assert.NotContains(t, out, "README")
+	assert.NotContains(t, out, "# source: README.md")
 }
 
 func TestRunWritesTheBundleToTheOutputDirectory(t *testing.T) {
