@@ -45,7 +45,7 @@ internal/config/       application config types of apiVersion gero/v1alpha1, the
 internal/config/loader/  application config loader of gero/v1alpha1: YAML decoding, defaults, validation (workspace only)
 internal/appconfig/    application config provider of gero/v1alpha2: reads every YAML file of a directory, validates each document and the set (workspace only; not yet used)
 
-internal/platform/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
+internal/platform/clicfg/     the user file (schema.go, unversioned: not application config) and the CLI config loader -> Settings   (CLI_CONFIG)
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/platform/errs/       error values shared across gero, such as NotImplemented
