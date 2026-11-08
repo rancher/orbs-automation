@@ -5,6 +5,9 @@
 // documents into those types and checks nothing else: defaults, rules inside one
 // kind and rules across documents are added in their own steps.
 //
+// The envelope and the decoding are shared by every version, in
+// internal/apis/meta; this package defines its kinds and registers them.
+//
 // The old shape, apiVersion gero/v1alpha1, is internal/config; it keeps loading
 // the real config until the cutover.
 package v1alpha2
