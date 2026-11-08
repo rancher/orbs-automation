@@ -22,7 +22,7 @@ func withColor(s clicfg.Settings) clicfg.Settings {
 
 func render(t *testing.T, s clicfg.Settings, format string) string {
 	t.Helper()
-	out, err := Render(s, workspace.ConfigDir{}, format)
+	out, err := Render(s, workspace.CentralConfigDir{}, format)
 	require.NoError(t, err)
 	return out
 }

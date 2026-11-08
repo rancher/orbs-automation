@@ -23,7 +23,7 @@ func colored() *style.Renderer {
 func valid(t *testing.T) fakeWorkspace {
 	t.Helper()
 	return fakeWorkspace{
-		dir:   workspace.ConfigDir{Dir: "/work/config"},
+		dir:   workspace.CentralConfigDir{Dir: "/work/config"},
 		graph: chaintest.Projects(t, "a", "acme/a", "b", "acme/b"),
 	}
 }

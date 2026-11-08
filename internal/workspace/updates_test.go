@@ -26,7 +26,7 @@ func bumpWorkspace(t *testing.T, extra map[string]string) *Workspace {
 		files[name] = body
 	}
 	dir := chainConfig(t, files)
-	return Open(settings(t, "", nil, map[string]string{"config-dir": dir}), t.TempDir())
+	return Open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), t.TempDir())
 }
 
 func TestBumpBuildsTheEngine(t *testing.T) {

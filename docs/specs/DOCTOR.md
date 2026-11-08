@@ -46,8 +46,8 @@ Each one reuses the package that already does the work (section 7).
 | `git` | dependencies | no | `git` is not on `PATH` or will not report a version, since `gero repo build-tags` runs it; `warn` when `user.name` or `user.email` is unset, since commits gero makes will need them. It asks git itself, so includes and system config count; bounds its calls so a hung `git` cannot hang the run | `internal/platform/git/gitcli` (`Version`, `Config`) |
 | `gh` | dependencies | no | never; `warn` when `gh` is not on `PATH`, since the keyring token fallback and `gh auth login` depend on it; reports the version and path when found; bounds `gh --version` so a hung `gh` cannot hang the run | `internal/platform/ghcli`, which finds `gh` the way go-gh does (`GH_PATH`, then `PATH`) |
 | `user-file` | configuration | no | the user file exists and a command would refuse it: it does not parse, or holds a value such as a relative path. A key it does not know is a `warn`, naming the line, since commands ignore it. It is judged on its own, with the `GERO_*` variables masked, so a bad environment value is not blamed on the file. With no file it is `ok`, saying where one would go | `internal/platform/clicfg` (`OpenUserFile`, `Load`) |
-| `config-dir` | configuration | no | no central config directory is found; the fix is the advice in `workspace.NotFoundHint` | `internal/workspace` (`ConfigDir`) |
-| `config` | configuration | no | the application config does not validate, counting the problems the validator found; needs `config-dir` | `internal/workspace` (`Config`) |
+| `central-config-dir` | configuration | no | no central config directory is found; the fix is the advice in `workspace.NotFoundHint` | `internal/workspace` (`ConfigDir`) |
+| `config` | configuration | no | the application config does not validate, counting the problems the validator found; needs `central-config-dir` | `internal/workspace` (`Config`) |
 | `repos` | configuration | no | never; `warn` when a project has no local clone or several equally good ones, with the fix for each kind; needs `config` | `internal/workspace` (`RepoPaths`), and the fix text from `internal/cli/configresolve` |
 | `auth-token` | authentication | no | no token is found for the default host; names the variables to set; reports where the token came from and never the token. It runs the same resolver as every command, so it may call `gh auth token` | `internal/platform/github` (`Resolve`, `NoTokenError`, `DescribeTokenSource`) |
 | `auth-api` | authentication | yes | GitHub rejects the token, with advice that depends on where the token came from (replace an environment variable, or `gh auth login` again); `warn` on a timeout or any other error, since a network problem says nothing about the token; needs `auth-token` | `internal/cli/authstatus` (`Check`) |
@@ -70,7 +70,7 @@ Dependencies
 
 Configuration
   ✔ user-file: /Users/me/.config/gero/config.yaml
-  ✔ config-dir: /Users/me/work/orbs-automation/config (cwd)
+  ✔ central-config-dir: /Users/me/work/orbs-automation/config (cwd)
   ✗ config: 2 problems in the central config
     → run `gero config validate` for the details
   ○ repos: skipped, needs config

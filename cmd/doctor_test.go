@@ -234,18 +234,18 @@ func TestDoctorWiring(t *testing.T) {
 		assert.Contains(t, stdout, "→ gero runs git for a few operations")
 	})
 
-	t.Run("no config directory fails config-dir and skips what needs it", func(t *testing.T) {
+	t.Run("no config directory fails central-config-dir and skips what needs it", func(t *testing.T) {
 		resetDoctorFlags(t)
 		stubGh(t)
 		withToken(t)
-		t.Setenv("GERO_CONFIG_DIR", "") // the working directory, cmd/, holds no config either
+		t.Setenv("GERO_CENTRAL_CONFIG_DIR", "") // the working directory, cmd/, holds no config either
 
 		stdout, _, err := execRoot(t, "doctor")
 
 		require.ErrorIs(t, err, doctor.ErrChecksFailed)
-		assert.Contains(t, stdout, "✗ config-dir: no central config directory found\n")
-		assert.Contains(t, stdout, "→ set one of --config-dir, GERO_CONFIG_DIR or configDir in the user file")
-		assert.Contains(t, stdout, "○ config: skipped, needs config-dir\n")
+		assert.Contains(t, stdout, "✗ central-config-dir: no central config directory found\n")
+		assert.Contains(t, stdout, "→ set one of --central-config-dir, GERO_CENTRAL_CONFIG_DIR or centralConfigDir in the user file")
+		assert.Contains(t, stdout, "○ config: skipped, needs central-config-dir\n")
 		assert.Contains(t, stdout, "○ repos: skipped, needs config\n")
 	})
 
@@ -308,7 +308,7 @@ func TestDoctorWiring(t *testing.T) {
 	})
 }
 
-// withConfigDir points GERO_CONFIG_DIR at a new directory holding files (name to
+// withConfigDir points GERO_CENTRAL_CONFIG_DIR at a new directory holding files (name to
 // content), so the configuration checks do not depend on the working directory.
 // No files is a config with one line in it and no projects: an empty directory is
 // not a config, since it is almost always the wrong directory, and a project
@@ -322,5 +322,5 @@ func withConfigDir(t *testing.T, files map[string]string) {
 	for name, content := range files {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
 	}
-	t.Setenv("GERO_CONFIG_DIR", dir)
+	t.Setenv("GERO_CENTRAL_CONFIG_DIR", dir)
 }

@@ -26,19 +26,19 @@ import (
 
 // NotFoundHint is the advice for a missing central config directory. It is the
 // tail of ErrNotFound, and gero doctor shows it as the fix.
-const NotFoundHint = "set one of --config-dir, GERO_CONFIG_DIR or configDir in the user file, " +
+const NotFoundHint = "set one of --central-config-dir, GERO_CENTRAL_CONFIG_DIR or centralConfigDir in the user file, " +
 	"or run from a checkout of the central repo (./config)"
 
 // ErrNotFound is returned when no source names a config directory.
 var ErrNotFound = errors.New("central config directory not found: " + NotFoundHint)
 
-// SourceCwd is the ConfigDir.Source of a directory found in the working
+// SourceCwd is the CentralConfigDir.Source of a directory found in the working
 // directory.
 const SourceCwd = "cwd"
 
-// ConfigDir is the resolved central config directory and where it came from:
+// CentralConfigDir is the resolved central config directory and where it came from:
 // the clicfg layer (flag, env or file) or SourceCwd.
-type ConfigDir struct {
+type CentralConfigDir struct {
 	Dir    string
 	Source string
 }
@@ -97,20 +97,20 @@ func defaultCredentials() (host, token string) {
 	return host, token
 }
 
-// ConfigDir returns the central config directory: the configDir setting when
+// CentralConfigDir returns the central config directory: the centralConfigDir setting when
 // set (flag, env or user file), else ./config when the working directory holds
 // a YAML file there with documents of gero's (an apiVersion of gero/). It returns
 // ErrNotFound when neither names one.
-func (w *Workspace) ConfigDir() (ConfigDir, error) {
-	if w.settings.ConfigDir != "" {
-		return ConfigDir{Dir: w.settings.ConfigDir, Source: w.settings.Source("configDir").String()}, nil
+func (w *Workspace) CentralConfigDir() (CentralConfigDir, error) {
+	if w.settings.CentralConfigDir != "" {
+		return CentralConfigDir{Dir: w.settings.CentralConfigDir, Source: w.settings.Source("centralConfigDir").String()}, nil
 	}
 	if w.cwdFS != nil {
 		if hasGeroConfig(w.cwdFS) {
-			return ConfigDir{Dir: filepath.Join(w.cwd, "config"), Source: SourceCwd}, nil
+			return CentralConfigDir{Dir: filepath.Join(w.cwd, "config"), Source: SourceCwd}, nil
 		}
 	}
-	return ConfigDir{}, ErrNotFound
+	return CentralConfigDir{}, ErrNotFound
 }
 
 // hasGeroConfig reports whether config/ of the file system has a YAML file with

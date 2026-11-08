@@ -17,7 +17,7 @@ type shown map[string]struct{ Value, Source string }
 // flags, and decodes the result. GERO_* and the user file are isolated per test.
 func configShow(t *testing.T, file string, env map[string]string, flags ...string) shown {
 	t.Helper()
-	for _, k := range []string{"GERO_CONFIG", "GERO_CONFIG_DIR", "GERO_UPSTREAM", "GERO_OUTPUT", "CI", "GITHUB_ACTIONS"} {
+	for _, k := range []string{"GERO_CONFIG", "GERO_CENTRAL_CONFIG_DIR", "GERO_UPSTREAM", "GERO_OUTPUT", "CI", "GITHUB_ACTIONS"} {
 		t.Setenv(k, "")
 	}
 	if file != "" {
@@ -71,10 +71,10 @@ func TestConfigShowPrecedence(t *testing.T) {
 }
 
 func TestConfigShowGlobalFlags(t *testing.T) {
-	got := configShow(t, "", nil, "--config-dir", "/cfg")
+	got := configShow(t, "", nil, "--central-config-dir", "/cfg")
 
-	assert.Equal(t, "/cfg", got["configDir"].Value)
-	assert.Equal(t, "flag", got["configDir"].Source)
+	assert.Equal(t, "/cfg", got["centralConfigDir"].Value)
+	assert.Equal(t, "flag", got["centralConfigDir"].Source)
 	// --json stands in for --output json.
 	assert.Equal(t, "json", got["output"].Value)
 	assert.Equal(t, "flag", got["output"].Source)
@@ -117,30 +117,30 @@ func TestConfigShowConfigDirFromWorkingDirectory(t *testing.T) {
 
 	got := configShow(t, "", nil)
 
-	assert.Equal(t, want, got["configDir"].Value)
-	assert.Equal(t, "cwd", got["configDir"].Source)
+	assert.Equal(t, want, got["centralConfigDir"].Value)
+	assert.Equal(t, "cwd", got["centralConfigDir"].Source)
 }
 
 func TestConfigShowConfigDirExplicitBeatsWorkingDirectory(t *testing.T) {
 	inCentralRepo(t)
 
 	t.Run("flag", func(t *testing.T) {
-		got := configShow(t, "", nil, "--config-dir", "/flag")
+		got := configShow(t, "", nil, "--central-config-dir", "/flag")
 
-		assert.Equal(t, "/flag", got["configDir"].Value)
-		assert.Equal(t, "flag", got["configDir"].Source)
+		assert.Equal(t, "/flag", got["centralConfigDir"].Value)
+		assert.Equal(t, "flag", got["centralConfigDir"].Source)
 	})
 	t.Run("env", func(t *testing.T) {
-		got := configShow(t, "", map[string]string{"GERO_CONFIG_DIR": "/env"})
+		got := configShow(t, "", map[string]string{"GERO_CENTRAL_CONFIG_DIR": "/env"})
 
-		assert.Equal(t, "/env", got["configDir"].Value)
-		assert.Equal(t, "env", got["configDir"].Source)
+		assert.Equal(t, "/env", got["centralConfigDir"].Value)
+		assert.Equal(t, "env", got["centralConfigDir"].Source)
 	})
 	t.Run("user file", func(t *testing.T) {
-		got := configShow(t, "configDir: /file\n", nil)
+		got := configShow(t, "centralConfigDir: /file\n", nil)
 
-		assert.Equal(t, "/file", got["configDir"].Value)
-		assert.Equal(t, "file", got["configDir"].Source)
+		assert.Equal(t, "/file", got["centralConfigDir"].Value)
+		assert.Equal(t, "file", got["centralConfigDir"].Source)
 	})
 }
 
@@ -149,14 +149,14 @@ func TestConfigShowConfigDirUnsetOutsideCentralRepo(t *testing.T) {
 
 	got := configShow(t, "", nil)
 
-	assert.Empty(t, got["configDir"].Value)
-	assert.Equal(t, "default", got["configDir"].Source)
+	assert.Empty(t, got["centralConfigDir"].Value)
+	assert.Equal(t, "default", got["centralConfigDir"].Source)
 }
 
 // isolateGero clears the settings a developer's environment could leak in.
 func isolateGero(t *testing.T) {
 	t.Helper()
-	for _, k := range []string{"GERO_CONFIG", "GERO_CONFIG_DIR", "GERO_UPSTREAM", "GERO_OUTPUT", "CI", "GITHUB_ACTIONS"} {
+	for _, k := range []string{"GERO_CONFIG", "GERO_CENTRAL_CONFIG_DIR", "GERO_UPSTREAM", "GERO_OUTPUT", "CI", "GITHUB_ACTIONS"} {
 		t.Setenv(k, "")
 	}
 }
@@ -166,7 +166,7 @@ func TestConfigValidateAcceptsTheCheckedInConfig(t *testing.T) {
 	dir, err := filepath.Abs("../config")
 	require.NoError(t, err)
 
-	stdout, _, err := execRoot(t, "config", "validate", "--config-dir", dir)
+	stdout, _, err := execRoot(t, "config", "validate", "--central-config-dir", dir)
 
 	require.NoError(t, err)
 	assert.Contains(t, stdout, "config OK")
@@ -183,7 +183,7 @@ spec:
   repo: {name: not-a-slug}
 `), 0o600))
 
-	_, _, err := execRoot(t, "config", "validate", "--config-dir", dir)
+	_, _, err := execRoot(t, "config", "validate", "--central-config-dir", dir)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "repo.name")
@@ -196,7 +196,7 @@ func TestConfigValidateWithoutConfigDirectory(t *testing.T) {
 	_, _, err := execRoot(t, "config", "validate")
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--config-dir")
+	assert.Contains(t, err.Error(), "--central-config-dir")
 }
 
 // centralWith writes one Project per slug into a new config directory and
@@ -234,7 +234,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		central := centralWith(t, "rancher/rancher")
 		withRancherPath(t)
 
-		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--config-dir", central)
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--central-config-dir", central)
 
 		require.NoError(t, err)
 		assert.Regexp(t, `(?m)^rancher/rancher\s+/src/rancher\s+repos\.paths$`, stdout)
@@ -246,7 +246,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		central := centralWith(t, "rancher/rancher", "rancher/charts")
 		withRancherPath(t)
 
-		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--config-dir", central)
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--central-config-dir", central)
 
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no unique local clone")
@@ -261,7 +261,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		central := centralWith(t, "rancher/rancher")
 		withRancherPath(t)
 
-		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--json", "--config-dir", central)
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "--json", "--central-config-dir", central)
 
 		require.NoError(t, err)
 		var got []struct{ Slug, Path, Source string }
@@ -275,7 +275,7 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		central := centralWith(t, "rancher/rancher", "rancher/charts")
 		withRancherPath(t)
 
-		stdout, _, err := execRoot(t, "config", "resolve", "repos", "rancher/rancher", "--config-dir", central)
+		stdout, _, err := execRoot(t, "config", "resolve", "repos", "rancher/rancher", "--central-config-dir", central)
 
 		require.NoError(t, err)
 		assert.Contains(t, stdout, "/src/rancher")
@@ -297,6 +297,6 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		_, _, err := execRoot(t, "config", "resolve", "repos")
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "--config-dir")
+		assert.Contains(t, err.Error(), "--central-config-dir")
 	})
 }

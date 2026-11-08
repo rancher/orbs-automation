@@ -14,13 +14,13 @@ const UserFileSchemaComment = "# yaml-language-server: $schema=https://raw.githu
 // UserFileValues are the keys gero init writes to a new user file. A key left
 // empty is left out of the file.
 type UserFileValues struct {
-	GitHubUser   string
-	Fork         string // remote holding the developer's fork
-	Upstream     string // remote treated as the real source
-	BranchPrefix string
-	ConfigDir    string   // configDir: the central application config
-	Search       []string // repos.search: directories scanned for clones that exist
-	CloneRoot    string   // repos.cloneRoot: where gero repo clone puts new clones
+	GitHubUser       string
+	Fork             string // remote holding the developer's fork
+	Upstream         string // remote treated as the real source
+	BranchPrefix     string
+	CentralConfigDir string   // centralConfigDir: the central application config
+	Search           []string // repos.search: directories scanned for clones that exist
+	CloneRoot        string   // repos.cloneRoot: where gero repo clone puts new clones
 }
 
 // RenderUserFile returns the text of a new user file with v: the schema comment,
@@ -38,8 +38,8 @@ func RenderUserFile(v UserFileValues) string {
 			b.WriteString(kv[0] + ": " + yamlScalar(kv[1]) + "\n")
 		}
 	}
-	if v.ConfigDir != "" {
-		b.WriteString("configDir: " + pathScalar(v.ConfigDir) + "\n")
+	if v.CentralConfigDir != "" {
+		b.WriteString("centralConfigDir: " + pathScalar(v.CentralConfigDir) + "\n")
 	}
 	if len(v.Search) > 0 || v.CloneRoot != "" {
 		b.WriteString("repos:\n")

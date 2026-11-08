@@ -27,7 +27,7 @@ func flagged(t *testing.T, args ...string) *cobra.Command {
 }
 
 func TestGlobalFlagsDeclared(t *testing.T) {
-	for _, name := range []string{"config-dir", "upstream", "output", "json", "dry-run"} {
+	for _, name := range []string{"central-config-dir", "upstream", "output", "json", "dry-run"} {
 		t.Run(name, func(t *testing.T) {
 			cmd := &cobra.Command{Use: "x"}
 			addGlobalFlags(cmd)
@@ -40,7 +40,7 @@ func TestGlobalFlagsDeclared(t *testing.T) {
 }
 
 func TestRootDeclaresGlobalFlagsAndLoadsSettings(t *testing.T) {
-	for _, name := range []string{"config-dir", "upstream", "output", "json", "verbose", "dry-run"} {
+	for _, name := range []string{"central-config-dir", "upstream", "output", "json", "verbose", "dry-run"} {
 		assert.NotNil(t, rootCmd.PersistentFlags().Lookup(name), "flag --%s", name)
 	}
 	assert.NotNil(t, rootCmd.PersistentPreRunE)
@@ -56,7 +56,7 @@ func TestFlagLookup(t *testing.T) {
 	}{
 		{"unset flag is not set", nil, "upstream", "", false},
 		{"set flag", []string{"--upstream", "rancher"}, "upstream", "rancher", true},
-		{"kebab name", []string{"--config-dir", "/cfg"}, "config-dir", "/cfg", true},
+		{"kebab name", []string{"--central-config-dir", "/cfg"}, "central-config-dir", "/cfg", true},
 		{"explicitly empty counts as set", []string{"--upstream="}, "upstream", "", true},
 		{"json is output json", []string{"--json"}, "output", "json", true},
 		{"explicit output beats json", []string{"--json", "--output", "env"}, "output", "env", true},

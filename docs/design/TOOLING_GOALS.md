@@ -14,7 +14,7 @@ The primary user config fields that are worth prompting for are:
 - `githubUser` - To identify their forks of repos
 - `fork` & `upstream` - To identify the remote repo names for projects under their fork and Rancher upstream respectively
 - `branchPrefix` - A branch prefix - support minimal vars - to use when creating PRs via the tooling
-- `configDir` - The directory path to the ORBS automation repo's config dir - for now clone is kept in sync manually
+- `centralConfigDir` - The directory path to the ORBS automation repo's config dir - for now clone is kept in sync manually
   - This item will matter less when:
     - Build the config bundle renderer,
     - Update the tooling to be able to use the release file sourced config, AND
@@ -22,7 +22,7 @@ The primary user config fields that are worth prompting for are:
 - `repos.search` - Would be useful to have set
 - `repos.cloneRoot` - Will be needed for repo clone tooling; if possible we prompt to set this (single dir value) to the first input search path?
 
-**Built:** `gero init` asks for `githubUser`, `fork`, `upstream`, `branchPrefix`, `configDir`, `repos.search` and `repos.cloneRoot`, or takes them as flags, and refuses an existing file unless `--force` ([CLI_FRAMEWORK](../specs/CLI_FRAMEWORK.md)). An empty answer skips a question and leaves its key out, so there are no defaults, and `repos.cloneRoot` is not offered the first search path: the two are different keys ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and the prompt says so.
+**Built:** `gero init` asks for `githubUser`, `fork`, `upstream`, `branchPrefix`, `centralConfigDir`, `repos.search` and `repos.cloneRoot`, or takes them as flags, and refuses an existing file unless `--force` ([CLI_FRAMEWORK](../specs/CLI_FRAMEWORK.md)). An empty answer skips a question and leaves its key out, so there are no defaults, and `repos.cloneRoot` is not offered the first search path: the two are different keys ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and the prompt says so.
 
 ## Result
 After accepting user inputs it would save to relevant field(s) in file and then subsequent `gero` commands are more configured.

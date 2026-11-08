@@ -14,26 +14,26 @@ import (
 )
 
 type fakeWorkspace struct {
-	dir workspace.ConfigDir
+	dir workspace.CentralConfigDir
 	err error
 }
 
-func (f fakeWorkspace) ConfigDir() (workspace.ConfigDir, error) { return f.dir, f.err }
+func (f fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) { return f.dir, f.err }
 
 func TestRunShowsResolvedConfigDir(t *testing.T) {
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}}
+	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}}
 
 	out, err := run(load(t, "", nil, nil), ws)
 
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^configDir\s+/work/config\s+cwd$`, out)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+/work/config\s+cwd$`, out)
 }
 
 func TestRunShowsUnresolvedConfigDirAsUnset(t *testing.T) {
 	out, err := run(load(t, "", nil, nil), fakeWorkspace{err: workspace.ErrNotFound})
 
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^configDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
 }
 
 func TestRunReturnsOtherWorkspaceErrors(t *testing.T) {
@@ -46,14 +46,14 @@ func TestRunReturnsOtherWorkspaceErrors(t *testing.T) {
 
 func TestRunFollowsOutputSetting(t *testing.T) {
 	s := load(t, "", nil, map[string]string{"output": "json"})
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}}
+	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}}
 
 	out, err := run(s, ws)
 
 	require.NoError(t, err)
 	var got map[string]struct{ Value, Source string }
 	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
-	assert.Equal(t, "/work/config", got["configDir"].Value)
+	assert.Equal(t, "/work/config", got["centralConfigDir"].Value)
 }
 
 func TestRunRejectsUnknownOutput(t *testing.T) {
@@ -71,12 +71,12 @@ func TestRunOpensWorkspaceInWorkingDirectory(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Contains(t, out, filepath.Join(dir, "config"))
-	assert.Regexp(t, `(?m)^configDir\s+\S+\s+cwd$`, out)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+\S+\s+cwd$`, out)
 }
 
 func TestRunWithoutCentralCheckout(t *testing.T) {
 	out, err := Run(load(t, "", nil, nil), t.TempDir())
 
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^configDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
 }

@@ -17,18 +17,18 @@ import (
 )
 
 type fakeWorkspace struct {
-	dir      workspace.ConfigDir
+	dir      workspace.CentralConfigDir
 	dirErr   error
 	graph    *chain.Graph
 	chainErr error
 }
 
-func (f fakeWorkspace) ConfigDir() (workspace.ConfigDir, error) { return f.dir, f.dirErr }
-func (f fakeWorkspace) Chain() (*chain.Graph, error)            { return f.graph, f.chainErr }
+func (f fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) { return f.dir, f.dirErr }
+func (f fakeWorkspace) Chain() (*chain.Graph, error)                          { return f.graph, f.chainErr }
 
 func TestRunSummarizesAValidConfig(t *testing.T) {
 	ws := fakeWorkspace{
-		dir: workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd},
+		dir: workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd},
 		graph: chaintest.Load(t,
 			chaintest.Lines("v2.16", "v2.15"),
 			chaintest.Doc("Project", "a", "", "  repo: {name: acme/a}\n"),
@@ -52,7 +52,7 @@ func TestRunSummarizesAValidConfig(t *testing.T) {
 }
 
 func TestRunSummarizesAConfigWithoutLines(t *testing.T) {
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, graph: chaintest.Projects(t, "a", "acme/a")}
+	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, graph: chaintest.Projects(t, "a", "acme/a")}
 
 	out, err := run(ws, nil)
 
@@ -67,7 +67,7 @@ func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
 	}))
 	require.NoError(t, rep.Err())
 
-	out, err := run(fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, graph: g}, nil)
+	out, err := run(fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, graph: g}, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "config OK")
@@ -82,7 +82,7 @@ func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
 
 func TestRunReturnsConfigProblems(t *testing.T) {
 	problem := errors.New(`Project "a": spec.repo.name "x" must be owner/name`)
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, chainErr: problem}
+	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, chainErr: problem}
 
 	out, err := run(ws, nil)
 
@@ -94,7 +94,7 @@ func TestRunOpensWorkspaceInWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(chaintest.Doc("Project", "a", "", "  repo: {name: o/a}\n")), 0o600))
 
-	out, err := Run(clicfg.Settings{ConfigDir: dir}, "/elsewhere")
+	out, err := Run(clicfg.Settings{CentralConfigDir: dir}, "/elsewhere")
 
 	require.NoError(t, err)
 	assert.Contains(t, out, dir)

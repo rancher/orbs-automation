@@ -59,7 +59,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 * Path: `$XDG_CONFIG_HOME/gero/config.yaml`, else `~/.config/gero/config.yaml`. `GERO_CONFIG` overrides the path. We do not use `os.UserConfigDir` because it points at `~/Library/Application Support` on macOS, and `~/.gero` was rejected to match `gh`'s layout.
 * Optional. A missing file is fine; a malformed file, or a key with a value that is not allowed, is a loud error naming the file and key. A key gero does not know (a typo, or one from a newer gero) is not: it is ignored, the keys that are valid still apply, and every command prints `warning: <file>: line N: unknown key "x", ignored` on stderr. The schema still marks it, so an editor underlines it.
 * `gero config show` lists the file it loaded as `userFile`, first in the table, with `env` as its source when `GERO_CONFIG` named it and `default` otherwise, or `(none)` when no file applies. `gero doctor` checks that the file loads ([DOCTOR](DOCTOR.md)).
-* `gero init` writes a first file: `githubUser`, `fork`, `upstream`, `branchPrefix`, `configDir`, `repos.search` and `repos.cloneRoot`, those it is given or that are answered, after the schema comment. It will not replace a file that exists unless `--force` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
+* `gero init` writes a first file: `githubUser`, `fork`, `upstream`, `branchPrefix`, `centralConfigDir`, `repos.search` and `repos.cloneRoot`, those it is given or that are answered, after the schema comment. It will not replace a file that exists unless `--force` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
 * No secrets. Tokens stay with `gh` or the environment.
 * **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file. What counts as CI is decided in one place ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)).
 * The main use is per-developer behavior that must not leak into the shared tool. The motivating case: locally `origin` is a developer's fork, while in CI `origin` is the real source, so `upstream` tells `gero` which remote to treat as the real source.
@@ -71,7 +71,7 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 
 | File key | Env var | Flag | Meaning |
 |---|---|---|---|
-| `configDir` | `GERO_CONFIG_DIR` | `--config-dir` | Where the central application config is |
+| `centralConfigDir` | `GERO_CENTRAL_CONFIG_DIR` | `--central-config-dir` | The local clone of the central repo's `config/` directory, where the central application config is. Named for that, since gero's own config directory is the user's, where the user file is. Needed only until gero can fetch the config from a release bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), when it becomes an override |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
 | `color` | `GERO_COLOR` | `--color`, `--no-color` | `auto` (default), `always` or `never`. `auto` defers to `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and TTY detection ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) |
@@ -104,7 +104,7 @@ File-only keys, all **(leaning)**:
 ```yaml
 # All keys optional. Unknown keys are warned about and ignored. No secrets.
 # "~" and $ENV are expanded in paths; relative paths are an error.
-configDir: ~/GitProjects/SUSE/orbs-automation/config
+centralConfigDir: ~/GitProjects/SUSE/orbs-automation/config
 output: text
 color: auto            # auto (default), always or never
 upstream: upstream
@@ -132,12 +132,12 @@ The keys and their allowed values are also published as a JSON Schema, `generate
 
 Commands that read the central `config/` find it in this order:
 
-1. `--config-dir`
-2. `GERO_CONFIG_DIR`
-3. `configDir` in the user file
+1. `--central-config-dir`
+2. `GERO_CENTRAL_CONFIG_DIR`
+3. `centralConfigDir` in the user file
 4. `./config`, when the working directory is a checkout of the central repo (reported as source `cwd`)
 
-If none resolves, the command fails with a message listing these four places. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CONFIG_DIR` or `--config-dir` is set explicitly in the workflow.
+If none resolves, the command fails with a message listing these four places. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow.
 
 ## Not built yet
 

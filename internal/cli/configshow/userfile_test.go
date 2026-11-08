@@ -52,7 +52,7 @@ func TestEntriesStartWithTheUserFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			es := Entries(tt.s, workspace.ConfigDir{})
+			es := Entries(tt.s, workspace.CentralConfigDir{})
 
 			require.NotEmpty(t, es)
 			assert.Equal(t, tt.want, es[0], "it comes first, because the file sources below refer to it")
@@ -61,17 +61,17 @@ func TestEntriesStartWithTheUserFile(t *testing.T) {
 }
 
 func TestRenderTextShowsTheUserFileOrNone(t *testing.T) {
-	loaded, err := Render(loadFrom(t, "output: json\n", nil), workspace.ConfigDir{}, clicfg.OutputText)
+	loaded, err := Render(loadFrom(t, "output: json\n", nil), workspace.CentralConfigDir{}, clicfg.OutputText)
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^userFile\s+`+userFilePath+`\s+default$`, loaded)
 
-	none, err := Render(loadFrom(t, "", nil), workspace.ConfigDir{}, clicfg.OutputText)
+	none, err := Render(loadFrom(t, "", nil), workspace.CentralConfigDir{}, clicfg.OutputText)
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^userFile\s+\(none\)\s+default$`, none)
 }
 
 func TestRenderJSONHasTheUserFile(t *testing.T) {
-	out, err := Render(loadFrom(t, "output: json\n", nil), workspace.ConfigDir{}, clicfg.OutputJSON)
+	out, err := Render(loadFrom(t, "output: json\n", nil), workspace.CentralConfigDir{}, clicfg.OutputJSON)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, `"userFile": {`)
@@ -79,7 +79,7 @@ func TestRenderJSONHasTheUserFile(t *testing.T) {
 }
 
 func TestRenderEnvLeavesTheUserFileOut(t *testing.T) {
-	out, err := Render(loadFrom(t, "output: json\n", nil), workspace.ConfigDir{}, clicfg.OutputEnv)
+	out, err := Render(loadFrom(t, "output: json\n", nil), workspace.CentralConfigDir{}, clicfg.OutputEnv)
 
 	require.NoError(t, err)
 	assert.NotContains(t, out, userFilePath, "GERO_CONFIG is how the file is named, not a setting to export")

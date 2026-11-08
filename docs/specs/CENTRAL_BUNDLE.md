@@ -55,9 +55,9 @@ Every download of a release asset, the bundle or anything else, is verified agai
 
 The bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config):
 
-1. `--config-dir`
-2. `GERO_CONFIG_DIR`
-3. `configDir` in the user file
+1. `--central-config-dir`
+2. `GERO_CENTRAL_CONFIG_DIR`
+3. `centralConfigDir` in the user file
 4. `./config`, when the working directory is a checkout of the central repo
 5. The cached bundle, refreshed from the release chosen above
 
@@ -74,6 +74,6 @@ Everything: the bundle format and loader, `ci:compile-bundle`, the release job s
 
 * The name of the release asset and of the checksum file, and which repo the CLI fetches from (a setting, or fixed in the binary).
 * What `ghreleases` does about the REST API's unauthenticated rate limit (60 requests an hour per IP, shared by CI runners and office networks), and whether it verifies checksums itself or the shared package does. If it uses the API, the daily refresh limit matters more.
-* Whether the central repo's setting is still `configDir`, or becomes a directory for the whole central repo, now that the bundle holds templates as well as config ([CLI_CONFIG](CLI_CONFIG.md)).
+* Whether the central repo's setting is still `centralConfigDir`, or becomes a directory for the whole central repo, now that the bundle holds templates as well as config ([CLI_CONFIG](CLI_CONFIG.md)).
 * How `gero ci:*` commands in other repos get the bundle: use the one the installed `gero` release implies, fetch the latest stable, or check the central repo out. Not decided. The central repo's own CI uses its checkout and does not need the bundle.
 * Whether the refresh interval is a setting.

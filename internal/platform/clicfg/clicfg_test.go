@@ -28,7 +28,7 @@ func TestEnvAndFlagNames(t *testing.T) {
 		env  string
 		flag string
 	}{
-		{"configDir", "GERO_CONFIG_DIR", "config-dir"},
+		{"centralConfigDir", "GERO_CENTRAL_CONFIG_DIR", "central-config-dir"},
 		{"output", "GERO_OUTPUT", "output"},
 		{"upstream", "GERO_UPSTREAM", "upstream"},
 		{"githubUser", "GERO_GITHUB_USER", "github-user"},
@@ -53,7 +53,7 @@ func TestLoadDefaults(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, OutputText, s.Output)
-	assert.Empty(t, s.ConfigDir)
+	assert.Empty(t, s.CentralConfigDir)
 	assert.Empty(t, s.Upstream)
 	assert.Equal(t, SourceDefault, s.Source("output"))
 	assert.Equal(t, SourceDefault, s.Source("upstream"))
@@ -100,13 +100,13 @@ func TestLoadOutputFromEnvAndFlag(t *testing.T) {
 func file(s string) io.Reader { return strings.NewReader(s) }
 
 func TestLoadFileLayer(t *testing.T) {
-	const yml = "upstream: fromfile\noutput: json\nconfigDir: /etc/gero\n"
+	const yml = "upstream: fromfile\noutput: json\ncentralConfigDir: /etc/gero\n"
 
 	s, err := Load(Inputs{UserFile: file(yml)})
 	require.NoError(t, err)
 	assert.Equal(t, "fromfile", s.Upstream)
 	assert.Equal(t, OutputJSON, s.Output)
-	assert.Equal(t, "/etc/gero", s.ConfigDir)
+	assert.Equal(t, "/etc/gero", s.CentralConfigDir)
 	assert.Equal(t, SourceFile, s.Source("upstream"))
 
 	s, err = Load(Inputs{UserFile: file(yml), Getenv: env(map[string]string{"GERO_UPSTREAM": "fromenv"})})
@@ -169,7 +169,7 @@ func TestLoadFileErrors(t *testing.T) {
 	}{
 		{"malformed", "upstream: [\n", "gero-test.yaml"},
 		{"invalid output", "output: xml\n", "output"},
-		{"relative configDir", "configDir: rel/dir\n", "absolute"},
+		{"relative centralConfigDir", "centralConfigDir: rel/dir\n", "absolute"},
 		{"relative search path", "repos:\n  search: [rel]\n", "repos.search"},
 		{"relative cloneRoot", "repos:\n  cloneRoot: rel\n", "repos.cloneRoot"},
 		{"relative repo path", "repos:\n  paths:\n    rancher/rancher: rel\n", "repos.paths.rancher/rancher"},
@@ -202,11 +202,11 @@ func TestLoadExpandsPaths(t *testing.T) {
 	s, err := Load(Inputs{
 		Home:     "/home/dan",
 		Getenv:   env(map[string]string{"WORK": "/w"}),
-		UserFile: file("configDir: ~/cfg\nrepos:\n  search: [\"$WORK/suse\", \"~\"]\n  paths:\n    rancher/rancher: ~/r\n"),
+		UserFile: file("centralConfigDir: ~/cfg\nrepos:\n  search: [\"$WORK/suse\", \"~\"]\n  paths:\n    rancher/rancher: ~/r\n"),
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "/home/dan/cfg", s.ConfigDir)
+	assert.Equal(t, "/home/dan/cfg", s.CentralConfigDir)
 	assert.Equal(t, []string{"/w/suse", "/home/dan"}, s.Repos.Search)
 	assert.Equal(t, "/home/dan/r", s.Repos.Paths["rancher/rancher"])
 }
@@ -231,20 +231,20 @@ func TestLoadCloneRootIsEmptyWhenNotSet(t *testing.T) {
 }
 
 func TestLoadTildeWithoutHome(t *testing.T) {
-	_, err := Load(Inputs{UserFile: file("configDir: ~/cfg\n")})
+	_, err := Load(Inputs{UserFile: file("centralConfigDir: ~/cfg\n")})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "home")
 }
 
 func TestLoadExpandsFlagAndEnvPathsButAllowsRelative(t *testing.T) {
-	s, err := Load(Inputs{Home: "/home/dan", Flags: flags(map[string]string{"config-dir": "~/cfg"})})
+	s, err := Load(Inputs{Home: "/home/dan", Flags: flags(map[string]string{"central-config-dir": "~/cfg"})})
 	require.NoError(t, err)
-	assert.Equal(t, "/home/dan/cfg", s.ConfigDir)
+	assert.Equal(t, "/home/dan/cfg", s.CentralConfigDir)
 
-	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_CONFIG_DIR": "./config"})})
+	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_CENTRAL_CONFIG_DIR": "./config"})})
 	require.NoError(t, err)
-	assert.Equal(t, "./config", s.ConfigDir)
+	assert.Equal(t, "./config", s.CentralConfigDir)
 }
 
 func TestInCI(t *testing.T) {
@@ -600,7 +600,7 @@ func TestStatePath(t *testing.T) {
 func TestEnvNameOfADottedKeyUsesUnderscores(t *testing.T) {
 	assert.Equal(t, "GERO_REPL_PROMPT", EnvName("repl.prompt"))
 	assert.Equal(t, "repl-prompt", FlagName("repl.prompt"))
-	assert.Equal(t, "GERO_CONFIG_DIR", EnvName("configDir"), "the rule for the others is as it was")
+	assert.Equal(t, "GERO_CENTRAL_CONFIG_DIR", EnvName("centralConfigDir"), "the rule for the others is as it was")
 }
 
 func TestReplPromptDefaultsToTheDefaultTemplate(t *testing.T) {
@@ -658,12 +658,12 @@ func TestTheUserFileStillWarnsOfUnknownKeysUnderRepl(t *testing.T) {
 
 func TestLoadUnknownKeysAreWarningsAndTheValidKeysStillLoad(t *testing.T) {
 	s, err := Load(Inputs{
-		UserFile:     file("configDir: /cfg\nupstrem: x\nrepos:\n  search: [/w]\n  cloneDir: /c\n"),
+		UserFile:     file("centralConfigDir: /cfg\nupstrem: x\nrepos:\n  search: [/w]\n  cloneDir: /c\n"),
 		UserFileName: "gero-test.yaml",
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, "/cfg", s.ConfigDir)
+	assert.Equal(t, "/cfg", s.CentralConfigDir)
 	assert.Equal(t, []string{"/w"}, s.Repos.Search)
 	require.Len(t, s.Warnings, 2)
 	assert.Contains(t, s.Warnings[0], "gero-test.yaml")

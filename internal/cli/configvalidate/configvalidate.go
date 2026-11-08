@@ -16,7 +16,7 @@ import (
 // Workspace is what Run needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	ConfigDir() (workspace.ConfigDir, error)
+	CentralConfigDir() (workspace.CentralConfigDir, error)
 	Chain() (*chain.Graph, error)
 }
 
@@ -29,7 +29,7 @@ func Run(s clicfg.Settings, cwd string) (string, error) {
 }
 
 func run(ws Workspace, view *style.Renderer) (string, error) {
-	dir, err := ws.ConfigDir()
+	dir, err := ws.CentralConfigDir()
 	if err != nil {
 		return "", err
 	}

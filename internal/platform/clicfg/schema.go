@@ -11,17 +11,17 @@ import (
 // apiVersion or kind, unlike the versioned documents of internal/apis. Keep it in
 // step with the example in docs/specs/CLI_CONFIG.md.
 type fileConfig struct {
-	ConfigDir    string    `yaml:"configDir"`
-	Output       string    `yaml:"output"`
-	Color        string    `yaml:"color"`
-	Upstream     string    `yaml:"upstream"`
-	Fork         string    `yaml:"fork"`
-	GitHubUser   string    `yaml:"githubUser"`
-	BranchPrefix string    `yaml:"branchPrefix"`
-	PushTo       string    `yaml:"pushTo"`
-	SignCommits  *bool     `yaml:"signCommits"`
-	Repos        fileRepos `yaml:"repos"`
-	Repl         fileRepl  `yaml:"repl"`
+	CentralConfigDir string    `yaml:"centralConfigDir"`
+	Output           string    `yaml:"output"`
+	Color            string    `yaml:"color"`
+	Upstream         string    `yaml:"upstream"`
+	Fork             string    `yaml:"fork"`
+	GitHubUser       string    `yaml:"githubUser"`
+	BranchPrefix     string    `yaml:"branchPrefix"`
+	PushTo           string    `yaml:"pushTo"`
+	SignCommits      *bool     `yaml:"signCommits"`
+	Repos            fileRepos `yaml:"repos"`
+	Repl             fileRepl  `yaml:"repl"`
 }
 
 type fileRepl struct {

@@ -21,7 +21,7 @@ type settingsKey struct{}
 // set, so the real defaults live in internal/platform/clicfg.
 func addGlobalFlags(cmd *cobra.Command) {
 	f := cmd.PersistentFlags()
-	f.String("config-dir", "", "directory of the central application config (env GERO_CONFIG_DIR)")
+	f.String("central-config-dir", "", "directory of the central application config (env GERO_CENTRAL_CONFIG_DIR)")
 	f.String("upstream", "", "remote that points at the real source repository (env GERO_UPSTREAM)")
 	f.String("output", "", "output format: text, json or env (env GERO_OUTPUT; default text)")
 	f.String("color", "", "color: auto, always or never (env GERO_COLOR; default auto: as much as the terminal supports)")

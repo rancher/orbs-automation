@@ -17,7 +17,7 @@ import (
 // (docs/specs/WORKSPACE.md). It is defined here, where it is consumed, so tests
 // can use a fake; *workspace.Workspace satisfies it.
 type Workspace interface {
-	ConfigDir() (workspace.ConfigDir, error)
+	CentralConfigDir() (workspace.CentralConfigDir, error)
 	Chain() (*chain.Graph, error)
 	RepoPaths(slugs []string) []workspace.RepoPath
 }
@@ -25,10 +25,10 @@ type Workspace interface {
 // configDirCheck finds the central config directory and says where it came from.
 type configDirCheck struct{ ws Workspace }
 
-// NewConfigDirCheck returns the check named "config-dir".
+// NewConfigDirCheck returns the check named "central-config-dir".
 func NewConfigDirCheck(ws Workspace) Check { return configDirCheck{ws: ws} }
 
-func (configDirCheck) Name() string     { return "config-dir" }
+func (configDirCheck) Name() string     { return "central-config-dir" }
 func (configDirCheck) Category() string { return "configuration" }
 func (configDirCheck) Description() string {
 	return "Finds the central config directory and says where it came from"
@@ -37,7 +37,7 @@ func (configDirCheck) Online() bool    { return false }
 func (configDirCheck) Needs() []string { return nil }
 
 func (c configDirCheck) Run(context.Context) Result {
-	dir, err := c.ws.ConfigDir()
+	dir, err := c.ws.CentralConfigDir()
 	switch {
 	case errors.Is(err, workspace.ErrNotFound):
 		return Result{Status: StatusFail, Message: "no central config directory found", Remediation: workspace.NotFoundHint}
@@ -48,7 +48,7 @@ func (c configDirCheck) Run(context.Context) Result {
 }
 
 // configCheck loads the central application config and reports whether it is
-// usable. It needs config-dir.
+// usable. It needs central-config-dir.
 type configCheck struct{ ws Workspace }
 
 // NewConfigCheck returns the check named "config".
@@ -58,7 +58,7 @@ func (configCheck) Name() string        { return "config" }
 func (configCheck) Category() string    { return "configuration" }
 func (configCheck) Description() string { return "Loads the central config and reports any problems" }
 func (configCheck) Online() bool        { return false }
-func (configCheck) Needs() []string     { return []string{"config-dir"} }
+func (configCheck) Needs() []string     { return []string{"central-config-dir"} }
 
 func (c configCheck) Run(context.Context) Result {
 	g, err := c.ws.Chain()

@@ -18,8 +18,8 @@ func TestLoadNamesTheFileForEveryRejectedValue(t *testing.T) {
 		key  string
 	}{
 		{"invalid output", "output: xml\n", "", "output"},
-		{"relative configDir", "configDir: rel/dir\n", "", "configDir"},
-		{"tilde without a home", "configDir: ~/cfg\n", "", "configDir"},
+		{"relative centralConfigDir", "centralConfigDir: rel/dir\n", "", "centralConfigDir"},
+		{"tilde without a home", "centralConfigDir: ~/cfg\n", "", "centralConfigDir"},
 		{"relative search path", "repos:\n  search: [rel]\n", "", "repos.search"},
 		{"relative repo path", "repos:\n  paths:\n    rancher/rancher: rel\n", "", "repos.paths.rancher/rancher"},
 		{"bad slug in paths", "repos:\n  paths:\n    rancher: /x\n", "", "repos.paths"},
@@ -74,11 +74,11 @@ func TestLoadDoesNotBlameTheFileForTheEnvironmentOrAFlag(t *testing.T) {
 		_, err := Load(Inputs{
 			UserFile:     file("upstream: rancher\n"),
 			UserFileName: "/home/dev/gero.yaml",
-			Getenv:       env(map[string]string{"GERO_CONFIG_DIR": "~/x"}), // no home to expand
+			Getenv:       env(map[string]string{"GERO_CENTRAL_CONFIG_DIR": "~/x"}), // no home to expand
 		})
 
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "configDir (from env)")
+		assert.Contains(t, err.Error(), "centralConfigDir (from env)")
 		assert.NotContains(t, err.Error(), "/home/dev/gero.yaml")
 	})
 }

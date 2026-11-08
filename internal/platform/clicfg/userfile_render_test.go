@@ -13,7 +13,7 @@ import (
 func TestRenderUserFile(t *testing.T) {
 	got := RenderUserFile(UserFileValues{
 		GitHubUser: "alice", Fork: "origin", Upstream: "upstream", BranchPrefix: "alice/",
-		ConfigDir: "~/orbs/config", Search: []string{"~/src", "/work"}, CloneRoot: "~/src/new",
+		CentralConfigDir: "~/orbs/config", Search: []string{"~/src", "/work"}, CloneRoot: "~/src/new",
 	})
 
 	want := UserFileSchemaComment + "\n" +
@@ -21,7 +21,7 @@ func TestRenderUserFile(t *testing.T) {
 		"fork: origin\n" +
 		"upstream: upstream\n" +
 		"branchPrefix: alice/\n" +
-		"configDir: ~/orbs/config\n" +
+		"centralConfigDir: ~/orbs/config\n" +
 		"repos:\n" +
 		"  search:\n" +
 		"    - ~/src\n" +
@@ -48,9 +48,9 @@ func TestRenderUserFileLeavesOutWhatIsEmpty(t *testing.T) {
 }
 
 func TestRenderUserFileQuotesPathsOnlyWhenNeeded(t *testing.T) {
-	got := RenderUserFile(UserFileValues{ConfigDir: "~/my cfg", CloneRoot: "$HOME/src", Search: []string{"/a: b"}})
+	got := RenderUserFile(UserFileValues{CentralConfigDir: "~/my cfg", CloneRoot: "$HOME/src", Search: []string{"/a: b"}})
 
-	assert.Contains(t, got, `configDir: "~/my cfg"`+"\n")
+	assert.Contains(t, got, `centralConfigDir: "~/my cfg"`+"\n")
 	assert.Contains(t, got, "  cloneRoot: $HOME/src\n")
 	assert.Contains(t, got, `    - "/a: b"`+"\n")
 }
@@ -76,7 +76,7 @@ func TestRenderUserFileQuotesWhatYAMLWouldRead(t *testing.T) {
 func TestRenderedUserFileLoads(t *testing.T) {
 	in := UserFileValues{
 		GitHubUser: "alice", Fork: "origin", Upstream: "upstream", BranchPrefix: "a: b/",
-		ConfigDir: "~/my cfg", Search: []string{"~/src", "/w x"}, CloneRoot: "~/new",
+		CentralConfigDir: "~/my cfg", Search: []string{"~/src", "/w x"}, CloneRoot: "~/new",
 	}
 
 	s, err := Load(Inputs{
@@ -92,7 +92,7 @@ func TestRenderedUserFileLoads(t *testing.T) {
 	assert.Equal(t, "origin", s.Fork)
 	assert.Equal(t, "upstream", s.Upstream)
 	assert.Equal(t, "a: b/", s.BranchPrefix)
-	assert.Equal(t, "/home/alice/my cfg", s.ConfigDir)
+	assert.Equal(t, "/home/alice/my cfg", s.CentralConfigDir)
 	assert.Equal(t, []string{"/home/alice/src", "/w x"}, s.Repos.Search)
 	assert.Equal(t, "/home/alice/new", s.Repos.CloneRoot)
 }

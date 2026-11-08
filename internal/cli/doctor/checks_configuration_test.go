@@ -17,7 +17,7 @@ import (
 // fakeWorkspace answers the Workspace questions from fixed values and records
 // the slugs it was asked to resolve.
 type fakeWorkspace struct {
-	dir      workspace.ConfigDir
+	dir      workspace.CentralConfigDir
 	dirErr   error
 	graph    *chain.Graph
 	chainErr error
@@ -25,8 +25,10 @@ type fakeWorkspace struct {
 	asked    []string
 }
 
-func (f *fakeWorkspace) ConfigDir() (workspace.ConfigDir, error) { return f.dir, f.dirErr }
-func (f *fakeWorkspace) Chain() (*chain.Graph, error)            { return f.graph, f.chainErr }
+func (f *fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) {
+	return f.dir, f.dirErr
+}
+func (f *fakeWorkspace) Chain() (*chain.Graph, error) { return f.graph, f.chainErr }
 
 func (f *fakeWorkspace) RepoPaths(slugs []string) []workspace.RepoPath {
 	f.asked = slugs
@@ -45,7 +47,7 @@ func projects(t *testing.T, slugs ...string) *chain.Graph {
 func TestConfigDirCheckMetadata(t *testing.T) {
 	c := NewConfigDirCheck(&fakeWorkspace{})
 
-	assert.Equal(t, "config-dir", c.Name())
+	assert.Equal(t, "central-config-dir", c.Name())
 	assert.Equal(t, "configuration", c.Category())
 	assert.False(t, c.Online())
 	assert.Empty(t, c.Needs())
@@ -55,11 +57,11 @@ func TestConfigDirCheckMetadata(t *testing.T) {
 func TestConfigDirCheckFound(t *testing.T) {
 	tests := []struct {
 		name string
-		dir  workspace.ConfigDir
+		dir  workspace.CentralConfigDir
 		want string
 	}{
-		{"in the working directory", workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}, "/work/config (cwd)"},
-		{"from the environment", workspace.ConfigDir{Dir: "/etc/gero", Source: "env"}, "/etc/gero (env)"},
+		{"in the working directory", workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}, "/work/config (cwd)"},
+		{"from the environment", workspace.CentralConfigDir{Dir: "/etc/gero", Source: "env"}, "/etc/gero (env)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -92,7 +94,7 @@ func TestConfigCheckMetadata(t *testing.T) {
 	assert.Equal(t, "config", c.Name())
 	assert.Equal(t, "configuration", c.Category())
 	assert.False(t, c.Online())
-	assert.Equal(t, []string{"config-dir"}, c.Needs())
+	assert.Equal(t, []string{"central-config-dir"}, c.Needs())
 	assert.NotEmpty(t, c.Description())
 }
 

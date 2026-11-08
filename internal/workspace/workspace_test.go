@@ -43,24 +43,24 @@ func TestConfigDir(t *testing.T) {
 		env   map[string]string
 		flags map[string]string
 		fsys  fstest.MapFS
-		want  ConfigDir
+		want  CentralConfigDir
 	}{
-		{"flag", "", nil, map[string]string{"config-dir": "/flag"}, nil, ConfigDir{"/flag", "flag"}},
-		{"env", "", map[string]string{"GERO_CONFIG_DIR": "/env"}, nil, nil, ConfigDir{"/env", "env"}},
-		{"user file", "configDir: /file\n", nil, nil, nil, ConfigDir{"/file", "file"}},
+		{"flag", "", nil, map[string]string{"central-config-dir": "/flag"}, nil, CentralConfigDir{"/flag", "flag"}},
+		{"env", "", map[string]string{"GERO_CENTRAL_CONFIG_DIR": "/env"}, nil, nil, CentralConfigDir{"/env", "env"}},
+		{"user file", "centralConfigDir: /file\n", nil, nil, nil, CentralConfigDir{"/file", "file"}},
 		{
 			"flag beats env and file",
-			"configDir: /file\n", map[string]string{"GERO_CONFIG_DIR": "/env"}, map[string]string{"config-dir": "/flag"}, nil,
-			ConfigDir{"/flag", "flag"},
+			"centralConfigDir: /file\n", map[string]string{"GERO_CENTRAL_CONFIG_DIR": "/env"}, map[string]string{"central-config-dir": "/flag"}, nil,
+			CentralConfigDir{"/flag", "flag"},
 		},
-		{"explicit beats cwd", "configDir: /file\n", nil, nil, centralRepo, ConfigDir{"/file", "file"}},
-		{"cwd checkout of the central repo", "", nil, nil, centralRepo, ConfigDir{cwd + "/config", SourceCwd}},
+		{"explicit beats cwd", "centralConfigDir: /file\n", nil, nil, centralRepo, CentralConfigDir{"/file", "file"}},
+		{"cwd checkout of the central repo", "", nil, nil, centralRepo, CentralConfigDir{cwd + "/config", SourceCwd}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := open(settings(t, tt.file, tt.env, tt.flags), cwd, tt.fsys)
 
-			got, err := w.ConfigDir()
+			got, err := w.CentralConfigDir()
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
@@ -82,11 +82,11 @@ func TestConfigDirNotFound(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := open(settings(t, "", nil, nil), cwd, tt.fsys)
 
-			got, err := w.ConfigDir()
+			got, err := w.CentralConfigDir()
 
 			require.ErrorIs(t, err, ErrNotFound)
-			assert.Equal(t, ConfigDir{}, got)
-			for _, place := range []string{"--config-dir", "GERO_CONFIG_DIR", "configDir", "./config"} {
+			assert.Equal(t, CentralConfigDir{}, got)
+			for _, place := range []string{"--central-config-dir", "GERO_CENTRAL_CONFIG_DIR", "centralConfigDir", "./config"} {
 				assert.Contains(t, err.Error(), place)
 			}
 		})
@@ -94,7 +94,7 @@ func TestConfigDirNotFound(t *testing.T) {
 }
 
 func TestConfigDirNilFS(t *testing.T) {
-	_, err := open(settings(t, "", nil, nil), cwd, nil).ConfigDir()
+	_, err := open(settings(t, "", nil, nil), cwd, nil).CentralConfigDir()
 
 	assert.ErrorIs(t, err, ErrNotFound)
 }
@@ -111,10 +111,10 @@ func TestOpenReadsWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, mkProjectFile(dir))
 
-	got, err := Open(settings(t, "", nil, nil), dir).ConfigDir()
+	got, err := Open(settings(t, "", nil, nil), dir).CentralConfigDir()
 
 	require.NoError(t, err)
-	assert.Equal(t, ConfigDir{Dir: filepath.Join(dir, "config"), Source: SourceCwd}, got)
+	assert.Equal(t, CentralConfigDir{Dir: filepath.Join(dir, "config"), Source: SourceCwd}, got)
 }
 
 func mkProjectFile(dir string) error {

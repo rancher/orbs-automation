@@ -23,7 +23,7 @@ the names of your fork and upstream remotes, the prefix of your branches, where
 the central config is, and where your clones are and go.
 
 Each value is asked for on a terminal unless its flag gives it (--github-user,
---fork, --upstream, --branch-prefix, --config-dir, --search, --clone-root). An
+--fork, --upstream, --branch-prefix, --central-config-dir, --search, --clone-root). An
 empty answer skips the question and leaves its key out, so nothing is ever
 filled in for you. Without a terminal nothing is asked, and a value with no flag
 is skipped.
@@ -46,15 +46,15 @@ line points an editor at the JSON Schema of the file.`,
 			if os.Getenv(repl.EnvRepl) != "" {
 				return errors.New("gero init asks questions and writes a file, which the REPL is not for: exit the REPL, or run it in your shell")
 			}
-			// --upstream and --config-dir are the global flags, which name the same
+			// --upstream and --central-config-dir are the global flags, which name the same
 			// remote and directory. The options outlive a run in a test, so a flag not
 			// given is cleared and not left from the last.
-			o.Upstream, o.ConfigDir = "", ""
+			o.Upstream, o.CentralConfigDir = "", ""
 			if f := cmd.Flags().Lookup("upstream"); f != nil && f.Changed {
 				o.Upstream = f.Value.String()
 			}
-			if f := cmd.Flags().Lookup("config-dir"); f != nil && f.Changed {
-				o.ConfigDir = f.Value.String()
+			if f := cmd.Flags().Lookup("central-config-dir"); f != nil && f.Changed {
+				o.CentralConfigDir = f.Value.String()
 			}
 			o.Interactive = termfacts.IsTerminal(os.Stdin)
 			o.DryRun = settingsFrom(cmd).DryRun

@@ -56,10 +56,10 @@ type Repos struct {
 // Settings is the resolved CLI config. Treat it as read-only and pass it down by
 // value.
 type Settings struct {
-	ConfigDir string // central application config directory
-	Output    string // OutputText or OutputJSON
-	Color     string // ColorAuto, ColorAlways or ColorNever
-	Terminal  Terminal
+	CentralConfigDir string // central application config directory
+	Output           string // OutputText or OutputJSON
+	Color            string // ColorAuto, ColorAlways or ColorNever
+	Terminal         Terminal
 	// ReplPrompt is the template of the prompt of gero repl, repl.prompt in the
 	// user file. It is checked when the REPL starts and not here, so a bad one
 	// breaks the REPL and no other command.
@@ -96,7 +96,7 @@ type Settings struct {
 	sources map[string]Source
 }
 
-// Source reports the layer key (a user-file key such as "configDir") came from.
+// Source reports the layer key (a user-file key such as "centralConfigDir") came from.
 // Keys that only exist in the file report SourceFile when set.
 func (s Settings) Source(key string) Source {
 	return s.sources[key]

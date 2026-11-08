@@ -26,11 +26,11 @@ type Options struct {
 	// empty answer skips it: the key is left out. Without a terminal an empty one
 	// is skipped.
 	GitHubUser, Fork, Upstream, BranchPrefix string
-	// ConfigDir is configDir. Search and CloneRoot are repos.search, the
+	// CentralConfigDir is centralConfigDir. Search and CloneRoot are repos.search, the
 	// directories scanned for clones that exist, and repos.cloneRoot, the one
 	// directory gero repo clone puts new clones in.
-	ConfigDir, CloneRoot string
-	Search               []string
+	CentralConfigDir, CloneRoot string
+	Search                      []string
 	// Force replaces a user file that exists, even one that cannot be loaded.
 	Force bool
 	// Interactive says the input is a terminal, where a missing value is asked.
@@ -70,7 +70,7 @@ func Run(o Options) (string, error) {
 
 	v := clicfg.UserFileValues{
 		GitHubUser: o.GitHubUser, Fork: o.Fork, Upstream: o.Upstream, BranchPrefix: o.BranchPrefix,
-		ConfigDir: o.ConfigDir, Search: cleanList(o.Search), CloneRoot: o.CloneRoot,
+		CentralConfigDir: o.CentralConfigDir, Search: cleanList(o.Search), CloneRoot: o.CloneRoot,
 	}
 	if o.Interactive {
 		if err := ask(o, &v); err != nil {
@@ -159,7 +159,7 @@ func ask(o Options, v *clicfg.UserFileValues) error {
 		{&v.Fork, "Remote that holds your fork (for example origin):"},
 		{&v.Upstream, "Remote that is the real source (for example upstream):"},
 		{&v.BranchPrefix, "Prefix of your branch names (for example me/):"},
-		{&v.ConfigDir, "Directory of the central config, configDir:"},
+		{&v.CentralConfigDir, "Directory of the central config, centralConfigDir:"},
 	} {
 		if *q.dest != "" {
 			continue

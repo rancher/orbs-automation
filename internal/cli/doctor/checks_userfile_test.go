@@ -68,7 +68,7 @@ func TestUserFileCheckFileThatWouldStopACommandFails(t *testing.T) {
 		want    string
 	}{
 		{"a value that is not allowed", "pushTo: forks\n", "pushTo"},
-		{"a path that is not absolute", "configDir: relative/dir\n", "absolute"},
+		{"a path that is not absolute", "centralConfigDir: relative/dir\n", "absolute"},
 		{"a file that is not YAML", "output: [unclosed\n", "yaml"},
 	}
 	for _, tt := range tests {

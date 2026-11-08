@@ -35,7 +35,7 @@ flag > env > user file > inferred from CWD repo > built-in default > error
 |---|---|
 | Current repo slug | `owner/name` parsed from remote URLs, matched against central-config `spec.repo.name` |
 | Local path for a slug | The CWD repo if its slug matches; else `repos.paths`; else the `repos.search` scan; else the flat sibling `<parent of CWD repo>/<name>` |
-| `configDir` | `./config` when the CWD has a YAML file there with documents of gero's (an `apiVersion` of `gero/`) |
+| `centralConfigDir` | `./config` when the CWD has a YAML file there with documents of gero's (an `apiVersion` of `gero/`) |
 | `upstream` | Remote whose URL matches the slug; else the only remote; in CI, `origin` |
 | `fork` | Remote with the same repo name under a different owner |
 | `githubUser` | Owner of the fork remote's URL (no network call) |

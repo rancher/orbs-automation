@@ -24,35 +24,35 @@ type Entry struct {
 
 // scalarKeys are the keys that have a flag and an environment variable, and so
 // the ones the env format can express.
-var scalarKeys = []string{"configDir", "output", "color", "repl.prompt", "log", "upstream"}
+var scalarKeys = []string{"centralConfigDir", "output", "color", "repl.prompt", "log", "upstream"}
 
 // hints say what an unset key falls back to. Text output shows one in place of
 // "(unset)"; json and env never do, so scripts never read a hint as data. They
 // describe the rules in docs/specs/WORKSPACE.md and docs/specs/CLI_CONFIG.md, and each
 // goes away as internal/workspace infers a real value for its key.
 var hints = map[string]string{
-	"userFile":     "none",
-	"configDir":    "none; ./config in a central checkout",
-	"upstream":     "inferred from remotes",
-	"fork":         "inferred from remotes",
-	"githubUser":   "inferred from the fork remote",
-	"branchPrefix": "none",
-	"pushTo":       "none: the fork when one is set, else the upstream",
+	"userFile":         "none",
+	"centralConfigDir": "none; ./config in a central checkout",
+	"upstream":         "inferred from remotes",
+	"fork":             "inferred from remotes",
+	"githubUser":       "inferred from the fork remote",
+	"branchPrefix":     "none",
+	"pushTo":           "none: the fork when one is set, else the upstream",
 }
 
 // Entries flattens s into one Entry per setting, in display order: the user
 // file the values came from, the scalar keys, then the repos sections with their
 // map keys sorted. dir is the resolved
-// central config directory and overrides the configDir entry; the zero Result
+// central config directory and overrides the centralConfigDir entry; the zero Result
 // (nothing resolved) leaves it as loaded.
-func Entries(s clicfg.Settings, dir workspace.ConfigDir) []Entry {
-	configDir := entry(s, "configDir", s.ConfigDir)
-	if dir != (workspace.ConfigDir{}) {
-		configDir = Entry{Key: "configDir", Value: dir.Dir, Source: dir.Source}
+func Entries(s clicfg.Settings, dir workspace.CentralConfigDir) []Entry {
+	centralConfigDir := entry(s, "centralConfigDir", s.CentralConfigDir)
+	if dir != (workspace.CentralConfigDir{}) {
+		centralConfigDir = Entry{Key: "centralConfigDir", Value: dir.Dir, Source: dir.Source}
 	}
 	es := []Entry{
 		entry(s, "userFile", s.UserFile),
-		configDir,
+		centralConfigDir,
 		entry(s, "output", s.Output),
 		entry(s, "color", s.Color),
 		entry(s, "repl.prompt", s.ReplPrompt),
@@ -99,7 +99,7 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // Render formats s as clicfg.OutputText, OutputJSON or OutputEnv. The env
 // format lists only the keys that have an environment variable.
-func Render(s clicfg.Settings, dir workspace.ConfigDir, format string) (string, error) {
+func Render(s clicfg.Settings, dir workspace.CentralConfigDir, format string) (string, error) {
 	es := Entries(s, dir)
 	switch format {
 	case clicfg.OutputText:

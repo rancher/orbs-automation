@@ -71,13 +71,13 @@ func TestEntries(t *testing.T) {
 		},
 		{
 			name: "user file values",
-			file: "upstream: rancher\nfork: origin\nbranchPrefix: dan/\nconfigDir: ~/cfg\n",
+			file: "upstream: rancher\nfork: origin\nbranchPrefix: dan/\ncentralConfigDir: ~/cfg\n",
 			want: map[string]Entry{
-				"upstream":     {"upstream", "rancher", "file"},
-				"fork":         {"fork", "origin", "file"},
-				"branchPrefix": {"branchPrefix", "dan/", "file"},
-				"configDir":    {"configDir", "/home/dev/cfg", "file"},
-				"output":       {"output", "text", "default"},
+				"upstream":         {"upstream", "rancher", "file"},
+				"fork":             {"fork", "origin", "file"},
+				"branchPrefix":     {"branchPrefix", "dan/", "file"},
+				"centralConfigDir": {"centralConfigDir", "/home/dev/cfg", "file"},
+				"output":           {"output", "text", "default"},
 			},
 		},
 		{
@@ -119,7 +119,7 @@ func TestEntries(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), workspace.ConfigDir{}))
+			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), workspace.CentralConfigDir{}))
 
 			for k, want := range tt.want {
 				assert.Equal(t, want, got[k], k)
@@ -131,30 +131,30 @@ func TestEntries(t *testing.T) {
 func TestEntriesOrderIsStable(t *testing.T) {
 	s := load(t, "repos:\n  paths:\n    b/b: /b\n    a/a: /a\n", nil, nil)
 
-	first := Entries(s, workspace.ConfigDir{})
+	first := Entries(s, workspace.CentralConfigDir{})
 
 	assert.NotEmpty(t, first)
 	for range 5 {
-		assert.Equal(t, first, Entries(s, workspace.ConfigDir{}))
+		assert.Equal(t, first, Entries(s, workspace.CentralConfigDir{}))
 	}
 }
 
 func TestRenderText(t *testing.T) {
 	s := load(t, "fork: origin\n", nil, map[string]string{"upstream": "rancher"})
 
-	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputText)
+	out, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+rancher\s+flag$`, out)
 	assert.Regexp(t, `(?m)^fork\s+origin\s+file$`, out)
 	assert.Regexp(t, `(?m)^output\s+text\s+default$`, out)
-	assert.Regexp(t, `(?m)^configDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
 }
 
 func TestRenderJSON(t *testing.T) {
 	s := load(t, "fork: origin\n", map[string]string{"GERO_OUTPUT": "json"}, nil)
 
-	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputJSON)
+	out, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputJSON)
 
 	require.NoError(t, err)
 	var got map[string]struct{ Value, Source string }
@@ -168,7 +168,7 @@ func TestRenderJSON(t *testing.T) {
 func TestRenderEnv(t *testing.T) {
 	s := load(t, "upstream: rancher\n", nil, nil)
 
-	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputEnv)
+	out, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputEnv)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "GERO_UPSTREAM=rancher\n")
@@ -176,24 +176,24 @@ func TestRenderEnv(t *testing.T) {
 }
 
 func TestRenderUnknownFormat(t *testing.T) {
-	_, err := Render(clicfg.Settings{}, workspace.ConfigDir{}, "xml")
+	_, err := Render(clicfg.Settings{}, workspace.CentralConfigDir{}, "xml")
 
 	assert.Error(t, err)
 }
 
 func TestEntriesResolvedConfigDir(t *testing.T) {
-	resolved := workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}
+	resolved := workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}
 
 	t.Run("resolved directory replaces the unset setting", func(t *testing.T) {
 		got := byKey(Entries(load(t, "", nil, nil), resolved))
 
-		assert.Equal(t, Entry{"configDir", "/work/config", "cwd"}, got["configDir"])
+		assert.Equal(t, Entry{"centralConfigDir", "/work/config", "cwd"}, got["centralConfigDir"])
 	})
 
 	t.Run("zero result keeps the setting as loaded", func(t *testing.T) {
-		got := byKey(Entries(load(t, "configDir: /file\n", nil, nil), workspace.ConfigDir{}))
+		got := byKey(Entries(load(t, "centralConfigDir: /file\n", nil, nil), workspace.CentralConfigDir{}))
 
-		assert.Equal(t, Entry{"configDir", "/file", "file"}, got["configDir"])
+		assert.Equal(t, Entry{"centralConfigDir", "/file", "file"}, got["centralConfigDir"])
 	})
 
 	t.Run("other entries are untouched", func(t *testing.T) {
@@ -204,20 +204,20 @@ func TestEntriesResolvedConfigDir(t *testing.T) {
 }
 
 func TestRenderResolvedConfigDir(t *testing.T) {
-	resolved := workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}
+	resolved := workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}
 	s := load(t, "", nil, nil)
 
 	text, err := Render(s, resolved, clicfg.OutputText)
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^configDir\s+/work/config\s+cwd$`, text)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+/work/config\s+cwd$`, text)
 
 	env, err := Render(s, resolved, clicfg.OutputEnv)
 	require.NoError(t, err)
-	assert.Contains(t, env, "GERO_CONFIG_DIR=/work/config\n")
+	assert.Contains(t, env, "GERO_CENTRAL_CONFIG_DIR=/work/config\n")
 }
 
 func TestRenderTextHintsForUnsetKeys(t *testing.T) {
-	out, err := Render(load(t, "", nil, nil), workspace.ConfigDir{}, clicfg.OutputText)
+	out, err := Render(load(t, "", nil, nil), workspace.CentralConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+\(inferred from remotes\)\s+default$`, out)
@@ -228,26 +228,26 @@ func TestRenderTextHintsForUnsetKeys(t *testing.T) {
 }
 
 func TestRenderTextHintsOnlyWhereNothingIsSet(t *testing.T) {
-	s := load(t, "upstream: rancher\n", nil, map[string]string{"config-dir": "/flag"})
+	s := load(t, "upstream: rancher\n", nil, map[string]string{"central-config-dir": "/flag"})
 
-	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputText)
+	out, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^upstream\s+rancher\s+file$`, out)
-	assert.Regexp(t, `(?m)^configDir\s+/flag\s+flag$`, out)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+/flag\s+flag$`, out)
 }
 
 func TestRenderHintsStayOutOfMachineFormats(t *testing.T) {
 	s := load(t, "", nil, nil)
 
-	js, err := Render(s, workspace.ConfigDir{}, clicfg.OutputJSON)
+	js, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputJSON)
 	require.NoError(t, err)
 	var got map[string]struct{ Value, Source string }
 	require.NoError(t, json.Unmarshal([]byte(js), &got), js)
 	assert.Empty(t, got["upstream"].Value)
 	assert.Equal(t, "default", got["upstream"].Source)
 
-	env, err := Render(s, workspace.ConfigDir{}, clicfg.OutputEnv)
+	env, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputEnv)
 	require.NoError(t, err)
 	assert.Contains(t, env, "GERO_UPSTREAM=\n")
 	assert.NotContains(t, env, "inferred")
@@ -256,7 +256,7 @@ func TestRenderHintsStayOutOfMachineFormats(t *testing.T) {
 func TestRenderTextPointsAtResolveWhenReposSearchIsSet(t *testing.T) {
 	s := load(t, "repos:\n  search:\n    - /work/suse\n", nil, nil)
 
-	out, err := Render(s, workspace.ConfigDir{}, clicfg.OutputText)
+	out, err := Render(s, workspace.CentralConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^repos\.search\s+/work/suse\s+file$`, out)
@@ -264,7 +264,7 @@ func TestRenderTextPointsAtResolveWhenReposSearchIsSet(t *testing.T) {
 }
 
 func TestRenderTextHasNoResolveHintWithoutReposSearch(t *testing.T) {
-	out, err := Render(load(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n", nil, nil), workspace.ConfigDir{}, clicfg.OutputText)
+	out, err := Render(load(t, "repos:\n  paths:\n    rancher/rancher: /src/rancher\n", nil, nil), workspace.CentralConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
 	assert.NotContains(t, out, "config resolve")
@@ -274,7 +274,7 @@ func TestRenderResolveHintStaysOutOfMachineFormats(t *testing.T) {
 	s := load(t, "repos:\n  search:\n    - /work/suse\n", nil, nil)
 
 	for _, format := range []string{clicfg.OutputJSON, clicfg.OutputEnv} {
-		out, err := Render(s, workspace.ConfigDir{}, format)
+		out, err := Render(s, workspace.CentralConfigDir{}, format)
 
 		require.NoError(t, err)
 		assert.NotContains(t, out, "config resolve", format)
@@ -296,7 +296,7 @@ func TestEntriesShowColorAndWhereItCameFrom(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), workspace.ConfigDir{}))
+			got := byKey(Entries(load(t, tt.file, tt.env, tt.flags), workspace.CentralConfigDir{}))
 
 			assert.Equal(t, tt.want, got["color"])
 		})
@@ -304,7 +304,7 @@ func TestEntriesShowColorAndWhereItCameFrom(t *testing.T) {
 }
 
 func TestRenderEnvHasColor(t *testing.T) {
-	out := renderEnv(Entries(load(t, "color: never\n", nil, nil), workspace.ConfigDir{}))
+	out := renderEnv(Entries(load(t, "color: never\n", nil, nil), workspace.CentralConfigDir{}))
 
 	assert.Contains(t, out, "GERO_COLOR=never\n")
 }
@@ -322,7 +322,7 @@ func TestEntriesShowTheReplPromptAndWhereItCameFrom(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := byKey(Entries(load(t, tt.file, tt.env, nil), workspace.ConfigDir{}))
+			got := byKey(Entries(load(t, tt.file, tt.env, nil), workspace.CentralConfigDir{}))
 
 			assert.Equal(t, tt.want, got["repl.prompt"])
 		})
@@ -330,7 +330,7 @@ func TestEntriesShowTheReplPromptAndWhereItCameFrom(t *testing.T) {
 }
 
 func TestRenderEnvHasTheReplPrompt(t *testing.T) {
-	out := renderEnv(Entries(load(t, "repl:\n  prompt: \"{dir}$ \"\n", nil, nil), workspace.ConfigDir{}))
+	out := renderEnv(Entries(load(t, "repl:\n  prompt: \"{dir}$ \"\n", nil, nil), workspace.CentralConfigDir{}))
 
 	assert.Contains(t, out, "GERO_REPL_PROMPT={dir}$ \n")
 }

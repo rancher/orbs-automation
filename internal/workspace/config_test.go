@@ -31,13 +31,13 @@ func chainWorkspace(t *testing.T, cwd string) *Workspace {
 		"rancher.yaml": projectDocV2("rancher", rancherSlug),
 		"charts.yaml":  projectDocV2("charts", "rancher/charts"),
 	})
-	return Open(settings(t, "", nil, map[string]string{"config-dir": dir}), cwd)
+	return Open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), cwd)
 }
 
 func TestChainLoadsAndJoinsTheConfig(t *testing.T) {
 	dir := chainConfig(t, map[string]string{"a.yaml": projectDocV2("a", "o/a")})
 
-	g, err := open(settings(t, "", nil, map[string]string{"config-dir": dir}), "/elsewhere", nil).Chain()
+	g, err := open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), "/elsewhere", nil).Chain()
 
 	require.NoError(t, err)
 	require.Len(t, g.Projects(), 1)
@@ -74,7 +74,7 @@ func TestChainWithoutAConfigDirectory(t *testing.T) {
 func TestChainErrorNamesTheDirectoryAndTheFile(t *testing.T) {
 	dir := chainConfig(t, map[string]string{"bad.yaml": projectDocV2("p", "nope")})
 
-	_, err := open(settings(t, "", nil, map[string]string{"config-dir": dir}), "/elsewhere", nil).Chain()
+	_, err := open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), "/elsewhere", nil).Chain()
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), dir)
@@ -85,7 +85,7 @@ func TestChainErrorNamesTheDirectoryAndTheFile(t *testing.T) {
 func TestChainRejectsADirectoryWithNoDocuments(t *testing.T) {
 	dir := chainConfig(t, nil)
 
-	_, err := open(settings(t, "", nil, map[string]string{"config-dir": dir}), "/elsewhere", nil).Chain()
+	_, err := open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), "/elsewhere", nil).Chain()
 
 	assert.ErrorIs(t, err, ErrEmptyConfig)
 }
@@ -94,7 +94,7 @@ func TestChainLoadsTheCheckedInConfig(t *testing.T) {
 	dir, err := filepath.Abs("../../config")
 	require.NoError(t, err)
 
-	g, err := open(settings(t, "", nil, map[string]string{"config-dir": dir}), "/elsewhere", nil).Chain()
+	g, err := open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), "/elsewhere", nil).Chain()
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, g.Projects())

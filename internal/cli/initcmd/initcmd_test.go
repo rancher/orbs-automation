@@ -14,7 +14,7 @@ import (
 
 var full = clicfg.UserFileValues{
 	GitHubUser: "alice", Fork: "origin", Upstream: "upstream", BranchPrefix: "alice/",
-	ConfigDir: "~/orbs/config", Search: []string{"~/src", "/work"}, CloneRoot: "~/new",
+	CentralConfigDir: "~/orbs/config", Search: []string{"~/src", "/work"}, CloneRoot: "~/new",
 }
 
 // setup returns Options that write under a temporary XDG_CONFIG_HOME, with all
@@ -25,7 +25,7 @@ func setup(t *testing.T) (Options, string) {
 	env := map[string]string{"XDG_CONFIG_HOME": xdg}
 	return Options{
 		GitHubUser: full.GitHubUser, Fork: full.Fork, Upstream: full.Upstream, BranchPrefix: full.BranchPrefix,
-		ConfigDir: full.ConfigDir, Search: full.Search, CloneRoot: full.CloneRoot,
+		CentralConfigDir: full.CentralConfigDir, Search: full.Search, CloneRoot: full.CloneRoot,
 		In: strings.NewReader(""), Out: &bytes.Buffer{},
 		Getenv: func(k string) string { return env[k] }, Home: t.TempDir(),
 	}, filepath.Join(xdg, "gero", "config.yaml")
@@ -145,7 +145,7 @@ func TestRunWithoutATerminalSkipsWhatIsNotGiven(t *testing.T) {
 		{"fork", func(o *Options, v *clicfg.UserFileValues) { o.Fork, v.Fork = "", "" }},
 		{"upstream", func(o *Options, v *clicfg.UserFileValues) { o.Upstream, v.Upstream = "", "" }},
 		{"branch prefix", func(o *Options, v *clicfg.UserFileValues) { o.BranchPrefix, v.BranchPrefix = "", "" }},
-		{"config dir", func(o *Options, v *clicfg.UserFileValues) { o.ConfigDir, v.ConfigDir = "", "" }},
+		{"config dir", func(o *Options, v *clicfg.UserFileValues) { o.CentralConfigDir, v.CentralConfigDir = "", "" }},
 		{"search", func(o *Options, v *clicfg.UserFileValues) { o.Search, v.Search = nil, nil }},
 		{"clone root", func(o *Options, v *clicfg.UserFileValues) { o.CloneRoot, v.CloneRoot = "", "" }},
 	} {
@@ -166,7 +166,7 @@ func TestRunWithoutATerminalSkipsWhatIsNotGiven(t *testing.T) {
 
 func TestRunWithNothingGivenWritesTheSchemaCommentOnly(t *testing.T) {
 	o, path := setup(t)
-	o.GitHubUser, o.Fork, o.Upstream, o.BranchPrefix, o.ConfigDir, o.Search, o.CloneRoot = "", "", "", "", "", nil, ""
+	o.GitHubUser, o.Fork, o.Upstream, o.BranchPrefix, o.CentralConfigDir, o.Search, o.CloneRoot = "", "", "", "", "", nil, ""
 
 	_, err := Run(o)
 
@@ -177,7 +177,7 @@ func TestRunWithNothingGivenWritesTheSchemaCommentOnly(t *testing.T) {
 }
 
 func blank(o *Options) {
-	o.GitHubUser, o.Fork, o.Upstream, o.BranchPrefix, o.ConfigDir, o.Search, o.CloneRoot = "", "", "", "", "", nil, ""
+	o.GitHubUser, o.Fork, o.Upstream, o.BranchPrefix, o.CentralConfigDir, o.Search, o.CloneRoot = "", "", "", "", "", nil, ""
 }
 
 func TestRunAsksEveryQuestionOnATerminal(t *testing.T) {
@@ -298,7 +298,7 @@ func TestRunDoesNotExplainWhenNeitherPathIsAsked(t *testing.T) {
 
 func TestRunRefusesPathsThatCannotBeRead(t *testing.T) {
 	for name, set := range map[string]func(*Options){
-		"relative config dir": func(o *Options) { o.ConfigDir = "rel/cfg" },
+		"relative config dir": func(o *Options) { o.CentralConfigDir = "rel/cfg" },
 		"relative search":     func(o *Options) { o.Search = []string{"/ok", "rel"} },
 		"relative clone root": func(o *Options) { o.CloneRoot = "rel" },
 	} {

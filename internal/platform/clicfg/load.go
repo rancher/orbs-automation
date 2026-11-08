@@ -39,10 +39,10 @@ type scalar struct {
 
 var scalars = []scalar{
 	{
-		name:     "configDir",
+		name:     "centralConfigDir",
 		path:     true,
-		field:    func(s *Settings) *string { return &s.ConfigDir },
-		fromFile: func(f *fileConfig) string { return f.ConfigDir },
+		field:    func(s *Settings) *string { return &s.CentralConfigDir },
+		fromFile: func(f *fileConfig) string { return f.CentralConfigDir },
 	},
 	{
 		name:     "output",
@@ -311,12 +311,12 @@ func expandPath(p, home string, getenv func(string) string) (string, error) {
 }
 
 // EnvName derives the environment variable for a file key:
-// configDir -> GERO_CONFIG_DIR, repl.prompt -> GERO_REPL_PROMPT.
+// centralConfigDir -> GERO_CENTRAL_CONFIG_DIR, repl.prompt -> GERO_REPL_PROMPT.
 func EnvName(key string) string {
 	return "GERO_" + strings.ToUpper(splitWords(key, '_'))
 }
 
-// FlagName derives the flag for a file key: configDir -> config-dir.
+// FlagName derives the flag for a file key: centralConfigDir -> central-config-dir.
 func FlagName(key string) string {
 	return strings.ToLower(splitWords(key, '-'))
 }

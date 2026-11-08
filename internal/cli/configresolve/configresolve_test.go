@@ -270,9 +270,9 @@ func TestReposEndToEnd(t *testing.T) {
 	}
 	repotest.NewRepoAt(t, filepath.Join(search, "rancher-src"), map[string]string{"upstream": "https://github.com/rancher/rancher.git"})
 	s := clicfg.Settings{
-		ConfigDir: central,
-		Output:    clicfg.OutputText,
-		Repos:     clicfg.Repos{Search: []string{search}},
+		CentralConfigDir: central,
+		Output:           clicfg.OutputText,
+		Repos:            clicfg.Repos{Search: []string{search}},
 	}
 
 	out, err := Repos(s, t.TempDir(), nil)

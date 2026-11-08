@@ -25,7 +25,7 @@ var (
 )
 
 // Chain returns the central application config, read and joined: every document
-// of every YAML file under the config directory (see ConfigDir), validated, so a
+// of every YAML file under the config directory (see CentralConfigDir), validated, so a
 // command never sees an invalid config. The warnings are on the graph. It is read
 // once for the invocation, so every caller has the same graph. It returns ErrNotFound when there is no config directory, ErrEmptyConfig when it
 // holds no document, and the provider's error, naming the file and the document,
@@ -37,7 +37,7 @@ func (w *Workspace) Chain() (*chain.Graph, error) {
 
 // loadChain reads and joins the config once.
 func (w *Workspace) loadChain() (*chain.Graph, error) {
-	dir, err := w.ConfigDir()
+	dir, err := w.CentralConfigDir()
 	if err != nil {
 		return nil, err
 	}

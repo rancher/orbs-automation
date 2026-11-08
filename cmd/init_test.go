@@ -75,13 +75,13 @@ func TestInitTakesTheConfigDirSearchAndCloneRootFlags(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	t.Setenv("GERO_CONFIG", path)
 
-	_, _, err := execRoot(t, "init", "--config-dir", "/cfg", "--search", "/a,/b", "--search", "/c", "--clone-root", "/new")
+	_, _, err := execRoot(t, "init", "--central-config-dir", "/cfg", "--search", "/a,/b", "--search", "/c", "--clone-root", "/new")
 
 	require.NoError(t, err)
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{
-		ConfigDir: "/cfg", Search: []string{"/a", "/b", "/c"}, CloneRoot: "/new",
+		CentralConfigDir: "/cfg", Search: []string{"/a", "/b", "/c"}, CloneRoot: "/new",
 	}), string(got))
 }
 
