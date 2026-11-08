@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"testing/fstest"
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundle"
@@ -70,6 +71,6 @@ type Loaded struct {
 }
 
 // Load finds the bundle for the request.
-func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
-	return Loaded{}, nil
+func (r *Resolver) Load(_ context.Context, _ Request) (Loaded, error) {
+	return Loaded{FS: fstest.MapFS{}}, nil
 }
