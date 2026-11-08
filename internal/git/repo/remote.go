@@ -13,7 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/storage/memory"
-	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 const (

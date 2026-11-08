@@ -3,7 +3,7 @@ package workspace
 import (
 	"context"
 
-	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 // UpstreamRefs lists the tags and branches of the repository slug (owner/name)

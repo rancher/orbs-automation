@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/git"
 	"github.com/rancher/orbs-automation/internal/git/repo"
 	"github.com/rancher/orbs-automation/internal/git/repo/repotest"
+	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"

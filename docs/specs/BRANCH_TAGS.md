@@ -64,7 +64,7 @@ gero repo build-tags
 
 ## 3. Library
 
-`internal/git` (pure logic, no go-git and no exec) resolves the result from a ref, an abbreviated commit and a tag source. The interface is defined in the package that consumes it ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3):
+`internal/platform/git` (pure logic, no go-git and no exec) resolves the result from a ref, an abbreviated commit and a tag source. The interface is defined in the package that consumes it ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3):
 
 ```go
 type BranchTags struct {

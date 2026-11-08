@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 // Action is what Run did.

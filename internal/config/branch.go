@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 // Branch returns the branch a line of the Project lives on, and whether that
