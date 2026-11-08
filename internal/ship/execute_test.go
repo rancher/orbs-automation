@@ -84,7 +84,7 @@ func newShip(t *testing.T) (*realWorkspace, string, *Executor) {
 }
 
 func shipIn(line string) Input {
-	return Input{Project: "scc-operator", Lines: lines(line), NoPush: true}
+	return Input{Project: "scc-operator", Lines: lineArgs(line), NoPush: true}
 }
 
 // onlyResult is the result of the one target, which the test requires.
@@ -323,8 +323,8 @@ func TestShipCommitsTheEditAndEachStepSeparatelyWithTheirOwnMessages(t *testing.
 	assert.Equal(t, "2", runGit(t, clone, "rev-list", "--count", "upstream/release/v2.15.."+botV215), "two commits on the base")
 }
 
-// lines is a line as the lines of an Input: none for "".
-func lines(line string) []string {
+// lineArgs is a line as the lines of an Input: none for "".
+func lineArgs(line string) []string {
 	if line == "" {
 		return nil
 	}

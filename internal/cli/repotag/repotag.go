@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -361,7 +362,7 @@ func lineBranch(p *chain.Project, st *chain.Stream, arg string) (branch, series 
 		if series, ok := st.Series(arg); ok {
 			return b, series, nil
 		}
-		if slices.ContainsFunc(p.Lines(), func(l string) bool { return strings.EqualFold(l, withV(arg)) }) {
+		if slices.ContainsFunc(p.Lines(), func(l string) bool { return strings.EqualFold(l, lines.Normalize(arg)) }) {
 			return b, "", nil
 		}
 	}
@@ -376,13 +377,6 @@ func lineBranch(p *chain.Project, st *chain.Stream, arg string) (branch, series 
 		have = p.ReleaseBranches()
 	}
 	return "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), arg, strings.Join(have, ", "))
-}
-
-func withV(line string) string {
-	if !strings.HasPrefix(strings.ToLower(line), "v") {
-		return "v" + line
-	}
-	return line
 }
 
 // short abbreviates a commit for a message.

@@ -1,10 +1,11 @@
 package chain
 
 import (
-	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"path"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // Stream is what a project releases.
@@ -47,7 +48,7 @@ func (s *Stream) TagMatches(tag string) bool {
 // stream does not list the line or lists it with no series.
 func (s *Stream) Series(line string) (series string, ok bool) {
 	for _, l := range s.Doc.Spec.Lines {
-		if lineKey(l.Line) == lineKey(line) {
+		if lines.Normalize(l.Line) == lines.Normalize(line) {
 			return l.Series, l.Series != ""
 		}
 	}
@@ -61,7 +62,7 @@ func (s *Stream) Serves(line string) bool {
 		return true
 	}
 	for _, l := range s.Doc.Spec.Lines {
-		if lineKey(l.Line) == lineKey(line) {
+		if lines.Normalize(l.Line) == lines.Normalize(line) {
 			return true
 		}
 	}

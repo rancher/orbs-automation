@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -133,20 +134,13 @@ func (r resolution) followsLines() bool { return !r.stream.Universal() }
 
 // consumerLine finds a line of the consumer by name, with or without the v.
 func (r resolution) consumerLine(line string) (string, bool) {
-	line = withV(line)
+	line = lines.Normalize(line)
 	for _, l := range r.route.Consumer.Lines() {
 		if strings.EqualFold(l, line) {
 			return l, true
 		}
 	}
 	return "", false
-}
-
-func withV(line string) string {
-	if !strings.HasPrefix(strings.ToLower(line), "v") {
-		return "v" + line
-	}
-	return line
 }
 
 // specs chooses the targets to check, each with its release.

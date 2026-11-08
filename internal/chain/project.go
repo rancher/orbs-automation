@@ -3,8 +3,8 @@ package chain
 import (
 	"maps"
 	"slices"
-	"strings"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 )
 
@@ -101,7 +101,7 @@ func (p *Project) lists(line string) bool {
 // listsExplicitly reports whether the line is one of the project's branch lines.
 func (p *Project) listsExplicitly(line string) bool {
 	for _, id := range p.Lines() {
-		if lineKey(id) == lineKey(line) {
+		if lines.Normalize(id) == lines.Normalize(line) {
 			return true
 		}
 	}
@@ -119,15 +119,6 @@ func (p *Project) serves(line string) bool {
 	return p.listsExplicitly(line)
 }
 
-// lineKey writes a line id the one way lines are compared: lowercase, with its v.
-func lineKey(line string) string {
-	line = strings.ToLower(line)
-	if !strings.HasPrefix(line, "v") {
-		line = "v" + line
-	}
-	return line
-}
-
 // BranchOfLine returns the branch a line is on, for a stage when the line has a
 // branch for each. The line may be written with or without its v, in any case. A
 // single layout has the default branch for every line, and a line in
@@ -139,7 +130,7 @@ func (p *Project) BranchOfLine(line, stage string) (branch string, ok bool) {
 		return p.DefaultBranch(), true
 	}
 	for _, bl := range p.Doc.Spec.Branches.Lines {
-		if lineKey(bl.Line) != lineKey(line) {
+		if lines.Normalize(bl.Line) != lines.Normalize(line) {
 			continue
 		}
 		switch {
