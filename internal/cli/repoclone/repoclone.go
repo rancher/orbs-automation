@@ -61,10 +61,9 @@ type Workspace interface {
 	ConfiguredRepoPath(slug string) (workspace.RepoPath, error)
 }
 
-// ProjectSource is where the Projects to clone come from. Today that is the local
-// central config; a source that reads the central bundle can stand in for it.
-// TODO(bundle): add a bundle-backed source, for a workstation with no central
-// config, and the newer of the two when both exist (docs/specs/CENTRAL_BUNDLE.md).
+// ProjectSource is where the Projects to clone come from: the central config,
+// which the workspace reads from a local directory or, with none named, from the
+// central bundle (docs/specs/CENTRAL_BUNDLE.md).
 type ProjectSource interface {
 	// Project is the Project named by its config name or slug.
 	Project(key string) (*chain.Project, error)

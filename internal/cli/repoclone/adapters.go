@@ -2,8 +2,6 @@ package repoclone
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
@@ -11,31 +9,20 @@ import (
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
-// chainSource is the ProjectSource that reads the local central config through the
-// workspace.
+// chainSource is the ProjectSource that reads the central config through the
+// workspace: a local directory when one is named, else the central bundle.
 type chainSource struct{ ws *workspace.Workspace }
 
 func (c chainSource) Project(key string) (*chain.Project, error) {
-	p, err := c.ws.Project(key)
-	return p, notBuilt(err)
+	return c.ws.Project(key)
 }
 
 func (c chainSource) Projects() ([]*chain.Project, error) {
 	g, err := c.ws.Chain()
 	if err != nil {
-		return nil, notBuilt(err)
+		return nil, err
 	}
 	return g.Projects(), nil
-}
-
-// notBuilt says, of a missing central config, that clone has no other place to
-// read the Projects from yet.
-// TODO(bundle): drop this when a bundle-backed ProjectSource exists.
-func notBuilt(err error) error {
-	if errors.Is(err, workspace.ErrNotFound) {
-		return fmt.Errorf("%w; gero repo clone reads a local central config only, because the central bundle reader is not built yet", err)
-	}
-	return err
 }
 
 // gitCLI is Git on the engineer's own git binary.

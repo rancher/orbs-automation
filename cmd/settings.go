@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/rancher/orbs-automation/cmd/ci"
+	"github.com/rancher/orbs-automation/cmd/version"
 	"github.com/rancher/orbs-automation/internal/cli/cigate"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
@@ -124,6 +125,9 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 		if err != nil {
 			return err
 		}
+		// The release is what picks the central config bundle when no local config
+		// is named (docs/specs/CENTRAL_BUNDLE.md); only here is it known.
+		s.GeroVersion = version.Version
 		if err := requireContext(cmd, s); err != nil {
 			return err
 		}
