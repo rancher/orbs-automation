@@ -5,12 +5,16 @@
 package selfupdate
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	platform "github.com/rancher/orbs-automation/internal/platform/selfupdate"
+	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
 // ErrNeedsApproval is returned when approval is needed and cannot be asked for:
@@ -45,5 +49,69 @@ type Options struct {
 // Run checks for a newer release and, when there is one and the user approves,
 // installs it. It returns what to print.
 func Run(ctx context.Context, o Options) (string, error) {
-	return "", nil
+	view := style.New(o.Terminal)
+	status, err := o.Updater.Check(ctx)
+	if err != nil {
+		return "", fmt.Errorf("checking for a newer gero: %w", err)
+	}
+	latest := status.Latest.Version
+	if !status.Available {
+		if status.Current == "" || status.Current == "dev" {
+			return fmt.Sprintf("This gero is a development build, which self-update leaves alone. The latest release is %s.\n", latest), nil
+		}
+		return view.Style(style.OK, fmt.Sprintf("gero %s is up to date", status.Current)) +
+			fmt.Sprintf(" (the latest release is %s)\n", latest), nil
+	}
+	found := fmt.Sprintf("%s is available (this is gero %s)", latest, status.Current)
+	if status.Latest.Prerelease {
+		found += ", and it is a pre-release"
+	}
+	found += "\n"
+	switch {
+	case o.DryRun:
+		return found + fmt.Sprintf("Would update gero %s to %s, after checking its signatures. Nothing was changed.\n", status.Current, latest), nil
+	case o.CheckOnly:
+		return found, nil
+	}
+	if hint := o.Updater.Blocked(); hint != "" {
+		return found + hint + "\n", nil
+	}
+	if !o.Yes {
+		if !o.Interactive {
+			return "", ErrNeedsApproval
+		}
+		question := fmt.Sprintf("Update gero %s to %s? [y/N] ", status.Current, latest)
+		if status.Latest.Prerelease {
+			question = fmt.Sprintf("Update gero %s to the pre-release %s? [y/N] ", status.Current, latest)
+		}
+		yes, err := ask(o.In, o.Out, question)
+		if err != nil {
+			return "", err
+		}
+		if !yes {
+			return "", ErrDeclined
+		}
+	}
+	installed, err := o.Updater.Apply(ctx, status)
+	if err != nil {
+		return "", fmt.Errorf("updating gero to %s: %w", latest, err)
+	}
+	return view.Style(style.OK, "Updated gero to "+installed) + "\n", nil
+}
+
+// ask writes question to out and reads one line from in. Only y or yes, in
+// either case, is a yes.
+func ask(in io.Reader, out io.Writer, question string) (bool, error) {
+	if _, err := fmt.Fprint(out, question); err != nil {
+		return false, err
+	}
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	}
+	return false, nil
 }
