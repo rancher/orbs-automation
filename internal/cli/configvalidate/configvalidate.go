@@ -5,11 +5,11 @@ package configvalidate
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui/style"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -17,15 +17,13 @@ import (
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
 	ConfigDir() (workspace.ConfigDir, error)
-	Config() (config.Config, error)
-	// Updates builds the update dispatcher's engine, which finds what depends on
-	// a strategy: a method that cannot work, or an edge that does not fit its method.
-	Updates() (*updatedispatcher.Engine, error)
+	Chain() (*chain.Graph, error)
 }
 
 // Run validates the central config found from s and the working directory cwd.
-// It returns a one-line summary on success, and on failure the error naming
-// every problem, or workspace.ErrNotFound when there is no config directory.
+// It returns a summary on success, with a line for each warning, and on failure
+// the error naming every problem, or workspace.ErrNotFound when there is no
+// config directory.
 func Run(s clicfg.Settings, cwd string) (string, error) {
 	return run(workspace.Open(s, cwd), style.New(s.Terminal))
 }
@@ -35,17 +33,20 @@ func run(ws Workspace, view *style.Renderer) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cfg, err := ws.Config()
+	g, err := ws.Chain()
 	if err != nil {
 		return "", err
 	}
-	if _, err := ws.Updates(); err != nil {
-		return "", err
+	var streams, artifacts int
+	for _, p := range g.Projects() {
+		streams += len(p.Streams())
+		artifacts += len(p.Artifacts())
 	}
-	lines := 0
-	if cfg.Lines != nil {
-		lines = len(cfg.Lines.Lines)
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s: %s (projects: %d, streams: %d, artifacts: %d, holdings: %d, lines: %d)\n",
+		view.Style(style.OK, "config OK"), dir.Dir, len(g.Projects()), streams, artifacts, len(g.Holdings()), len(g.Lines()))
+	for _, w := range g.Warnings() {
+		fmt.Fprintf(&b, "%s %s\n", view.Style(style.Warn, "warning:"), w.Error())
 	}
-	return fmt.Sprintf("%s: %s (projects: %d, externals: %d, lines: %d)\n",
-		view.Style(style.OK, "config OK"), dir.Dir, len(cfg.Projects), len(cfg.Externals), lines), nil
+	return b.String(), nil
 }

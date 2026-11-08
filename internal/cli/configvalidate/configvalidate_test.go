@@ -6,38 +6,38 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
+	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeWorkspace struct {
-	dir    workspace.ConfigDir
-	dirErr error
-	cfg    config.Config
-	cfgErr error
-	// updatesErr is what the update dispatcher's engine finds wrong.
-	updatesErr error
+	dir      workspace.ConfigDir
+	dirErr   error
+	graph    *chain.Graph
+	chainErr error
 }
 
 func (f fakeWorkspace) ConfigDir() (workspace.ConfigDir, error) { return f.dir, f.dirErr }
-func (f fakeWorkspace) Config() (config.Config, error)          { return f.cfg, f.cfgErr }
-func (f fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
-	return nil, f.updatesErr
-}
+func (f fakeWorkspace) Chain() (*chain.Graph, error)            { return f.graph, f.chainErr }
 
 func TestRunSummarizesAValidConfig(t *testing.T) {
 	ws := fakeWorkspace{
 		dir: workspace.ConfigDir{Dir: "/work/config", Source: workspace.SourceCwd},
-		cfg: config.Config{
-			Projects:  make([]config.Project, 2),
-			Externals: make([]config.External, 1),
-			Lines:     &config.RancherLines{Lines: make([]config.Line, 5)},
-		},
+		graph: chaintest.Load(t,
+			chaintest.Lines("v2.16", "v2.15"),
+			chaintest.Doc("Project", "a", "", "  repo: {name: acme/a}\n"),
+			chaintest.Doc("Project", "b", "", "  repo: {name: acme/b}\n"),
+			chaintest.Doc("Stream", "s", "{project: a}", "  universal: true\n"),
+			chaintest.Doc("Artifact", "img", "{stream: s}", "  kind: image\n  name: acme/a\n"),
+			chaintest.Doc("Holding", "h", "{project: b, artifact: img}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release}\n"),
+		),
 	}
 
 	out, err := run(ws, nil)
@@ -45,18 +45,34 @@ func TestRunSummarizesAValidConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "/work/config")
 	assert.Contains(t, out, "projects: 2")
-	assert.Contains(t, out, "externals: 1")
-	assert.Contains(t, out, "lines: 5")
+	assert.Contains(t, out, "streams: 1")
+	assert.Contains(t, out, "artifacts: 1")
+	assert.Contains(t, out, "holdings: 1")
+	assert.Contains(t, out, "lines: 2")
 	assert.True(t, strings.HasSuffix(out, "\n"), "output ends with a newline: %q", out)
 }
 
 func TestRunSummarizesAConfigWithoutLines(t *testing.T) {
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfg: config.Config{}}
+	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, graph: chaintest.Projects(t, "a", "acme/a")}
 
 	out, err := run(ws, nil)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "lines: 0")
+}
+
+func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
+	g, rep := chain.Load(files(map[string]string{
+		"lines.yaml": "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n",
+		"p.yaml":     chaintest.Doc("Project", "p", "", "  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n"),
+	}), config.Context{Now: chaintest.Now})
+	require.NoError(t, rep.Err())
+
+	out, err := run(fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, graph: g}, nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "config OK")
+	assert.Contains(t, out, "warning: p.yaml: Project \"p\": spec.branches.lines[0].branch: omitted")
 }
 
 func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
@@ -66,8 +82,8 @@ func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
 }
 
 func TestRunReturnsConfigProblems(t *testing.T) {
-	problem := errors.New(`Project "a": repo.name "x" must be owner/name`)
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfgErr: problem}
+	problem := errors.New(`Project "a": spec.repo.name "x" must be owner/name`)
+	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, chainErr: problem}
 
 	out, err := run(ws, nil)
 
@@ -77,13 +93,8 @@ func TestRunReturnsConfigProblems(t *testing.T) {
 
 func TestRunOpensWorkspaceInWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.project.yaml"), []byte(`apiVersion: gero/v1alpha1
-kind: Project
-name: a
-spec:
-  repo:
-    name: o/a
-`), 0o600))
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", "a.yaml"), []byte(chaintest.Doc("Project", "a", "", "  repo: {name: o/a}\n")), 0o600))
 
 	out, err := Run(clicfg.Settings{ConfigDir: dir}, "/elsewhere")
 
@@ -98,12 +109,11 @@ func TestRunWithoutCentralCheckout(t *testing.T) {
 	assert.ErrorIs(t, err, workspace.ErrNotFound)
 }
 
-func TestRunReturnsWhatTheUpdateDispatcherFinds(t *testing.T) {
-	problem := errors.New(`Project "rancher": method "build-yaml-bump": strategy "nope" is not known: use one of yamlBump`)
-	ws := fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, cfg: config.Config{}, updatesErr: problem}
-
-	out, err := run(ws, nil)
-
-	assert.ErrorIs(t, err, problem, "a method or an edge that cannot work is a config problem, like any other")
-	assert.Empty(t, out)
+// files is a file system of the given files, for chain.Load.
+func files(m map[string]string) fstest.MapFS {
+	fsys := fstest.MapFS{}
+	for name, data := range m {
+		fsys[name] = &fstest.MapFile{Data: []byte(data)}
+	}
+	return fsys
 }

@@ -176,12 +176,12 @@ func TestConfigValidateAcceptsTheCheckedInConfig(t *testing.T) {
 func TestConfigValidateReportsProblems(t *testing.T) {
 	isolateGero(t)
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.project.yaml"), []byte(`apiVersion: gero/v1alpha1
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", "a.yaml"), []byte(`apiVersion: gero/v1alpha2
 kind: Project
 name: a
 spec:
-  repo:
-    name: not-a-slug
+  repo: {name: not-a-slug}
 `), 0o600))
 
 	_, _, err := execRoot(t, "config", "validate", "--config-dir", dir)
@@ -205,14 +205,14 @@ func TestConfigValidateWithoutConfigDirectory(t *testing.T) {
 func centralWith(t *testing.T, slugs ...string) string {
 	t.Helper()
 	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
 	for _, slug := range slugs {
 		_, name, _ := strings.Cut(slug, "/")
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name+".project.yaml"), []byte(`apiVersion: gero/v1alpha1
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", name+".yaml"), []byte(`apiVersion: gero/v1alpha2
 kind: Project
 name: `+name+`
 spec:
-  repo:
-    name: `+slug+`
+  repo: {name: `+slug+`}
 `), 0o600))
 	}
 	return dir

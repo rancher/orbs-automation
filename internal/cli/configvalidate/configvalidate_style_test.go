@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -20,18 +20,19 @@ func colored() *style.Renderer {
 	return style.New(clicfg.Terminal{StdoutTTY: true, Profile: clicfg.Profile256})
 }
 
-func valid() fakeWorkspace {
+func valid(t *testing.T) fakeWorkspace {
+	t.Helper()
 	return fakeWorkspace{
-		dir: workspace.ConfigDir{Dir: "/work/config"},
-		cfg: config.Config{Projects: make([]config.Project, 2), Externals: make([]config.External, 1)},
+		dir:   workspace.ConfigDir{Dir: "/work/config"},
+		graph: chaintest.Projects(t, "a", "acme/a", "b", "acme/b"),
 	}
 }
 
 func TestStyledSummaryIsThePlainSummaryWithEscapesAdded(t *testing.T) {
-	plain, err := run(valid(), nil)
+	plain, err := run(valid(t), nil)
 	require.NoError(t, err)
 
-	styled, err := run(valid(), colored())
+	styled, err := run(valid(t), colored())
 
 	require.NoError(t, err)
 	assert.Equal(t, plain, strip(styled))
@@ -40,11 +41,11 @@ func TestStyledSummaryIsThePlainSummaryWithEscapesAdded(t *testing.T) {
 }
 
 func TestNoColorIsThePlainSummary(t *testing.T) {
-	plain, err := run(valid(), nil)
+	plain, err := run(valid(t), nil)
 	require.NoError(t, err)
 
 	for who, v := range map[string]*style.Renderer{"plain": style.Plain(), "none": style.New(clicfg.Terminal{})} {
-		got, err := run(valid(), v)
+		got, err := run(valid(t), v)
 
 		require.NoError(t, err, who)
 		assert.Equal(t, plain, got, who)
