@@ -71,7 +71,8 @@ func checkRange(r *config.Report, path string, rng Range) {
 	}
 }
 
-// lineNumbers reads a line id that already matched lineID as its major and minor.
+// lineNumbers reads a line id, or a Kubernetes minor, that already matched as its
+// major and minor.
 func lineNumbers(id string) [2]int {
 	major, minor, _ := strings.Cut(strings.TrimPrefix(id, "v"), ".")
 	var n [2]int
