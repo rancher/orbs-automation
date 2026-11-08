@@ -11,6 +11,7 @@
 | `rancher-assets.yaml` | Project, Stream, Artifact, Holding |
 | `rancher-charts.yaml` | Project, one chart Stream, 2 Holdings, Edit |
 | `rancher.yaml` | Project, Stream, Artifact, 4 Holdings, Edit |
+| `rancher.lines.yaml` | RancherLines, as in the real config |
 | `examples/library.yaml` | a Go library, two services holding it in `go.mod` |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |
 
