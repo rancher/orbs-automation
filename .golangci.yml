@@ -150,12 +150,13 @@ linters:
             - "!**/internal/workspace/**"
             - "!**/internal/config/loader/**"
             - "!**/internal/appconfig/**"
+            - "!**/internal/chain/**"
             - "!$test"
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/config/loader
               desc: the config loader is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
             - pkg: github.com/rancher/orbs-automation/internal/appconfig
-              desc: the application config provider is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
+              desc: the application config provider is only allowed in internal/workspace and internal/chain; get config from a Workspace (docs/specs/WORKSPACE.md)
         # go-gh is used for token and host resolution only, through
         # internal/platform/github.GoGh. Its pkg/api is not approved
         # (docs/specs/DEPENDENCY_POLICY.md).
