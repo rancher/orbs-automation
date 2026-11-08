@@ -145,3 +145,8 @@ func parseSeries(series string) (major uint64, minor int64) {
 	}
 	return major, minor
 }
+
+// EffectiveStages is the stages of the stream: those written, else those its
+// scheme gives. projectStages is the stages of the branch layout of the stream's
+// project, which a chartVersion stream takes.
+func (s *Stream) EffectiveStages(_ []string) []Stage { return nil }

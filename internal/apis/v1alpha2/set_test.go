@@ -338,3 +338,148 @@ func TestALineWithNoBranchAfterDevelopmentIsAWarning(t *testing.T) {
 		})
 	}
 }
+
+func TestOnlyOneRancherLinesDocument(t *testing.T) {
+	one := doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n")
+	two := doc("RancherLines", "other", "", "  lines:\n    - id: v2.15\n")
+
+	rep := validateSet(t, one, two)
+
+	assert.True(t, hasSetError(rep, `RancherLines "other"`, "spec", "only one RancherLines"), "%v", rep.Findings)
+}
+
+func TestRepoSlugsAreUniqueWhateverTheirCase(t *testing.T) {
+	rep := validateSet(t,
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: ACME/A}\n"),
+	)
+
+	assert.True(t, hasSetError(rep, `Project "q"`, "spec.repo.name", `already the repo of Project "p"`), "%v", rep.Findings)
+}
+
+func TestAnImageNameIsUniqueWithinAProject(t *testing.T) {
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "s1", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec),
+		doc("Stream", "t", "{project: q}", streamSpec),
+		doc("Artifact", "a1", "{stream: s1}", artifactSpec),
+	}
+
+	t.Run("in another stream of the project", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "a2", "{stream: s2}", artifactSpec))...)
+
+		assert.True(t, hasSetError(rep, `Artifact "a2"`, "spec.name", `already an artifact of Project "p"`), "%v", rep.Findings)
+	})
+	t.Run("in another project is fine", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "a2", "{stream: t}", artifactSpec))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("a file and an image of one name are not the same", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "a2", "{stream: s2}", "  kind: file\n  name: acme/a\n"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+}
+
+func TestAProjectDoesNotHoldSomethingOfItself(t *testing.T) {
+	p := doc("Project", "p", "", projectSpec)
+	s := doc("Stream", "s", "{project: p}", streamSpec)
+	a := doc("Artifact", "a", "{stream: s}", artifactSpec)
+
+	t.Run("a release", func(t *testing.T) {
+		rep := validateSet(t, p, s, a, doc("Holding", "h", "{project: p, artifact: a}", holdingSpec))
+
+		assert.True(t, hasSetError(rep, `Holding "h"`, "refs.artifact", "its own project"), "%v", rep.Findings)
+	})
+	t.Run("a commit", func(t *testing.T) {
+		rep := validateSet(t, p, doc("Holding", "h", "{project: p, from: p}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"))
+
+		assert.True(t, hasSetError(rep, `Holding "h"`, "refs.from", "its own project"), "%v", rep.Findings)
+	})
+}
+
+func TestACalverStreamNeedsASingleLayoutProject(t *testing.T) {
+	lines := doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n")
+	calver := doc("Stream", "s", "{project: p}", "  scheme: calverLineStage\n  lines: [{line: v2.16}]\n")
+
+	t.Run("per line", func(t *testing.T) {
+		rep := validateSet(t, lines, doc("Project", "p", "", projectSpec+"  branches:\n    layout: perLine\n    lines: [{line: v2.16, branch: x}]\n"), calver)
+
+		assert.True(t, hasSetError(rep, `Stream "s"`, "spec.scheme", "layout single"), "%v", rep.Findings)
+	})
+	t.Run("single", func(t *testing.T) {
+		rep := validateSet(t, lines, doc("Project", "p", "", projectSpec), calver)
+
+		assert.Empty(t, rep.Findings)
+	})
+}
+
+func TestTheStagesAHoldingNamesAreStagesOfTheProjectsInvolved(t *testing.T) {
+	charts := doc("Project", "charts", "", "  repo: {name: acme/charts}\n  branches:\n    layout: perLine\n    stages: [dev, stable]\n    lines: [{line: v2.16, branch: {dev: d, stable: s}}]\n")
+	assets := doc("Project", "assets", "", "  repo: {name: acme/assets}\n")
+	assetsStream := doc("Stream", "assets", "{project: assets}", "  scheme: calverLineStage\n  lines: [{line: v2.16}]\n")
+	chartStream := doc("Stream", "chart", "{project: charts}", "  scheme: chartVersion\n  lines: [{line: v2.16, series: \"111.x\"}]\n")
+	chartArtifact := doc("Artifact", "chart-file", "{stream: chart}", "  kind: file\n  name: chart-{version}.tgz\n")
+	plain := doc("Project", "plain", "", "  repo: {name: acme/plain}\n")
+	lines := doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n")
+	at := "  at: {file: f.yaml, key: '.a.{stage}'}\n"
+
+	t.Run("a stage of the holder", func(t *testing.T) {
+		h := doc("Holding", "h", "{project: charts, artifact: chart-file}", at+"  holds: {kind: release, stage: dev}\n")
+
+		assert.Empty(t, validateSet(t, lines, charts, chartStream, chartArtifact, h).Findings)
+	})
+	t.Run("a stage the holder does not have", func(t *testing.T) {
+		h := doc("Holding", "h", "{project: charts, artifact: chart-file}", at+"  holds: {kind: release, stage: nightly}\n")
+
+		rep := validateSet(t, lines, charts, chartStream, chartArtifact, h)
+
+		assert.True(t, hasSetError(rep, `Holding "h"`, "spec.holds.stage", `"nightly" is not a stage of branches.stages`), "%v", rep.Findings)
+	})
+	t.Run("a stage of a holder with none", func(t *testing.T) {
+		h := doc("Holding", "h", "{project: plain, artifact: chart-file}", at+"  holds: {kind: release, stage: dev}\n")
+
+		rep := validateSet(t, lines, charts, chartStream, chartArtifact, plain, h)
+
+		assert.True(t, hasSetError(rep, `Holding "h"`, "spec.holds.stage", "branches.stages"), "%v", rep.Findings)
+	})
+	t.Run("stages of the producer", func(t *testing.T) {
+		h := doc("Holding", "h", "{project: assets, from: charts}", at+"  holds: {kind: commit, stages: [dev, stable]}\n")
+
+		assert.Empty(t, validateSet(t, lines, charts, chartStream, assets, assetsStream, h).Findings)
+	})
+	t.Run("a stage the producer does not have", func(t *testing.T) {
+		h := doc("Holding", "h", "{project: assets, from: charts}", at+"  holds: {kind: commit, stages: [dev, beta]}\n")
+
+		rep := validateSet(t, lines, charts, chartStream, assets, assetsStream, h)
+
+		assert.True(t, hasSetError(rep, `Holding "h"`, "spec.holds.stages[1]", `"beta" is not a stage of Project "charts"`), "%v", rep.Findings)
+	})
+}
+
+func TestAStepFromTheProducerNeedsAnOwnedProducer(t *testing.T) {
+	holder := doc("Project", "p", "", projectSpec)
+	step := "  postEdit:\n    - {run: x, from: producer}\n"
+	build := func(producer string) []string {
+		return []string{
+			holder,
+			doc("Project", "q", "", producer),
+			doc("Stream", "s", "{project: q}", streamSpec),
+			doc("Artifact", "a", "{stream: s}", artifactSpec),
+			doc("Holding", "h", "{project: p, artifact: a}", holdingSpec),
+			doc("Edit", "e", "{holding: h}", step),
+		}
+	}
+
+	t.Run("owned", func(t *testing.T) {
+		assert.Empty(t, validateSet(t, build("  repo: {name: acme/b, owned: true}\n")...).Findings)
+	})
+	t.Run("not owned", func(t *testing.T) {
+		rep := validateSet(t, build("  repo: {name: acme/b}\n")...)
+
+		assert.True(t, hasSetError(rep, `Edit "e"`, "spec.postEdit[0].from", `Project "q" is not owned`), "%v", rep.Findings)
+	})
+}

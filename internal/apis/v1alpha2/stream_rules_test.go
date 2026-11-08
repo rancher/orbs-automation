@@ -105,3 +105,24 @@ func TestAStreamServesSomething(t *testing.T) {
 		})
 	}
 }
+
+func TestEffectiveStages(t *testing.T) {
+	dev, stable := Stage{Name: "dev", Prerelease: true}, Stage{Name: "stable"}
+	tests := []struct {
+		name     string
+		stream   Stream
+		project  []string
+		expected []Stage
+	}{
+		{"calver gives dev and stable", Stream{Spec: StreamSpec{Scheme: SchemeCalverLineStage}}, nil, []Stage{dev, stable}},
+		{"chart takes the project's stages, dev being a prerelease", Stream{Spec: StreamSpec{Scheme: SchemeChartVersion}}, []string{"dev", "stable"}, []Stage{dev, stable}},
+		{"chart with a project that has none", Stream{Spec: StreamSpec{Scheme: SchemeChartVersion}}, nil, nil},
+		{"semver gives none", Stream{Spec: StreamSpec{Scheme: SchemeSemver}}, []string{"dev"}, nil},
+		{"what is written wins", Stream{Spec: StreamSpec{Scheme: SchemeCalverLineStage, Stages: []Stage{{Name: "nightly", Prerelease: true}}}}, nil, []Stage{{Name: "nightly", Prerelease: true}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.stream.EffectiveStages(tt.project))
+		})
+	}
+}
