@@ -17,7 +17,7 @@ var ctx = config.Context{Now: time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)}
 
 const (
 	project = "apiVersion: gero/v1alpha2\nkind: Project\nname: p\nspec:\n  repo: {name: acme/a}\n"
-	stream  = "apiVersion: gero/v1alpha2\nkind: Stream\nname: s\nrefs: {project: p}\nspec:\n  scheme: semver\n"
+	stream  = "apiVersion: gero/v1alpha2\nkind: Stream\nname: s\nrefs: {project: p}\nspec:\n  scheme: semver\n  universal: true\n"
 	lines   = "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.16\n"
 )
 

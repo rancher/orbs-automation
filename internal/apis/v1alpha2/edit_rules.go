@@ -7,6 +7,13 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
+// Where the program of a step comes from.
+const (
+	FromConsumer = "consumer"
+	FromProducer = "producer"
+	FromCentral  = "central"
+)
+
 // strategyName is what the name of a strategy looks like: a camelCase word.
 var strategyName = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 
@@ -41,6 +48,9 @@ func checkSteps(r *config.Report, path string, steps []Step) {
 			r.Errorf(at+".run", "required: the program to run")
 		case st.Run[0] == "":
 			r.Errorf(at+".run", "the program is empty")
+		}
+		if st.From != "" {
+			oneOf(r, at+".from", st.From, FromConsumer, FromProducer, FromCentral)
 		}
 		checkRange(r, at, Range{Since: st.Since, Until: st.Until})
 	}

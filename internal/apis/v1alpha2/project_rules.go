@@ -51,6 +51,8 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 		r.Errorf("spec.repo.name", "is required")
 	case !ok || owner == "" || name == "" || strings.Contains(name, "/"):
 		r.Errorf("spec.repo.name", "%q must be owner/name", repo.Name)
+	case strings.ContainsAny(repo.Name, " \t"):
+		r.Errorf("spec.repo.name", "%q has a space", repo.Name)
 	}
 	if repo.ManagedBy != "" && !slug.MatchString(repo.ManagedBy) {
 		r.Errorf("spec.repo.managedBy", "%q must be a lowercase slug such as release-team", repo.ManagedBy)

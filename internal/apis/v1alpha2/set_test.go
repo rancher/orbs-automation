@@ -26,7 +26,7 @@ func doc(kind, name, refs, spec string) string {
 
 const (
 	projectSpec  = "  repo: {name: acme/a}\n"
-	streamSpec   = "  scheme: semver\n"
+	streamSpec   = "  scheme: semver\n  universal: true\n"
 	artifactSpec = "  kind: image\n  name: acme/a\n"
 	holdingSpec  = "  at: {file: f.yaml, key: .a}\n  holds: {kind: release}\n"
 )

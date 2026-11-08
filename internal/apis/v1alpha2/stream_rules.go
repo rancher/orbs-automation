@@ -69,6 +69,9 @@ func (s *Stream) Validate(_ config.Context, r *config.Report) {
 	if spec.Universal && len(spec.Lines) > 0 {
 		r.Errorf("spec.lines", "are not given when the stream is universal, which serves every line")
 	}
+	if !spec.Universal && len(spec.Lines) == 0 {
+		r.Errorf("spec", "serves nothing: give its lines or universal")
+	}
 	s.validateLines(r)
 }
 

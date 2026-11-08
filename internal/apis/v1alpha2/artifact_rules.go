@@ -35,6 +35,8 @@ func (a *Artifact) Validate(_ config.Context, r *config.Report) {
 		r.Errorf("spec.name", "is required")
 	case kindOK && spec.Kind == ArtifactImage && strings.ContainsAny(spec.Name, "{}"):
 		r.Errorf("spec.name", "%q is a repository path and has no variables", spec.Name)
+	case kindOK && spec.Kind == ArtifactImage && strings.ContainsAny(spec.Name, " \t"):
+		r.Errorf("spec.name", "%q is a repository path and has no space", spec.Name)
 	case kindOK && spec.Kind == ArtifactFile:
 		if err := templates.Validate(spec.Name, fileNameVars); err != nil {
 			r.Errorf("spec.name", "%v", err)

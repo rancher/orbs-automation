@@ -279,6 +279,7 @@ apiVersion: gero/v1alpha2
 kind: Stream
 name: a
 refs: {project: a}
+spec: {universal: true}
 ---
 apiVersion: gero/v1alpha2
 kind: Artifact
