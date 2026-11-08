@@ -11,6 +11,7 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/google/go-github/v93 v93.0.0
 	github.com/invopop/jsonschema v0.14.0
+	github.com/mallardduck/binup v0.2.2
 	github.com/mallardduck/ghreleases v0.8.1
 	github.com/mallardduck/ghreleases/sigstore v0.1.0
 	github.com/spf13/cobra v1.10.2
@@ -23,7 +24,9 @@ require (
 )
 
 require (
+	aead.dev/minisign v0.3.0 // indirect
 	dario.cat/mergo v1.0.1 // indirect
+	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -88,6 +91,7 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/minio/selfupdate v0.6.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect

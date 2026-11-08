@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 
+	binupgithub "github.com/mallardduck/binup/github"
 	"github.com/mallardduck/ghreleases/sigstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -76,8 +77,6 @@ const fakeBase = "https://assets.invalid"
 type fakeRelease struct {
 	handler http.Handler
 	assets  map[string][]byte // by name
-	mu      sync.Mutex
-	paths   []string
 }
 
 func tarGz(t *testing.T, name string, content []byte) []byte {
@@ -126,24 +125,8 @@ func newRelease(t *testing.T, binary []byte, signed bool, sig string) *fakeRelea
 		}
 		_, _ = w.Write(body)
 	})
-	fr.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fr.mu.Lock()
-		fr.paths = append(fr.paths, r.URL.Path)
-		fr.mu.Unlock()
-		mux.ServeHTTP(w, r)
-	})
+	fr.handler = mux
 	return fr
-}
-
-func (fr *fakeRelease) requested(substr string) bool {
-	fr.mu.Lock()
-	defer fr.mu.Unlock()
-	for _, p := range fr.paths {
-		if strings.Contains(p, substr) {
-			return true
-		}
-	}
-	return false
 }
 
 type serve func(*http.Request) (*http.Response, error)
@@ -179,8 +162,7 @@ func TestNewRefusesAReleaseWithoutSignatures(t *testing.T) {
 	_, err = u.Apply(context.Background(), status)
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "signature")
-	assert.True(t, fr.requested("checksums.txt.sigstore.json"), "the manifest's bundle was looked for")
+	assert.ErrorIs(t, err, binupgithub.ErrSignatureMissing)
 	got, _ := os.ReadFile(target)
 	assert.Equal(t, "old", string(got), "the binary is left as it was")
 }
