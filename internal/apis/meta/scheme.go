@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,9 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
+
+// slug is what the name of a document may look like.
+var slug = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 
 // Scheme knows which kinds each apiVersion has, and decodes documents into them.
 type Scheme struct {
@@ -93,6 +97,9 @@ func (s *Scheme) decodeDocument(source string, doc int, node *yaml.Node, ctx con
 	}
 	if h.Name == "" {
 		return fail("name is required")
+	}
+	if !slug.MatchString(h.Name) {
+		return fail("name %q must be a lowercase slug: a to z, 0 to 9 and hyphens, starting and ending with a letter or a digit", h.Name)
 	}
 	obj := newObject()
 	return obj, config.LoadNode(source, doc, fmt.Sprintf("%s %q", h.Kind, h.Name), node, obj, ctx)
