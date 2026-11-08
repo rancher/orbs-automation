@@ -152,11 +152,11 @@ linters:
             - "!**/internal/appconfig/**"
             - "!**/internal/chain/**"
             - "!**/internal/chainload/**"
-            - "!**/tools/compilebundle/**"
+            - "!**/internal/bundle/**"
             - "!$test"
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/chainload
-              desc: the config loader is only allowed in internal/workspace, and in tools/compilebundle, which checks a bundle loads back; get config from a Workspace (docs/specs/WORKSPACE.md)
+              desc: the config loader is only allowed in internal/workspace, and in internal/bundle, which checks a bundle loads back; get config from a Workspace (docs/specs/WORKSPACE.md)
             - pkg: github.com/rancher/orbs-automation/internal/appconfig
               desc: the application config provider is only allowed in internal/workspace, internal/chain and internal/chainload; get config from a Workspace (docs/specs/WORKSPACE.md)
         # A version of the config API is spelled in config and nowhere else. The domain
@@ -313,11 +313,13 @@ linters:
             - github.com/rancher/orbs-automation/internal/cli/buildinfo
             - github.com/rancher/orbs-automation/internal/cli/authstatus
             - github.com/rancher/orbs-automation/internal/cli/configresolve
-        # main.go only calls cmd.Execute().
+        # main.go only calls cmd.Execute(). The tools under tools/ are developer
+        # commands that import the packages they work on.
         entrypoint:
           list-mode: strict
           files:
             - "**/main.go"
+            - "!**/tools/**"
           allow:
             - $gostd
             - github.com/rancher/orbs-automation/cmd

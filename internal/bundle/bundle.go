@@ -1,4 +1,9 @@
-package main
+// Package bundle is the format of the central config bundle: the config/ directory
+// of the central repository as one multi-document YAML file, which a gero release
+// carries beside its binaries (docs/specs/CENTRAL_BUNDLE.md). Compile makes it,
+// for tools/compilebundle, and the reader of the CLI takes it apart again here,
+// so the two cannot drift.
+package bundle
 
 import (
 	"errors"
@@ -22,8 +27,9 @@ type Header struct {
 	CompiledAt   time.Time // when, as the release job says: never the clock, so a build repeats
 }
 
-// bundleName is the file name of the bundle, in the output directory.
-const bundleName = "gero-config-bundle.yaml"
+// Name is the file name of the bundle, in the output directory and as a release
+// asset.
+const Name = "gero-config-bundle.yaml"
 
 const (
 	// bundleAPIVersion is not a config kind: the header is read by the reader of
@@ -79,7 +85,7 @@ func Compile(fsys fs.FS, h Header) ([]byte, error) {
 
 	// What a reader does with the body is checked here: it has to load to the
 	// config that went in.
-	back, rep := chainload.Load(fstest.MapFS{bundleName: {Data: []byte(body.String())}}, ctx)
+	back, rep := chainload.Load(fstest.MapFS{Name: {Data: []byte(body.String())}}, ctx)
 	if err := rep.Err(); err != nil {
 		return nil, fmt.Errorf("the bundle does not load back: %w", err)
 	}
