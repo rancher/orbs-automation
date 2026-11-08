@@ -155,3 +155,68 @@ func TestRefsRules(t *testing.T) {
 		})
 	}
 }
+
+func TestRepoSlugsAreUnique(t *testing.T) {
+	rep := validateSet(t,
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", projectSpec),
+	)
+
+	assert.True(t, hasSetError(rep, `Project "q"`, "spec.repo.name", `already the repo of Project "p"`), "%v", rep.Findings)
+}
+
+func TestAtMostOneProjectIsTheFinalDestination(t *testing.T) {
+	rep := validateSet(t,
+		doc("Project", "p", "", projectSpec+"  finalDestination: true\n"),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n  finalDestination: true\n"),
+	)
+
+	assert.True(t, hasSetError(rep, `Project "q"`, "spec.finalDestination", `already Project "p"`), "%v", rep.Findings)
+}
+
+func TestOneFinalDestinationIsFine(t *testing.T) {
+	rep := validateSet(t,
+		doc("Project", "p", "", projectSpec+"  finalDestination: true\n"),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+	)
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestLinesNamedAreInRancherLines(t *testing.T) {
+	lines := doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n    - id: v2.15\n")
+	p := doc("Project", "p", "", projectSpec)
+	s := doc("Stream", "s", "{project: p}", streamSpec)
+	a := doc("Artifact", "a", "{stream: s}", artifactSpec)
+	h := doc("Holding", "h", "{project: p, artifact: a}", holdingSpec)
+	tests := []struct {
+		name        string
+		docs        []string
+		label, path string
+	}{
+		{"a branch line", []string{lines, doc("Project", "p", "", projectSpec+"  branches:\n    layout: perLine\n    lines: [{line: v2.99, branch: x}]\n")}, `Project "p"`, "spec.branches.lines[0].line"},
+		{"a stream line", []string{lines, p, doc("Stream", "s", "{project: p}", "  lines: [{line: v2.99, series: 9.x}]\n")}, `Stream "s"`, "spec.lines[0].line"},
+		{"an artifact since", []string{lines, p, s, doc("Artifact", "a", "{stream: s}", artifactSpec+"  lines: {since: v2.99}\n")}, `Artifact "a"`, "spec.lines.since"},
+		{"a holding until", []string{lines, p, s, a, doc("Holding", "h", "{project: p, artifact: a}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release, lines: {until: v2.99}}\n")}, `Holding "h"`, "spec.holds.lines.until"},
+		{"an edit since", []string{lines, p, s, a, h, doc("Edit", "e", "{holding: h}", "  postEdit:\n    - {run: x, since: v2.99}\n")}, `Edit "e"`, "spec.postEdit[0].since"},
+		{"a line with no lines document", []string{p, doc("Stream", "s", "{project: p}", "  lines: [{line: v2.16, series: 9.x}]\n")}, `Stream "s"`, "spec.lines[0].line"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rep := validateSet(t, tt.docs...)
+
+			assert.True(t, hasSetError(rep, tt.label, tt.path, "is not in RancherLines"), "want an error on %s at %s, got %v", tt.label, tt.path, rep.Findings)
+		})
+	}
+}
+
+func TestLinesInRancherLinesAreFine(t *testing.T) {
+	rep := validateSet(t,
+		doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n"),
+		doc("Project", "p", "", projectSpec+"  branches:\n    layout: perLine\n    lines: [{line: v2.16, branch: x}]\n"),
+		doc("Stream", "s", "{project: p}", "  lines: [{line: v2.16, series: 9.x}]\n"),
+		doc("Artifact", "a", "{stream: s}", artifactSpec+"  lines: {since: v2.16, until: v2.16}\n"),
+	)
+
+	assert.Empty(t, rep.Findings)
+}
