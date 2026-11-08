@@ -2,7 +2,7 @@
 // line can have next, which tags it may not have, and what its newest is. It is
 // pure, with no I/O and no knowledge of how a tag is made, and it knows the
 // project's settings only as arguments (the tag pattern, the line's series and
-// requiresPrerelease). Version arithmetic is in internal/semver, which knows
+// requiresPrerelease). Version arithmetic is in internal/platform/semver, which knows
 // nothing of lines; the tag task, gero repo tag and gero repo status all ask
 // here, so what the status says is what the tag command does
 // (docs/specs/TASK_COMMANDS.md).
@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 var (
@@ -207,7 +207,7 @@ func Candidates(c Choice) []Candidate {
 }
 
 // Choose picks the tag to make from the newest tag of the line, with
-// internal/semver doing the arithmetic. It is the policy that semver does not
+// internal/platform/semver doing the arithmetic. It is the policy that semver does not
 // have: which tag may follow which.
 //
 // Without Stable it is a prerelease: the next iteration of the one under way, or

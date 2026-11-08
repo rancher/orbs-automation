@@ -14,7 +14,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // Scheme answers the questions of one way of naming releases.

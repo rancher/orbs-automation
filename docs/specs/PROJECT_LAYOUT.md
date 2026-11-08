@@ -46,7 +46,7 @@ internal/github/    gero's access to GitHub: the host and token, the REST client
 internal/actor/     who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
 internal/platform/errs/      error values shared across gero, such as NotImplemented
 internal/registry/  image existence checks in the registries a project publishes to   (IMAGES_EXIST)
-internal/semver/    release tag classification, as the check-semver script did   (CHECK_SEMVER)
+internal/platform/semver/    release tag classification, as the check-semver script did   (CHECK_SEMVER)
 internal/lifecycle/ reads Rancher's lifecycle dates from the SUSE lifecycle page; the only importer of golang.org/x/net/html
 internal/shellenv/  the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
 internal/steprun/   runs the pre-edit and post-edit steps of an update

@@ -7,7 +7,7 @@ package registry
 
 import (
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // Registry is a place images are published.

@@ -17,7 +17,7 @@ Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before 
 
 ## What is checked
 
-The script's rule, kept as it is: Docker Hub and Prime staging always, and Prime production only for a stable tag. A stable tag has no prerelease suffix, decided by `internal/semver.Classify`, which is the script's own check ([CHECK_SEMVER](CHECK_SEMVER.md)).
+The script's rule, kept as it is: Docker Hub and Prime staging always, and Prime production only for a stable tag. A stable tag has no prerelease suffix, decided by `internal/platform/semver.Classify`, which is the script's own check ([CHECK_SEMVER](CHECK_SEMVER.md)).
 
 ## Config
 

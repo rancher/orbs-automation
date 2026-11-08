@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // ErrNoTag is returned when neither an argument nor GITHUB_REF_NAME names a tag.

@@ -3,7 +3,7 @@ package git
 import (
 	"path"
 
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // Tag is a tag name and the commit it points at, with an annotated tag already

@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // InSeries reports whether the tag name is a version in the series, a dotted

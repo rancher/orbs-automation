@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // Prober looks for one image in one registry. Checker is the real one.

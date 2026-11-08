@@ -2,7 +2,7 @@ package ship
 
 import (
 	"github.com/rancher/orbs-automation/internal/github/pulls"
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // PublishAction is what to do about the PR of one target.

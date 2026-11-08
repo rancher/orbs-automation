@@ -3,7 +3,7 @@ package checksemver
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/stretchr/testify/assert"
 )
 

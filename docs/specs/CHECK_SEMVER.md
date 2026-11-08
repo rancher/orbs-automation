@@ -40,11 +40,11 @@ gero semver check [tag]
 
 * **Context:** either (read-only, no credentials).
 * The command reads the environment and passes the string down. The library never reads it.
-* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/semver.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
+* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/semver.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/platform/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
 
 ## 3. Library
 
-`internal/semver` exposes a pure function, shaped like:
+`internal/platform/semver` exposes a pure function, shaped like:
 
 ```go
 type Info struct {
@@ -72,7 +72,7 @@ func Classify(tag string, opts ...Option) Info
 
 Test first, per [TESTING](TESTING.md) and [`ai/red-green-commits.md`](../ai/red-green-commits.md).
 
-**`internal/semver`, table test of `Classify`.** The first two result columns are the default (the script's results). The last three are the result with `WithGrammar()`. Rows where the two differ are the improvements from section 6:
+**`internal/platform/semver`, table test of `Classify`.** The first two result columns are the default (the script's results). The last three are the result with `WithGrammar()`. Rows where the two differ are the improvements from section 6:
 
 | Input | Pre | Build | | IsSemver | Pre | Build |
 |---|---|---|---|---|---|---|
