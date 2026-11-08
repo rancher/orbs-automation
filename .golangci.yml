@@ -202,6 +202,72 @@ linters:
               desc: a task reports through its own sink and never prints (docs/specs/PROJECT_LAYOUT.md)
             - pkg: github.com/rancher/orbs-automation/internal/task
               desc: a task never calls another task; the command or conveyor chains them (docs/specs/PROJECT_LAYOUT.md)
+        # Layers (docs/design/LAYERS.md): imports point down, platform < apis <
+        # domain < cli and ui < cmd. A rule is lax with an allow carve-out, so a
+        # new package never needs an edit and a stale path cannot quietly stop
+        # denying. The config API may use only platform and apis.
+        layer-apis:
+          list-mode: lax
+          files:
+            - "**/internal/apis/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal
+              desc: the config API may import only internal/platform and internal/apis (docs/design/LAYERS.md)
+          allow:
+            - github.com/rancher/orbs-automation/internal/platform
+            - github.com/rancher/orbs-automation/internal/apis
+        # Domain packages (everything under internal/ that is not platform, apis,
+        # cli or ui) never import the command layer or the output seam.
+        layer-domain:
+          list-mode: lax
+          files:
+            - "**/internal/**"
+            - "!**/internal/platform/**"
+            - "!**/internal/apis/**"
+            - "!**/internal/cli/**"
+            - "!**/internal/ui/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/cli/
+              desc: domain packages do not import commands (docs/design/LAYERS.md)
+            - pkg: github.com/rancher/orbs-automation/internal/ui
+              desc: domain packages do not import the output seam (docs/design/LAYERS.md)
+        # A command does not import another command, except the shared helpers
+        # that are not commands. doctor also reuses two commands' checks.
+        layer-commands:
+          list-mode: lax
+          files:
+            - "**/internal/cli/**"
+            - "!**/internal/cli/doctor/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/cli/
+              desc: a command does not import another command; shared helpers are the exception (docs/design/LAYERS.md)
+          allow:
+            - github.com/rancher/orbs-automation/internal/cli/identity
+            - github.com/rancher/orbs-automation/internal/cli/cdpath
+            - github.com/rancher/orbs-automation/internal/cli/termfacts
+            - github.com/rancher/orbs-automation/internal/cli/cigate
+            - github.com/rancher/orbs-automation/internal/cli/logging
+            - github.com/rancher/orbs-automation/internal/cli/buildinfo
+        layer-commands-doctor:
+          list-mode: lax
+          files:
+            - "**/internal/cli/doctor/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/cli/
+              desc: doctor reuses the checks of authstatus and configresolve and the shared helpers only (docs/design/LAYERS.md)
+          allow:
+            - github.com/rancher/orbs-automation/internal/cli/identity
+            - github.com/rancher/orbs-automation/internal/cli/cdpath
+            - github.com/rancher/orbs-automation/internal/cli/termfacts
+            - github.com/rancher/orbs-automation/internal/cli/cigate
+            - github.com/rancher/orbs-automation/internal/cli/logging
+            - github.com/rancher/orbs-automation/internal/cli/buildinfo
+            - github.com/rancher/orbs-automation/internal/cli/authstatus
+            - github.com/rancher/orbs-automation/internal/cli/configresolve
         # main.go only calls cmd.Execute().
         entrypoint:
           list-mode: strict
