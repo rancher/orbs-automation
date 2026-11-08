@@ -445,4 +445,32 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 // holding that applies to the line, the consumer's branch of the line for the
 // holding's stage. It is how a run to named lines of the consumer finds its
 // branches. It is an error when no holding of the route has a branch for the line.
-func (r Route) TargetsOn(string) ([]Target, error) { return nil, nil }
+func (r Route) TargetsOn(line string) ([]Target, error) {
+	targets := r.targetsOnLine(line, r.Holdings)
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("%w: %s has no branch for the release line %s that a holding of %s is for", ErrNoBranches, r.Consumer.Slug(), line, r.Producer.Slug())
+	}
+	return targets, nil
+}
+
+// targetsOnLine groups the holdings that apply to the consumer's line by the
+// branch each is on for its stage.
+func (r Route) targetsOnLine(line string, holdings []*chain.Holding) []Target {
+	var targets []Target
+	for _, h := range holdings {
+		if !h.AppliesTo(line) {
+			continue
+		}
+		branch, ok := r.Consumer.BranchOfLine(line, h.Doc.Spec.Holds.Stage)
+		if !ok {
+			continue
+		}
+		i := slices.IndexFunc(targets, func(t Target) bool { return t.Branch == branch })
+		if i < 0 {
+			targets = append(targets, Target{Branch: branch, Line: r.Consumer.LineOfBranch(branch)})
+			i = len(targets) - 1
+		}
+		targets[i].Holdings = append(targets[i].Holdings, h)
+	}
+	return targets
+}
