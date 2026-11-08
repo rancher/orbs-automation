@@ -122,7 +122,7 @@ func TestPushReachesTheEngineersCredentialsAndNothingSecret(t *testing.T) {
 // agent or credential helper. It is skipped unless GERO_SPIKE_PUSH_URL names a
 // repository that is safe to push a branch to, such as a scratch fork:
 //
-//	GERO_SPIKE_PUSH_URL=git@github.com:you/scratch.git go test ./internal/git/gitcli -run PushSpike -v
+//	GERO_SPIKE_PUSH_URL=git@github.com:you/scratch.git go test ./internal/platform/git/gitcli -run PushSpike -v
 //
 // An https URL needs a credential helper (gh auth setup-git), since prompts are
 // off.

@@ -3,8 +3,8 @@ package ship
 import (
 	"context"
 
-	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/workdir"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
 )
@@ -71,7 +71,7 @@ type Git interface {
 	PushCommitReplacing(ctx context.Context, dir, remote, branch, commit, expected string) error
 }
 
-// GitCLI is Git through the git binary (internal/git/gitcli).
+// GitCLI is Git through the git binary (internal/platform/git/gitcli).
 type GitCLI struct{}
 
 var _ Git = GitCLI{}

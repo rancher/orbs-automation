@@ -34,7 +34,7 @@ internal/git/        pure logic about git refs, tags and commits (branch tags, c
 internal/git/releasetag/  the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
 internal/git/repo/   local repository access with go-git; the only importer of go-git
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
-internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
+internal/platform/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
 internal/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
 internal/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
 internal/platform/workdir/   the branch a run edits and commits in: made in the engineer's clone or a temporary worktree of it, committed to, and put back when the work ends or fails; shared by the tasks that make a branch and the ones that commit to it

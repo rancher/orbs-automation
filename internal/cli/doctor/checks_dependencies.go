@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/ghcli"
-	"github.com/rancher/orbs-automation/internal/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 )
 
 // GhBinary is what the gh check needs from the gh binary. It is defined here,
@@ -167,7 +167,7 @@ func (c gitCheck) Run(ctx context.Context) Result {
 	}
 }
 
-// gitBinary is the GitBinary backed by internal/git/gitcli.
+// gitBinary is the GitBinary backed by internal/platform/git/gitcli.
 type gitBinary struct{}
 
 func (gitBinary) Version(ctx context.Context) (string, error) { return gitcli.Version(ctx) }

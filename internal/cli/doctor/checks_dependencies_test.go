@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

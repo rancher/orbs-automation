@@ -8,8 +8,8 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/actor"
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/github"
+	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 )
 
 // userLookup returns the numeric id of a GitHub user, using credentials c.

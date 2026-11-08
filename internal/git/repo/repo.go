@@ -1,6 +1,6 @@
 // Package repo reads the facts commands need from a local repository: the
 // current ref, the abbreviated commit and the tags by date. It uses go-git, and
-// reaches for internal/git/gitcli only for what go-git cannot do. It is the
+// reaches for internal/platform/git/gitcli only for what go-git cannot do. It is the
 // only package that imports go-git.
 package repo
 
@@ -15,7 +15,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/rancher/orbs-automation/internal/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 )
 
 var (

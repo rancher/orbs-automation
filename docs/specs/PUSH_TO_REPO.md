@@ -94,7 +94,7 @@ The consumer's clone is found as for every command ([WORKSPACE](WORKSPACE.md#res
 
 **A rerun** finds the branch name already in use, because the name is deterministic and a branch is kept after it is published. What to do depends on whose commits are on it ([Existing branches and PRs](#existing-branches-and-prs)).
 
-go-git cannot create linked worktrees or switch a checkout the way `git` does, so this part goes through `internal/git/gitcli`, with the reason recorded next to the code.
+go-git cannot create linked worktrees or switch a checkout the way `git` does, so this part goes through `internal/platform/git/gitcli`, with the reason recorded next to the code.
 
 ## The CI variant
 
