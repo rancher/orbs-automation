@@ -69,8 +69,18 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 **No hard limit on graph shape.** Real workflows are complex, and artificial limits (such as banning every cycle) could block legitimate setups. A circular dependency between two projects is a warning. Graph traversal must be cycle-safe regardless (track visited projects).
 
+## JSON Schemas
+
+The kinds are described as JSON Schema (draft 2020-12) so an editor can validate and complete a config file. They are in [`generated/jsonschema/`](../../generated/jsonschema/): one for each kind, in `v1alpha2/`, and `gero.v1alpha2.schema.json`, which holds them all and picks the one for a document by its `kind`, so it fits a file of several documents. The schema of the user file ([CLI_CONFIG](CLI_CONFIG.md)) is `user-config.schema.json`.
+
+* They are derived from the Go types by `tools/genschema`, which reads the same `yaml` tags the decoder does, so a key and a nesting cannot differ. Descriptions are the Go comments. The allowed values of a field are built from the constants the rules check, in the tool's `hints.go`.
+* A schema checks the shape of one document: its keys, types, allowed values and the envelope. It does not check what only the set can, such as a ref that resolves or a unique name, nor the rules that depend on other fields; `gero config validate` does.
+* Regenerate with `go run ./tools/genschema` from the repository root. A test fails when the committed files are stale.
+* To use one, point the editor's YAML support at the file, for example with a first-line comment for the YAML language server: `# yaml-language-server: $schema=<path or URL of the schema>`. Wiring it into each editor is left to whoever wants it.
+
 ## Not built yet
 
+* A schema for `WorkflowsConfig`, which has no Go type yet.
 * Validation of a repo's `gero.yaml` (the allowed-kinds check) and of `WorkflowsConfig`.
 * Cycle warnings across more than two projects.
 * `gero config show --resolved`.

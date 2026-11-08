@@ -125,6 +125,8 @@ repos:
       pushTo: upstream
 ```
 
+The keys and their allowed values are also published as a JSON Schema, `generated/jsonschema/user-config.schema.json`, for an editor ([APP_CONFIG](APP_CONFIG.md#json-schemas)).
+
 ## Locating the central application config
 
 Commands that read the central `config/` find it in this order:
