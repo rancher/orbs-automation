@@ -230,6 +230,30 @@ func TestLoadCloneRootIsEmptyWhenNotSet(t *testing.T) {
 	assert.Empty(t, s.Repos.CloneRoot, "never inferred from the search directories")
 }
 
+func TestLoadCloneRootEnvBeatsTheFile(t *testing.T) {
+	s, err := Load(Inputs{
+		Home:     "/home/alice",
+		Getenv:   env(map[string]string{"GERO_REPOS_CLONE_ROOT": "~/elsewhere"}),
+		UserFile: file("repos:\n  cloneRoot: ~/src\n"),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/home/alice/elsewhere", s.Repos.CloneRoot)
+	assert.Equal(t, SourceEnv, s.Source("repos.cloneRoot"))
+}
+
+func TestLoadCloneRootEnvAloneSetsItAndARelativeOneIsRefused(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(map[string]string{"GERO_REPOS_CLONE_ROOT": "/c"})})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/c", s.Repos.CloneRoot)
+
+	_, err = Load(Inputs{Getenv: env(map[string]string{"GERO_REPOS_CLONE_ROOT": "rel/dir"})})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GERO_REPOS_CLONE_ROOT")
+}
+
 func TestLoadTildeWithoutHome(t *testing.T) {
 	_, err := Load(Inputs{UserFile: file("centralConfigDir: ~/cfg\n")})
 
