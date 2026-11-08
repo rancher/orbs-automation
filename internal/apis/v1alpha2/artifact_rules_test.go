@@ -68,3 +68,10 @@ func TestArtifactRules(t *testing.T) {
 		})
 	}
 }
+
+func TestAnImageNameHasNoSpaces(t *testing.T) {
+	a, rep := loadArtifact(t, "  kind: image\n  name: \"acme/a b\"\n")
+
+	assert.Nil(t, a)
+	assert.True(t, hasError(rep, "spec.name", "space"), "%v", rep.Findings)
+}

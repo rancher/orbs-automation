@@ -94,3 +94,14 @@ func TestSeriesOfDifferentMinorsDoNotOverlap(t *testing.T) {
 
 	assert.Empty(t, rep.Findings)
 }
+
+func TestAStreamServesSomething(t *testing.T) {
+	for _, scheme := range []string{"semver", "calverLineStage", "chartVersion"} {
+		t.Run(scheme, func(t *testing.T) {
+			s, rep := loadStream(t, "  scheme: "+scheme+"\n")
+
+			assert.Nil(t, s)
+			assert.True(t, hasError(rep, "spec", "lines or universal"), "%v", rep.Findings)
+		})
+	}
+}

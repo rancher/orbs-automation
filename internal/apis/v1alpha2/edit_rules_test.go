@@ -62,3 +62,19 @@ func TestEditRules(t *testing.T) {
 		})
 	}
 }
+
+func TestAStepSaysWhereItsProgramComesFrom(t *testing.T) {
+	for _, from := range []string{"consumer", "producer", "central"} {
+		t.Run(from, func(t *testing.T) {
+			e, rep := loadEdit(t, "  postEdit:\n    - {run: x, from: "+from+"}\n")
+
+			assert.Empty(t, rep.Findings)
+			assert.NotNil(t, e)
+		})
+	}
+
+	e, rep := loadEdit(t, "  postEdit:\n    - {run: x, from: elsewhere}\n")
+
+	assert.Nil(t, e)
+	assert.True(t, hasError(rep, "spec.postEdit[0].from", "consumer, producer or central"), "%v", rep.Findings)
+}

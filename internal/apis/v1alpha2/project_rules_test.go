@@ -142,3 +142,10 @@ func unwrapOnce(err error) error {
 	}
 	return u.Unwrap()
 }
+
+func TestARepoNameHasNoSpaces(t *testing.T) {
+	p, rep := loadProject(t, "  repo: {name: \"acme/a b\"}\n")
+
+	assert.Nil(t, p)
+	assert.True(t, hasError(rep, "spec.repo.name", "space"), "%v", rep.Findings)
+}
