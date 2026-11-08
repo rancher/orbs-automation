@@ -41,7 +41,7 @@ func Parse(r io.Reader, product string) (map[string]lines.Dates, error) {
 	if detail == nil {
 		return nil, fmt.Errorf("section %q has no version table: nothing follows its row", product)
 	}
-	lines := map[string]lines.Dates{}
+	byLine := map[string]lines.Dates{}
 	var found bool
 	for _, table := range descendants(detail, "table") {
 		header, rows := tableRows(table)
@@ -58,16 +58,16 @@ func Parse(r io.Reader, product string) (map[string]lines.Dates, error) {
 			if err != nil {
 				return nil, fmt.Errorf("section %q: %w", product, err)
 			}
-			if _, dup := lines[id]; dup {
+			if _, dup := byLine[id]; dup {
 				return nil, fmt.Errorf("section %q: line %s is listed twice", product, id)
 			}
-			lines[id] = dates
+			byLine[id] = dates
 		}
 	}
 	if !found {
 		return nil, fmt.Errorf("section %q has no version table (one with Version, GA, EOM and EOL columns)", product)
 	}
-	return lines, nil
+	return byLine, nil
 }
 
 // columns are the indexes of the columns of a version table, or -1 for one the
