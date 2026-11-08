@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -208,4 +209,39 @@ func TestDecodeReturnsTheErrorsAndNotTheWarnings(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Len(t, objs, 1)
+}
+
+func TestANameIsALowercaseSlug(t *testing.T) {
+	tests := []struct {
+		name string
+		ok   bool
+	}{
+		{"w", true},
+		{"rancher-charts", true},
+		{"v2", true},
+		{"a1-b2", true},
+		{"Rancher", false},
+		{"rancher_charts", false},
+		{"-rancher", false},
+		{"rancher-", false},
+		{"rancher charts", false},
+		{"rancher.charts", false},
+		{"rancher/charts", false},
+	}
+	require.NotEmpty(t, tests)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs, err := rulesScheme().Decode(strings.NewReader(fmt.Sprintf("apiVersion: test/v1\nkind: Widget\nname: %q\n", tt.name)), "w.yaml")
+
+			if tt.ok {
+				require.NoError(t, err)
+				assert.Len(t, objs, 1)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "name")
+			assert.Contains(t, err.Error(), "lowercase slug")
+			assert.Empty(t, objs)
+		})
+	}
 }
