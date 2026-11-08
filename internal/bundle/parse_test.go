@@ -44,10 +44,10 @@ func TestParseGivesTheConfigChunkAsOneFileTheLoaderReads(t *testing.T) {
 
 func TestParseReadsWhatCompileWroteForTheRealConfig(t *testing.T) {
 	t.Chdir("../..")
-	real, err := Compile(os.DirFS("config"), header)
+	shipped, err := Compile(os.DirFS("config"), header)
 	require.NoError(t, err)
 
-	_, fsys, err := Parse(real)
+	_, fsys, err := Parse(shipped)
 
 	require.NoError(t, err)
 	g, rep := chainload.Load(fsys, config.Context{Now: header.CompiledAt})
