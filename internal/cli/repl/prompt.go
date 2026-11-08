@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 
 // The placeholders of a template. The set grows when a user asks for something it

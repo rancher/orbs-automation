@@ -11,7 +11,7 @@ A command package may not locate the central config, discover a repo or scan for
 * Each `internal/cli/<cmd>` calls `workspace.Open(settings, cwd)`. It takes plain values and builds its own real dependencies (file system, go-git opener). A `getenv` joins the parameters when a rule first needs it, such as the CI check for `upstream`. `cmd/` knows nothing about `workspace`.
 * The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake.
 * **Resolution is lazy.** `Open` does no I/O, and a method does only the work its caller needs. A command that needs no remote does not fail because the working directory is not a repo.
-* `internal/clicfg` stays pure (flags, environment, file, defaults; unset stays zero) and does not import git. `workspace` takes `Settings` and does the inference.
+* `internal/platform/clicfg` stays pure (flags, environment, file, defaults; unset stays zero) and does not import git. `workspace` takes `Settings` and does the inference.
 * The repository is offered as `Current()` (found from the working directory upward) and `CurrentAtRoot()` (`.git` must be in the working directory itself, for commands that port a script with that rule). `ErrNotRepository` is re-exported.
 
 ## Raw and effective values

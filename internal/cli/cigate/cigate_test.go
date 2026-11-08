@@ -3,7 +3,7 @@ package cigate
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

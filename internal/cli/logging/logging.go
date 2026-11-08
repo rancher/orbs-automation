@@ -7,7 +7,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 
 // New returns a logger that writes to w at level, one of the clicfg.Log*

@@ -13,8 +13,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
 	"github.com/rancher/orbs-automation/internal/ui/style"

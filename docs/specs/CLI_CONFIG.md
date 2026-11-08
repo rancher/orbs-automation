@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** implemented for the flags, environment, user file and defaults (`internal/clicfg`) and for locating the central config. The file keys `fork`, `githubUser`, `branchPrefix`, `pushTo`, `signCommits` and `repos.*` are read by `gero ship`, `gero repo tag` and the workspace.
+**Status:** implemented for the flags, environment, user file and defaults (`internal/platform/clicfg`) and for locating the central config. The file keys `fork`, `githubUser`, `branchPrefix`, `pushTo`, `signCommits` and `repos.*` are read by `gero ship`, `gero repo tag` and the workspace.
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md). Inferring values from the working directory, and resolving repo paths, are in [WORKSPACE](WORKSPACE.md).
 
@@ -11,7 +11,7 @@ Two kinds of config exist, and the docs keep them apart.
 * **Application config** describes the world `gero` operates on: projects, Rancher lines, external projects, and per-repo workflow settings. It is the multi-document YAML in `config/` and a target repo's `gero.yaml` ([APP_CONFIG](APP_CONFIG.md)). Versioned by `apiVersion`.
 * **CLI config** describes how one invocation behaves: where to find the application config, which remote counts as upstream, output format, verbosity, host. It comes from flags, environment variables and an optional user file. It never holds application facts, and it never holds secrets.
 
-Code mirrors the split: `internal/config` for application config (types, with `internal/config/loader` behind `internal/workspace`), `internal/clicfg` for CLI config ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
+Code mirrors the split: `internal/config` for application config (types, with `internal/config/loader` behind `internal/workspace`), `internal/platform/clicfg` for CLI config ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
 
 ## Sources and precedence
 
@@ -26,7 +26,7 @@ Highest wins:
  flags  >  GERO_* env  >  user file  >  defaults
                  \           |           /
                   v          v          v
-              internal/clicfg  ->  Settings (resolved, immutable)
+              internal/platform/clicfg  ->  Settings (resolved, immutable)
                                         |
                                   command RunE
 ```
@@ -35,7 +35,7 @@ Highest wins:
 
 ### Flag source
 
-`internal/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)), so `cmd/` hands it a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
+`internal/platform/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)), so `cmd/` hands it a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
 
 ```go
 type FlagLookup func(key string) (value string, set bool) // set == Flags().Changed

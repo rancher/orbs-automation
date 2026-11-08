@@ -50,7 +50,7 @@ The CLI is built on **cobra** with a small custom loader for CLI config (no vipe
 ```
  flags  >  GERO_* env  >  user file (~/.config/gero/config.yaml)  >  defaults
                               |
-                        internal/clicfg  ->  Settings  ->  command
+                        internal/platform/clicfg  ->  Settings  ->  command
 ```
 
 Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Output for a person is styled by `internal/ui/style` (lipgloss v2) and laid out by `ui.Align`, and `gero repl` reads its lines through `internal/ui/editor` (ergochat/readline). Each outside module sits behind one package, dependencies are stdlib-first, and the allow-list is in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md). A full-screen TUI is not planned. All decisions are in the [specs](specs/README.md).

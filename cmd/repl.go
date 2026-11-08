@@ -10,7 +10,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/cdpath"
 	"github.com/rancher/orbs-automation/internal/cli/repl"
-	"github.com/rancher/orbs-automation/internal/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/spf13/cobra"
 )
 
