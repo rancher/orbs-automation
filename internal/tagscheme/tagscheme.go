@@ -46,20 +46,41 @@ type Scheme interface {
 // For returns the scheme of a project: the one release.tagScheme names for a
 // perLineTag project, and semver for every other.
 func For(p config.Project) (Scheme, error) {
+	var lines []lineSeries
+	for _, l := range p.Release.Lines {
+		lines = append(lines, lineSeries{line: l.Line, series: l.Series()})
+	}
 	if p.Release.Branching != config.BranchingPerLineTag {
-		return semverScheme{project: p}, nil
+		return semverScheme{lines: lines, pattern: p.Release.TagPattern}, nil
 	}
 	inner, err := calver.Builtin().Get(p.Release.TagScheme)
 	if err != nil {
 		return nil, fmt.Errorf("project %s: %w", p.Name, err)
 	}
-	return calverScheme{project: p, inner: inner}, nil
+	return calverScheme{lines: ids(lines), inner: inner}, nil
+}
+
+// lineSeries is a line a project lists and the version series of its releases.
+type lineSeries struct {
+	line   string
+	series string
+}
+
+// ids is the lines of the list, in order.
+func ids(lines []lineSeries) []string {
+	var out []string
+	for _, l := range lines {
+		out = append(out, l.line)
+	}
+	return out
 }
 
 // semverScheme is the scheme of a project with per-line branches, and the default:
 // tags are versions, and a line is the version series the config gives it.
 type semverScheme struct {
-	project config.Project
+	lines   []lineSeries
+	pattern string
+	accepts func(tag string) bool // nil: every tag the pattern matches
 }
 
 func (semverScheme) Name() string { return config.TagSchemeSemver }
@@ -69,15 +90,16 @@ func (semverScheme) Valid(tag string) bool {
 	return ok
 }
 
-func (s semverScheme) Lines([]git.Tag) []string {
-	var lines []string
-	for _, l := range s.project.Release.Lines {
-		lines = append(lines, l.Line)
-	}
-	return lines
-}
+func (s semverScheme) Lines([]git.Tag) []string { return ids(s.lines) }
 
-func (s semverScheme) LineOf(tag string) string { return s.project.LineOf(tag) }
+func (s semverScheme) LineOf(tag string) string {
+	for _, l := range s.lines {
+		if l.series != "" && git.InSeries(tag, l.series) {
+			return l.line
+		}
+	}
+	return ""
+}
 
 func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 	if line != "" {
@@ -93,14 +115,23 @@ func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 		}
 		tags = inLine
 	}
-	return git.LatestReleases(tags, s.project.Release.TagPattern)
+	if s.accepts != nil {
+		var kept []git.Tag
+		for _, t := range tags {
+			if s.accepts(t.Name) {
+				kept = append(kept, t)
+			}
+		}
+		tags = kept
+	}
+	return git.LatestReleases(tags, s.pattern)
 }
 
 // series is the version series of the project's line of that name.
 func (s semverScheme) series(line string) (string, bool) {
-	for _, l := range s.project.Release.Lines {
-		if l.Line == line {
-			return l.Series(), true
+	for _, l := range s.lines {
+		if l.line == line {
+			return l.series, true
 		}
 	}
 	return "", false
@@ -122,8 +153,8 @@ func (semverScheme) Compare(a, b string) int {
 // calverScheme is the scheme of a project that finds its lines in its tags, over a
 // scheme of internal/calver. A prerelease is a tag of the dev stage.
 type calverScheme struct {
-	project config.Project
-	inner   calver.Scheme
+	lines []string
+	inner calver.Scheme
 }
 
 func (c calverScheme) Name() string { return c.inner.Name() }
@@ -135,13 +166,7 @@ func (c calverScheme) Valid(tag string) bool {
 
 // Lines are the lines the config lists, whatever the tags carry: the project is
 // used for those lines and not for the others its repository has tags of.
-func (c calverScheme) Lines([]git.Tag) []string {
-	var lines []string
-	for _, l := range c.project.Release.Lines {
-		lines = append(lines, l.Line)
-	}
-	return lines
-}
+func (c calverScheme) Lines([]git.Tag) []string { return c.lines }
 
 func (c calverScheme) LineOf(tag string) string {
 	t, _ := c.inner.Parse(tag)
