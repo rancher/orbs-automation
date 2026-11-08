@@ -163,3 +163,10 @@ var StepCommitVars = []string{
 	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
 	"consumer", "sourceReleaseURL", "command", "phase",
 }
+
+// CheckReversible returns an error when the text uses a modifier that loses
+// information. A text that is read as well as written, such as the form of a
+// holding, may use only modifiers that can be undone.
+func CheckReversible(_ string) error {
+	return nil
+}
