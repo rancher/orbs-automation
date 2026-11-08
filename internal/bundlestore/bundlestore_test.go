@@ -40,9 +40,9 @@ func newRig(t *testing.T) *rig {
 	return g
 }
 
-func (g *rig) publish(tag string, names ...string) []byte {
+func (g *rig) publish(tag string, names ...string) {
 	g.t.Helper()
-	return bundletest.Publish(g.t, g.hub, tag, bundletest.Config(names...))
+	bundletest.Publish(g.t, g.hub, tag, bundletest.Config(names...))
 }
 
 func (g *rig) load(version string) (Loaded, error) {
