@@ -17,10 +17,8 @@ const (
 	TeamOrbs = "orbs"
 
 	// The stages a tag scheme can give.
-	StageDev     = "dev"
-	StageRelease = "release"
-	// StageStable is the second stage; for now it has the value of StageRelease.
-	StageStable = "release"
+	StageDev    = "dev"
+	StageStable = "stable"
 
 	AcceptStable = "stable"
 	AcceptAll    = "all"

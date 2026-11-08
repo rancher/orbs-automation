@@ -104,7 +104,7 @@ func (p Project) Steward() string {
 // scheme whose tags carry no stage.
 func TagSchemeStages(scheme string) []string {
 	if scheme == TagSchemeCalverLineStage {
-		return []string{StageDev, StageRelease}
+		return []string{StageDev, StageStable}
 	}
 	return nil
 }

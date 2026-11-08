@@ -35,7 +35,7 @@ type Scheme interface {
 	Latest(tags []git.Tag, line string) git.Latest
 	// IsStable reports whether a tag is not a prerelease.
 	IsStable(tag string) bool
-	// Stage is the stage a tag is of (config.StageDev or config.StageRelease), or ""
+	// Stage is the stage a tag is of (config.StageDev or config.StageStable), or ""
 	// for a scheme whose tags carry none, and for a name that is not a release.
 	Stage(tag string) string
 	// Compare orders two tags: negative when a is older, zero when they are equal
@@ -148,7 +148,7 @@ func (c calverScheme) LineOf(tag string) string {
 	return t.Line
 }
 
-// Latest is the newest tag of the release stage, and the newest of the dev stage
+// Latest is the newest tag of the stable stage, and the newest of the dev stage
 // when it is strictly newer than that: a dev tag of the same minute as a release,
 // which is the same commit, is not a newer one.
 func (c calverScheme) Latest(tags []git.Tag, line string) git.Latest {
@@ -159,7 +159,7 @@ func (c calverScheme) Latest(tags []git.Tag, line string) git.Latest {
 		}
 		lines = []string{line}
 	}
-	release := c.newest(tags, lines, config.StageRelease)
+	release := c.newest(tags, lines, config.StageStable)
 	dev := c.newest(tags, lines, config.StageDev)
 	var out git.Latest
 	if release != nil {
@@ -205,7 +205,7 @@ func (c calverScheme) Stage(tag string) string {
 
 func (c calverScheme) IsStable(tag string) bool {
 	t, ok := c.inner.Parse(tag)
-	return ok && t.Stage == config.StageRelease
+	return ok && t.Stage == config.StageStable
 }
 
 // Compare orders by the date in the names, so a newer date with the same line is a

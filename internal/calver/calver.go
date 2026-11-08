@@ -18,7 +18,7 @@ import (
 type Tag struct {
 	Name  string
 	Line  string    // the Rancher line, such as v2.16
-	Stage string    // config.StageDev or config.StageRelease
+	Stage string    // config.StageDev or config.StageStable
 	Time  time.Time // UTC, to the minute
 }
 
@@ -57,7 +57,7 @@ func (LineStage) Parse(name string) (Tag, bool) {
 	if err != nil {
 		return Tag{}, false
 	}
-	stage := config.StageRelease
+	stage := config.StageStable
 	if m[3] != "" {
 		stage = config.StageDev
 	}
