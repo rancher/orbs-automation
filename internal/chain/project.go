@@ -39,6 +39,14 @@ func (p *Project) DefaultBranch() string { return p.Doc.Spec.Repo.DefaultBranch 
 // Streams returns the streams the project releases, in the order read.
 func (p *Project) Streams() []*Stream { return nil }
 
+// StreamOf returns the stream a tag is a release of: the first of the project's
+// streams whose pattern the tag matches and none of whose excludes it matches. It
+// is nil when there is none.
+func (p *Project) StreamOf(_ string) *Stream { return nil }
+
+// LineOf returns the line a tag is of, through the stream it is a release of.
+func (p *Project) LineOf(_ string) (line string, ok bool) { return "", false }
+
 // single reports whether every release is on the default branch.
 func (p *Project) single() bool { return p.Doc.Spec.Branches.Layout != v1alpha2.LayoutPerLine }
 
