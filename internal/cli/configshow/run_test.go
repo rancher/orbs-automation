@@ -21,8 +21,6 @@ type fakeWorkspace struct {
 	err    error
 }
 
-func (f fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) { return f.dir, f.err }
-
 func (f fakeWorkspace) ConfigSource() (workspace.ConfigSource, error) {
 	return workspace.ConfigSource{Dir: f.dir, Bundle: f.bundle}, f.err
 }
