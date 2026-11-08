@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/rancher/orbs-automation/internal/errs"
+	"github.com/rancher/orbs-automation/internal/platform/errs"
 	"github.com/spf13/cobra"
 )
 

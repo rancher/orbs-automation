@@ -38,7 +38,7 @@ linters:
             - github.com/ergochat/readline
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
-        # internal/errs for exit-code errors and its own subpackages.
+        # internal/platform/errs for exit-code errors and its own subpackages.
         # See docs/specs/PROJECT_LAYOUT.md sections 2, 3 and 6.
         cmd:
           list-mode: strict
@@ -51,7 +51,7 @@ linters:
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
             - github.com/rancher/orbs-automation/internal/clicfg
-            - github.com/rancher/orbs-automation/internal/errs
+            - github.com/rancher/orbs-automation/internal/platform/errs
         # cobra stays in cmd/. internal/cli/ and domain packages must not
         # import it, so the CLI framework can be swapped by touching cmd/ only.
         nocobra:

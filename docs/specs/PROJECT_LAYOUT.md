@@ -15,7 +15,7 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 
 ```
 main.go              entry point: calls cmd.Execute(), nothing else
-cmd/                 all cobra code: root command, command tree, flags, help text, groups, gating; imports only internal/cli, internal/clicfg and internal/errs
+cmd/                 all cobra code: root command, command tree, flags, help text, groups, gating; imports only internal/cli, internal/clicfg and internal/platform/errs
 cmd/version/         build info (Version, Commit, Date) set by GoReleaser through -ldflags -X; read only by cmd/, passed down as a value
 internal/cli/<cmd>/  one subpackage per command: its logic as plain functions, no cobra
 internal/cli/logging/ shared, not a command: builds the *slog.Logger, called once by cmd/   (CLI_OUTPUT)
@@ -44,7 +44,7 @@ internal/updatedispatcher/  applies a bump: strategies claimed by name, the engi
 internal/yamledit/  changes one YAML value in place without reflowing the file; the third importer of the YAML library
 internal/github/    gero's access to GitHub: the host and token, the REST client, the rate limit, raw file reads
 internal/actor/     who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
-internal/errs/      error values shared across gero, such as NotImplemented
+internal/platform/errs/      error values shared across gero, such as NotImplemented
 internal/registry/  image existence checks in the registries a project publishes to   (IMAGES_EXIST)
 internal/semver/    release tag classification, as the check-semver script did   (CHECK_SEMVER)
 internal/lifecycle/ reads Rancher's lifecycle dates from the SUSE lifecycle page; the only importer of golang.org/x/net/html
@@ -54,7 +54,7 @@ internal/...         domain packages as they arrive, such as the reconciler's
 test/integration/    separate Go module (own go.mod) for integration tests     (TESTING)
 ```
 
-**Decision: cobra lives only in `cmd/`, command logic lives in `internal/cli/`.** `cmd/` (package `cmd`, with `main.go` at the repo root, as `cobra-cli init` generates) is the one place that knows about cobra. It holds the root command, the global flags, the command tree, each command's `Use`, help text, flags and annotations, the help groups, the context gating, and a short `RunE` per command. That `RunE` only translates: it turns args, flags and the environment into plain values, calls a function in `internal/cli/<cmd>/`, writes the result to `cmd.OutOrStdout()` and returns the error. It may import the standard library, cobra, its own subpackages (`cmd/...`), `internal/cli/...`, `internal/clicfg` and `internal/errs` (exit-code errors, needed to wire `Execute`). It may **not** import any other `internal/` package. Its use of `internal/clicfg` is narrow: it builds a `clicfg.FlagLookup` over the parsed flags, calls `clicfg.Load` once in the root `PersistentPreRunE`, and passes the resulting `Settings` down by value.
+**Decision: cobra lives only in `cmd/`, command logic lives in `internal/cli/`.** `cmd/` (package `cmd`, with `main.go` at the repo root, as `cobra-cli init` generates) is the one place that knows about cobra. It holds the root command, the global flags, the command tree, each command's `Use`, help text, flags and annotations, the help groups, the context gating, and a short `RunE` per command. That `RunE` only translates: it turns args, flags and the environment into plain values, calls a function in `internal/cli/<cmd>/`, writes the result to `cmd.OutOrStdout()` and returns the error. It may import the standard library, cobra, its own subpackages (`cmd/...`), `internal/cli/...`, `internal/clicfg` and `internal/platform/errs` (exit-code errors, needed to wire `Execute`). It may **not** import any other `internal/` package. Its use of `internal/clicfg` is narrow: it builds a `clicfg.FlagLookup` over the parsed flags, calls `clicfg.Load` once in the root `PersistentPreRunE`, and passes the resulting `Settings` down by value.
 
 `internal/cli/<cmd>/` holds everything a command does beyond that translation, as plain exported functions that never import cobra. Inputs are plain values: strings, an options struct for flags, and a `getenv func(string) string` instead of `os.Getenv`. Outputs are returned values (a string, a struct) or an `io.Writer` argument, plus errors, with sentinel errors where a caller needs to tell them apart. Example: `gero semver check` is `checksemver.ResolveTag(args, getenv) (string, error)`, `checksemver.Classify(tag) semver.Info` and `checksemver.Render(info) string`, called from the `RunE` in `cmd/repo.go`. A noun command such as `gero repo` is a parent in `cmd/`; each child (`gero semver check`, `gero repo build-tags`) keeps its own `internal/cli/<child>/` package, named for its logic (`checksemver`, `branchtags`).
 **CI-only commands.** The help group is still a `cobra.Group` ("CI-Only Commands:") following `ob-charts-tool`. Its definition and the `gero/context` annotation constants live in `cmd/groups/`. A CI-only command prefixes its `Use` with the group ID (`gero ci:reconcile`) and sets the annotation and `GroupID` where `cmd/` defines it. The shared gating `PersistentPreRunE` is cobra code too, so it stays in `cmd/`. The command's logic in `internal/cli/` knows nothing about contexts.
@@ -98,7 +98,7 @@ main.go -> cmd -> internal/cli/<cmd>  ->  domain packages  ->  internal/config, 
                           leaf packages import nothing from internal/
 ```
 
-* `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
+* `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any other `internal/` package, but not another command package, with two exceptions that are by decision and not by lint: shared packages that are not commands (`identity`, `cdpath`, `termfacts`, `cigate`), and `doctor`, which reuses `authstatus` and `configresolve` for its checks. Other shared command code goes in a third, smaller package.
 * `internal/task/<name>/` imports the standard library and domain packages, never `internal/cli/...`, cobra, `internal/ui` or another task (lint-enforced). Tasks are composed only by `internal/cli/<cmd>/` and by a conveyor's domain package such as `internal/ship`, which is by review.
 * Domain packages (`semver`, `git`, `config`, ...) never import `internal/cli/...` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
@@ -135,7 +135,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 * The `internal/` rule is compiler-enforced.
 * Imports of third-party modules are checked by the depguard allow-list ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
 * **The boundaries below are lint-enforced** by depguard rules in [`.golangci.yml`](../../.golangci.yml), each with a comment saying why. The config is the source of truth for the exact lists; this is the intent.
-  * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/clicfg` and `internal/errs`. `main.go` imports only `cmd`.
+  * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`.
   * cobra is importable only from `cmd/` and `main.go`.
   * Each outside dependency has one door: go-git only in `internal/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/clicfg`, `internal/config/loader`, `internal/apis` and `internal/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/github/gogh.go`, go-github only in `internal/github`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/git/repo` directly. Its pure logic may still take `internal/git` and domain types.
