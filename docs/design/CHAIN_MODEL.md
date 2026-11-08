@@ -53,4 +53,4 @@ No answer is stored in the config that can be worked out from it. There is no im
 
 ## One adapter
 
-`chain` is the only domain package that reads a version of the API. The names the domain uses (layouts, what a holding holds, `accept`, registry roles) are `chain` constants; the scheme and stage names belong to `tagscheme` and `calver`; and `names_test.go` checks each is the name the config accepts. A new version changes `appconfig`, `chain` and `chainload`. The `oneversion` rule in `.golangci.yml` denies `apis/v1alpha2` anywhere else, tests included. What every version shares, such as a line and its dates, is in `apis/lines`.
+`chain` is the only domain package that reads a version of the API. The names the domain uses (layouts, what a holding holds, `accept`, registry roles) are `chain` constants; the scheme and stage names belong to `tagscheme` and `calver`; and `names_test.go` checks each is the name the config accepts. A new version changes `appconfig`, `chain` and `chainload`. The `oneversion` rule in `.golangci.yml` denies `apis/v1alpha2` anywhere else, except in tests. What every version shares, such as a line and its dates, is in `apis/lines`.
