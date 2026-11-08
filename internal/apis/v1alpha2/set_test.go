@@ -73,7 +73,7 @@ func TestTheFixtureIsAValidSet(t *testing.T) {
 			return err
 		}
 		if filepath.Base(filepath.Dir(path)) == "examples" {
-			sets[path] = nil // each example is a set of its own, with the lines
+			sets[path] = nil // each example is a set with the fixture it builds on
 		} else {
 			sets["fixture"] = append(sets["fixture"], path)
 		}
@@ -82,7 +82,7 @@ func TestTheFixtureIsAValidSet(t *testing.T) {
 	require.NoError(t, err)
 	for name := range sets {
 		if name != "fixture" {
-			sets[name] = []string{name, filepath.Join(fixtureDir, "rancher.lines.yaml")}
+			sets[name] = append([]string{name}, sets["fixture"]...)
 		}
 	}
 
