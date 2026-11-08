@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/cli/cigate"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -177,6 +178,14 @@ func resetFlags() {
 		f := rootCmd.PersistentFlags().Lookup(name)
 		_ = f.Value.Set(f.DefValue)
 		f.Changed = false
+	}
+	if c, _, err := rootCmd.Find([]string{"init"}); err == nil {
+		c.Flags().VisitAll(func(f *pflag.Flag) {
+			if f.Name != "upstream" { // the global one is reset above
+				_ = f.Value.Set(f.DefValue)
+				f.Changed = false
+			}
+		})
 	}
 }
 
