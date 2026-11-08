@@ -13,7 +13,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
@@ -49,7 +49,7 @@ type Result struct {
 // Workspace is what the command needs from the invocation's workspace. It is
 // defined here, where it is consumed.
 type Workspace interface {
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
 	UpstreamFor(slug string) string
 }
@@ -79,11 +79,11 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 	if format != clicfg.OutputText && format != clicfg.OutputJSON {
 		return fmt.Errorf("output format %q is not supported by repo branch: use text or json", format)
 	}
-	project, err := ws.Project(opts.Project)
+	project, err := ws.ChainProject(opts.Project)
 	if err != nil {
 		return err
 	}
-	slug := project.Repo.Name
+	slug := project.Slug()
 	remote := ws.UpstreamFor(slug)
 	if remote == "" {
 		return fmt.Errorf("no upstream remote is set for %s: set upstream in the user file, or repos.overrides.%s.upstream", slug, slug)
@@ -135,22 +135,19 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 // lineBranch is the branch of the project that a release line lives on: the
 // line's own branch, or the default branch for a line that has none. A branch of
 // the project's, such as release/v2.15 or main, is taken as it is.
-func lineBranch(p config.Project, line string) (string, error) {
-	if branch, ok := p.BranchOfLine(line); ok {
+func lineBranch(p *chain.Project, line string) (string, error) {
+	if branch, ok := p.BranchOfLine(line, ""); ok {
 		return branch, nil
 	}
 	branches := p.ReleaseBranches()
 	if slices.Contains(branches, line) {
 		return line, nil
 	}
-	var lines []string
-	for _, l := range p.Release.Lines {
-		lines = append(lines, l.Line)
-	}
+	lines := p.Lines()
 	if len(lines) == 0 {
 		lines = branches
 	}
-	return "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Repo.Name, line, strings.Join(lines, ", "))
+	return "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), line, strings.Join(lines, ", "))
 }
 
 // render is the report in text. What was made is green, what only would be is

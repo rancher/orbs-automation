@@ -12,7 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/workdir"
@@ -28,7 +29,7 @@ const (
 )
 
 type fakeWorkspace struct {
-	project    config.Project
+	project    *chain.Project
 	projectErr error
 	path       workspace.RepoPath
 	pathErr    error
@@ -36,7 +37,7 @@ type fakeWorkspace struct {
 	asked      string // the project key it was asked for
 }
 
-func (f *fakeWorkspace) Project(key string) (config.Project, error) {
+func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
 	f.asked = key
 	return f.project, f.projectErr
 }
@@ -44,15 +45,14 @@ func (f *fakeWorkspace) Project(key string) (config.Project, error) {
 func (f *fakeWorkspace) RepoPath(string) (workspace.RepoPath, error) { return f.path, f.pathErr }
 func (f *fakeWorkspace) UpstreamFor(string) string                   { return f.upstream }
 
-func newWorkspace() *fakeWorkspace {
+func newWorkspace(t *testing.T) *fakeWorkspace {
+	t.Helper()
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: "+slug+"}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.15, branch: release/v2.15}\n      - {line: v2.14, branch: release/v2.14}\n      - {line: v2.16}\n"),
+	)
 	return &fakeWorkspace{
-		project: config.Project{
-			Name: "rancher",
-			Repo: config.Repo{Name: slug, DefaultBranch: "main"},
-			Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
-				{Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}, {Line: "v2.16"},
-			}},
-		},
+		project:  g.Project("rancher"),
 		path:     workspace.RepoPath{Slug: slug, Path: "/src/rancher"},
 		upstream: "upstream",
 	}
@@ -145,7 +145,7 @@ func TestParseArgsTwoAreTheLineAndTheNameAndThreeStartWithTheProject(t *testing.
 }
 
 func TestRunAskedForTheProjectTheUserNamed(t *testing.T) {
-	ws := newWorkspace()
+	ws := newWorkspace(t)
 	o := opts()
 	o.Project = "scc-operator"
 
@@ -158,7 +158,7 @@ func TestRunAskedForTheProjectTheUserNamed(t *testing.T) {
 func TestRunMakesTheBranchAtTheHeadOfTheLinesUpstreamBranchAndLeavesTheCheckout(t *testing.T) {
 	g := cleanGit()
 
-	out, err := do(t, newWorkspace(), g, clicfg.OutputText, false, opts())
+	out, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{
@@ -175,7 +175,7 @@ func TestRunADirtyCloneIsLeftAloneAndTheBranchIsStillMade(t *testing.T) {
 	g := cleanGit()
 	g.state.Tracked = []string{"go.mod"}
 
-	out, err := do(t, newWorkspace(), g, clicfg.OutputText, false, opts())
+	out, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 
 	require.NoError(t, err)
 	joined := strings.Join(g.calls, "\n")
@@ -191,7 +191,7 @@ func TestRunSwitchLeavesTheCheckoutOnTheNewBranch(t *testing.T) {
 	o := opts()
 	o.Switch = true
 
-	out, err := do(t, newWorkspace(), g, clicfg.OutputText, false, o)
+	out, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, o)
 
 	require.NoError(t, err)
 	require.NotEmpty(t, g.calls)
@@ -203,7 +203,7 @@ func TestRunSwitchLeavesTheCheckoutOnTheNewBranch(t *testing.T) {
 func TestRunADryRunMakesNothingThatStays(t *testing.T) {
 	g := cleanGit()
 
-	out, err := do(t, newWorkspace(), g, clicfg.OutputText, true, opts())
+	out, err := do(t, newWorkspace(t), g, clicfg.OutputText, true, opts())
 
 	require.NoError(t, err)
 	joined := strings.Join(g.calls, "\n")
@@ -219,7 +219,7 @@ func TestRunAnEarlierBranchOfOursOnTheCurrentHeadIsKept(t *testing.T) {
 	g.mergeB = head
 	g.commits = []git.BranchCommit{{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update\n\n" + git.OurTrailer}}
 
-	out, err := do(t, newWorkspace(), g, clicfg.OutputText, false, opts())
+	out, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "my-fix already exists")
@@ -235,7 +235,7 @@ func TestRunABranchWithCommitsThatAreNotOursIsRefusedAndNothingIsDeleted(t *test
 	g.mergeB = head
 	g.commits = []git.BranchCommit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine"}}
 
-	_, err := do(t, newWorkspace(), g, clicfg.OutputText, false, opts())
+	_, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 
 	require.ErrorIs(t, err, createbranch.ErrBranchExists)
 	for _, c := range g.calls {
@@ -247,7 +247,7 @@ func TestRunTheCheckedOutBranchSaysToChooseAnotherName(t *testing.T) {
 	g := cleanGit()
 	g.state.Branch = "my-fix"
 
-	_, err := do(t, newWorkspace(), g, clicfg.OutputText, false, opts())
+	_, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 
 	require.ErrorIs(t, err, createbranch.ErrBranchCheckedOut)
 	assert.Contains(t, err.Error(), "choose another name")
@@ -267,7 +267,7 @@ func TestRunALineIsFoundByItsNameOrAsABranchOfTheProject(t *testing.T) {
 			o := opts()
 			o.Line = line
 
-			_, err := do(t, newWorkspace(), g, clicfg.OutputText, false, o)
+			_, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, o)
 
 			require.NoError(t, err)
 			require.NotEmpty(t, g.calls)
@@ -281,7 +281,7 @@ func TestRunAnUnknownLineNamesTheOnesTheProjectHasAndTouchesNothing(t *testing.T
 	o := opts()
 	o.Line = "v9.9"
 
-	_, err := do(t, newWorkspace(), g, clicfg.OutputText, false, o)
+	_, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, o)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "v9.9")
@@ -291,7 +291,7 @@ func TestRunAnUnknownLineNamesTheOnesTheProjectHasAndTouchesNothing(t *testing.T
 }
 
 func TestRunWithNoUpstreamRemoteSaysWhatToSet(t *testing.T) {
-	ws := newWorkspace()
+	ws := newWorkspace(t)
 	ws.upstream = ""
 
 	_, err := do(t, ws, cleanGit(), clicfg.OutputText, false, opts())
@@ -302,7 +302,7 @@ func TestRunWithNoUpstreamRemoteSaysWhatToSet(t *testing.T) {
 }
 
 func TestRunWithNoCloneSaysHowToGetOne(t *testing.T) {
-	ws := newWorkspace()
+	ws := newWorkspace(t)
 	ws.pathErr = errors.New("not found")
 
 	_, err := do(t, ws, cleanGit(), clicfg.OutputText, false, opts())
@@ -312,7 +312,7 @@ func TestRunWithNoCloneSaysHowToGetOne(t *testing.T) {
 }
 
 func TestRunAProjectThatIsNotFoundIsItsError(t *testing.T) {
-	ws := newWorkspace()
+	ws := newWorkspace(t)
 	ws.projectErr = errors.New("no such project")
 
 	_, err := do(t, ws, cleanGit(), clicfg.OutputText, false, opts())
@@ -321,7 +321,7 @@ func TestRunAProjectThatIsNotFoundIsItsError(t *testing.T) {
 }
 
 func TestRunJSONIsTheResult(t *testing.T) {
-	out, err := do(t, newWorkspace(), cleanGit(), clicfg.OutputJSON, false, opts())
+	out, err := do(t, newWorkspace(t), cleanGit(), clicfg.OutputJSON, false, opts())
 
 	require.NoError(t, err)
 	var got Result
@@ -332,7 +332,7 @@ func TestRunJSONIsTheResult(t *testing.T) {
 func TestRunAFormatThatIsNeitherTextNorJSONIsAnError(t *testing.T) {
 	g := cleanGit()
 
-	_, err := do(t, newWorkspace(), g, clicfg.OutputEnv, false, opts())
+	_, err := do(t, newWorkspace(t), g, clicfg.OutputEnv, false, opts())
 
 	require.ErrorContains(t, err, "text or json")
 	assert.Empty(t, g.calls)

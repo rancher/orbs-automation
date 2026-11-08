@@ -72,7 +72,7 @@ func TestTheJSONReportIsNeverStyled(t *testing.T) {
 	o := opts()
 	o.Style = colored()
 
-	out, err := do(t, newWorkspace(), cleanGit(), clicfg.OutputJSON, false, o)
+	out, err := do(t, newWorkspace(t), cleanGit(), clicfg.OutputJSON, false, o)
 
 	require.NoError(t, err)
 	assert.NotContains(t, out, "\x1b")
