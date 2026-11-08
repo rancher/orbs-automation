@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/releasetag"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -24,14 +26,14 @@ const (
 )
 
 type fakeWorkspace struct {
-	project  config.Project
+	project  *chain.Project
 	refs     git.Refs
 	refsErr  error
 	pathErr  error
 	upstream string
 }
 
-func (f fakeWorkspace) Project(string) (config.Project, error) { return f.project, nil }
+func (f fakeWorkspace) ChainProject(string) (*chain.Project, error) { return f.project, nil }
 func (f fakeWorkspace) RepoPath(string) (workspace.RepoPath, error) {
 	return workspace.RepoPath{Path: "/work"}, f.pathErr
 }
@@ -40,17 +42,32 @@ func (f fakeWorkspace) UpstreamRefs(context.Context, string) (git.Refs, error) {
 	return f.refs, f.refsErr
 }
 
-// shell is a producer with a version series for each Rancher line, in a clone
-// whose upstream remote is called upstream.
-func shell() fakeWorkspace {
+// shellProject is a producer with a version series for each Rancher line and a
+// branch for each but the development line.
+func shellProject(t *testing.T, requiresPrerelease bool) *chain.Project {
+	t.Helper()
+	return chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", "shell", "", "  repo: {name: rancher/shell}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.16}\n      - {line: v2.15, branch: release/v2.15}\n"),
+		chaintest.Doc("Stream", "shell", "{project: shell}", fmt.Sprintf("  requiresPrerelease: %t\n  lines:\n    - {line: v2.16, series: \"0.9.x\"}\n    - {line: v2.15, series: \"0.8.x\"}\n", requiresPrerelease)),
+	).Project("shell")
+}
+
+// sccProject is a producer whose releases are all on the default branch, with no
+// lines.
+func sccProject(t *testing.T) *chain.Project {
+	t.Helper()
+	return chaintest.Load(t,
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator}\n"),
+		chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
+	).Project("scc-operator")
+}
+
+// shell is a producer, in a clone whose upstream remote is called upstream.
+func shell(t *testing.T) fakeWorkspace {
+	t.Helper()
 	return fakeWorkspace{
-		project: config.Project{
-			Name: "shell", Repo: config.Repo{Name: "rancher/shell", DefaultBranch: "main"},
-			Release: config.Release{Branching: config.BranchingPerLine, TagPattern: "v*", Lines: []config.ProjectLine{
-				{Line: "v2.16", Version: "0.9.x"},
-				{Line: "v2.15", Version: "0.8.x", Branch: "release/v2.15"},
-			}},
-		},
+		project: shellProject(t, false),
 		refs: git.Refs{
 			Branches: []git.Branch{{Name: "main", Commit: headMain}, {Name: "release/v2.15", Commit: head215}},
 			Tags: []git.Tag{
@@ -143,7 +160,7 @@ func TestParseArgs(t *testing.T) {
 func TestRunMakesTheTagInTheCloneAtTheHeadOfTheLinesBranchAndAsksNothing(t *testing.T) {
 	var g tagging
 
-	err := g.run(shell(), "text", false, plain())
+	err := g.run(shell(t), "text", false, plain())
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/work v0.8.4-rc.1 " + head215}, g.git.made, "on release/v2.15's head, as the host has it")
@@ -157,7 +174,7 @@ func TestRunMakesTheTagInTheCloneAtTheHeadOfTheLinesBranchAndAsksNothing(t *test
 func TestRunWithPushAsksOnceThenMakesTheTagAndPushesItToTheUpstream(t *testing.T) {
 	var g tagging
 
-	err := g.run(shell(), "text", false, pushing("y\n"))
+	err := g.run(shell(t), "text", false, pushing("y\n"))
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/work v0.8.4-rc.1 " + head215}, g.git.made)
@@ -171,7 +188,7 @@ func TestRunWithPushAsksOnceThenMakesTheTagAndPushesItToTheUpstream(t *testing.T
 func TestRunWithPushDeclinedChangesNothing(t *testing.T) {
 	var g tagging
 
-	err := g.run(shell(), "text", false, pushing("n\n"))
+	err := g.run(shell(t), "text", false, pushing("n\n"))
 
 	require.ErrorIs(t, err, ErrDeclined)
 	assert.Empty(t, g.git.made, "asked before anything is made")
@@ -183,7 +200,7 @@ func TestRunWithPushAndYesDoesNotAsk(t *testing.T) {
 	opts := pushing("")
 	opts.Yes, opts.Interactive, opts.In = true, false, nil
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.NoError(t, err)
 	assert.Len(t, g.git.pushed, 1)
@@ -195,7 +212,7 @@ func TestRunWithPushAndNoTerminalOrYesIsRefusedBeforeAnyWrite(t *testing.T) {
 	opts := pushing("")
 	opts.Interactive, opts.In = false, nil
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.ErrorIs(t, err, ErrNeedsApproval)
 	assert.Empty(t, g.git.made)
@@ -204,14 +221,14 @@ func TestRunWithPushAndNoTerminalOrYesIsRefusedBeforeAnyWrite(t *testing.T) {
 
 func TestRunADryRunSaysWhatItWouldDoAndChangesNothing(t *testing.T) {
 	var g tagging
-	err := g.run(shell(), "text", true, plain())
+	err := g.run(shell(t), "text", true, plain())
 	require.NoError(t, err)
 	assert.Contains(t, g.out.String(), "Would tag v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell")
 
 	var p tagging
 	opts := pushing("")
 	opts.In = nil
-	err = p.run(shell(), "text", true, opts)
+	err = p.run(shell(t), "text", true, opts)
 	require.NoError(t, err)
 	assert.Contains(t, p.out.String(), "and push it to upstream")
 	assert.NotContains(t, p.out.String(), "[y/N]")
@@ -224,7 +241,7 @@ func TestRunADryRunSaysWhatItWouldDoAndChangesNothing(t *testing.T) {
 
 func TestRunATagTheHostHasOnTheCommitIsDoneAndNothingIsSent(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.1", Commit: head215})
 	opts := pushing("")
 	opts.Yes, opts.In = true, nil
@@ -239,7 +256,7 @@ func TestRunATagTheHostHasOnTheCommitIsDoneAndNothingIsSent(t *testing.T) {
 
 func TestRunATagThatIsOnlyInTheCloneIsNotMadeAgainAndCanBePushed(t *testing.T) {
 	g := tagging{git: &fakeGit{local: map[string]string{"v0.8.4-rc.1": head215}}}
-	err := g.run(shell(), "text", false, plain())
+	err := g.run(shell(t), "text", false, plain())
 	require.NoError(t, err)
 	assert.Empty(t, g.git.made)
 	assert.Contains(t, g.out.String(), "already in your clone")
@@ -247,7 +264,7 @@ func TestRunATagThatIsOnlyInTheCloneIsNotMadeAgainAndCanBePushed(t *testing.T) {
 
 	p := tagging{git: &fakeGit{local: map[string]string{"v0.8.4-rc.1": head215}}}
 	opts := pushing("y\n")
-	err = p.run(shell(), "text", false, opts)
+	err = p.run(shell(t), "text", false, opts)
 	require.NoError(t, err)
 	assert.Empty(t, p.git.made)
 	assert.Equal(t, []string{"/work upstream v0.8.4-rc.1"}, p.git.pushed)
@@ -257,7 +274,7 @@ func TestRunATagThatIsOnlyInTheCloneIsNotMadeAgainAndCanBePushed(t *testing.T) {
 func TestRunATagThatIsInTheCloneOnAnotherCommitIsNeverMoved(t *testing.T) {
 	g := tagging{git: &fakeGit{local: map[string]string{"v0.8.4-rc.1": "eeeeeeee"}}}
 
-	err := g.run(shell(), "text", false, plain())
+	err := g.run(shell(t), "text", false, plain())
 
 	require.ErrorIs(t, err, releasetag.ErrTagExists)
 	assert.Empty(t, g.git.made)
@@ -265,7 +282,7 @@ func TestRunATagThatIsInTheCloneOnAnotherCommitIsNeverMoved(t *testing.T) {
 
 func TestRunATagTheHostHasOnAnotherCommitIsNeverMoved(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.1", Commit: "ffffffff"})
 
 	err := g.run(ws, "text", false, plain())
@@ -279,7 +296,7 @@ func TestRunATagTheLineCannotHaveIsAnErrorBeforeAnyWriteOrQuestion(t *testing.T)
 	opts := pushing("y\n")
 	opts.Tag = "v0.9.1" // the series of v2.16
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.ErrorIs(t, err, releasetag.ErrNotInSeries)
 	assert.Empty(t, g.git.made)
@@ -291,7 +308,7 @@ func TestRunALineTheProjectDoesNotHaveListsTheOnesItDoes(t *testing.T) {
 	opts := plain()
 	opts.Line = "v2.99"
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "v2.99")
@@ -305,7 +322,7 @@ func TestRunTheLineMayBeWrittenWithoutTheVOrAsItsBranch(t *testing.T) {
 		opts := plain()
 		opts.Line = line
 
-		err := g.run(shell(), "text", false, opts)
+		err := g.run(shell(t), "text", false, opts)
 
 		require.NoError(t, err, line)
 		assert.Equal(t, []string{"/work v0.8.4-rc.1 " + head215}, g.git.made, line)
@@ -317,7 +334,7 @@ func TestRunTheDevelopmentLineIsTheDefaultBranchWithItsOwnSeries(t *testing.T) {
 	opts := plain()
 	opts.Line, opts.Tag = "v2.16", "v0.9.1-rc.1"
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/work v0.9.1-rc.1 " + headMain}, g.git.made)
@@ -325,9 +342,8 @@ func TestRunTheDevelopmentLineIsTheDefaultBranchWithItsOwnSeries(t *testing.T) {
 
 func TestRunAProjectWithNoLinesTagsABranchOfItsOwnWithNoSeries(t *testing.T) {
 	var g tagging
-	ws := shell()
-	ws.project.Release = config.Release{Branching: config.BranchingSingle, TagPattern: "v*"}
-	ws.project.Repo.Name = "rancher/scc-operator"
+	ws := shell(t)
+	ws.project = sccProject(t)
 	ws.refs.Tags = []git.Tag{{Name: "v0.5.3", Commit: "1111"}}
 	opts := plain()
 	opts.Line, opts.Tag = "main", "v0.5.4-rc.1"
@@ -343,7 +359,7 @@ func TestRunWithNoTagChoosesThePrereleaseThatFollowsTheNewestOfTheLine(t *testin
 	opts := plain()
 	opts.Tag = ""
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/work v0.8.4-rc.1 " + head215}, g.git.made)
@@ -351,7 +367,7 @@ func TestRunWithNoTagChoosesThePrereleaseThatFollowsTheNewestOfTheLine(t *testin
 
 func TestRunStablePromotesThePrereleaseOnTheHeadAndSaysSo(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: head215})
 	opts := pushing("y\n")
 	opts.Tag, opts.Stable = "", true
@@ -364,7 +380,7 @@ func TestRunStablePromotesThePrereleaseOnTheHeadAndSaysSo(t *testing.T) {
 }
 
 func TestRunStableThatPromotesSaysWhichPrereleaseInJSONAndInADryRun(t *testing.T) {
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: head215})
 	opts := Options{Line: "v2.15", Stable: true}
 
@@ -383,7 +399,7 @@ func TestRunStableThatPromotesSaysWhichPrereleaseInJSONAndInADryRun(t *testing.T
 
 func TestRunStableRefusesToPromoteWhenTheBranchHasMovedOn(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: "ccccccccdddd"})
 	opts := plain()
 	opts.Tag, opts.Stable = "", true
@@ -396,8 +412,8 @@ func TestRunStableRefusesToPromoteWhenTheBranchHasMovedOn(t *testing.T) {
 
 func TestRunAProjectThatRequiresAPrereleaseHasNoStableAfterAStable(t *testing.T) {
 	var g tagging
-	ws := shell()
-	ws.project.Release.RequiresPrerelease = true
+	ws := shell(t)
+	ws.project = shellProject(t, true)
 	opts := plain()
 	opts.Tag, opts.Stable = "", true
 
@@ -409,8 +425,8 @@ func TestRunAProjectThatRequiresAPrereleaseHasNoStableAfterAStable(t *testing.T)
 
 func TestRunANamedStableTagOfAProjectThatRequiresAPrereleaseNeedsOneOnTheHead(t *testing.T) {
 	var g tagging
-	ws := shell()
-	ws.project.Release.RequiresPrerelease = true
+	ws := shell(t)
+	ws.project = shellProject(t, true)
 	opts := plain()
 	opts.Tag = "v0.8.4"
 
@@ -423,8 +439,8 @@ func TestRunANamedStableTagOfAProjectThatRequiresAPrereleaseNeedsOneOnTheHead(t 
 func TestRunMinorAndMajorRaiseTheVersionAfterAStableTag(t *testing.T) {
 	for bump, want := range map[Bump]string{BumpMinor: "v0.6.0-rc.1", BumpMajor: "v1.0.0-rc.1"} {
 		var g tagging
-		ws := shell()
-		ws.project.Release = config.Release{Branching: config.BranchingSingle, TagPattern: "v*"}
+		ws := shell(t)
+		ws.project = sccProject(t)
 		ws.refs.Tags = []git.Tag{{Name: "v0.5.3", Commit: "1111"}}
 
 		err := g.run(ws, "text", false, Options{Line: "main", Bump: bump})
@@ -436,7 +452,7 @@ func TestRunMinorAndMajorRaiseTheVersionAfterAStableTag(t *testing.T) {
 
 func TestRunWithNothingNewOnTheHeadChoosesNothing(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4", Commit: head215})
 	opts := plain()
 	opts.Tag = ""
@@ -454,7 +470,7 @@ func TestRunATagAndAWayToChooseOneAreNotBothAllowed(t *testing.T) {
 	} {
 		var g tagging
 
-		err := g.run(shell(), "text", false, opts)
+		err := g.run(shell(t), "text", false, opts)
 
 		require.ErrorIs(t, err, ErrTagAndChoice)
 		assert.Empty(t, g.git.made)
@@ -464,7 +480,7 @@ func TestRunATagAndAWayToChooseOneAreNotBothAllowed(t *testing.T) {
 func TestRunABranchThatMovedWhileItWasReadIsAnErrorBeforeAnyWrite(t *testing.T) {
 	g := tagging{git: &fakeGit{heads: map[string]string{"release/v2.15": "9999999999"}}}
 
-	err := g.run(shell(), "text", false, plain())
+	err := g.run(shell(t), "text", false, plain())
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "release/v2.15")
@@ -474,7 +490,7 @@ func TestRunABranchThatMovedWhileItWasReadIsAnErrorBeforeAnyWrite(t *testing.T) 
 
 func TestRunABranchTheHostDoesNotHaveIsAnError(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refs.Branches = ws.refs.Branches[:1] // no release/v2.15
 
 	err := g.run(ws, "text", false, plain())
@@ -486,20 +502,20 @@ func TestRunABranchTheHostDoesNotHaveIsAnError(t *testing.T) {
 
 func TestRunFailuresToReachTheHostOrTheCloneAreErrors(t *testing.T) {
 	var g tagging
-	ws := shell()
+	ws := shell(t)
 	ws.refsErr = errors.New("network down")
 	require.ErrorContains(t, g.run(ws, "text", false, plain()), "network down")
 
-	ws = shell()
+	ws = shell(t)
 	ws.pathErr = errors.New("not found")
 	require.ErrorContains(t, tagging{}.run2(ws), "repos.search")
 
-	ws = shell()
+	ws = shell(t)
 	ws.upstream = ""
 	require.ErrorContains(t, tagging{}.run2(ws), "upstream")
 
 	f := tagging{git: &fakeGit{fetchErr: errors.New("could not fetch")}}
-	require.ErrorContains(t, f.run(shell(), "text", false, plain()), "could not fetch")
+	require.ErrorContains(t, f.run(shell(t), "text", false, plain()), "could not fetch")
 }
 
 func (tagging) run2(ws fakeWorkspace) error {
@@ -511,7 +527,7 @@ func TestRunAFailureToMakeTheTagIsAnErrorAndNothingIsPushed(t *testing.T) {
 	g := tagging{git: &fakeGit{createErr: errors.New("fatal: bad object")}}
 	opts := pushing("y\n")
 
-	err := g.run(shell(), "text", false, opts)
+	err := g.run(shell(t), "text", false, opts)
 
 	require.ErrorContains(t, err, "bad object")
 	assert.Empty(t, g.git.pushed)
@@ -521,7 +537,7 @@ func TestRunAFailureToMakeTheTagIsAnErrorAndNothingIsPushed(t *testing.T) {
 func TestRunAFailureToPushSaysTheTagIsInTheCloneAndHowToTryAgain(t *testing.T) {
 	g := tagging{git: &fakeGit{pushErr: errors.New("the remote rejected the push")}}
 
-	err := g.run(shell(), "text", false, pushing("y\n"))
+	err := g.run(shell(t), "text", false, pushing("y\n"))
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "rejected")
@@ -532,7 +548,7 @@ func TestRunAFailureToPushSaysTheTagIsInTheCloneAndHowToTryAgain(t *testing.T) {
 func TestRunJSONReportsWhatWasDone(t *testing.T) {
 	var g tagging
 
-	err := g.run(shell(), "json", false, plain())
+	err := g.run(shell(t), "json", false, plain())
 
 	require.NoError(t, err)
 	var res Result
@@ -547,7 +563,7 @@ func TestRunJSONWithPushNeverAsksSoItNeedsYes(t *testing.T) {
 	var g tagging
 	opts := pushing("y\n")
 
-	err := g.run(shell(), "json", false, opts)
+	err := g.run(shell(t), "json", false, opts)
 
 	require.ErrorIs(t, err, ErrNeedsApproval)
 	assert.Empty(t, g.git.made)
@@ -556,8 +572,32 @@ func TestRunJSONWithPushNeverAsksSoItNeedsYes(t *testing.T) {
 func TestRunAnOutputFormatItDoesNotSupportIsAnErrorBeforeAnything(t *testing.T) {
 	var g tagging
 
-	err := g.run(shell(), "env", false, plain())
+	err := g.run(shell(t), "env", false, plain())
 
 	require.Error(t, err)
 	assert.Empty(t, g.git.made)
+}
+
+func TestRunNeedsExactlyOneStream(t *testing.T) {
+	two := chaintest.Load(t,
+		chaintest.Doc("Project", "mono", "", "  repo: {name: acme/mono}\n"),
+		chaintest.Doc("Stream", "a", "{project: mono}", "  universal: true\n  tagPattern: \"a/v*\"\n"),
+		chaintest.Doc("Stream", "b", "{project: mono}", "  universal: true\n  tagPattern: \"b/v*\"\n"),
+	).Project("mono")
+	none := chaintest.Projects(t, "bare", "acme/bare").Project("bare")
+	for name, project := range map[string]*chain.Project{"two streams": two, "none": none} {
+		t.Run(name, func(t *testing.T) {
+			var g tagging
+			ws := shell(t)
+			ws.project = project
+			opts := plain()
+			opts.Line, opts.Tag = "main", "v1.0.0"
+
+			err := g.run(ws, "text", false, opts)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "stream")
+			assert.Empty(t, g.git.made)
+		})
+	}
 }

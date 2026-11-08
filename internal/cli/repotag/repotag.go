@@ -14,7 +14,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
@@ -100,7 +100,7 @@ type Result struct {
 // Workspace is what the command needs from the invocation's workspace. It is
 // defined here, where it is consumed.
 type Workspace interface {
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
 	UpstreamFor(slug string) string
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
@@ -159,11 +159,15 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if opts.Tag != "" && (opts.Stable || opts.Bump != BumpPatch) {
 		return ErrTagAndChoice
 	}
-	project, err := ws.Project(opts.Project)
+	project, err := ws.ChainProject(opts.Project)
 	if err != nil {
 		return err
 	}
-	slug := project.Repo.Name
+	stream, err := oneStream(project)
+	if err != nil {
+		return err
+	}
+	slug := project.Slug()
 	remote := ws.UpstreamFor(slug)
 	if remote == "" {
 		return fmt.Errorf("no upstream remote is set for %s: set upstream in the user file, or repos.overrides.%s.upstream", slug, slug)
@@ -172,7 +176,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if err != nil {
 		return fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
 	}
-	branch, series, err := lineBranch(project, opts.Line)
+	branch, series, err := lineBranch(project, stream, opts.Line)
 	if err != nil {
 		return err
 	}
@@ -194,8 +198,8 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	tag, promotes := opts.Tag, ""
 	if tag == "" {
 		chosen, err := releasetag.Choose(releasetag.Choice{
-			Tags: refs.Tags, Pattern: project.Release.TagPattern, Series: series, Commit: head.Commit,
-			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: project.Release.RequiresPrerelease,
+			Tags: refs.Tags, Pattern: stream.TagPattern(), Series: series, Commit: head.Commit,
+			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: stream.RequiresPrerelease(),
 		})
 		if err != nil {
 			return err
@@ -217,7 +221,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	}
 	in := createtag.Input{CloneDir: clone.Path, Input: releasetag.Input{
 		Repo: slug, Tag: tag, Commit: head.Commit, Tags: tags,
-		Pattern: project.Release.TagPattern, Series: series, RequiresPrerelease: project.Release.RequiresPrerelease,
+		Pattern: stream.TagPattern(), Series: series, RequiresPrerelease: stream.RequiresPrerelease(),
 	}}
 	decision, err := releasetag.Check(in.Input)
 	if err != nil {
@@ -334,34 +338,44 @@ func (r Result) what() string {
 	return fmt.Sprintf("%s on %s at %s in %s", r.Tag, r.Branch, short(r.Commit), r.Project)
 }
 
+// oneStream is the stream a tag is made for: the one the project has. A project
+// with none, or with several, has no one stream, and the caller would have to name
+// it.
+func oneStream(p *chain.Project) (*chain.Stream, error) {
+	switch streams := p.Streams(); len(streams) {
+	case 0:
+		return nil, fmt.Errorf("%s has no stream, so no release to tag", p.Slug())
+	case 1:
+		return streams[0], nil
+	default:
+		return nil, fmt.Errorf("%s has %d streams, and repo tag does not yet name one", p.Slug(), len(streams))
+	}
+}
+
 // lineBranch finds the branch a release line lives on, and the series of
-// versions the line has. The line may be written without the v, or be a branch of
-// the project, which has the series of the line it is the branch of, or none when
-// it is in no line.
-func lineBranch(p config.Project, arg string) (branch, series string, err error) {
-	if b, ok := p.BranchOfLine(arg); ok {
-		for _, l := range p.Release.Lines {
-			if strings.EqualFold(l.Line, withV(arg)) {
-				return b, l.Series(), nil
-			}
+// versions the line has in the stream. The line may be written without the v, or
+// be a branch of the project, which has the series of the line it is the branch
+// of, or none when it is in no line.
+func lineBranch(p *chain.Project, st *chain.Stream, arg string) (branch, series string, err error) {
+	if b, ok := p.BranchOfLine(arg, ""); ok {
+		if series, ok := st.Series(arg); ok {
+			return b, series, nil
+		}
+		if slices.ContainsFunc(p.Lines(), func(l string) bool { return strings.EqualFold(l, withV(arg)) }) {
+			return b, "", nil
 		}
 	}
 	if slices.Contains(p.ReleaseBranches(), arg) {
-		for _, l := range p.Release.Lines {
-			if l.Line == p.LineOfBranch(arg) {
-				return arg, l.Series(), nil
-			}
+		if series, ok := st.Series(p.LineOfBranch(arg)); ok {
+			return arg, series, nil
 		}
 		return arg, "", nil
 	}
-	var have []string
-	for _, l := range p.Release.Lines {
-		have = append(have, l.Line)
-	}
+	have := p.Lines()
 	if len(have) == 0 {
 		have = p.ReleaseBranches()
 	}
-	return "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Repo.Name, arg, strings.Join(have, ", "))
+	return "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), arg, strings.Join(have, ", "))
 }
 
 func withV(line string) string {
