@@ -22,6 +22,8 @@ The primary user config fields that are worth prompting for are:
 - `repos.search` - Would be useful to have set
 - `repos.cloneRoot` - Will be needed for repo clone tooling; if possible we prompt to set this (single dir value) to the first input search path?
 
+**Built so far:** `gero init` asks for `githubUser`, `fork`, `upstream` and `branchPrefix`, or takes them as flags, and refuses an existing file unless `--force` ([CLI_FRAMEWORK](../specs/CLI_FRAMEWORK.md)). `configDir`, `repos.search` and `repos.cloneRoot` are still to come; `repos.cloneRoot` is not a key of the user file yet.
+
 ## Result
 After accepting user inputs it would save to relevant field(s) in file and then subsequent `gero` commands are more configured.
 The file it writes starts with the `yaml-language-server` comment that points at the user file schema on the `main` branch of the repository, so an editor validates and completes the file from the first edit ([APP_CONFIG](../specs/APP_CONFIG.md#json-schemas)):
