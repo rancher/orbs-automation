@@ -80,6 +80,8 @@ The bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.m
 
 Everything: the bundle format and loader, `ci:compile-bundle`, the release job step, the shared download-and-verify package, the cache, the fifth source in precedence, and the source line in `config show` and `doctor`.
 
+`gero repo clone` is the first command that needs the bundle on a fresh workstation, where no central config exists yet. It reads a local central config for now and takes its Projects through a small source seam in its package, so the bundle reader can be added as another source, with the newer of the local copy and the bundle winning ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
+
 ## Open questions
 
 * The name of the release asset and of the checksum file, and which repo the CLI fetches from (a setting, or fixed in the binary).
