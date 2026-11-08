@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"maps"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
@@ -217,11 +218,11 @@ func (p *Project) External() bool { return p.Doc.Spec.Repo.External }
 
 // Layout is how the project's releases are laid out over branches: single or
 // perLine.
-func (p *Project) Layout() string { return "" }
+func (p *Project) Layout() string { return p.Doc.Spec.Branches.Layout }
 
 // Stages are the stages of the project's branch layout, for a layout whose stages
 // are branches.
-func (p *Project) Stages() []string { return nil }
+func (p *Project) Stages() []string { return p.Doc.Spec.Branches.Stages }
 
 // LineBranch is a listed line and where it is.
 type LineBranch struct {
@@ -237,4 +238,21 @@ type LineBranch struct {
 
 // LineBranches returns the listed lines with their branches, in the order written;
 // none for a single layout, which lists none.
-func (p *Project) LineBranches() []LineBranch { return nil }
+func (p *Project) LineBranches() []LineBranch {
+	var out []LineBranch
+	for _, bl := range p.Doc.Spec.Branches.Lines {
+		lb := LineBranch{Line: bl.Line}
+		switch {
+		case bl.Branch == nil:
+			lb.Branch, lb.IsDefault = p.DefaultBranch(), true
+		case bl.Branch.Stages != nil:
+			lb.Stages = maps.Clone(bl.Branch.Stages)
+		case bl.Branch.Name == "":
+			lb.Pending = true
+		default:
+			lb.Branch = bl.Branch.Name
+		}
+		out = append(out, lb)
+	}
+	return out
+}

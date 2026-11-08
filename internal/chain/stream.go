@@ -101,8 +101,8 @@ func (s *Stream) Lines() []string {
 }
 
 // Universal reports whether any release of the stream serves every line.
-func (s *Stream) Universal() bool { return false }
+func (s *Stream) Universal() bool { return s.Doc.Spec.Universal }
 
 // RequiresPrerelease reports whether a stable release of a version follows a
 // prerelease of it.
-func (s *Stream) RequiresPrerelease() bool { return false }
+func (s *Stream) RequiresPrerelease() bool { return s.Doc.Spec.RequiresPrerelease }
