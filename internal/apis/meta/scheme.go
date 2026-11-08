@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+
+	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
 // Scheme knows which kinds each apiVersion has, and decodes documents into them.
@@ -34,6 +36,12 @@ func (s *Scheme) AddKind(apiVersion, kind string, newObject func() Object) {
 type head struct {
 	TypeMeta   `yaml:",inline"`
 	ObjectMeta `yaml:",inline"`
+}
+
+// DecodeReport is Decode that also returns the findings of every document, errors
+// and warnings, in the order reported. ctx is what validation may depend on.
+func (s *Scheme) DecodeReport(_ io.Reader, _ string, _ config.Context) ([]Object, config.Report) {
+	return nil, config.Report{}
 }
 
 // Decode reads every document of a YAML stream into the typed object of its

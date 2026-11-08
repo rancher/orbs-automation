@@ -1,5 +1,7 @@
 package meta
 
+import "github.com/rancher/orbs-automation/internal/platform/config"
+
 // TypeMeta says which shape a document is.
 type TypeMeta struct {
 	APIVersion string `yaml:"apiVersion"`
@@ -27,14 +29,24 @@ func (o ObjectMeta) GetName() string { return o.Name }
 // GetRefs returns the document's references.
 func (o ObjectMeta) GetRefs() Refs { return o.Refs }
 
+// SetDefaults is the default for a kind that has no defaults of its own: it does
+// nothing. A kind defines SetDefaults on itself to fill what it defaults.
+func (o ObjectMeta) SetDefaults() {}
+
+// Validate is the default for a kind that has no rules of its own: it reports
+// nothing. A kind defines Validate on itself to check what it can alone.
+func (o ObjectMeta) Validate(_ config.Context, _ *config.Report) {}
+
 // Refs maps a reference key to the names it points at. It is written as one name
 // or a list of names.
 type Refs map[string][]string
 
-// Object is a decoded document of any kind.
+// Object is a decoded document of any kind. It is also a config.Schema, so the
+// engine can default and validate it.
 type Object interface {
 	GetAPIVersion() string
 	GetKind() string
 	GetName() string
 	GetRefs() Refs
+	config.Schema
 }
