@@ -1,0 +1,27 @@
+# Not ours: a third-party SDK that backup-restore-operator tracks in its go.mod.
+# repo.external marks a repo outside our organization; what we hold of it is a Holding.
+apiVersion: gero/v1alpha2
+kind: Project
+name: example-sdk
+spec:
+  repo: {name: third-party/example-sdk, external: true}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: example-sdk
+refs: {project: example-sdk}
+spec: {scheme: semver, universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: example-sdk-source
+refs: {stream: example-sdk}
+spec: {kind: file, name: "example-sdk-{version}.tgz"}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-tracks-example-sdk
+refs: {project: backup-restore-operator, artifact: example-sdk-source}
+spec:
+  at: {file: go.mod, key: third-party/example-sdk, format: gomod}
+  holds: {kind: release, form: "{tag}", accept: all}

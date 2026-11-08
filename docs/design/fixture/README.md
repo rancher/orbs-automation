@@ -14,6 +14,7 @@
 | `rancher.lines.yaml` | RancherLines, as in the real config |
 | `examples/library.yaml` | a Go library, two services holding it in `go.mod` |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |
+| `examples/external.yaml` | a third-party SDK as an external Project, tracked by a Holding in BRO |
 
 ## The questions the tools must answer
 

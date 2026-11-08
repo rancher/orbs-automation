@@ -55,9 +55,9 @@ func TestDecodeFixture(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 45, total)
+	assert.Equal(t, 49, total)
 	assert.Equal(t, map[string]int{
-		KindProject: 12, KindStream: 9, KindArtifact: 10, KindHolding: 11, KindEdit: 2, KindRancherLines: 1,
+		KindProject: 13, KindStream: 10, KindArtifact: 11, KindHolding: 12, KindEdit: 2, KindRancherLines: 1,
 	}, kinds)
 }
 
@@ -116,6 +116,30 @@ spec:
 	assert.Equal(t, Branch{}, *lines[1].Branch, "no branch yet")
 	assert.Equal(t, &Branch{Name: "release/v2.15"}, lines[2].Branch)
 	assert.Equal(t, &Branch{Stages: map[string]string{"dev": "dev-v2.14", "stable": "release-v2.14"}}, lines[3].Branch)
+}
+
+func TestDecodeExternalRepo(t *testing.T) {
+	p := decodeOne[*Project](t, `
+apiVersion: gero/v1alpha2
+kind: Project
+name: example-sdk
+spec:
+  repo: {name: third-party/example-sdk, external: true}
+`)
+
+	assert.Equal(t, Repo{Name: "third-party/example-sdk", External: true}, p.Spec.Repo)
+}
+
+func TestDecodeRepoIsNotExternalByDefault(t *testing.T) {
+	p := decodeOne[*Project](t, `
+apiVersion: gero/v1alpha2
+kind: Project
+name: shell
+spec:
+  repo: {name: rancher/shell, owned: true}
+`)
+
+	assert.False(t, p.Spec.Repo.External)
 }
 
 func TestDecodeStream(t *testing.T) {
