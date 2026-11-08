@@ -8,6 +8,8 @@ Start here. Each kind of document answers one question, and each kind changes at
 | [ARCHITECTURE_DESIGN](ARCHITECTURE_DESIGN.md) | What is the product shape? | When the design changes |
 | [IMPLEMENTATION](IMPLEMENTATION.md) | What does the tool do, and what did we decide about it? | When a decision is made or reversed |
 | [PHASES](PHASES.md) | What gets built, in what order? | When the plan changes |
+| [design/](design/CHAIN_MODEL.md) | What are the config model, the layers and the engines, and what did we decide? The newest account: where a spec disagrees, `design/` wins | While the design moves, then it is folded into specs and `doc.go` files |
+| [process/](process/README.md) | How is a Rancher release made, and how does each project take part? | When the process changes |
 | [specs/](specs/README.md) | How is one part built, and why that way? | While the part is being built, then it settles |
 | [projects/](projects/README.md), [references/](references/frameworks-automation.md) | What do we know about a repo we automate, or a tool we learned from? | When the repo changes |
 | [ai/](ai/red-green-commits.md) | How do we work on this repo? | Rarely |

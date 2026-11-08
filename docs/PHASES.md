@@ -25,7 +25,7 @@ Milestones are tied to `gero` version tags, and each headline tag has an **audie
 | **v3.0.0** | QA bridge | The team with QA | Engineering and QA leadership | "Engineering and QA are now in sync through shared tooling" | QA results appear on release tracking |
 | Moonshot | Dashboard | Anyone | Managers and leadership | "Anyone can see the state of releases" | Delivered whenever it is ready; unversioned |
 
-Until v1.0.0 the tool is not announced. From v1.0.0 only stable tags are released (no prereleases of `gero` itself). Config documents use `apiVersion: gero/v1alpha1` during v0.x, so the team can review and agree on the shapes before they become `gero/v1` with v1.0.0.
+Until v1.0.0 the tool is not announced. From v1.0.0 only stable tags are released (no prereleases of `gero` itself). Config documents use `apiVersion: gero/v1alpha2` during v0.x, so the team can review and agree on the shapes before they become `gero/v1` with v1.0.0.
 
 ---
 
@@ -34,22 +34,29 @@ Until v1.0.0 the tool is not announced. From v1.0.0 only stable tags are release
 **Owner:** the author, building a foundation others can build on, plus two real flows end to end. Not announced outside the team. v1.0.0 is about **automation**: the flows run from an engineer's workstation, and CI and tracking follow in v1.x. It is not about file generation.
 
 Two flows, in order:
-* **The POC flow, `scc-operator` into `rancher/rancher`.** One release line fanning out to every active Rancher branch. It exercises the update dispatcher, `yamlBump` and per-target status with the fewest moving parts. `shell` takes the same route with a series for each line. An engineer runs the bump with `gero ship` from their own clone; in CI it stays a bash script triggered by a stable tag until `gero ci:ship` replaces it in v1.x. Its job is to prove to the team that the approach is good.
-* **The chain flow, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: `yamlBump`, `chartsPackageBump` (the most complex strategy), chain tracing through the Assets image and the tag step between hops, run by hand.
+* **The POC flow, `scc-operator` into `rancher/rancher`.** One release line fanning out to every active Rancher branch. It exercises the update engine, a holding written in place and per-target status with the fewest moving parts. `shell` takes the same route with a series for each line. An engineer runs the bump with `gero ship` from their own clone; in CI it stays a bash script triggered by a stable tag until `gero ci:ship` replaces it in v1.x. Its job is to prove to the team that the approach is good.
+* **The chain flow, `kuberlr-kubectl` and everything it touches (the v1.0.0 highlight).** The full chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`: release holdings, `chartsPackageBump` (the most complex strategy), chain tracing through the Assets image and the tag step between hops, run by hand.
 
-| Label | Work | Depends on |
-|---|---|---|
-| v0.1 | **Foundations:** Go module, CLI skeleton per the [specs](specs/README.md) (cobra root, global flags, `internal/platform/clicfg` loader with precedence tests, `log/slog`, exit-code helper, `internal/ui` seam, depguard allow-list), CI for this repo, tagged binary releases, config loader and `gero config validate` (runs without credentials), `gero config show` (the settings and where each came from) and `gero config resolve repos`, the GitHub access layer (including a spike confirming the **(unverified)** items in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md) and the YAML library choice), CI-only versus either-context gating. Real configs for the repos the POC flow touches (`rancher`, `scc-operator`, `shell`), written and corrected up front; those for the chain flow (`kuberlr-kubectl`, BRO, `rancher/charts`) are written with v0.8 to v0.10, and everything for them is in `config/` until then | none |
-| v0.2 | **Read-only insight:** tag classification, the line map (`gero lines resolve`), a project's releases and who has picked them up (`gero repo status`, which also names what each line can have next), and the release-line rules in one place (`internal/releasetag`) for every command to share | v0.1 |
-| v0.3 | **Update dispatcher, `yamlBump` and the workstation bump:** target, branch resolution from the line map, named strategy, steps with a commit for each, per-consumer `pullRequests` conventions, deterministic branches, reuse and supersede of open PRs, `--refresh`, preconditions, a release for each line, fan-out with per-target status. The commands that make the pieces by hand: `repo branch`, `repo tag`. Used by the team beside the existing script | v0.2 |
-| v0.4 | **Chain tracing, from the far end back** ([CHAIN_TRACING](specs/CHAIN_TRACING.md)): Assets and Rancher (done: the shared release scheme, `repo status` in both directions, `lines resolve`), then charts to Assets: the charts project config with its dev and release tiers, which charts commit an Assets tag was built from, and the walk through several hops (`internal/chain`, the tree in `lines resolve`, `--depth`) | v0.3 |
-| v0.5 | **Our projects into charts** (CHAIN_TRACING stretch 3): `chartsPackageBump`, run in dry-run beside today's scripts, and BRO's tag into a charts bump; the tag step between hops is `gero repo tag`, and each hop is a `gero ship` once the one before it has merged and been tagged. Watching a whole chain without doing that by hand is the tracker, v1.2 | v0.4 |
-| v0.6 | **The chain flow runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0 | v0.5 |
-| | **POC review with the team,** at the end of v0.x, when the author is done with it: show the POC flow and the chain flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before v1.0.0 | v0.6 |
+**Is** says where a milestone stands: *built* (the code and tests exist, and the team can use it), *next*, or *later*. The status of a part is in its spec and `gero --help` is the list of commands; this column only orders the work.
+
+| Label | Is | Work | Depends on |
+|---|---|---|---|
+| v0.1 | built | **Foundations:** the CLI skeleton ([specs](specs/README.md)), CI for this repo, tagged binary releases, the layers of `internal/` and the lint that keeps them ([LAYERS](design/LAYERS.md)), the GitHub access layer, the CLI settings loader, `gero doctor`, `gero config`, the REPL and styled output | none |
+| v0.2 | built | **The config model, `gero/v1alpha2`:** documents of small kinds (Project, Stream, Artifact, Holding, Edit, `RancherLines`), the engine that decodes, defaults and validates them, the graph every command reads ([CONFIG_UNITS](design/CONFIG_UNITS.md), [CHAIN_MODEL](design/CHAIN_MODEL.md)), and the real configs of the POC and chain projects, written from the [process docs](process/README.md) | v0.1 |
+| v0.3 | built | **Read-only insight:** the line map (`gero lines resolve`), a project's releases and who holds them (`gero repo status`), and the release-line rules in one place (`internal/releasetag`) | v0.2 |
+| v0.4 | built | **The update engine and the workstation bump** ([UPDATE_ENGINE](design/UPDATE_ENGINE.md)): routes, targets, holdings written in place, edits with steps, `gero ship` (commits, PRs, supersede, `--refresh`, fan-out with per-target status), and the pieces by hand, `repo branch` and `repo tag`. The POC flow runs for real | v0.3 |
+| v0.5 | next | **Chain tracing through the charts hop** ([CHAIN_TRACING](specs/CHAIN_TRACING.md) stretch 2; Assets and Rancher is built): charts with its stages, which charts commit an Assets tag was built from, and the walk through several hops (the tree in `lines resolve`, `--depth`). Reading what a commit or branch holding holds | v0.4 |
+| v0.6 | later | **Our projects into charts** (CHAIN_TRACING stretch 3): `chartsPackageBump`, run in dry-run beside today's scripts, and BRO's tag into a charts bump; the tag step between hops is `gero repo tag`, and each hop is a `gero ship` once the one before it has merged and been tagged. Watching a whole chain without doing that by hand is the tracker, v1.2 | v0.5 |
+| v0.7 | later | **Checks over the chain** ([TOOLING_GOALS](design/TOOLING_GOALS.md)): stable readiness and line consistency, read-only, on the walk of v0.5 | v0.5 |
+| v0.8 | later | **Onboarding:** `gero init` writes the user file, and `gero repo clone` clones the team's projects, so a fresh workstation is usable in a few commands | v0.2 |
+| v0.9 | later | **The chain flow runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0: the loose ends in [TODO](../TODO.md), the process docs reviewed, field names settled | v0.6, v0.7, v0.8 |
+| | | **POC review with the team,** at the end of v0.x, when the author is done with it: show the POC flow and the chain flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before v1.0.0 | v0.9 |
+
+v0.8 depends only on the config model, so it can be taken at any point before v0.9.
 
 ### Decides in v0.x
 
-Final kind and field names; whether the path through `rancher/charts` into `rancher/rancher` is modeled so the line map connects it; how producers align on consumer PR conventions.
+Final kind and field names; how the path through `rancher/charts` into `rancher/rancher` is walked so the line map connects it; how producers align on consumer PR conventions; which checks over the chain are worth keeping.
 
 ---
 
@@ -58,7 +65,7 @@ Final kind and field names; whether the path through `rancher/charts` into `ranc
 **Gate:**
 * Repo layout, contribution guide, and how to run tests and a dry-run locally.
 * CI passes and a tagged release publishes installable binaries.
-* Config validates; the schema and defaults are documented in code; the team has reviewed the config shapes (at the POC review), and they move from `gero/v1alpha1` to `gero/v1`.
+* Config validates; the schema and defaults are documented in code; the team has reviewed the config shapes (at the POC review), and they move from `gero/v1alpha2` to `gero/v1`.
 * The GitHub access layer exists with narrow, fakeable interfaces.
 * The POC flow (`scc-operator`) and the chain flow (the `kuberlr-kubectl` chain) both run for real from an engineer's workstation: `gero ship` opens the bump PRs along the chain, and `gero repo branch` and `gero repo tag` make the pieces by hand. The scripts in the repos keep running in CI until v1.x replaces them.
 * Real configs exist for all repos and validate in CI.
@@ -78,10 +85,10 @@ Planning labels, not promises, roughly in dependency order. Only stable tags are
 | v1.2 | **Tracking issue format:** versioned state block, read-only rendered view, labels including stale; fixture-driven tests | v1.0.0 |
 | v1.3 | **Reconciler:** `gero ci:reconcile` on cron, per-operation locks, backoff; observe human-pushed tags first | v1.1, v1.2 |
 | v1.4 | **The POC flow and the chain flow in CI**, tracked end to end through `gero`, beside and then replacing today's scripts | v1.3, v1.0.0 |
-| v1.5 | `VERSION.md` generator and verify: generate from `release.lines` and `RancherLines` with a generated header, dry-run diff, PR on the default branch | v1.0.0 |
+| v1.5 | `VERSION.md` generator and verify: generate from `branches.lines` and `RancherLines` with a generated header, dry-run diff, PR on the default branch | v1.0.0 |
 | v1.6 | Shared reusable workflows (CI, head builds, FOSSA), pinned by `gero` tag or SHA | v1.0.0 |
 | v1.7 | Rendered workflows from `WorkflowsConfig`; the release workflow last (signing and attestation make it the most sensitive) | v1.6 |
-| v1.8 | Release trains beyond tracking: tag creation from the tracker through a workflow in the target repo (the CI form of `gero repo tag`, behind the tracker's sign-off), `repository_dispatch` where cron latency hurts, `release.requiresPrerelease` enforced for tags made outside `gero repo tag` too, with a per-release override | v1.3 |
+| v1.8 | Release trains beyond tracking: tag creation from the tracker through a workflow in the target repo (the CI form of `gero repo tag`, behind the tracker's sign-off), `repository_dispatch` where cron latency hurts, a stream's `requiresPrerelease` enforced for tags made outside `gero repo tag` too, with a per-release override | v1.3 |
 | v1.9 | "Branch for X" automation and hardening ahead of v2 | v1.5, v1.7, v1.8 |
 
 **Parallelism.** Three streams can run side by side after v1.0.0: CI and tracking (v1.1 to v1.4), standardization (v1.5 to v1.7) and release trains (v1.8, which needs the reconciler of v1.3). They meet at v1.9.

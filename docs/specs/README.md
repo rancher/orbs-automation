@@ -1,6 +1,6 @@
 # Specs
 
-Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why, [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md) is the product shape, [PHASES](../PHASES.md) is what and when. A spec covers one narrow how-we-build-it topic, so a commit or test can cite it. Read the [docs rules](../README.md) before editing one.
+Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why, [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md) is the product shape, [PHASES](../PHASES.md) is what and when. A spec covers one narrow how-we-build-it topic, so a commit or test can cite it. Read the [docs rules](../README.md) before editing one. [design/](../design/CHAIN_MODEL.md) is newer than the specs: where the two disagree, `design/` is right and the spec is stale.
 
 | Spec | Covers |
 |---|---|

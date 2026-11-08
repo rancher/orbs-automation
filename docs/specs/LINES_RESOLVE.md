@@ -2,7 +2,7 @@
 
 **Status:** implemented, with the parts under [Not built yet](#not-built-yet) open. `gero lines resolve`: the map of how the release lines of the projects connect.
 
-The one shared line map ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)) is in two places: the `RancherLines` document holds the facts of each Rancher line, and each project maps its own series and branch to line ids under `release.lines`. This command reads both and the edges between the projects, and joins them by line, so one screen says what `v2.15` is across the projects and what feeds what. It reads the central config and the clock and never the network; what each branch holds on the host is [REPO_STATUS](REPO_STATUS.md).
+The one shared line map ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)) is in two places: the `RancherLines` document holds the facts of each Rancher line, and each project maps its own series (in its streams) and branch (in `branches.lines`) to line ids. This command reads both and the holdings between the projects, and joins them by line, so one screen says what `v2.15` is across the projects and what feeds what. It reads the central config and the clock and never the network; what each branch holds on the host is [REPO_STATUS](REPO_STATUS.md).
 
 ```
 Release lines, through rancher/rancher
@@ -22,7 +22,7 @@ No gaps.
 ```
 
 * **Lines are newest first**, ordered by their numbers (`v2.16` before `v2.9`), whatever order the document has them in. A line is shown with its phase from the clock (`development`, `ga`, `eom`, `eol`, as [APP_CONFIG](APP_CONFIG.md) derives it), the dates that are set and the Kubernetes range.
-* **The hub** is the project the lines are connected through: the one project marked `finalDestination: true` in the config ([APP_CONFIG](APP_CONFIG.md)), which is `rancher/rancher`, and `--hub` names another. Most things end in it, either directly or through another project (`rancher/charts`, whose charts reach it in an image), and the chain is not modeled in the config, so it is not needed to get a useful map. The flag is a field of the config and not a project known by name, so the map has no special case in code; no flag and no `--hub` is an error that says so.
+* **The hub** is the project the lines are connected through: the one project marked `finalDestination: true` in the config ([APP_CONFIG](APP_CONFIG.md)), which is `rancher/rancher`, and `--hub` names another. Most things end in it, either directly or through another project (`rancher/charts`, whose charts reach it in an image), and the walk beyond one hop is not built, so it is not needed to get a useful map. The flag is a field of the config and not a project known by name, so the map has no special case in code; no flag and no `--hub` is an error that says so.
 * **Takes from** are the projects that the hub holds a release of, whose releases go to the hub's branch for the line, found with the routes `gero ship` ships down. A producer with its own lines is shown with its series and branch for the line; one with none (`universal`) goes to every release branch of the hub, so it is on every line the hub has a branch for, as `any release`. Each row names the holdings that make the connection.
 * **Ships to** are the projects the hub's releases for the line go to, with the branches, shown when the hub is named with `--hub` and is not the final destination. Nothing ships on from the final destination, so the section is not shown for it, whatever holdings others have of it, and a project that holds something of it is then just on the line. A consumer with no branch for the line is left out.
 * **Also on this line** is every other project that has the line but no direct link to the hub on it, with its own connections, so a chain through it shows. One hop from the hub is followed; the projects reached only through another are listed here with that other connection, and not followed further.
@@ -37,4 +37,4 @@ No gaps.
 
 ## Open questions
 
-* The charts to Assets edge, so the chain through `rancher/charts` connects back to the hub and leaves `also`: the Assets to Rancher edge is modeled and shown, and charts is stretch 2 of [CHAIN_TRACING](CHAIN_TRACING.md).
+* The charts to Assets holding, so the chain through `rancher/charts` connects back to the hub and leaves `also`: the Assets to Rancher holding is modeled and shown, and charts is stretch 2 of [CHAIN_TRACING](CHAIN_TRACING.md).

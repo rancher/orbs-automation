@@ -1,6 +1,6 @@
 # Config Engine
 
-**Status:** working notes, 2026-11-07. The engine in `internal/platform/config` and the providers built on it. Where it sits is in [LAYERS](LAYERS.md); the kinds it loads are in [CONFIG_SCHEMA](CONFIG_SCHEMA.md).
+**Status:** implemented, 2026-11-08. The engine in `internal/platform/config` and the providers built on it. Where it sits is in [LAYERS](LAYERS.md); the kinds it loads are in [CONFIG_SCHEMA](CONFIG_SCHEMA.md).
 
 ## What it does
 
@@ -10,7 +10,7 @@ The engine handles one object. It decodes strictly, fills safe defaults and vali
 2. **Defaults:** `SetDefaults` fills the fields that have a default
 3. **Validate:** `Validate` checks the object, reading the defaulted values
 
-This is the order `Workspace.Config()` runs today (decode, then defaults, then validate).
+This is the order the provider runs for each document (decode, then defaults, then validate).
 
 ## Defaults are safe and independent
 

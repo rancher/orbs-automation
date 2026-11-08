@@ -1,6 +1,6 @@
 # Update Engine
 
-**Status:** design, 2026-11-08. The engine that ships a release into the holdings of a consumer, in `internal/bump`, built on the [chain model](CHAIN_MODEL.md). It replaces the methods, edges and parameters of the old `internal/updatedispatcher` ([CUTOVER](CUTOVER.md)). `gero ship` and `gero repo status` read it.
+**Status:** implemented, 2026-11-08, except the strategy `chartsPackageBump`, which is declared and not built. The engine that ships a release into the holdings of a consumer, in `internal/bump`, built on the [chain model](CHAIN_MODEL.md). `gero ship` and `gero repo status` read it.
 
 ## What it does
 

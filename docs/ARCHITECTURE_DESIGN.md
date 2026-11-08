@@ -59,15 +59,20 @@ Data goes to stdout and diagnostics to stderr, with `--json` on data commands an
 
 ## 3. Topology & Config
 
-The central automation repo is the source of truth for the project list, how projects relate (what each takes updates from), the Rancher release lines, and the configs of projects we do not own. Config is a set of YAML documents with `apiVersion`, `kind`, `name` and `spec`, inspired by Kubernetes resources but not compatible with them.
+The central automation repo is the source of truth for the project list, what each project holds of the others, the Rancher release lines, and the configs of projects we do not own. Config is a set of YAML documents with `apiVersion` (`gero/v1alpha2`), `kind`, `name`, `spec` and `refs`, inspired by Kubernetes resources but not compatible with them. A document says what it is and a set of documents is checked together; nothing depends on which file holds which.
 
 Kinds so far (names are not final):
-* `Project`: a repo we model. Its `spec` has `repo`, `release` (branch policy, tag pattern, line-to-branch mapping), `updateMethods` (how it takes an update: a strategy configured by the consumer) and `downstream` (the projects it ships to, and with which of their methods). Edges are declared once, on the producing side, and the reverse view is derived. A project can be a producer on one edge and a consumer on another.
-* `RancherLines`: the set of Rancher lines with their lifecycle dates (GA, EOM, EOL) and Kubernetes range. The phase is derived from the dates and the current UTC time. It has no branches; each project maps its own branches to line IDs.
-* `External`: a third-party project we track (`trackOnly`, `react`) or notify.
+* `Project`: a repo as a place: who owns it, its pull request conventions, and its branches (the layout, the stages, and the branch of each Rancher line).
+* `Stream`: what a project releases: the tag scheme, the stages, and the lines and version series.
+* `Artifact`: one thing each release of a stream produces, an image or a file of the GitHub release.
+* `Holding`: where a piece of a producer's release lives in a consumer's repo, how it is written, and whether it is a release, a commit or a branch. The consumer lists its holdings, and the reverse view ("who holds X") is derived.
+* `Edit`: the steps and the named strategy that run around the write of the holdings.
+* `RancherLines`: the Rancher lines with their lifecycle dates and Kubernetes range. The phase is derived from the dates and the current UTC time. It has no branches; each project maps its own branches to line IDs.
 * `WorkflowsConfig`: how workflows are rendered into a repo's branches. This lives in the target repo's `gero.yaml`, not centrally, and is the only kind allowed there for now.
 
-The real config and its README are in [`../config/`](../config/README.md); illustrative mock repos are in [`../mock-repos/`](../mock-repos/). Shape, placement, defaults and validation are in [APP_CONFIG](specs/APP_CONFIG.md).
+The documents are decoded, defaulted and validated by the config engine, then joined into one graph that every command and `gero ship` read. The layers and the engines are in [design/](design/LAYERS.md) ([CHAIN_MODEL](design/CHAIN_MODEL.md), [UPDATE_ENGINE](design/UPDATE_ENGINE.md), [CONFIG_ENGINE](design/CONFIG_ENGINE.md)).
+
+The real config and its README are in [`../config/`](../config/README.md); an illustrative mock repo is in [`../mock-repos/`](../mock-repos/). Field reference: [CONFIG_SCHEMA](design/CONFIG_SCHEMA.md); shape, placement, defaults and validation: [APP_CONFIG](specs/APP_CONFIG.md).
 
 ---
 
@@ -123,5 +128,5 @@ What a QA run proves it tested (Rancher version, chart version or image) must be
 
 An optional `gero dashboard` or `gero triage` subcommand runs a lightweight embedded HTTP server (`net/http` with embedded static assets) on the developer's machine:
 * Displays real-time status of multi-repo release trains by querying the central tracking issues.
-* visualizes the project graph defined by the `downstream` edges in the central config.
+* visualizes the project graph defined by the holdings in the central config.
 * Inspired by Google's `triage-party`, allowing local custom views into multi-repo issue and release states.

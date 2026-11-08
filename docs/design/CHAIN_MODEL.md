@@ -1,6 +1,6 @@
 # Chain Model
 
-**Status:** design, 2026-11-08. The resolved model that commands and `ship` read, in `internal/chain`, built from the documents of [CONFIG_SCHEMA](CONFIG_SCHEMA.md). Where it sits is in [LAYERS](LAYERS.md); the order of the move to it is in [CUTOVER](CUTOVER.md).
+**Status:** implemented, 2026-11-08. The resolved model that commands and `ship` read, in `internal/chain`, built from the documents of [CONFIG_SCHEMA](CONFIG_SCHEMA.md). Where it sits is in [LAYERS](LAYERS.md); the order of the move to it is in [CUTOVER](CUTOVER.md).
 
 ## Why a package of its own
 
@@ -24,7 +24,7 @@ The kinds are small documents joined by `refs`: a Project does not know its Stre
 
 ## Answers, and where each came from
 
-These rules live in code today, on the old types or in the loader. They move here unchanged unless the schema changed them.
+The rules the graph applies, each in `internal/chain`.
 
 | Answer | Rule |
 |---|---|

@@ -33,7 +33,7 @@ Where the real config and the fixture differ, the real config wins as to facts, 
 4. `workspace.Chain()` beside `Config()`
 5. Each consumer, leaf first: constants and dates, registry, the commands that list projects, the repo commands, `lines resolve`, then the engine and `ship`. Each package moves in its own commit with its tests moved to small documents
 6. `Config()`, the old types, the old loader, `config-mock/` and the v1alpha1 files are deleted, `config/v1alpha2/` moves up to `config/`, and the lint doors name only `appconfig`
-7. The specs and READMEs are rewritten to the new model
+7. The specs and READMEs are rewritten to the new model (the docs refresh of 2026-11-08)
 
 The old model stays in place and green until the last consumer has moved.
 
