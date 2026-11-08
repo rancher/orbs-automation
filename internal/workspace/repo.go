@@ -1,10 +1,10 @@
 package workspace
 
-import "github.com/rancher/orbs-automation/internal/git/repo"
+import "github.com/rancher/orbs-automation/internal/platform/git/repo"
 
 // ErrNotRepository is returned when the working directory is not in the
 // repository the method asks for. It is repo.ErrNotRepository, re-exported so
-// commands need not import internal/git/repo to test for it.
+// commands need not import internal/platform/git/repo to test for it.
 var ErrNotRepository = repo.ErrNotRepository
 
 // ErrDetachedHead is returned by a repository's Head when HEAD is not on a

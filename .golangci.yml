@@ -63,16 +63,16 @@ linters:
           deny:
             - pkg: github.com/spf13/cobra
               desc: cobra is only allowed in cmd/ (docs/specs/PROJECT_LAYOUT.md)
-        # go-git stays in internal/git/repo, the one place that reads a local
+        # go-git stays in internal/platform/git/repo, the one place that reads a local
         # repository (docs/specs/PROJECT_LAYOUT.md section 6).
         nogogit:
           list-mode: lax
           files:
-            - "!**/internal/git/repo/**"
+            - "!**/internal/platform/git/repo/**"
             - "!$test"
           deny:
             - pkg: github.com/go-git/go-git
-              desc: go-git is only allowed in internal/git/repo (docs/specs/PROJECT_LAYOUT.md)
+              desc: go-git is only allowed in internal/platform/git/repo (docs/specs/PROJECT_LAYOUT.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/platform/git/gitcli (each use records why go-git
         # cannot do it) and internal/ghcli (gero doctor) go through it
@@ -184,7 +184,7 @@ linters:
             - "**/internal/cli/**"
             - "!$test"
           deny:
-            - pkg: github.com/rancher/orbs-automation/internal/git/repo
+            - pkg: github.com/rancher/orbs-automation/internal/platform/git/repo
               desc: commands open repositories through internal/workspace (docs/specs/PROJECT_LAYOUT.md)
         # A task is one action that commands compose. It reaches the world through
         # domain packages and its own small interface, and knows nothing of the CLI,

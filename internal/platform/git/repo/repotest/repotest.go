@@ -1,5 +1,5 @@
 // Package repotest builds real repositories for tests in packages that read
-// one. It lives under internal/git/repo because it is the only place besides
+// one. It lives under internal/platform/git/repo because it is the only place besides
 // that package allowed to import go-git. It uses only the testing package, so
 // it stays inside the dependency allow-list.
 package repotest

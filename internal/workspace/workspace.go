@@ -16,9 +16,9 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/git/repo"
 	"github.com/rancher/orbs-automation/internal/github"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/platform/git/repo"
 )
 
 // NotFoundHint is the advice for a missing central config directory. It is the

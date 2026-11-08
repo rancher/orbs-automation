@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/git/repo"
-	"github.com/rancher/orbs-automation/internal/git/repo/repotest"
+	"github.com/rancher/orbs-automation/internal/platform/git/repo"
+	"github.com/rancher/orbs-automation/internal/platform/git/repo/repotest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

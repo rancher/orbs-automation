@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/git/repo"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/platform/git/repo"
 )
 
 // How a RepoPath was found: where the winning rule looked.

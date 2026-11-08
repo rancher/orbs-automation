@@ -1,7 +1,7 @@
 // Package git holds the pure logic about git refs, tags and commits: today the
 // branch tag names the branch-tags script prints. It does no I/O besides the
 // Tags call, never reads the environment, and imports neither go-git nor
-// os/exec. Repository access lives in internal/git/repo.
+// os/exec. Repository access lives in internal/platform/git/repo.
 package git
 
 import (
