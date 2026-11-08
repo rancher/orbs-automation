@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
@@ -329,7 +328,7 @@ func branchesOn(r bump.Route, line string) ([]string, error) {
 // tagLines says the project finds its lines in its tags: one branch for them all,
 // and streams that list the lines.
 func tagLines(p *chain.Project) bool {
-	if p.Layout() != v1alpha2.LayoutSingle {
+	if p.Layout() != chain.LayoutSingle {
 		return false
 	}
 	return slices.ContainsFunc(p.Streams(), func(s *chain.Stream) bool { return len(s.Lines()) > 0 })

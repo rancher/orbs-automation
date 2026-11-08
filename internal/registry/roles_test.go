@@ -1,9 +1,9 @@
 package registry
 
 import (
+	"github.com/rancher/orbs-automation/internal/chain"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,9 +12,9 @@ func TestLookup(t *testing.T) {
 	tests := []struct {
 		role, label, host, name string
 	}{
-		{v1alpha2.RegistryDockerHub, "Docker Hub", "registry-1.docker.io", "docker.io"},
-		{v1alpha2.RegistryPrimeStaging, "Prime Staging", "stgregistry.suse.com", "stgregistry.suse.com"},
-		{v1alpha2.RegistryPrimeProduction, "Prime Production", "registry.rancher.com", "registry.rancher.com"},
+		{chain.RegistryDockerHub, "Docker Hub", "registry-1.docker.io", "docker.io"},
+		{chain.RegistryPrimeStaging, "Prime Staging", "stgregistry.suse.com", "stgregistry.suse.com"},
+		{chain.RegistryPrimeProduction, "Prime Production", "registry.rancher.com", "registry.rancher.com"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.role, func(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLookupUnknownRole(t *testing.T) {
 }
 
 func TestEveryConfigRoleHasARegistry(t *testing.T) {
-	for _, role := range []string{v1alpha2.RegistryDockerHub, v1alpha2.RegistryPrimeStaging, v1alpha2.RegistryPrimeProduction} {
+	for _, role := range []string{chain.RegistryDockerHub, chain.RegistryPrimeStaging, chain.RegistryPrimeProduction} {
 		_, ok := Lookup(role)
 		assert.True(t, ok, role)
 	}
@@ -43,15 +43,15 @@ func TestApplies(t *testing.T) {
 		role string
 		want bool
 	}{
-		{"v0.5.3", v1alpha2.RegistryDockerHub, true},
-		{"v0.5.3", v1alpha2.RegistryPrimeStaging, true},
-		{"v0.5.3", v1alpha2.RegistryPrimeProduction, true},
-		{"v0.5.3-rc.1", v1alpha2.RegistryDockerHub, true},
-		{"v0.5.3-rc.1", v1alpha2.RegistryPrimeStaging, true},
-		{"v0.5.3-rc.1", v1alpha2.RegistryPrimeProduction, false},
-		{"0.5.3-hotfix-1", v1alpha2.RegistryPrimeProduction, false},
-		{"v0.5.3+build.1", v1alpha2.RegistryPrimeProduction, true},
-		{"main", v1alpha2.RegistryPrimeProduction, true},
+		{"v0.5.3", chain.RegistryDockerHub, true},
+		{"v0.5.3", chain.RegistryPrimeStaging, true},
+		{"v0.5.3", chain.RegistryPrimeProduction, true},
+		{"v0.5.3-rc.1", chain.RegistryDockerHub, true},
+		{"v0.5.3-rc.1", chain.RegistryPrimeStaging, true},
+		{"v0.5.3-rc.1", chain.RegistryPrimeProduction, false},
+		{"0.5.3-hotfix-1", chain.RegistryPrimeProduction, false},
+		{"v0.5.3+build.1", chain.RegistryPrimeProduction, true},
+		{"main", chain.RegistryPrimeProduction, true},
 		{"v0.5.3", "ecr", false},
 	}
 	for _, tt := range tests {
@@ -62,8 +62,8 @@ func TestApplies(t *testing.T) {
 }
 
 func TestReference(t *testing.T) {
-	hub, _ := Lookup(v1alpha2.RegistryDockerHub)
-	prod, _ := Lookup(v1alpha2.RegistryPrimeProduction)
+	hub, _ := Lookup(chain.RegistryDockerHub)
+	prod, _ := Lookup(chain.RegistryPrimeProduction)
 	assert.Equal(t, "docker.io/rancher/scc-operator:v0.5.3", hub.Reference("rancher/scc-operator", "v0.5.3"))
 	assert.Equal(t, "registry.rancher.com/rancher/scc-operator:v0.5.3", prod.Reference("rancher/scc-operator", "v0.5.3"))
 }

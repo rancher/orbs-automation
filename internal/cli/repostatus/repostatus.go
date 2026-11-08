@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
@@ -275,7 +274,7 @@ func targets(p *chain.Project) []Target {
 		}
 		return ""
 	}
-	if p.Layout() == v1alpha2.LayoutSingle {
+	if p.Layout() == chain.LayoutSingle {
 		// Every line is on the one branch. A stream that lists lines has them in its
 		// tags, so each is a row of its own.
 		var ts []Target
@@ -322,7 +321,7 @@ func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
 	}
 	// What tag could be made next is for tags a person makes. A project whose tags
 	// its own CI makes has no next one.
-	if t.Head != "" && stream.Scheme() != v1alpha2.SchemeCalverLineStage {
+	if t.Head != "" && stream.Scheme() != tagscheme.CalverLineStage {
 		c := releasetag.Choice{
 			Tags: refs.Tags, Pattern: stream.TagPattern(), Series: t.Series, Commit: t.Head,
 			RequiresPrerelease: stream.RequiresPrerelease(),

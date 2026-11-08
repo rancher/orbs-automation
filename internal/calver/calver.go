@@ -10,15 +10,21 @@ import (
 	"slices"
 	"strings"
 	"time"
+)
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+// The names a calverLineStage tag has: the scheme as a stream calls it in config,
+// and its two stages.
+const (
+	LineStageName = "calverLineStage"
+	StageDev      = "dev"
+	StageStable   = "stable"
 )
 
 // Tag is a tag name read by a scheme.
 type Tag struct {
 	Name  string
 	Line  string    // the Rancher line, such as v2.16
-	Stage string    // v1alpha2.StageDev or v1alpha2.StageStable
+	Stage string    // StageDev or StageStable
 	Time  time.Time // UTC, to the minute
 }
 
@@ -38,7 +44,7 @@ type Scheme interface {
 type LineStage struct{}
 
 // Name is calverLineStage.
-func (LineStage) Name() string { return v1alpha2.SchemeCalverLineStage }
+func (LineStage) Name() string { return LineStageName }
 
 // lineStage is the whole tag: the line, the time and the optional dev suffix.
 var lineStage = regexp.MustCompile(`^(v\d+\.\d+)-(\d{8}T\d{4}Z)(-dev)?$`)
@@ -57,9 +63,9 @@ func (LineStage) Parse(name string) (Tag, bool) {
 	if err != nil {
 		return Tag{}, false
 	}
-	stage := v1alpha2.StageStable
+	stage := StageStable
 	if m[3] != "" {
-		stage = v1alpha2.StageDev
+		stage = StageDev
 	}
 	return Tag{Name: name, Line: m[1], Stage: stage, Time: t}, true
 }

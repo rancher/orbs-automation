@@ -31,9 +31,9 @@ func (a *Artifact) Registries(stable bool) []string {
 	if len(a.Doc.Spec.Registries) > 0 {
 		return append([]string(nil), a.Doc.Spec.Registries...)
 	}
-	regs := []string{v1alpha2.RegistryDockerHub, v1alpha2.RegistryPrimeStaging}
+	regs := []string{RegistryDockerHub, RegistryPrimeStaging}
 	if stable {
-		regs = append(regs, v1alpha2.RegistryPrimeProduction)
+		regs = append(regs, RegistryPrimeProduction)
 	}
 	return regs
 }

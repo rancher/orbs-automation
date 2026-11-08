@@ -6,7 +6,7 @@
 package registry
 
 import (
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
@@ -25,14 +25,14 @@ func Lookup(role string) (Registry, bool) {
 }
 
 var registries = map[string]Registry{
-	v1alpha2.RegistryDockerHub: {
-		Role: v1alpha2.RegistryDockerHub, Label: "Docker Hub", Host: "registry-1.docker.io", Name: "docker.io",
+	chain.RegistryDockerHub: {
+		Role: chain.RegistryDockerHub, Label: "Docker Hub", Host: "registry-1.docker.io", Name: "docker.io",
 	},
-	v1alpha2.RegistryPrimeStaging: {
-		Role: v1alpha2.RegistryPrimeStaging, Label: "Prime Staging", Host: "stgregistry.suse.com", Name: "stgregistry.suse.com",
+	chain.RegistryPrimeStaging: {
+		Role: chain.RegistryPrimeStaging, Label: "Prime Staging", Host: "stgregistry.suse.com", Name: "stgregistry.suse.com",
 	},
-	v1alpha2.RegistryPrimeProduction: {
-		Role: v1alpha2.RegistryPrimeProduction, Label: "Prime Production", Host: "registry.rancher.com", Name: "registry.rancher.com",
+	chain.RegistryPrimeProduction: {
+		Role: chain.RegistryPrimeProduction, Label: "Prime Production", Host: "registry.rancher.com", Name: "registry.rancher.com",
 	},
 }
 
@@ -44,7 +44,7 @@ func Applies(role, tag string) bool {
 	if _, ok := registries[role]; !ok {
 		return false
 	}
-	return role != v1alpha2.RegistryPrimeProduction || !semver.Classify(tag).HasPrerelease
+	return role != chain.RegistryPrimeProduction || !semver.Classify(tag).HasPrerelease
 }
 
 // Reference returns the full reference to an image in a registry, such as

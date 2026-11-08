@@ -10,7 +10,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -35,7 +34,7 @@ type Scheme interface {
 	Latest(tags []git.Tag, line string) git.Latest
 	// IsStable reports whether a tag is not a prerelease.
 	IsStable(tag string) bool
-	// Stage is the stage a tag is of (v1alpha2.StageDev or v1alpha2.StageStable), or ""
+	// Stage is the stage a tag is of (calver.StageDev or calver.StageStable), or ""
 	// for a scheme whose tags carry none, and for a name that is not a release.
 	Stage(tag string) string
 	// Compare orders two tags: negative when a is older, zero when they are equal
@@ -66,7 +65,13 @@ type semverScheme struct {
 	accepts func(tag string) bool // nil: every tag the pattern matches
 }
 
-func (semverScheme) Name() string { return v1alpha2.SchemeSemver }
+// The names of the schemes a stream may use in config.
+const (
+	Semver          = "semver"
+	CalverLineStage = calver.LineStageName
+)
+
+func (semverScheme) Name() string { return Semver }
 
 func (semverScheme) Valid(tag string) bool {
 	_, ok := semver.Parse(tag)
@@ -167,8 +172,8 @@ func (c calverScheme) Latest(tags []git.Tag, line string) git.Latest {
 		}
 		lines = []string{line}
 	}
-	release := c.newest(tags, lines, v1alpha2.StageStable)
-	dev := c.newest(tags, lines, v1alpha2.StageDev)
+	release := c.newest(tags, lines, calver.StageStable)
+	dev := c.newest(tags, lines, calver.StageDev)
 	var out git.Latest
 	if release != nil {
 		out.Stable = &release.tag
@@ -213,7 +218,7 @@ func (c calverScheme) Stage(tag string) string {
 
 func (c calverScheme) IsStable(tag string) bool {
 	t, ok := c.inner.Parse(tag)
-	return ok && t.Stage == v1alpha2.StageStable
+	return ok && t.Stage == calver.StageStable
 }
 
 // Compare orders by the date in the names, so a newer date with the same line is a
@@ -246,9 +251,9 @@ func ForStream(st *chain.Stream) (Scheme, error) {
 		lines = append(lines, lineSeries{line: id, series: series})
 	}
 	switch st.Scheme() {
-	case v1alpha2.SchemeSemver:
+	case Semver:
 		return semverScheme{lines: lines, pattern: st.TagPattern(), accepts: st.TagMatches}, nil
-	case v1alpha2.SchemeCalverLineStage:
+	case CalverLineStage:
 		inner, err := calver.Builtin().Get(st.Scheme())
 		if err != nil {
 			return nil, fmt.Errorf("stream %s: %w", st.Name(), err)

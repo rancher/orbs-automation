@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/stretchr/testify/assert"
@@ -108,7 +107,7 @@ func TestCheckProjectATagInNoLineWarns(t *testing.T) {
 
 func TestCheckProjectKeepsConfigOrder(t *testing.T) {
 	got := CheckProject(context.Background(), sccOperator(t), &fakeProber{}, "v1.0.0")
-	assert.Equal(t, []string{v1alpha2.RegistryDockerHub, v1alpha2.RegistryPrimeStaging, v1alpha2.RegistryPrimeProduction},
+	assert.Equal(t, []string{chain.RegistryDockerHub, chain.RegistryPrimeStaging, chain.RegistryPrimeProduction},
 		[]string{got.Rows[0].Registry, got.Rows[1].Registry, got.Rows[2].Registry})
 }
 

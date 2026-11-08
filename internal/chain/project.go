@@ -78,7 +78,7 @@ func (p *Project) LineOf(tag string) (line string, ok bool) {
 }
 
 // single reports whether every release is on the default branch.
-func (p *Project) single() bool { return p.Doc.Spec.Branches.Layout != v1alpha2.LayoutPerLine }
+func (p *Project) single() bool { return p.Doc.Spec.Branches.Layout != LayoutPerLine }
 
 // Lines returns the ids of the lines the project lists, as written.
 func (p *Project) Lines() []string {

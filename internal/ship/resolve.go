@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -101,7 +100,7 @@ func streamOf(route bump.Route) (*chain.Stream, error) {
 // prerelease too.
 func acceptsAll(route bump.Route) bool {
 	for _, h := range route.Holdings {
-		if h.Doc.Spec.Holds.Accept != v1alpha2.AcceptAll {
+		if h.Doc.Spec.Holds.Accept != chain.AcceptAll {
 			return false
 		}
 	}
