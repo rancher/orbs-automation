@@ -16,7 +16,7 @@ How `gero` talks to GitHub and to git. Two Go libraries each do one job, and a s
 * **The `gh` config file is read once per process**, so a test sets `GH_CONFIG_DIR` before the first call.
 * **`DefaultHost`** honors `GH_HOST`, then a lone host in `hosts.yml`, then `github.com`.
 
-All go-gh use stays in `internal/github/gogh.go` (lint-enforced).
+All go-gh use stays in `internal/platform/github/gogh.go` (lint-enforced).
 
 ## REST: `google/go-github`
 
