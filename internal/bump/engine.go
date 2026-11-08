@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/chain"
 )
@@ -276,7 +278,7 @@ func (r Route) Steps(t Target) (pre, post []StepRef) {
 	collect := func(phase Phase, name string, steps []v1alpha2.Step) []StepRef {
 		var out []StepRef
 		for i, st := range steps {
-			if (v1alpha2.Range{Since: st.Since, Until: st.Until}).Contains(t.Line) {
+			if (lines.Range{Since: st.Since, Until: st.Until}).Contains(t.Line) {
 				out = append(out, StepRef{Phase: phase, Edit: name, Index: i, Step: st})
 			}
 		}

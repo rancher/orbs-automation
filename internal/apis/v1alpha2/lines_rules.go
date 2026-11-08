@@ -2,17 +2,10 @@ package v1alpha2
 
 import (
 	"fmt"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"regexp"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
-)
-
-// The phases a line may be forced into.
-const (
-	PhaseDevelopment = "development"
-	PhaseGA          = "ga"
-	PhaseEOM         = "eom"
-	PhaseEOL         = "eol"
 )
 
 // kubernetesMinor is what a Kubernetes minor looks like in a range.
@@ -32,14 +25,14 @@ func (l *RancherLines) Validate(_ config.Context, r *config.Report) {
 		switch {
 		case ln.ID == "":
 			r.Errorf(at+".id", "required")
-		case !lineID.MatchString(ln.ID):
+		case !lines.Valid(ln.ID):
 			checkLineID(r, at+".id", ln.ID)
 		case seen[ln.ID]:
 			r.Errorf(at+".id", "line %s is listed twice", ln.ID)
 		}
 		seen[ln.ID] = true
 		if ln.Phase != "" {
-			oneOf(r, at+".phase", ln.Phase, PhaseDevelopment, PhaseGA, PhaseEOM, PhaseEOL)
+			oneOf(r, at+".phase", ln.Phase, lines.PhaseDevelopment, lines.PhaseGA, lines.PhaseEOM, lines.PhaseEOL)
 		}
 		checkDates(r, at+".dates", ln.Dates)
 		checkKubernetes(r, at+".kubernetes", ln.Kubernetes)
@@ -48,7 +41,7 @@ func (l *RancherLines) Validate(_ config.Context, r *config.Report) {
 
 // checkDates reports dates that are out of order: ga, then eom, then eol, each
 // optional.
-func checkDates(r *config.Report, path string, d Dates) {
+func checkDates(r *config.Report, path string, d lines.Dates) {
 	if !d.EOM.IsZero() && d.GA.IsZero() {
 		r.Errorf(path+".eom", "set without ga")
 	}
@@ -67,7 +60,7 @@ func checkDates(r *config.Report, path string, d Dates) {
 
 // checkKubernetes reports a range that is half written, whose ends are not
 // minors like 1.35, or whose min is after its max.
-func checkKubernetes(r *config.Report, path string, k KubernetesRange) {
+func checkKubernetes(r *config.Report, path string, k lines.KubernetesRange) {
 	if k.Min == "" && k.Max == "" {
 		return
 	}
@@ -85,8 +78,7 @@ func checkKubernetes(r *config.Report, path string, k KubernetesRange) {
 	if !ok {
 		return
 	}
-	lo, hi := lineNumbers(k.Min), lineNumbers(k.Max)
-	if lo[0] > hi[0] || (lo[0] == hi[0] && lo[1] > hi[1]) {
+	if lines.Compare(k.Min, k.Max) > 0 {
 		r.Errorf(path, "min %s is after max %s", k.Min, k.Max)
 	}
 }

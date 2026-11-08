@@ -2,6 +2,7 @@ package v1alpha2
 
 import (
 	"fmt"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"regexp"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
@@ -52,6 +53,6 @@ func checkSteps(r *config.Report, path string, steps []Step) {
 		if st.From != "" {
 			oneOf(r, at+".from", st.From, FromConsumer, FromProducer, FromCentral)
 		}
-		checkRange(r, at, Range{Since: st.Since, Until: st.Until})
+		checkRange(r, at, lines.Range{Since: st.Since, Until: st.Until})
 	}
 }

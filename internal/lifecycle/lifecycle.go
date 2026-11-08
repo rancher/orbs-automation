@@ -6,12 +6,13 @@ package lifecycle
 
 import (
 	"fmt"
+
 	"io"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"golang.org/x/net/html"
 )
 
@@ -27,7 +28,7 @@ import (
 // detail: one table per lifecycle (Rancher's newer lines and its older ones are
 // two tables with the same columns). Every table of the detail with a Version
 // column is read, and the columns are found by their header, not by position.
-func Parse(r io.Reader, product string) (map[string]v1alpha2.Dates, error) {
+func Parse(r io.Reader, product string) (map[string]lines.Dates, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
 		return nil, fmt.Errorf("read the lifecycle page: %w", err)
@@ -40,7 +41,7 @@ func Parse(r io.Reader, product string) (map[string]v1alpha2.Dates, error) {
 	if detail == nil {
 		return nil, fmt.Errorf("section %q has no version table: nothing follows its row", product)
 	}
-	lines := map[string]v1alpha2.Dates{}
+	lines := map[string]lines.Dates{}
 	var found bool
 	for _, table := range descendants(detail, "table") {
 		header, rows := tableRows(table)
@@ -104,23 +105,23 @@ func (c columns) complete() error {
 	return nil
 }
 
-func (c columns) read(cells []string) (string, v1alpha2.Dates, error) {
+func (c columns) read(cells []string) (string, lines.Dates, error) {
 	need := max(c.version, c.ga, c.eom, c.eol) + 1
 	if len(cells) < need {
-		return "", v1alpha2.Dates{}, fmt.Errorf("row %s has %d cells, need %d", cells[0], len(cells), need)
+		return "", lines.Dates{}, fmt.Errorf("row %s has %d cells, need %d", cells[0], len(cells), need)
 	}
 	id, err := lineID(cells[c.version])
 	if err != nil {
-		return "", v1alpha2.Dates{}, err
+		return "", lines.Dates{}, err
 	}
-	var d v1alpha2.Dates
+	var d lines.Dates
 	for _, f := range []struct {
 		name string
 		cell string
 		to   *time.Time
 	}{{"GA", cells[c.ga], &d.GA}, {"EOM", cells[c.eom], &d.EOM}, {"EOL", cells[c.eol], &d.EOL}} {
 		if *f.to, err = parseDate(f.cell); err != nil {
-			return "", v1alpha2.Dates{}, fmt.Errorf("row %s: %s: %w", cells[c.version], f.name, err)
+			return "", lines.Dates{}, fmt.Errorf("row %s: %s: %w", cells[c.version], f.name, err)
 		}
 	}
 	return id, d, nil

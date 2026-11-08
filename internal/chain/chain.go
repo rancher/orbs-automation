@@ -3,7 +3,7 @@ package chain
 import (
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/appconfig"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
@@ -14,7 +14,7 @@ type Graph struct {
 	holdings []*Holding
 	byName   map[string]*Project // lowercase name
 	bySlug   map[string]*Project // lowercase owner/name
-	lines    []v1alpha2.Line
+	lines    []lines.Line
 	warnings []config.Finding
 	empty    bool
 }
@@ -98,7 +98,7 @@ func (g *Graph) Project(key string) *Project {
 func (g *Graph) Holdings() []*Holding { return g.holdings }
 
 // Lines returns the Rancher lines, as listed, or none when the config has none.
-func (g *Graph) Lines() []v1alpha2.Line { return g.lines }
+func (g *Graph) Lines() []lines.Line { return g.lines }
 
 // Warnings returns the warnings found when the config was loaded, in the order
 // reported.

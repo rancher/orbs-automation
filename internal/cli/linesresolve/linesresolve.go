@@ -7,17 +7,17 @@
 package linesresolve
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -178,12 +178,12 @@ func hubOf(g *chain.Graph, name string) (*chain.Project, error) {
 	return nil, fmt.Errorf("%w: no project is marked finalDestination: true, so name one with --hub", ErrNoHub)
 }
 
-var phases = []string{v1alpha2.PhaseDevelopment, v1alpha2.PhaseGA, v1alpha2.PhaseEOM, v1alpha2.PhaseEOL}
+var phases = []string{lines.PhaseDevelopment, lines.PhaseGA, lines.PhaseEOM, lines.PhaseEOL}
 
 // selectLines is the lines of the document that the options keep, newest first.
-func selectLines(all []v1alpha2.Line, opts Options, now time.Time) ([]v1alpha2.Line, error) {
-	lines := slices.Clone(all)
-	slices.SortStableFunc(lines, func(a, b v1alpha2.Line) int { return -compareLineIDs(a.ID, b.ID) })
+func selectLines(all []lines.Line, opts Options, now time.Time) ([]lines.Line, error) {
+	sorted := slices.Clone(all)
+	slices.SortStableFunc(sorted, func(a, b lines.Line) int { return -lines.Compare(a.ID, b.ID) })
 	for _, p := range opts.Phases {
 		if !slices.Contains(phases, p) {
 			return nil, fmt.Errorf("%q is not a phase: it is %s", p, strings.Join(phases, ", "))
@@ -191,18 +191,18 @@ func selectLines(all []v1alpha2.Line, opts Options, now time.Time) ([]v1alpha2.L
 	}
 	var want []string
 	for _, id := range opts.Lines {
-		id = withV(id)
-		if !slices.ContainsFunc(lines, func(l v1alpha2.Line) bool { return strings.EqualFold(l.ID, id) }) {
-			ids := make([]string, len(lines))
-			for i, l := range lines {
+		id = lines.Normalize(id)
+		if !slices.ContainsFunc(sorted, func(l lines.Line) bool { return strings.EqualFold(l.ID, id) }) {
+			ids := make([]string, len(sorted))
+			for i, l := range sorted {
 				ids[i] = l.ID
 			}
 			return nil, fmt.Errorf("%s is not a Rancher line: they are %s", id, strings.Join(ids, ", "))
 		}
 		want = append(want, strings.ToLower(id))
 	}
-	var out []v1alpha2.Line
-	for _, l := range lines {
+	var out []lines.Line
+	for _, l := range sorted {
 		if len(want) > 0 && !slices.Contains(want, strings.ToLower(l.ID)) {
 			continue
 		}
@@ -214,36 +214,6 @@ func selectLines(all []v1alpha2.Line, opts Options, now time.Time) ([]v1alpha2.L
 	return out, nil
 }
 
-// compareLineIDs orders line ids such as v2.9 and v2.16 by their numbers.
-func compareLineIDs(a, b string) int {
-	an, bn := lineNumbers(a), lineNumbers(b)
-	for i := 0; i < len(an) && i < len(bn); i++ {
-		if c := cmp.Compare(an[i], bn[i]); c != 0 {
-			return c
-		}
-	}
-	return cmp.Or(cmp.Compare(len(an), len(bn)), strings.Compare(a, b))
-}
-
-func lineNumbers(id string) []int {
-	var out []int
-	for _, part := range strings.Split(strings.TrimPrefix(strings.ToLower(id), "v"), ".") {
-		n, err := strconv.Atoi(part)
-		if err != nil {
-			return out
-		}
-		out = append(out, n)
-	}
-	return out
-}
-
-func withV(id string) string {
-	if !strings.HasPrefix(strings.ToLower(id), "v") {
-		return "v" + id
-	}
-	return id
-}
-
 // mapper holds what is the same for every line.
 type mapper struct {
 	g      *chain.Graph
@@ -252,7 +222,7 @@ type mapper struct {
 }
 
 // line connects one Rancher line to the hub and to the rest.
-func (m mapper) line(l v1alpha2.Line, now time.Time) Line {
+func (m mapper) line(l lines.Line, now time.Time) Line {
 	out := Line{
 		ID: l.ID, Phase: l.PhaseAt(now),
 		Dates:      Dates{GA: date(l.Dates.GA), EOM: date(l.Dates.EOM), EOL: date(l.Dates.EOL)},
@@ -543,11 +513,11 @@ func renderText(r Result, view *style.Renderer) string {
 // phaseRole is the look of where a line is in its life.
 func phaseRole(phase string) style.Role {
 	switch phase {
-	case v1alpha2.PhaseGA:
+	case lines.PhaseGA:
 		return style.OK
-	case v1alpha2.PhaseEOM:
+	case lines.PhaseEOM:
 		return style.Warn
-	case v1alpha2.PhaseEOL:
+	case lines.PhaseEOL:
 		return style.Error
 	}
 	return style.Dim

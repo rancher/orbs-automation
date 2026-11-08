@@ -2,9 +2,9 @@ package v1alpha2
 
 import (
 	"fmt"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
@@ -12,9 +12,6 @@ import (
 
 // slug is what a lowercase slug looks like, as in a team name.
 var slug = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
-
-// lineID is what a Rancher line looks like.
-var lineID = regexp.MustCompile(`^v[0-9]+\.[0-9]+$`)
 
 // oneOf reports an error at path unless value is one of the allowed, and returns
 // whether it was.
@@ -39,7 +36,7 @@ func orList(items []string) string {
 
 // checkLineID reports an error at path unless the value looks like a Rancher line.
 func checkLineID(r *config.Report, path, value string) {
-	if !lineID.MatchString(value) {
+	if !lines.Valid(value) {
 		r.Errorf(path, "%q is not a Rancher line: write it like v2.16", value)
 	}
 }
@@ -55,27 +52,17 @@ func quoteAll(items []string) string {
 
 // checkRange reports an error at path unless the range's ends are Rancher lines
 // and the since is not after the until.
-func checkRange(r *config.Report, path string, rng Range) {
-	if rng.Since != "" && !lineID.MatchString(rng.Since) {
+func checkRange(r *config.Report, path string, rng lines.Range) {
+	if rng.Since != "" && !lines.Valid(rng.Since) {
 		r.Errorf(path+".since", "%q is not a Rancher line: write it like v2.16", rng.Since)
 	}
-	if rng.Until != "" && !lineID.MatchString(rng.Until) {
+	if rng.Until != "" && !lines.Valid(rng.Until) {
 		r.Errorf(path+".until", "%q is not a Rancher line: write it like v2.16", rng.Until)
 	}
-	if !lineID.MatchString(rng.Since) || !lineID.MatchString(rng.Until) {
+	if !lines.Valid(rng.Since) || !lines.Valid(rng.Until) {
 		return
 	}
-	if lineBefore(lineNumbers(rng.Until), lineNumbers(rng.Since)) {
+	if lines.Compare(rng.Until, rng.Since) < 0 {
 		r.Errorf(path, "since %s is after until %s", rng.Since, rng.Until)
 	}
-}
-
-// lineNumbers reads a line id, or a Kubernetes minor, that already matched as its
-// major and minor.
-func lineNumbers(id string) [2]int {
-	major, minor, _ := strings.Cut(strings.TrimPrefix(id, "v"), ".")
-	var n [2]int
-	n[0], _ = strconv.Atoi(major)
-	n[1], _ = strconv.Atoi(minor)
-	return n
 }

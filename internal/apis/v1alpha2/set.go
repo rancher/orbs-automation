@@ -2,6 +2,7 @@ package v1alpha2
 
 import (
 	"fmt"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"slices"
 	"sort"
 	"strings"
@@ -204,7 +205,7 @@ func (s *set) knownLines() {
 				r.Errorf(path, "%s is not in RancherLines", id)
 			}
 		}
-		checkSpan := func(path string, rng Range) {
+		checkSpan := func(path string, rng lines.Range) {
 			check(path+".since", rng.Since)
 			check(path+".until", rng.Until)
 		}
@@ -227,7 +228,7 @@ func (s *set) knownLines() {
 				steps []Step
 			}{{"spec.preEdit", o.Spec.PreEdit}, {"spec.postEdit", o.Spec.PostEdit}} {
 				for i, st := range steps.steps {
-					checkSpan(fmt.Sprintf("%s[%d]", steps.path, i), Range{Since: st.Since, Until: st.Until})
+					checkSpan(fmt.Sprintf("%s[%d]", steps.path, i), lines.Range{Since: st.Since, Until: st.Until})
 				}
 			}
 		}
@@ -332,11 +333,11 @@ func (s *set) circular() {
 // development: an omitted branch means the default branch, which is for the line
 // in development.
 func (s *set) omittedBranches() {
-	lines := map[string]Line{}
+	byID := map[string]lines.Line{}
 	for _, o := range s.objs {
 		if l, ok := o.(*RancherLines); ok {
 			for _, ln := range l.Spec.Lines {
-				lines[ln.ID] = ln
+				byID[ln.ID] = ln
 			}
 		}
 	}
@@ -347,11 +348,11 @@ func (s *set) omittedBranches() {
 		}
 		r := s.at(o)
 		for i, bl := range p.Spec.Branches.Lines {
-			ln, known := lines[bl.Line]
+			ln, known := byID[bl.Line]
 			if bl.Branch != nil || !known {
 				continue
 			}
-			if phase := ln.PhaseAt(s.ctx.Now); phase != PhaseDevelopment {
+			if phase := ln.PhaseAt(s.ctx.Now); phase != lines.PhaseDevelopment {
 				r.Warnf(fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
 			}
 		}

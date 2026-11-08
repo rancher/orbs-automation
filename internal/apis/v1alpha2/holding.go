@@ -1,5 +1,7 @@
 package v1alpha2
 
+import "github.com/rancher/orbs-automation/internal/apis/lines"
+
 // Holding is a named rule for where a piece of information lives in a repo, and
 // what it holds of a producer.
 type Holding struct {
@@ -23,10 +25,10 @@ type At struct {
 
 // Holds is what the place holds of a producer.
 type Holds struct {
-	Kind   string   `yaml:"kind"` // release, commit or branch
-	Form   string   `yaml:"form"` // a template: how the text is written
-	Lines  Range    `yaml:"lines"`
-	Stage  string   `yaml:"stage"`
-	Stages []string `yaml:"stages"`
-	Accept string   `yaml:"accept"` // stable or all
+	Kind   string      `yaml:"kind"` // release, commit or branch
+	Form   string      `yaml:"form"` // a template: how the text is written
+	Lines  lines.Range `yaml:"lines"`
+	Stage  string      `yaml:"stage"`
+	Stages []string    `yaml:"stages"`
+	Accept string      `yaml:"accept"` // stable or all
 }

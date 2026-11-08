@@ -3,9 +3,10 @@ package registry
 import (
 	"context"
 	"fmt"
+
 	"sync"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
@@ -113,7 +114,7 @@ func CheckProject(ctx context.Context, p *chain.Project, c Prober, tag string) R
 // anyRanged reports whether any image applies to some lines only.
 func anyRanged(images []*chain.Artifact) bool {
 	for _, img := range images {
-		if img.Doc.Spec.Lines != (v1alpha2.Range{}) {
+		if img.Doc.Spec.Lines != (lines.Range{}) {
 			return true
 		}
 	}

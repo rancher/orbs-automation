@@ -1,6 +1,7 @@
 package v1alpha2
 
 import (
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -185,7 +186,7 @@ spec:
 `)
 
 	assert.Equal(t, ArtifactSpec{
-		Kind: "image", Name: "rancher/rancher-server", Lines: Range{Since: "v2.16"},
+		Kind: "image", Name: "rancher/rancher-server", Lines: lines.Range{Since: "v2.16"},
 		Registries: []string{"dockerhub", "prime-staging"},
 	}, a.Spec)
 }
@@ -210,7 +211,7 @@ spec:
 		Key: `.chart-versions."{line|trimprefix:v}".upstream-refs.{stage|replace:stable=prod}.charts.commit`,
 	}, h.Spec.At)
 	assert.Equal(t, Holds{
-		Kind: "commit", Stages: []string{"dev", "stable"}, Lines: Range{Until: "v2.15"}, Accept: "all",
+		Kind: "commit", Stages: []string{"dev", "stable"}, Lines: lines.Range{Until: "v2.15"}, Accept: "all",
 	}, h.Spec.Holds)
 }
 
@@ -258,14 +259,14 @@ spec:
 `)
 
 	require.Len(t, l.Spec.Lines, 2)
-	assert.Equal(t, Line{ID: "v2.17", Kubernetes: KubernetesRange{Min: "1.36", Max: "1.38"}}, l.Spec.Lines[0])
+	assert.Equal(t, lines.Line{ID: "v2.17", Kubernetes: lines.KubernetesRange{Min: "1.36", Max: "1.38"}}, l.Spec.Lines[0])
 	got := l.Spec.Lines[1]
 	assert.Equal(t, "v2.15", got.ID)
 	assert.Equal(t, "eom", got.Phase)
 	assert.Equal(t, time.Date(2026, 8, 27, 0, 0, 0, 0, time.UTC), got.Dates.GA)
 	assert.Equal(t, time.Date(2027, 2, 27, 0, 0, 0, 0, time.UTC), got.Dates.EOM)
 	assert.Equal(t, time.Date(2028, 2, 27, 0, 0, 0, 0, time.UTC), got.Dates.EOL)
-	assert.Equal(t, KubernetesRange{Min: "1.34", Max: "1.36"}, got.Kubernetes)
+	assert.Equal(t, lines.KubernetesRange{Min: "1.34", Max: "1.36"}, got.Kubernetes)
 }
 
 func TestDecodeSeveralDocuments(t *testing.T) {

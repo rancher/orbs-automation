@@ -1,6 +1,9 @@
 package chain
 
-import "github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+import (
+	"github.com/rancher/orbs-automation/internal/apis/lines"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+)
 
 // Edit is the extra steps of shipping into the holdings it follows.
 type Edit struct {
@@ -29,7 +32,7 @@ func (e *Edit) Steps(line string) (pre, post []v1alpha2.Step) {
 func stepsFor(steps []v1alpha2.Step, line string) []v1alpha2.Step {
 	var out []v1alpha2.Step
 	for _, st := range steps {
-		if (v1alpha2.Range{Since: st.Since, Until: st.Until}).Contains(line) {
+		if (lines.Range{Since: st.Since, Until: st.Until}).Contains(line) {
 			out = append(out, st)
 		}
 	}
