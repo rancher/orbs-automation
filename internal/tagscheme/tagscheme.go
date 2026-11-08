@@ -11,6 +11,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/config"
@@ -257,8 +258,34 @@ func names(tags []git.Tag) []string {
 // ForStream returns the scheme of a stream: semver for a semver stream, over the
 // lines it lists and the tags it accepts, and the calver scheme it names for a
 // calverLineStage stream. A chartVersion stream has none yet.
-func ForStream(_ *chain.Stream) (Scheme, error) { return nil, nil }
+func ForStream(st *chain.Stream) (Scheme, error) {
+	var lines []lineSeries
+	for _, id := range st.Lines() {
+		series, _ := st.Series(id)
+		lines = append(lines, lineSeries{line: id, series: series})
+	}
+	switch st.Scheme() {
+	case v1alpha2.SchemeSemver:
+		return semverScheme{lines: lines, pattern: st.TagPattern(), accepts: st.TagMatches}, nil
+	case v1alpha2.SchemeCalverLineStage:
+		inner, err := calver.Builtin().Get(st.Scheme())
+		if err != nil {
+			return nil, fmt.Errorf("stream %s: %w", st.Name(), err)
+		}
+		return calverScheme{lines: ids(lines), inner: inner}, nil
+	}
+	return nil, fmt.Errorf("stream %s: the scheme %s is not built", st.Name(), st.Scheme())
+}
 
 // ForProject returns the scheme of the one stream of a project. A project with no
 // stream, or with several, has no one scheme, and the caller names the stream.
-func ForProject(_ *chain.Project) (Scheme, error) { return nil, nil }
+func ForProject(p *chain.Project) (Scheme, error) {
+	switch streams := p.Streams(); len(streams) {
+	case 0:
+		return nil, fmt.Errorf("project %s has no stream", p.Name())
+	case 1:
+		return ForStream(streams[0])
+	default:
+		return nil, fmt.Errorf("project %s has %d streams: name the one to use", p.Name(), len(streams))
+	}
+}
