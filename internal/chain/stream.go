@@ -9,15 +9,16 @@ import (
 
 // Stream is what a project releases.
 type Stream struct {
-	Doc     *v1alpha2.Stream
-	project *Project
+	Doc       *v1alpha2.Stream
+	project   *Project
+	artifacts []*Artifact
 }
 
 // Name is the name of the document.
 func (s *Stream) Name() string { return s.Doc.Name }
 
 // Artifacts returns what each release of the stream produces, in the order read.
-func (s *Stream) Artifacts() []*Artifact { return nil }
+func (s *Stream) Artifacts() []*Artifact { return s.artifacts }
 
 // Project is the project that releases the stream.
 func (s *Stream) Project() *Project { return s.project }

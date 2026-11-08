@@ -25,10 +25,18 @@ func Build(cfg appconfig.Config) *Graph {
 		g.byName[strings.ToLower(p.Name())] = p
 		g.bySlug[strings.ToLower(p.Slug())] = p
 	}
+	streams := map[string]*Stream{}
 	for _, doc := range cfg.Streams {
 		p := g.byName[strings.ToLower(doc.Refs["project"][0])]
 		s := &Stream{Doc: doc, project: p}
 		p.streams = append(p.streams, s)
+		streams[doc.Name] = s
+	}
+	for _, doc := range cfg.Artifacts {
+		s := streams[doc.Refs["stream"][0]]
+		a := &Artifact{Doc: doc, stream: s}
+		s.artifacts = append(s.artifacts, a)
+		s.project.artifacts = append(s.project.artifacts, a)
 	}
 	if cfg.Lines != nil {
 		g.lines = cfg.Lines.Spec.Lines

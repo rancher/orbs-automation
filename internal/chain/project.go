@@ -11,6 +11,8 @@ type Project struct {
 	Doc     *v1alpha2.Project
 	graph   *Graph
 	streams []*Stream
+
+	artifacts []*Artifact
 }
 
 // Name is the name of the document.
@@ -42,7 +44,7 @@ func (p *Project) Streams() []*Stream { return p.streams }
 
 // Artifacts returns what the releases of every stream of the project produce, in
 // the order read.
-func (p *Project) Artifacts() []*Artifact { return nil }
+func (p *Project) Artifacts() []*Artifact { return p.artifacts }
 
 // StreamOf returns the stream a tag is a release of: the first of the project's
 // streams whose pattern the tag matches and none of whose excludes it matches. It

@@ -28,10 +28,10 @@ func TestAStreamAndAProjectKnowTheirArtifacts(t *testing.T) {
 	assert.Equal(t, "img2", a.Streams()[0].Artifacts()[1].Name())
 	require.Len(t, a.Streams()[1].Artifacts(), 1)
 	require.Len(t, a.Artifacts(), 3)
-	assert.Equal(t, []string{"acme/a", "acme/a-agent", "a-{version}.tgz"}, []string{a.Artifacts()[0].Ref(), a.Artifacts()[1].Ref(), a.Artifacts()[2].Ref()})
+	assert.Equal(t, []string{"acme/a", "a-{version}.tgz", "acme/a-agent"}, []string{a.Artifacts()[0].Ref(), a.Artifacts()[1].Ref(), a.Artifacts()[2].Ref()})
 	assert.Equal(t, "one", a.Artifacts()[0].Stream().Name())
 	assert.True(t, a.Artifacts()[0].IsImage())
-	assert.False(t, a.Artifacts()[2].IsImage())
+	assert.False(t, a.Artifacts()[1].IsImage())
 }
 
 func TestTheRegistriesOfAnArtifact(t *testing.T) {
