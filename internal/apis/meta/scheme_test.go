@@ -3,7 +3,9 @@ package meta
 import (
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -108,4 +110,102 @@ func TestSchemeRejectsAFieldTheKindDoesNotHave(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bogus")
+}
+
+// rulesWidget is a kind with a default and rules of its own.
+type rulesWidget struct {
+	TypeMeta   `yaml:",inline"`
+	ObjectMeta `yaml:",inline"`
+	Spec       struct {
+		Layout string `yaml:"layout"`
+		Size   int    `yaml:"size"`
+	} `yaml:"spec"`
+}
+
+func (w *rulesWidget) SetDefaults() {
+	if w.Spec.Layout == "" {
+		w.Spec.Layout = "single"
+	}
+}
+
+func (w *rulesWidget) Validate(_ config.Context, r *config.Report) {
+	if w.Spec.Size < 0 {
+		r.Errorf("spec.size", "must not be negative, got %d", w.Spec.Size)
+	}
+	if w.Spec.Size > 100 {
+		r.Warnf("spec.size", "is large, %d", w.Spec.Size)
+	}
+}
+
+func rulesScheme() *Scheme {
+	s := NewScheme()
+	s.AddKind("test/v1", "Widget", func() Object { return new(rulesWidget) })
+	return s
+}
+
+var testCtx = config.Context{Now: time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)}
+
+func TestDecodeReportAppliesTheDefaultsOfAKind(t *testing.T) {
+	objs, rep := rulesScheme().DecodeReport(strings.NewReader("apiVersion: test/v1\nkind: Widget\nname: w\n"), "w.yaml", testCtx)
+
+	require.NoError(t, rep.Err())
+	require.Len(t, objs, 1)
+	assert.Equal(t, "single", objs[0].(*rulesWidget).Spec.Layout)
+}
+
+func TestDecodeReportCarriesWarningsAndKeepsTheObject(t *testing.T) {
+	objs, rep := rulesScheme().DecodeReport(strings.NewReader("apiVersion: test/v1\nkind: Widget\nname: w\nspec: {size: 500}\n"), "w.yaml", testCtx)
+
+	require.NoError(t, rep.Err())
+	require.Len(t, objs, 1, "a warning does not drop the object")
+	require.Len(t, rep.Warnings(), 1)
+	assert.Equal(t, `w.yaml: document 1: Widget "w": spec.size: is large, 500`, rep.Warnings()[0].Error())
+}
+
+func TestDecodeReportAnInvalidObjectIsDroppedAndTheRestKept(t *testing.T) {
+	objs, rep := rulesScheme().DecodeReport(strings.NewReader(`
+apiVersion: test/v1
+kind: Widget
+name: good
+---
+apiVersion: test/v1
+kind: Widget
+name: bad
+spec: {size: -1}
+`), "a.yaml", testCtx)
+
+	require.Error(t, rep.Err())
+	assert.Equal(t, `a.yaml: document 2: Widget "bad": spec.size: must not be negative, got -1`, rep.Err().Error())
+	require.Len(t, objs, 1)
+	assert.Equal(t, "good", objs[0].GetName())
+}
+
+func TestDecodeReportFindingsAreInTheOrderOfTheDocuments(t *testing.T) {
+	_, rep := rulesScheme().DecodeReport(strings.NewReader(`
+apiVersion: test/v1
+kind: Widget
+name: one
+spec: {size: 500}
+---
+apiVersion: test/v1
+kind: Sprocket
+name: two
+---
+apiVersion: test/v1
+kind: Widget
+name: three
+spec: {size: -1}
+`), "a.yaml", testCtx)
+
+	require.Len(t, rep.Findings, 3)
+	assert.Equal(t, []int{1, 2, 3}, []int{rep.Findings[0].Doc, rep.Findings[1].Doc, rep.Findings[2].Doc})
+	assert.Equal(t, []config.Severity{config.Warning, config.Error, config.Error},
+		[]config.Severity{rep.Findings[0].Severity, rep.Findings[1].Severity, rep.Findings[2].Severity})
+}
+
+func TestDecodeReturnsTheErrorsAndNotTheWarnings(t *testing.T) {
+	objs, err := rulesScheme().Decode(strings.NewReader("apiVersion: test/v1\nkind: Widget\nname: w\nspec: {size: 500}\n"), "w.yaml")
+
+	require.NoError(t, err)
+	assert.Len(t, objs, 1)
 }
