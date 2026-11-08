@@ -45,11 +45,12 @@ The bundle ships with each `gero` release, as the asset `gero-config-bundle.yaml
 [release.yaml](../../.github/workflows/release.yaml) then does what GoReleaser cannot:
 
 * The provenance attestation covers the bundle, with the archives and `checksums.txt`.
+* GoReleaser signs `checksums.txt` and each archive with keyless Sigstore, which is what `gero doctor self-update` verifies ([SELF_UPDATE](SELF_UPDATE.md)). The bundle is listed in `checksums.txt`, so that signature covers it too.
 * Before the draft is published, a step fails the release unless the bundle is on it, in `checksums.txt`, and the uploaded copy has the hash `checksums.txt` lists.
 
 [ci.yml](../../.github/workflows/ci.yml) runs `goreleaser check` and a snapshot release on every pull request, and checks that the bundle is in the snapshot's `checksums.txt`, so a change to the wiring fails before a tag does.
 
-What this does not do: the checksums come from the same release as the bundle, so a reader that verifies them knows the download is intact, not who made it. Verifying the attestation is not built.
+What this does not do: the checksums come from the same release as the bundle, so a reader that verifies them knows the download is intact, not who made it. Fetching the bundle does not verify either signature or the attestation yet; self-update's verifier (`internal/platform/selfupdate`) is the model, and `ghreleases` takes it as `WithManifestVerifier`.
 
 ## Releases, fetching and verifying
 
@@ -105,7 +106,7 @@ A change to config therefore reaches workstations with a release, not with a mer
 
 ## Not built yet
 
-* Verifying the attestation of the release. The checksums come from the same release as the bundle, so a download is known to be intact, not to be the maintainers'.
+* Verifying the release's signature when the bundle is fetched, with the pinned release-workflow identity self-update uses. The checksums come from the same release as the bundle, so a download is known to be intact, not to be the maintainers'.
 * The newer of a local copy and the bundle: a local source always wins.
 * Conditional requests (`ghreleases` has none), so the daily refresh is by the age of the cache alone.
 * The templates and generated chunks, a way to name a release to use, and a refresh interval setting.

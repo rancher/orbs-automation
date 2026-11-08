@@ -1,6 +1,6 @@
 # Self-update
 
-**Status:** implemented, not yet exercised against a signed release: no release has carried the signatures it demands, so it refuses every release published so far. The release workflow now signs; the first signed tag is the first real test.
+**Status:** implemented.
 
 `gero doctor self-update` replaces the running `gero` with the newest GitHub release. It is for an engineer's workstation: it is `workstation-only` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), refused in CI and in `gero repl` and hidden from help there. The mechanics are `github.com/mallardduck/binup`, behind `internal/platform/selfupdate` ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)); the flow and its text are `internal/cli/selfupdate`.
 
@@ -35,7 +35,7 @@ Sigstore verification is the largest dependency gero has: **+17.6 MB stripped (1
 
 ## Not built yet
 
-* No release has been signed, so no end-to-end run against a real bundle exists. The tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature itself, in memory and with no network.
+* A run against a real signed release: none has been published, so every release so far is refused, and the first signed tag is the first real test. Whether `cosign` runs inside the release workflow's container image is part of that test. The tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature itself, in memory and with no network.
 * `--version`, to install a named release or roll back.
 * An offline path (a `trusted_root.json` supplied by file), though `selfupdate.Config.TrustedRoot` takes one.
 * Windows: gero is released for macOS and Linux only.
