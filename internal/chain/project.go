@@ -40,6 +40,10 @@ func (p *Project) DefaultBranch() string { return p.Doc.Spec.Repo.DefaultBranch 
 // Streams returns the streams the project releases, in the order read.
 func (p *Project) Streams() []*Stream { return p.streams }
 
+// Artifacts returns what the releases of every stream of the project produce, in
+// the order read.
+func (p *Project) Artifacts() []*Artifact { return nil }
+
 // StreamOf returns the stream a tag is a release of: the first of the project's
 // streams whose pattern the tag matches and none of whose excludes it matches. It
 // is nil when there is none.

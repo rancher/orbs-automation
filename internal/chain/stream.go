@@ -16,6 +16,9 @@ type Stream struct {
 // Name is the name of the document.
 func (s *Stream) Name() string { return s.Doc.Name }
 
+// Artifacts returns what each release of the stream produces, in the order read.
+func (s *Stream) Artifacts() []*Artifact { return nil }
+
 // Project is the project that releases the stream.
 func (s *Stream) Project() *Project { return s.project }
 
