@@ -25,6 +25,11 @@ func Build(cfg appconfig.Config) *Graph {
 		g.byName[strings.ToLower(p.Name())] = p
 		g.bySlug[strings.ToLower(p.Slug())] = p
 	}
+	for _, doc := range cfg.Streams {
+		p := g.byName[strings.ToLower(doc.Refs["project"][0])]
+		s := &Stream{Doc: doc, project: p}
+		p.streams = append(p.streams, s)
+	}
 	if cfg.Lines != nil {
 		g.lines = cfg.Lines.Spec.Lines
 	}
