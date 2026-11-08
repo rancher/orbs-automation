@@ -59,15 +59,30 @@ func TestInitForceReplacesAFileThatDoesNotLoad(t *testing.T) {
 	assert.Contains(t, string(got), "githubUser: alice")
 }
 
-func TestInitWithoutATerminalNeedsTheFlags(t *testing.T) {
+func TestInitWithoutATerminalSkipsWhatIsNotGiven(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	t.Setenv("GERO_CONFIG", path)
 
 	_, _, err := execRoot(t, "init", "--github-user", "alice")
 
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "--fork")
-	assert.NoFileExists(t, path)
+	require.NoError(t, err)
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{GitHubUser: "alice"}), string(got))
+}
+
+func TestInitTakesTheConfigDirSearchAndCloneRootFlags(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv("GERO_CONFIG", path)
+
+	_, _, err := execRoot(t, "init", "--config-dir", "/cfg", "--search", "/a,/b", "--search", "/c", "--clone-root", "/new")
+
+	require.NoError(t, err)
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{
+		ConfigDir: "/cfg", Search: []string{"/a", "/b", "/c"}, CloneRoot: "/new",
+	}), string(got))
 }
 
 func TestInitDryRunWritesNothing(t *testing.T) {

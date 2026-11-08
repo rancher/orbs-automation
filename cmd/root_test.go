@@ -181,10 +181,15 @@ func resetFlags() {
 	}
 	if c, _, err := rootCmd.Find([]string{"init"}); err == nil {
 		c.Flags().VisitAll(func(f *pflag.Flag) {
-			if f.Name != "upstream" { // the global one is reset above
-				_ = f.Value.Set(f.DefValue)
-				f.Changed = false
+			if f.Name == "upstream" || f.Name == "config-dir" { // the global ones are reset above
+				return
 			}
+			if sv, ok := f.Value.(pflag.SliceValue); ok {
+				_ = sv.Replace(nil)
+			} else {
+				_ = f.Value.Set(f.DefValue)
+			}
+			f.Changed = false
 		})
 	}
 }
