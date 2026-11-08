@@ -143,7 +143,7 @@ func TestCalverComparesByDate(t *testing.T) {
 func TestCalverStageIsTheSuffix(t *testing.T) {
 	s := calverFor(t)
 	assert.Equal(t, "dev", s.Stage("v2.16-20261030T1111Z-dev"))
-	assert.Equal(t, "release", s.Stage("v2.16-20261029T0000Z"))
+	assert.Equal(t, "stable", s.Stage("v2.16-20261029T0000Z"))
 	assert.Equal(t, "", s.Stage("main-abc1234"))
 }
 

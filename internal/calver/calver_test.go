@@ -18,9 +18,9 @@ func TestLineStageParse(t *testing.T) {
 		want Tag
 		ok   bool
 	}{
-		{"v2.15-20260915T1243Z", Tag{Name: "v2.15-20260915T1243Z", Line: "v2.15", Stage: "release", Time: at(2026, 9, 15, 12, 43)}, true},
+		{"v2.15-20260915T1243Z", Tag{Name: "v2.15-20260915T1243Z", Line: "v2.15", Stage: "stable", Time: at(2026, 9, 15, 12, 43)}, true},
 		{"v2.16-20261030T1111Z-dev", Tag{Name: "v2.16-20261030T1111Z-dev", Line: "v2.16", Stage: "dev", Time: at(2026, 10, 30, 11, 11)}, true},
-		{"v2.9-20250101T0000Z", Tag{Name: "v2.9-20250101T0000Z", Line: "v2.9", Stage: "release", Time: at(2025, 1, 1, 0, 0)}, true},
+		{"v2.9-20250101T0000Z", Tag{Name: "v2.9-20250101T0000Z", Line: "v2.9", Stage: "stable", Time: at(2025, 1, 1, 0, 0)}, true},
 		{"v2.16", Tag{}, false},
 		{"v2.16.1", Tag{}, false},
 		{"main-abc1234", Tag{}, false},
@@ -83,7 +83,7 @@ func TestSelectIsFilteredByLineAndStageThenNewestFirst(t *testing.T) {
 }
 
 func TestSelectDoesNotMixTheStages(t *testing.T) {
-	got := Select(LineStage{}, assetsTags, "v2.16", "release")
+	got := Select(LineStage{}, assetsTags, "v2.16", "stable")
 
 	assert.Equal(t, []string{"v2.16-20261029T0000Z"}, namesOf(got), "the dev tags are newer, and are not this stage")
 }

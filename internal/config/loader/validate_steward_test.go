@@ -10,14 +10,14 @@ import (
 
 // observed is withMethods with the producer b made like rancher-assets: not
 // owned, managed by the release team, releases on one branch with its lines in
-// CalVer tags, and an edge that follows the release stage.
+// CalVer tags, and an edge that follows the stable stage.
 func observed() config.Config {
 	c := withMethods()
 	b := &c.Projects[1]
 	b.Repo.Owned, b.Repo.ManagedBy = false, "release-team"
 	b.Release.Branching, b.Release.TagScheme = config.BranchingPerLineTag, config.TagSchemeCalverLineStage
 	b.Release.Lines = []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}} // v2.15 is ga, and needs no branch here
-	b.Downstream[0].Stage = config.StageRelease
+	b.Downstream[0].Stage = config.StageStable
 	return c
 }
 
@@ -59,8 +59,8 @@ func TestValidateStewardshipAndTagProblems(t *testing.T) {
 		}, []string{"release.tagScheme", "calverLineStage", "perLineTag"}},
 		{"stage on an owned producer's edge", func(c *config.Config) { producer(c).Repo.Owned = true }, []string{"downstream[0]", "stage", "owned"}},
 		{"stage the scheme does not give", func(c *config.Config) {
-			producer(c).Downstream[0].Stage = "stable"
-		}, []string{"downstream[0]", "stage", `"stable"`, "dev, release"}},
+			producer(c).Downstream[0].Stage = "release"
+		}, []string{"downstream[0]", "stage", `"release"`, "dev, stable"}},
 		{"stage under a scheme with none", func(c *config.Config) {
 			producer(c).Release.Branching, producer(c).Release.TagScheme = config.BranchingSingle, config.TagSchemeSemver
 		}, []string{"downstream[0]", "stage"}},

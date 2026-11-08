@@ -26,7 +26,7 @@ func TestProjectSteward(t *testing.T) {
 }
 
 func TestTagSchemeStages(t *testing.T) {
-	assert.Equal(t, []string{"dev", "release"}, TagSchemeStages(TagSchemeCalverLineStage))
+	assert.Equal(t, []string{"dev", "stable"}, TagSchemeStages(TagSchemeCalverLineStage))
 	assert.Empty(t, TagSchemeStages(TagSchemeSemver), "semver tags carry no stage")
 	assert.Empty(t, TagSchemeStages("nonsense"))
 }

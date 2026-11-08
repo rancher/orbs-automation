@@ -86,7 +86,7 @@ func TestHoldingsOfAnAssetsProducerSayWhichStageIsHeld(t *testing.T) {
 	hs := byBranch(t, got[0])
 
 	assert.Equal(t, "dev", hs["main"].Stage)
-	assert.Equal(t, "release", hs["release/v2.15"].Stage)
+	assert.Equal(t, "stable", hs["release/v2.15"].Stage)
 }
 
 func TestSourcesOfRancherShowTheAssetsTagItHolds(t *testing.T) {
