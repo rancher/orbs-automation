@@ -11,20 +11,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 )
 
 // Tag is a tag name read by a scheme.
 type Tag struct {
 	Name  string
 	Line  string    // the Rancher line, such as v2.16
-	Stage string    // config.StageDev or config.StageStable
+	Stage string    // v1alpha2.StageDev or v1alpha2.StageStable
 	Time  time.Time // UTC, to the minute
 }
 
 // Scheme is one way a project spells a line, a stage and a time in its tags.
 type Scheme interface {
-	// Name is what release.tagScheme calls it in config.
+	// Name is what the scheme of a stream calls it in config.
 	Name() string
 	// Parse reads a tag name. It is false for a name that is not a release of the
 	// scheme, which is then not a release of any line.
@@ -38,7 +38,7 @@ type Scheme interface {
 type LineStage struct{}
 
 // Name is calverLineStage.
-func (LineStage) Name() string { return config.TagSchemeCalverLineStage }
+func (LineStage) Name() string { return v1alpha2.SchemeCalverLineStage }
 
 // lineStage is the whole tag: the line, the time and the optional dev suffix.
 var lineStage = regexp.MustCompile(`^(v\d+\.\d+)-(\d{8}T\d{4}Z)(-dev)?$`)
@@ -57,9 +57,9 @@ func (LineStage) Parse(name string) (Tag, bool) {
 	if err != nil {
 		return Tag{}, false
 	}
-	stage := config.StageStable
+	stage := v1alpha2.StageStable
 	if m[3] != "" {
-		stage = config.StageDev
+		stage = v1alpha2.StageDev
 	}
 	return Tag{Name: name, Line: m[1], Stage: stage, Time: t}, true
 }

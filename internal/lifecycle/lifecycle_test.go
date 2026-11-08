@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -28,13 +28,13 @@ func TestParseTheRealPageFixture(t *testing.T) {
 	// and the other product's table is not.
 	assert.Len(t, got, 17)
 	assert.NotContains(t, got, "v9.9")
-	assert.Equal(t, config.Dates{GA: day(2026, time.August, 27), EOM: day(2027, time.February, 27), EOL: day(2028, time.February, 27)}, got["v2.15"])
+	assert.Equal(t, v1alpha2.Dates{GA: day(2026, time.August, 27), EOM: day(2027, time.February, 27), EOL: day(2028, time.February, 27)}, got["v2.15"])
 	// A non-breaking space between the month and the year.
-	assert.Equal(t, config.Dates{GA: day(2026, time.April, 30), EOM: day(2026, time.October, 30), EOL: day(2027, time.October, 10)}, got["v2.14"])
+	assert.Equal(t, v1alpha2.Dates{GA: day(2026, time.April, 30), EOM: day(2026, time.October, 30), EOL: day(2027, time.October, 10)}, got["v2.14"])
 	// A four-letter month, and a zero-padded day.
-	assert.Equal(t, config.Dates{GA: day(2024, time.January, 22), EOM: day(2024, time.September, 22), EOL: day(2025, time.July, 22)}, got["v2.8"])
-	assert.Equal(t, config.Dates{GA: day(2021, time.August, 31), EOM: day(2023, time.March, 1), EOL: day(2024, time.April, 30)}, got["v2.6"])
-	assert.Equal(t, config.Dates{GA: day(2017, time.June, 8), EOM: day(2019, time.December, 31), EOL: day(2020, time.June, 30)}, got["v1.6"])
+	assert.Equal(t, v1alpha2.Dates{GA: day(2024, time.January, 22), EOM: day(2024, time.September, 22), EOL: day(2025, time.July, 22)}, got["v2.8"])
+	assert.Equal(t, v1alpha2.Dates{GA: day(2021, time.August, 31), EOM: day(2023, time.March, 1), EOL: day(2024, time.April, 30)}, got["v2.6"])
+	assert.Equal(t, v1alpha2.Dates{GA: day(2017, time.June, 8), EOM: day(2019, time.December, 31), EOL: day(2020, time.June, 30)}, got["v1.6"])
 }
 
 func TestParsePicksTheNamedProduct(t *testing.T) {
@@ -45,7 +45,7 @@ func TestParsePicksTheNamedProduct(t *testing.T) {
 	got, err := Parse(f, "suse-other-product")
 
 	require.NoError(t, err)
-	assert.Equal(t, map[string]config.Dates{
+	assert.Equal(t, map[string]v1alpha2.Dates{
 		"v9.9": {GA: day(2030, time.January, 1), EOM: day(2030, time.July, 1), EOL: day(2031, time.January, 1)},
 	}, got)
 }
@@ -75,7 +75,7 @@ func TestParseReadsColumnsByHeader(t *testing.T) {
 	got, err := Parse(strings.NewReader(html), "p")
 
 	require.NoError(t, err)
-	assert.Equal(t, map[string]config.Dates{
+	assert.Equal(t, map[string]v1alpha2.Dates{
 		"v2.15": {GA: day(2026, time.January, 1), EOM: day(2027, time.February, 2), EOL: day(2028, time.March, 3)},
 	}, got)
 }
@@ -96,7 +96,7 @@ func TestParseABlankDateIsNotSet(t *testing.T) {
 	got, err := Parse(strings.NewReader(html), "p")
 
 	require.NoError(t, err)
-	assert.Equal(t, config.Dates{GA: day(2027, time.January, 1)}, got["v2.16"])
+	assert.Equal(t, v1alpha2.Dates{GA: day(2027, time.January, 1)}, got["v2.16"])
 }
 
 func TestParseSkipsRowsWithNoCells(t *testing.T) {
@@ -119,7 +119,7 @@ func TestParsePlaceholdersAreNotSet(t *testing.T) {
 			got, err := Parse(strings.NewReader(html), "p")
 
 			require.NoError(t, err)
-			assert.Equal(t, map[string]config.Dates{"v2.16": {}}, got)
+			assert.Equal(t, map[string]v1alpha2.Dates{"v2.16": {}}, got)
 		})
 	}
 }
