@@ -67,7 +67,7 @@ Kinds so far (names are not final):
 * `External`: a third-party project we track (`trackOnly`, `react`) or notify.
 * `WorkflowsConfig`: how workflows are rendered into a repo's branches. This lives in the target repo's `gero.yaml`, not centrally, and is the only kind allowed there for now.
 
-Real configs and their README are in [`../config/`](../config/README.md); illustrative mock files are in [`../config-mock/`](../config-mock/) and [`../mock-repos/`](../mock-repos/). Shape, placement, defaults and validation are in [APP_CONFIG](specs/APP_CONFIG.md).
+The real config and its README are in [`../config/`](../config/README.md); illustrative mock repos are in [`../mock-repos/`](../mock-repos/). Shape, placement, defaults and validation are in [APP_CONFIG](specs/APP_CONFIG.md).
 
 ---
 

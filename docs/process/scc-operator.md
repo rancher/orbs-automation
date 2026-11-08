@@ -118,4 +118,4 @@ None known.
 
 * The repo's README and development notes
 * [`../projects/scc-operator.md`](../projects/scc-operator.md)
-* [`config/scc-operator.project.yaml`](../../config/scc-operator.project.yaml)
+* [`config/scc-operator.yaml`](../../config/scc-operator.yaml)

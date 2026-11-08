@@ -123,5 +123,5 @@ None. Charts use kuberlr-kubectl; only Rancher uses shell.
 
 * The repo's README
 * [`../projects/rancher-shell.md`](../projects/rancher-shell.md)
-* [`config/shell.project.yaml`](../../config/shell.project.yaml)
+* [`config/shell.yaml`](../../config/shell.yaml)
 * [`rancher.md`](rancher.md), [`scc-operator.md`](scc-operator.md)

@@ -140,4 +140,4 @@ None.
 * The ORBS team lead, 2026-11-07: charts review and promotion, QA sign-off, hand-made stable tags, CVE stables, head image registries, v7 ended
 * [`../projects/backup-restore-operator.md`](../projects/backup-restore-operator.md)
 * [`kuberlr-kubectl.md`](kuberlr-kubectl.md)
-* [`config-mock/backup-restore-operator.project.yaml`](../../config-mock/backup-restore-operator.project.yaml)
+* [`config/backup-restore-operator.yaml`](../../config/backup-restore-operator.yaml)

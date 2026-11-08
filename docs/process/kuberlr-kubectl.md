@@ -125,5 +125,5 @@ None.
 ## Evidence
 
 * The repo's README, version notes and chart migration guide
-* [`config-mock/kuberlr-kubectl.project.yaml`](../../config-mock/kuberlr-kubectl.project.yaml), for the assumed hand-off
+* [`config/kuberlr-kubectl.yaml`](../../config/kuberlr-kubectl.yaml), for the assumed hand-off
 * No project note in [`../projects/`](../projects/README.md)
