@@ -11,12 +11,16 @@ import (
 // main branch (docs/specs/APP_CONFIG.md#json-schemas).
 const UserFileSchemaComment = "# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/user-config.schema.json"
 
-// UserFileValues are the keys gero init writes to a new user file.
+// UserFileValues are the keys gero init writes to a new user file. A key left
+// empty is left out of the file.
 type UserFileValues struct {
 	GitHubUser   string
 	Fork         string // remote holding the developer's fork
 	Upstream     string // remote treated as the real source
 	BranchPrefix string
+	ConfigDir    string   // configDir: the central application config
+	Search       []string // repos.search: directories scanned for clones that exist
+	CloneRoot    string   // repos.cloneRoot: where gero repo clone puts new clones
 }
 
 // RenderUserFile returns the text of a new user file with v: the schema comment,

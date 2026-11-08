@@ -26,9 +26,15 @@ var ErrNeedsValues = errors.New("values are missing and there is no terminal to 
 
 // Options are the choices of one run.
 type Options struct {
-	// The four values of the file. One left empty is asked for on a terminal, and
-	// is an error without one.
+	// The values of the file. One left empty is asked for on a terminal, and an
+	// empty answer skips it: the key is left out. Without a terminal an empty one
+	// is skipped.
 	GitHubUser, Fork, Upstream, BranchPrefix string
+	// ConfigDir is configDir. Search and CloneRoot are repos.search, the
+	// directories scanned for clones that exist, and repos.cloneRoot, the one
+	// directory gero repo clone puts new clones in.
+	ConfigDir, CloneRoot string
+	Search               []string
 	// Force replaces a user file that exists, even one that cannot be loaded.
 	Force bool
 	// Interactive says the input is a terminal, where a missing value is asked.
