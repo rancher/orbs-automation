@@ -42,6 +42,14 @@ type Release struct {
 	PublishedAt time.Time
 }
 
+// CompareVersions orders two release tags by semantic versioning: negative when a
+// is older than b, zero when equal, positive when newer. A leading v is optional
+// and a prerelease is older than its release. ok is false when either is not a
+// semantic version, such as "dev".
+func CompareVersions(a, b string) (cmp int, ok bool) {
+	return ghrelease.CompareVersions(a, b)
+}
+
 // Options configure a Fetcher.
 type Options struct {
 	HTTP    *http.Client // nil for the default, which has timeouts

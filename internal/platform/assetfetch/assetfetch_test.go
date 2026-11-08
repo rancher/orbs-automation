@@ -134,3 +134,20 @@ func TestAssetOfAReleaseThatIsNotThereIsNotFound(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestCompareVersionsOrdersTagsAndSaysWhenOneIsNotAVersion(t *testing.T) {
+	cmp, ok := CompareVersions("v0.5.0", "v0.6.0")
+	assert.True(t, ok)
+	assert.Negative(t, cmp)
+
+	cmp, ok = CompareVersions("v0.6.0-rc.1", "v0.6.0")
+	assert.True(t, ok)
+	assert.Negative(t, cmp, "a prerelease is older than its release")
+
+	cmp, ok = CompareVersions("v1.0.0", "1.0.0")
+	assert.True(t, ok)
+	assert.Zero(t, cmp)
+
+	_, ok = CompareVersions("dev", "v0.5.0")
+	assert.False(t, ok)
+}
