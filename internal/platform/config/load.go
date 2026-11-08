@@ -15,7 +15,7 @@ import (
 func Load(source string, data []byte, target Schema, ctx Context) Report {
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
-		r := newReport(source, 0, "")
+		r := NewReport(source, 0, "")
 		r.add(Error, "", err.Error())
 		return r
 	}
@@ -26,7 +26,7 @@ func Load(source string, data []byte, target Schema, ctx Context) Report {
 // source, from 1, and label says what it is (such as Project "rancher"); both
 // appear in the findings.
 func LoadNode(source string, doc int, label string, node *yaml.Node, target Schema, ctx Context) Report {
-	r := newReport(source, doc, label)
+	r := NewReport(source, doc, label)
 	if node != nil && node.Kind != 0 {
 		// yaml.Node.Decode cannot reject unknown fields, so the document is encoded
 		// again and decoded with them rejected.

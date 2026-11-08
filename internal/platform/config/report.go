@@ -54,7 +54,10 @@ type Report struct {
 	label  string
 }
 
-func newReport(source string, doc int, label string) Report {
+// NewReport returns an empty Report whose findings name the document: a finding
+// reported on it carries the source, the place of the document in it, and the
+// label. A check across documents uses it to report on the one at fault.
+func NewReport(source string, doc int, label string) Report {
 	return Report{source: source, doc: doc, label: label}
 }
 
