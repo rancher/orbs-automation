@@ -256,3 +256,9 @@ func (p *Project) LineBranches() []LineBranch {
 	}
 	return out
 }
+
+// BranchesOfStage returns the branches a release of a stage goes to: the branch of
+// each listed line for the stage, where a line has one for each, and its one
+// branch where it has one. With no stage it is the release branches. A single
+// layout has its default branch.
+func (p *Project) BranchesOfStage(_ string) []string { return nil }

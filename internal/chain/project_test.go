@@ -177,3 +177,13 @@ func TestTheLineBranchesOfAProject(t *testing.T) {
 	}, g.Project("a").LineBranches())
 	assert.Empty(t, g.Project("s").LineBranches())
 }
+
+func TestTheBranchesOfAStage(t *testing.T) {
+	g := chaintest.Load(t, chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"), project("a", perLine), project("s", "  repo: {name: acme/s}\n"))
+	a := g.Project("a")
+
+	assert.Equal(t, []string{"main", "release/v2.15", "dev-v2.13"}, a.BranchesOfStage("dev"))
+	assert.Equal(t, []string{"main", "release/v2.15", "release-v2.13"}, a.BranchesOfStage("stable"))
+	assert.Equal(t, a.ReleaseBranches(), a.BranchesOfStage(""))
+	assert.Equal(t, []string{"main"}, g.Project("s").BranchesOfStage("dev"))
+}
