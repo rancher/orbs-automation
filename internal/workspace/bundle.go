@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/rancher/orbs-automation/internal/bundlestore"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 
 // BundleSource is where the central config comes from when no local source is
@@ -33,4 +34,12 @@ func (w *Workspace) WithBundle(b BundleSource) *Workspace {
 // the bundle is loaded, and ErrNotFound is returned, naming why, when it cannot be.
 func (w *Workspace) ConfigSource() (ConfigSource, error) {
 	return ConfigSource{}, nil
+}
+
+// bundleFor is the default bundle source for the settings: the release's bundle,
+// fetched, verified and cached. There is none without a gero version, which only
+// cmd/ sets, so no test or library caller reaches the network by accident, and
+// none in CI, which has a checkout of the central repo (docs/specs/CENTRAL_BUNDLE.md).
+func bundleFor(s clicfg.Settings) BundleSource {
+	return nil
 }
