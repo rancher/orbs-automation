@@ -1,6 +1,6 @@
 # Config Shape Review
 
-**Status:** second pass, 2026-11-07. Compares the current `gero/v1alpha1` config ([`internal/config`](../../internal/config/config.go), [`config/`](../../config/README.md), [APP_CONFIG](../specs/APP_CONFIG.md)) with the [process docs](../process/README.md), the [tooling goals](TOOLING_GOALS.md), the [constraints](CONSTRAINTS.md) and [VISION](../VISION.md). It finds gaps and proposes directions; nothing here is decided. Where sources disagree, the real `config/` directory wins, then the code, then the specs, then `config-mock/`. Sketches are illustrations, not final field names.
+**Status:** second pass, 2026-11-07. Compared the `gero/v1alpha1` config as it was then (the types in `internal/config` and the files of `config/`, since replaced by [v1alpha2](CONFIG_SCHEMA.md); see [CUTOVER](CUTOVER.md)) with the [process docs](../process/README.md), the [tooling goals](TOOLING_GOALS.md), the [constraints](CONSTRAINTS.md) and [VISION](../VISION.md). It finds gaps and proposes directions; nothing here is decided. Where sources disagree, the real `config/` directory wins, then the code, then the specs, then `config-mock/`. Sketches are illustrations, not final field names.
 
 ## What fits
 

@@ -1,6 +1,6 @@
 # Cutover
 
-**Status:** plan, 2026-11-08. How every command moves from the `gero/v1alpha1` model (`internal/config` and its loader) to `gero/v1alpha2`, and what is deleted at the end. The graph it moves to is in [CHAIN_MODEL](CHAIN_MODEL.md).
+**Status:** done, 2026-11-08. How every command moved from the `gero/v1alpha1` model (`internal/config` and its loader) to `gero/v1alpha2`, and what is deleted at the end. The graph it moves to is in [CHAIN_MODEL](CHAIN_MODEL.md).
 
 ## Decisions
 

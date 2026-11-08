@@ -39,5 +39,5 @@ The envelope, the kind registry and the multi-document loop stay in `apis/meta`;
 
 ## What stays as it is
 
-* The old `internal/config` and its loader keep loading the real config until the cutover
+* The old `internal/config` and its loader were deleted in the [cutover](CUTOVER.md); the engine is what loads the config
 * The user's CLI config schema does not change
