@@ -255,5 +255,5 @@ func ageString(d time.Duration) string {
 // and gero doctor: the release and how old the copy is, such as "bundle v0.5.0, 3
 // hours old".
 func (s Source) Describe() string {
-	return ""
+	return fmt.Sprintf("bundle %s, %s old", s.Tag, ageString(s.Age))
 }
