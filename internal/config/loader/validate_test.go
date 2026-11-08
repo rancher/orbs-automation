@@ -1,6 +1,8 @@
 package loader
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -262,6 +264,30 @@ func TestValidateReportsEveryProblem(t *testing.T) {
 	for _, w := range []string{"repo.name", "release.branching", "action"} {
 		assert.Contains(t, err.Error(), w)
 	}
+}
+
+// gero doctor counts the problems of a config error by walking to the first
+// error that is a join (internal/cli/doctor: problemCount). The validator joins
+// one error per problem and the workspace wraps the join with %w, so the count
+// is found. A new loader must keep returning a join.
+func TestValidateErrorIsAJoinOfOneErrorForEachProblem(t *testing.T) {
+	c := valid()
+	c.Projects[0].Repo.Name = "a"
+	c.Projects[0].Release.Branching = "weekly"
+	c.Externals[0].Relationships[0].Action = "watch"
+
+	wrapped := fmt.Errorf("config directory %s: %w", "config", Validate(c))
+
+	assert.Equal(t, 3, joinedCount(wrapped))
+}
+
+func joinedCount(err error) int {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if joined, ok := e.(interface{ Unwrap() []error }); ok {
+			return len(joined.Unwrap())
+		}
+	}
+	return 1
 }
 
 func TestValidateAcceptsLineWithoutBranchWhileInDevelopment(t *testing.T) {
