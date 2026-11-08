@@ -10,7 +10,7 @@ import (
 
 // addVersion adds the command to root.
 func addVersion(root *cobra.Command) {
-	root.AddCommand(&cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print the gero version",
 		Long: `Print the version, commit and build date of this gero binary. The text is
@@ -26,8 +26,12 @@ commit and date.`,
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), string(b))
 				return err
 			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "gero version %s\n", version.String())
-			return err
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "gero version %s\n", version.String()); err != nil {
+				return err
+			}
+			return printHeader(cmd)
 		},
-	})
+	}
+	addHeaderFlag(versionCmd)
+	root.AddCommand(versionCmd)
 }

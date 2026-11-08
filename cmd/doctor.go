@@ -44,6 +44,9 @@ failed or, with --strict, warned.`,
 			if err != nil {
 				return err
 			}
+			if err := printHeader(cmd); err != nil {
+				return err
+			}
 			build := doctor.Build{
 				Version: version.Version, Commit: version.Commit, Date: version.Date,
 				OS: runtime.GOOS, Arch: runtime.GOARCH,
@@ -68,6 +71,7 @@ failed or, with --strict, warned.`,
 	f.Duration("timeout", 10*time.Second, "bound for each check that needs the network")
 	f.Bool("strict", false, "exit non-zero on warnings too")
 	f.Bool("list-checks", false, "list the checks and exit")
+	addHeaderFlag(doctorCmd)
 	root.AddCommand(doctorCmd)
 }
 
