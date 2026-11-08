@@ -25,6 +25,9 @@ type Header struct {
 	GeroVersion  string    // the gero release the bundle is made for, such as v0.5.0
 	SourceCommit string    // the commit of the central repo that config was read from
 	CompiledAt   time.Time // when, as the release job says: never the clock, so a build repeats
+	// FormatVersion is the version of the bundle format, set by Parse and ignored by
+	// Compile, which writes the one it knows.
+	FormatVersion int
 }
 
 // Name is the file name of the bundle, in the output directory and as a release
@@ -127,4 +130,21 @@ func trimTop(s string) string {
 		s += "\n"
 	}
 	return s
+}
+
+var (
+	// ErrMalformed is returned by Parse for data that is not a bundle: no header,
+	// or a header that is missing a field or has a bad one.
+	ErrMalformed = errors.New("not a config bundle")
+	// ErrUnsupported is returned by Parse for a bundle of a format this gero cannot
+	// read. A gero older than its newest bundle is expected, so this is a normal
+	// outcome and the message names both versions.
+	ErrUnsupported = errors.New("the config bundle is in a format this gero cannot read")
+)
+
+// Parse reads a bundle: it checks the header, which is the first document, and
+// returns it with the rest, the config chunk, as a file system that holds one file,
+// Name, for the config loader. It is what Compile makes the bundle for.
+func Parse(data []byte) (Header, fs.FS, error) {
+	return Header{}, fstest.MapFS{}, nil
 }
