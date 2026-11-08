@@ -24,6 +24,9 @@ spec:
       - line: v2.13
         version: "9.x"
         branch: release/v9.x
+      - line: v2.12
+        version: "8.x"
+        branch: release/v8.x
   updateMethods:
     - name: kubectl-tag-bump
       strategy: yamlBump

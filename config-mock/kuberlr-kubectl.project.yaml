@@ -23,6 +23,9 @@ spec:
       - line: v2.13
         version: "6.x"
         branch: release/v6.x
+      - line: v2.12
+        version: "5.x"
+        branch: release/v5.x
   downstream:
     - to: backup-restore-operator
       method: kubectl-tag-bump

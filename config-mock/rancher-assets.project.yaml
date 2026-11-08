@@ -14,7 +14,6 @@ spec:
     owned: false
     managedBy: release-team
   release:
-    requiresPrerelease: true
     branching: perLineTag
     tagScheme: calverLineStage
     lines:
@@ -25,10 +24,18 @@ spec:
     labels:
       - status/auto-created
       - team/release-team
+  updateMethods:
+    - name: read-lock-yaml
+      strategy: yamlBump
+      with:
+        file: lock.yaml
+      allowedParams:
+        - key: updateKey
+          description: "The name of the key to update/read in lock.yaml file"
   downstream:
     - to: rancher
       method: build-yaml-bump
-      # stage: omitted, so the edge follows whichever stage rancher holds (dev or release)
+      # stage: omitted, so the edge follows whichever stage rancher holds (dev or stable)
       params:
         updateKey: defaultAssetsImage
         value: "{image}:{tag}"

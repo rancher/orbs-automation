@@ -39,7 +39,9 @@ spec:
       accept:
         when: all                   # RC bumps and stable "UnRC" bumps both
   downstream:
-    - to: rancher
-      method: build-yaml-bump-all
+    - to: rancher-assets
+      method: read-lock-yaml        # observed: Assets reads the heads of dev and release for each line
       params:
-        updateKey: webhookVersion   # key varies per chart
+        # The key differs for each line and stage (chart-versions."2.16".upstream-refs.dev.charts.commit),
+        # which one edge cannot carry; see docs/design/CONFIG_REVIEW.md.
+        updateKey: chart-versions.2.16.upstream-refs.dev.charts.commit

@@ -1,6 +1,5 @@
 # MOCK config for review. Shape is not final.
-# Synced with config/rancher-rancher.project.yaml, plus build-yaml-bump-all, which
-# only the mock rancher-charts uses. Not owned (the default), so all config is
+# Synced with config/rancher.project.yaml. Not owned (the default), so all config is
 # central. This is where Rancher's own line-to-branch mapping lives (the
 # RancherLines document has no branches).
 apiVersion: gero/v1alpha1
@@ -10,6 +9,7 @@ spec:
   finalDestination: true   # releases end here: the other projects ship to it, and it ships to none
   repo:
     name: rancher/rancher
+    managedBy: shared   # every team owns it together
   release:
     branching: perLine
     lines:
@@ -41,17 +41,6 @@ spec:
         - key: value
           description: "What to write at the key, over {image}, {tag}, {version} and {sourceRepo}"
           default: "{tag}"
-      postEdit:
-        - run: scripts/generate-buildconfig
-    - name: build-yaml-bump-all
-      strategy: yamlBump        # the same code, taking release candidates too
-      with:
-        file: build.yaml
-      allowedParams:
-        - key: updateKey
-          description: "The name of the key to update/read in build.yaml file"
-      accept:
-        when: all
       postEdit:
         - run: scripts/generate-buildconfig
 
