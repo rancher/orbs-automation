@@ -187,3 +187,28 @@ func TestTheBranchesOfAStage(t *testing.T) {
 	assert.Equal(t, a.ReleaseBranches(), a.BranchesOfStage(""))
 	assert.Equal(t, []string{"main"}, g.Project("s").BranchesOfStage("dev"))
 }
+
+func TestAProjectKnowsItsPullRequestConventions(t *testing.T) {
+	g := chaintest.Load(t,
+		project("a", "  repo: {name: acme/a}\n  pullRequests: {title: \"[{branch}] Update\", labels: [x], botLabels: [bot], pushTo: upstream}\n"),
+		project("b", "  repo: {name: acme/b}\n"),
+	)
+
+	pr := g.Project("a").PullRequests()
+
+	assert.Equal(t, "[{branch}] Update", pr.Title)
+	assert.Equal(t, []string{"x"}, pr.Labels)
+	assert.Equal(t, []string{"bot"}, pr.BotLabels)
+	assert.Equal(t, "upstream", pr.PushTo)
+	assert.Empty(t, g.Project("b").PullRequests().Title)
+}
+
+func TestAProjectSaysWhetherItIsTheFinalDestination(t *testing.T) {
+	g := chaintest.Load(t,
+		project("end", "  repo: {name: acme/end}\n  finalDestination: true\n"),
+		project("other", "  repo: {name: acme/other}\n"),
+	)
+
+	assert.True(t, g.Project("end").FinalDestination())
+	assert.False(t, g.Project("other").FinalDestination())
+}

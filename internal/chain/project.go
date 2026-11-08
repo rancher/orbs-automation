@@ -283,3 +283,11 @@ func (p *Project) BranchesOfStage(stage string) []string {
 	}
 	return out
 }
+
+// PullRequests are the conventions for the pull requests opened against the
+// project's repo.
+func (p *Project) PullRequests() v1alpha2.PullRequests { return p.Doc.Spec.PullRequests }
+
+// FinalDestination reports whether releases end in the project: the others ship
+// to it, directly or through another project, and it ships to none.
+func (p *Project) FinalDestination() bool { return p.Doc.Spec.FinalDestination }
