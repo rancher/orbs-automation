@@ -1,7 +1,7 @@
 // Package gitcli is the escape hatch to the git binary. gero uses go-git for
 // repository access (internal/git/repo) and runs git only for an operation
 // go-git cannot do. Every function here records why. git is started through
-// internal/execx, the one package allowed to import os/exec (see .golangci.yml
+// internal/platform/execx, the one package allowed to import os/exec (see .golangci.yml
 // and DEPENDENCY_POLICY).
 package gitcli
 

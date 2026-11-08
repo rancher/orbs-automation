@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/execx"
+	"github.com/rancher/orbs-automation/internal/platform/execx"
 )
 
 // ShellFunc runs the user's shell, the program at path shell, in dir with env

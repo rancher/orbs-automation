@@ -2,7 +2,7 @@
 // directly: telling the user, in gero doctor, whether gh is installed and which
 // one. Tokens are not fetched here: go-gh's pkg/auth runs "gh auth token" itself
 // (internal/github). Like internal/git/gitcli, it starts the binary through
-// internal/execx, the one package allowed to import os/exec (see .golangci.yml
+// internal/platform/execx, the one package allowed to import os/exec (see .golangci.yml
 // and DEPENDENCY_POLICY).
 package ghcli
 
@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/execx"
+	"github.com/rancher/orbs-automation/internal/platform/execx"
 )
 
 // ErrNotFound is returned when no gh binary can be found.

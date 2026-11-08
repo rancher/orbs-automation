@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/execx"
+	"github.com/rancher/orbs-automation/internal/platform/execx"
 )
 
 // ErrPushRejected is returned by Push when the remote refused the branch, such

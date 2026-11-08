@@ -73,18 +73,18 @@ linters:
           deny:
             - pkg: github.com/go-git/go-git
               desc: go-git is only allowed in internal/git/repo (docs/specs/PROJECT_LAYOUT.md)
-        # os/exec lives only in internal/execx, the one place gero starts
+        # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/git/gitcli (each use records why go-git
         # cannot do it) and internal/ghcli (gero doctor) go through it
         # (docs/specs/DEPENDENCY_POLICY.md).
         noexec:
           list-mode: lax
           files:
-            - "!**/internal/execx/**"
+            - "!**/internal/platform/execx/**"
             - "!$test"
           deny:
             - pkg: os/exec
-              desc: os/exec is only allowed in internal/execx; run programs through it (docs/specs/DEPENDENCY_POLICY.md)
+              desc: os/exec is only allowed in internal/platform/execx; run programs through it (docs/specs/DEPENDENCY_POLICY.md)
         # YAML stays in the two loaders, the versioned config API and yamledit, so
         # moving to a new YAML major version touches known files only
         # (docs/specs/DEPENDENCY_POLICY.md).
@@ -202,6 +202,20 @@ linters:
               desc: a task reports through its own sink and never prints (docs/specs/PROJECT_LAYOUT.md)
             - pkg: github.com/rancher/orbs-automation/internal/task
               desc: a task never calls another task; the command or conveyor chains them (docs/specs/PROJECT_LAYOUT.md)
+        # The platform layer imports only platform packages and third-party
+        # libraries, so nothing low-level depends on what sits above it.
+        layer-platform:
+          list-mode: lax
+          files:
+            - "**/internal/platform/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal
+              desc: platform packages import only other platform packages (docs/design/LAYERS.md)
+            - pkg: github.com/rancher/orbs-automation/cmd
+              desc: platform packages do not import the command shell (docs/design/LAYERS.md)
+          allow:
+            - github.com/rancher/orbs-automation/internal/platform
         # Layers (docs/design/LAYERS.md): imports point down, platform < apis <
         # domain < cli and ui < cmd. A rule is lax with an allow carve-out, so a
         # new package never needs an edit and a stale path cannot quietly stop

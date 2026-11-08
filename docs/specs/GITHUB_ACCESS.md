@@ -31,7 +31,7 @@ Typed REST calls: PRs, labels and comments, user ids, and the rate limit today; 
 
 `go-git/go-git` is the way to do local git operations (reading refs and tags, cloning, committing rendered workflows). It needs no `git` binary on the machine and avoids running a subprocess with inherited environment and config, which is safer and more portable. Usage stays behind our own interfaces, and only `internal/git/repo` imports it. PR creation goes through the API.
 
-**`git` via a subprocess is an escape hatch, not a fallback.** go-git is the implementation. There is no try-go-git-then-git at runtime and no matching API on both sides. The `git` binary is used only for a specific operation go-git cannot do, or does differently from git in a way that matters, and each use records the reason next to the code. All such uses live in `internal/git/gitcli`, which starts git through `internal/execx`, so `gitcli` is the list of what go-git could not do. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
+**`git` via a subprocess is an escape hatch, not a fallback.** go-git is the implementation. There is no try-go-git-then-git at runtime and no matching API on both sides. The `git` binary is used only for a specific operation go-git cannot do, or does differently from git in a way that matters, and each use records the reason next to the code. All such uses live in `internal/git/gitcli`, which starts git through `internal/platform/execx`, so `gitcli` is the list of what go-git could not do. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
 
 **Push and commit signing** are where the escape hatch is used (`gitcli.Push`, `gitcli.PushTag`, signed commits), because they depend on the engineer's SSH agent, credential helpers and signing configuration. The reasoning, and who the commits are attributed to in each context, is in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
@@ -39,7 +39,7 @@ Typed REST calls: PRs, labels and comments, user ids, and the rate limit today; 
 
 Only for interactive or human-facing steps (for example `gh auth login` and browser handoffs) and pure passthrough. It is not used for logic that must be tested or that runs in CI. `gero doctor` runs `gh --version` through `internal/ghcli` so its report says which `gh` token resolution would use. Tokens are never read this way: go-gh runs `gh auth token` itself.
 
-All subprocesses go through `internal/execx`, the one place `gero` starts another program. Its contract is in the package doc.
+All subprocesses go through `internal/platform/execx`, the one place `gero` starts another program. Its contract is in the package doc.
 
 ## GraphQL
 

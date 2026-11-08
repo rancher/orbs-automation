@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/execx"
+	"github.com/rancher/orbs-automation/internal/platform/execx"
 )
 
 // ErrNotFound is returned when there is no git binary on PATH.

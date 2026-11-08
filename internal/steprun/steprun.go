@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/execx"
+	"github.com/rancher/orbs-automation/internal/platform/execx"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 

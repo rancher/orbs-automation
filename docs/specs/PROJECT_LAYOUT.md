@@ -33,7 +33,7 @@ internal/task/<name>/  one package per single action (create a branch, bump and 
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/git/releasetag/  the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
 internal/git/repo/   local repository access with go-git; the only importer of go-git
-internal/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
+internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
 internal/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
 internal/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
@@ -137,7 +137,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 * **The boundaries below are lint-enforced** by depguard rules in [`.golangci.yml`](../../.golangci.yml), each with a comment saying why. The config is the source of truth for the exact lists; this is the intent.
   * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/clicfg` and `internal/errs`. `main.go` imports only `cmd`.
   * cobra is importable only from `cmd/` and `main.go`.
-  * Each outside dependency has one door: go-git only in `internal/git/repo`, `os/exec` only in `internal/execx`, the YAML library only in `internal/clicfg`, `internal/config/loader`, `internal/apis` and `internal/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/github/gogh.go`, go-github only in `internal/github`.
+  * Each outside dependency has one door: go-git only in `internal/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/clicfg`, `internal/config/loader`, `internal/apis` and `internal/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/github/gogh.go`, go-github only in `internal/github`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/git/repo` directly. Its pure logic may still take `internal/git` and domain types.
   * `internal/task/**` imports neither `internal/cli`, `internal/ui` nor another task.
 * **Central config has one door.** `internal/config/loader` is importable only from `internal/workspace` (lint-enforced). A command package cannot load config, apply defaults or skip validation: it gets a `config.Project` or `config.Config` from `Workspace`, already defaulted and validated, and imports `internal/config` only for the types and their getters.
