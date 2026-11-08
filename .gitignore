@@ -3,6 +3,7 @@
 /.cache
 /bin
 /dist
+/.bundle
 /build
 *.swp
 .idea

@@ -38,6 +38,23 @@ jobs:
           subject-path: |
             dist/gero_*.tar.gz
             dist/checksums.txt
+            .bundle/gero-config-bundle.yaml
+
+      # The bundle is what `gero` fetches when it has no local config, so a release
+      # without it, or with a copy that is not the one in checksums.txt, is not
+      # published (docs/specs/CENTRAL_BUNDLE.md).
+      - name: Check the config bundle is on the release and in the checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          grep -E '^[0-9a-f]{64}  gero-config-bundle\.yaml$' dist/checksums.txt
+          gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name' | grep -Fx gero-config-bundle.yaml
+          mkdir -p "$RUNNER_TEMP/released"
+          gh release download "${{ github.ref_name }}" --pattern gero-config-bundle.yaml --dir "$RUNNER_TEMP/released"
+          want="$(grep -E '  gero-config-bundle\.yaml$' dist/checksums.txt | cut -d' ' -f1)"
+          got="$(sha256sum "$RUNNER_TEMP/released/gero-config-bundle.yaml" | cut -d' ' -f1)"
+          test "$want" = "$got"
 
       - name: Publish release
         env:

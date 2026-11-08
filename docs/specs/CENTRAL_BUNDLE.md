@@ -1,6 +1,6 @@
 # Central Bundle
 
-**Status:** draft. The producer is built, `tools/compilebundle`, which writes the config chunk; the reader in `gero`, the release wiring, the templates and the generated chunk are not.
+**Status:** draft. The producer is built, `tools/compilebundle`, which writes the config chunk, and the release publishes it; the reader in `gero`, the templates and the generated chunk are not built.
 
 How the central repo's shared content ships as one file with each `gero` release, and how the CLI uses that file when no local checkout is available. The content is the application config ([APP_CONFIG](APP_CONFIG.md)) and the workflow templates for `gero workflows sync` ([ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md)). How a local directory is found is in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config).
 
@@ -27,19 +27,29 @@ The seam for config is `chainload.Load`, which takes an `fs.FS` (`appconfig.Load
 
 ## Compile command
 
-`tools/compilebundle` is a developer tool under `tools/`, like `tools/genschema`: not part of `gero`, importing its packages. It runs at release time and writes `gero-config-bundle.yaml` into `dist/`, beside what GoReleaser writes. Run it from the repository root, after GoReleaser, which empties `dist/` when it starts:
+`tools/compilebundle` is a developer tool under `tools/`, like `tools/genschema`: not part of `gero`, importing its packages. It writes `gero-config-bundle.yaml` into the directory named by `--out`. Run it from the repository root:
 
 ```
-go run ./tools/compilebundle --version v0.5.0 --commit "$(git rev-parse HEAD)" --date "$(git show -s --format=%cI HEAD)"
+go run ./tools/compilebundle --out .bundle --version v0.5.0 --commit "$(git rev-parse HEAD)" --date "$(git show -s --format=%cI HEAD)"
 ```
 
 `--config` (default `config`) is the directory to bundle and `--out` (default `dist`) where to write it. The version, commit and date go in the header and are flags, never read from git or the clock, so the same input gives the same bytes. The tool loads the directory with `chainload.Load`, as every command does, and fails on invalid or empty config, so a bad bundle is never produced. It then loads the body of the bundle back, through an in-memory file system as a reader will, and fails unless it gives the same projects, holdings and lines. It writes nothing on failure. A test compiles the real `config/`, so a bad edit fails `go test ./...`.
 
-Not wired yet, for when the release is set up:
+## Publishing
 
-* Run it in the release job after `goreleaser release --clean`, with the tag, `GITHUB_SHA` and the commit time.
-* Add the bundle to `checksums.txt` and to the `subject-path` of the provenance attestation in `.github/workflows/release.yaml`.
-* Attach it to the release with `gh release upload`, or `release.extra_files` of GoReleaser, before the release is published.
+The bundle ships with each `gero` release, as the asset `gero-config-bundle.yaml` of the release of `rancher/orbs-automation`, listed in the release's `checksums.txt`. GoReleaser does all of it, in one run ([.goreleaser.yaml](../../.goreleaser.yaml)):
+
+* A `before` hook runs the tool with `--out .bundle` and the release's `{{ .Tag }}`, `{{ .FullCommit }}` and `{{ .CommitDate }}`. The output is outside `dist/`, which `--clean` empties, and `/.bundle` is git-ignored so the tree stays clean for GoReleaser.
+* `checksum.extra_files` puts the bundle in `checksums.txt`, and `release.extra_files` uploads it with the archives to the draft release.
+
+[release.yaml](../../.github/workflows/release.yaml) then does what GoReleaser cannot:
+
+* The provenance attestation covers the bundle, with the archives and `checksums.txt`.
+* Before the draft is published, a step fails the release unless the bundle is on it, in `checksums.txt`, and the uploaded copy has the hash `checksums.txt` lists.
+
+[ci.yml](../../.github/workflows/ci.yml) runs `goreleaser check` and a snapshot release on every pull request, and checks that the bundle is in the snapshot's `checksums.txt`, so a change to the wiring fails before a tag does.
+
+What this does not do: the checksums come from the same release as the bundle, so a reader that verifies them knows the download is intact, not who made it. Verifying the attestation is not built.
 
 ## Releases, fetching and verifying
 
@@ -78,13 +88,12 @@ The bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.m
 
 ## Not built yet
 
-Everything: the bundle format and loader, `ci:compile-bundle`, the release job step, the shared download-and-verify package, the cache, the fifth source in precedence, and the source line in `config show` and `doctor`.
+The reader: parsing the bundle and checking its versions, the shared download-and-verify package, the cache, the fifth source in precedence, and the source line in `config show` and `doctor`. There is no `ci:compile-bundle` command; the tool is run by the release.
 
 `gero repo clone` is the first command that needs the bundle on a fresh workstation, where no central config exists yet. It reads a local central config for now and takes its Projects through a small source seam in its package, so the bundle reader can be added as another source, with the newer of the local copy and the bundle winning ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
 
 ## Open questions
 
-* The name of the release asset and of the checksum file, and which repo the CLI fetches from (a setting, or fixed in the binary).
 * What `ghreleases` does about the REST API's unauthenticated rate limit (60 requests an hour per IP, shared by CI runners and office networks), and whether it verifies checksums itself or the shared package does. If it uses the API, the daily refresh limit matters more.
 * Whether the central repo's setting is still `centralConfigDir`, or becomes a directory for the whole central repo, now that the bundle holds templates as well as config ([CLI_CONFIG](CLI_CONFIG.md)).
 * How `gero ci:*` commands in other repos get the bundle: use the one the installed `gero` release implies, fetch the latest stable, or check the central repo out. Not decided. The central repo's own CI uses its checkout and does not need the bundle.
