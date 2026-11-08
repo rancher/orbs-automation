@@ -6,6 +6,12 @@
 // that differs per project. The variables a text may use are a closed set that
 // the caller supplies, and an unknown one is an error, both when the config is
 // validated and when the text is filled.
+//
+// A placeholder may carry modifiers after a pipe, applied left to right, to spell
+// a value the way a file does: {line|trimprefix:v} turns v2.16 into 2.16 and
+// {stage|replace:stable=prod} turns stable into prod. The set is closed (upper,
+// lower, title, trimprefix, trimsuffix and replace of a whole value), and an
+// argument cannot contain } or |.
 package templates
 
 import (
@@ -13,6 +19,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // name is what a placeholder may be called.
@@ -22,6 +30,68 @@ var name = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*$`)
 type part struct {
 	text          string // the literal, or the placeholder's name
 	isPlaceholder bool
+	mods          []modifier // a placeholder's modifiers, in order
+}
+
+// modifier respells a value: a name and, for some, an argument.
+type modifier struct{ name, arg string }
+
+// modifierNames are the modifiers there are.
+var modifierNames = []string{"upper", "lower", "title", "trimprefix", "trimsuffix", "replace"}
+
+// reversible are the modifiers that lose nothing, so a text that is read as well
+// as written may use them.
+var reversible = []string{"trimprefix", "trimsuffix", "replace"}
+
+// parseModifier reads one modifier such as trimprefix:v and checks its argument.
+func parseModifier(f, placeholder string) (modifier, error) {
+	if f == "" {
+		return modifier{}, fmt.Errorf("empty modifier in {%s}", placeholder)
+	}
+	mod, arg, hasArg := strings.Cut(f, ":")
+	switch mod {
+	case "upper", "lower", "title":
+		if hasArg {
+			return modifier{}, fmt.Errorf("%s takes no argument, in {%s}", mod, placeholder)
+		}
+	case "trimprefix", "trimsuffix":
+		if arg == "" {
+			return modifier{}, fmt.Errorf("%s needs an argument, in {%s}", mod, placeholder)
+		}
+	case "replace":
+		if from, _, ok := strings.Cut(arg, "="); !ok || from == "" {
+			return modifier{}, fmt.Errorf("replace needs FROM=TO with a FROM, in {%s}", placeholder)
+		}
+	default:
+		return modifier{}, fmt.Errorf("unknown modifier %q in {%s}: use one of %s", mod, placeholder, strings.Join(modifierNames, ", "))
+	}
+	return modifier{name: mod, arg: arg}, nil
+}
+
+// apply respells value by the modifier.
+func (m modifier) apply(value string) string {
+	switch m.name {
+	case "upper":
+		return strings.ToUpper(value)
+	case "lower":
+		return strings.ToLower(value)
+	case "title":
+		r, size := utf8.DecodeRuneInString(value)
+		if size == 0 {
+			return value
+		}
+		return string(unicode.ToUpper(r)) + value[size:]
+	case "trimprefix":
+		return strings.TrimPrefix(value, m.arg)
+	case "trimsuffix":
+		return strings.TrimSuffix(value, m.arg)
+	case "replace":
+		from, to, _ := strings.Cut(m.arg, "=")
+		if value == from {
+			return to
+		}
+	}
+	return value
 }
 
 // parse splits text into literals and placeholders, turning {{ and }} into
@@ -49,14 +119,23 @@ func parse(text string) ([]part, error) {
 				return nil, fmt.Errorf("unclosed { at position %d", i)
 			}
 			n := text[i+1 : i+1+end]
-			switch {
-			case n == "":
+			if n == "" {
 				return nil, fmt.Errorf("empty placeholder {} at position %d", i)
-			case !name.MatchString(n):
+			}
+			fields := strings.Split(n, "|")
+			if !name.MatchString(fields[0]) {
 				return nil, fmt.Errorf("{%s} is not a placeholder name: use letters and digits", n)
 			}
+			var mods []modifier
+			for _, f := range fields[1:] {
+				m, err := parseModifier(f, n)
+				if err != nil {
+					return nil, err
+				}
+				mods = append(mods, m)
+			}
 			flush()
-			parts = append(parts, part{text: n, isPlaceholder: true})
+			parts = append(parts, part{text: fields[0], isPlaceholder: true, mods: mods})
 			i += end + 2
 		case c == '}':
 			return nil, fmt.Errorf("unmatched } at position %d: write }} for a literal brace", i)
@@ -149,6 +228,9 @@ func Render(text string, vars map[string]string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("unknown placeholder {%s}", p.text)
 		}
+		for _, m := range p.mods {
+			v = m.apply(v)
+		}
 		out.WriteString(v)
 	}
 	return out.String(), nil
@@ -167,6 +249,18 @@ var StepCommitVars = []string{
 // CheckReversible returns an error when the text uses a modifier that loses
 // information. A text that is read as well as written, such as the form of a
 // holding, may use only modifiers that can be undone.
-func CheckReversible(_ string) error {
+func CheckReversible(text string) error {
+	parts, err := parse(text)
+	if err != nil {
+		return err
+	}
+	for _, p := range parts {
+		for _, m := range p.mods {
+			if !slices.Contains(reversible, m.name) {
+				return fmt.Errorf("modifier %s of {%s} loses information, so it cannot be used where the text is also read: use %s",
+					m.name, p.text, strings.Join(reversible, ", "))
+			}
+		}
+	}
 	return nil
 }
