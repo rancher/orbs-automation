@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/calver"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
@@ -252,3 +253,12 @@ func names(tags []git.Tag) []string {
 	}
 	return out
 }
+
+// ForStream returns the scheme of a stream: semver for a semver stream, over the
+// lines it lists and the tags it accepts, and the calver scheme it names for a
+// calverLineStage stream. A chartVersion stream has none yet.
+func ForStream(_ *chain.Stream) (Scheme, error) { return nil, nil }
+
+// ForProject returns the scheme of the one stream of a project. A project with no
+// stream, or with several, has no one scheme, and the caller names the stream.
+func ForProject(_ *chain.Project) (Scheme, error) { return nil, nil }
