@@ -146,10 +146,10 @@ func parseSeries(series string) (major uint64, minor int64) {
 	return major, minor
 }
 
-// The stage names the schemes give, and the one that is a prerelease.
+// The stage names the schemes give; a stage named dev is a prerelease.
 const (
-	stageDev    = "dev"
-	stageStable = "stable"
+	StageDev    = "dev"
+	StageStable = "stable"
 )
 
 // EffectiveStages is the stages of the stream: those written, else those its
@@ -161,11 +161,11 @@ func (s *Stream) EffectiveStages(projectStages []string) []Stage {
 	}
 	switch s.Spec.Scheme {
 	case SchemeCalverLineStage:
-		return []Stage{{Name: stageDev, Prerelease: true}, {Name: stageStable}}
+		return []Stage{{Name: StageDev, Prerelease: true}, {Name: StageStable}}
 	case SchemeChartVersion:
 		var stages []Stage
 		for _, name := range projectStages {
-			stages = append(stages, Stage{Name: name, Prerelease: name == stageDev})
+			stages = append(stages, Stage{Name: name, Prerelease: name == StageDev})
 		}
 		return stages
 	}
