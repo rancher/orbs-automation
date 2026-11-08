@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 )
 
 // Input is the PR to open.

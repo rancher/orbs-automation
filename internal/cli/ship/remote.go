@@ -4,8 +4,8 @@ import (
 	"errors"
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
-	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/platform/github"
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 )
 

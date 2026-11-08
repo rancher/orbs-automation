@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/github/pulls"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )

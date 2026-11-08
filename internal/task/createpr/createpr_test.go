@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 )
 
 var bg = context.Background()

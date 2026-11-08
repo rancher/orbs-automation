@@ -1,7 +1,7 @@
 package ship
 
 import (
-	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 

@@ -170,7 +170,6 @@ linters:
           list-mode: lax
           files:
             - "!**/internal/platform/github/**"
-            - "!**/internal/github/**" # pulls, until it moves
             - "!$test"
           deny:
             - pkg: github.com/google/go-github

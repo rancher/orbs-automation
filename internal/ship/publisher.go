@@ -7,13 +7,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/github/pulls"
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/task/createpr"
 	"github.com/rancher/orbs-automation/internal/task/pushbranch"
 )
 
 // Remote is the GitHub side of publishing, as ship needs it. It is defined here,
-// where it is used, and the PR service (internal/github/pulls) is what satisfies
+// where it is used, and the PR service (internal/platform/github/pulls) is what satisfies
 // it, with Me from the token's login.
 type Remote interface {
 	// Me is the login that is running: whose PRs are the actor's own.
