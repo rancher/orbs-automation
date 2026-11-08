@@ -15,6 +15,11 @@ permissions:
 
 env:
   CI: true
+  # The central config is this repo's own config/ directory, so every job reads it
+  # from the checkout. Not a shell expansion: gero expands $GITHUB_WORKSPACE itself
+  # (inside the job container that is /__w/..., where ${{ github.workspace }} would
+  # give the host path). Nothing is read until a step runs gero, after checkout.
+  GERO_CENTRAL_CONFIG_DIR: "$GITHUB_WORKSPACE/config"
 
 jobs:
   build:
