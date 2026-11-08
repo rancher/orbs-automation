@@ -66,5 +66,11 @@ func StatePath(getenv func(string) string, home, name string) string {
 // UserFilePath it does not use the platform's directory, which on macOS is
 // ~/Library/Caches.
 func CacheDir(getenv func(string) string, home string) string {
-	return ""
+	if x := getenv("XDG_CACHE_HOME"); x != "" {
+		return filepath.Join(x, "gero")
+	}
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".cache", "gero")
 }
