@@ -171,6 +171,11 @@ func Load(in Inputs) (Settings, error) {
 	if s.NonInteractive, s.sources["nonInteractive"], err = loadBool("nonInteractive", in.Flags, getenv, "non-interactive", "yes"); err != nil {
 		return Settings{}, err
 	}
+	// GERO_OFFLINE is read from the environment alone: a file that could turn the
+	// network off would do it for every command.
+	if s.Offline, s.sources["offline"], err = loadBool("offline", nil, getenv); err != nil {
+		return Settings{}, err
+	}
 	s.sources["signCommits"] = SourceDefault
 	if fc.SignCommits != nil {
 		s.SignCommits, s.sources["signCommits"] = *fc.SignCommits, SourceFile
