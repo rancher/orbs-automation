@@ -62,7 +62,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 * No secrets. Tokens stay with `gh` or the environment.
 * **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file. What counts as CI is decided in one place ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)).
 * The main use is per-developer behavior that must not leak into the shared tool. The motivating case: locally `origin` is a developer's fork, while in CI `origin` is the real source, so `upstream` tells `gero` which remote to treat as the real source.
-* It never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no `root` or layout key: it would encode a workstation convention not everyone follows.
+* It never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no layout key: it would encode a workstation convention not everyone follows. `repos.cloneRoot` is not one, since it says where a new clone goes and not how existing clones are arranged; the layout under it is fixed at `<root>/<name>`.
 
 ### Keys and environment
 
@@ -96,6 +96,7 @@ File-only keys, all **(leaning)**:
 | `signCommits` | `true` makes git sign the commits `gero ship` makes, with the engineer's own key; env `GERO_SIGN_COMMITS` beats the file. A commit that cannot be signed fails the target, never falls back to unsigned ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing)) |
 | `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
 | `repos.search` | Directories scanned to depth 2 for clones, matched to slugs by remote URL. No directory layout is assumed |
+| `repos.cloneRoot` | The one directory `gero repo clone` puts new clones in, as `<root>/<name>`. Precedence: `--into`, then env `GERO_REPOS_CLONE_ROOT`, then this key; with none set the command fails naming the three. It is scanned like a `repos.search` entry, so a clone is found again without another step. A `repos.paths` entry for the slug beats the root. Never inferred from `repos.search` |
 | `repos.overrides.<slug>.upstream` | Per-repo upstream remote name |
 | `repos.overrides.<slug>.pushTo` | Per-repo `pushTo`, which beats the project's and the user's own |
 
@@ -115,6 +116,7 @@ pushTo: fork
 repos:
   search:
     - ~/GitProjects/SUSE
+  cloneRoot: ~/GitProjects/SUSE
   paths:
     rancher/rancher: ~/GitProjects/SUSE/rancher-src
   overrides:
