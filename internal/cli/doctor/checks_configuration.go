@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/cli/configresolve"
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -18,7 +18,7 @@ import (
 // can use a fake; *workspace.Workspace satisfies it.
 type Workspace interface {
 	ConfigDir() (workspace.ConfigDir, error)
-	Config() (config.Config, error)
+	Chain() (*chain.Graph, error)
 	RepoPaths(slugs []string) []workspace.RepoPath
 }
 
@@ -61,7 +61,7 @@ func (configCheck) Online() bool        { return false }
 func (configCheck) Needs() []string     { return []string{"config-dir"} }
 
 func (c configCheck) Run(context.Context) Result {
-	cfg, err := c.ws.Config()
+	g, err := c.ws.Chain()
 	if err != nil {
 		n := problemCount(err)
 		return Result{
@@ -70,14 +70,22 @@ func (c configCheck) Run(context.Context) Result {
 			Remediation: validateHint,
 		}
 	}
-	lines := 0
-	if cfg.Lines != nil {
-		lines = len(cfg.Lines.Lines)
+	var streams, artifacts int
+	for _, p := range g.Projects() {
+		streams += len(p.Streams())
+		artifacts += len(p.Artifacts())
 	}
-	return Result{Status: StatusOK, Message: fmt.Sprintf("%d %s, %d %s, %d %s",
-		len(cfg.Projects), plural(len(cfg.Projects), "project"),
-		len(cfg.Externals), plural(len(cfg.Externals), "external"),
-		lines, plural(lines, "line"))}
+	holdings, lines := len(g.Holdings()), len(g.Lines())
+	msg := fmt.Sprintf("%d %s, %d %s, %d %s, %d %s, %d %s",
+		len(g.Projects()), plural(len(g.Projects()), "project"),
+		streams, plural(streams, "stream"),
+		artifacts, plural(artifacts, "artifact"),
+		holdings, plural(holdings, "holding"),
+		lines, plural(lines, "line"))
+	if n := len(g.Warnings()); n > 0 {
+		return Result{Status: StatusWarn, Message: fmt.Sprintf("%s, %d %s", msg, n, plural(n, "warning")), Remediation: validateHint}
+	}
+	return Result{Status: StatusOK, Message: msg}
 }
 
 // validateHint points at the command that lists every problem with the config.
@@ -112,7 +120,7 @@ func (reposCheck) Online() bool    { return false }
 func (reposCheck) Needs() []string { return []string{"config"} }
 
 func (c reposCheck) Run(context.Context) Result {
-	cfg, err := c.ws.Config()
+	g, err := c.ws.Chain()
 	if err != nil {
 		return Result{
 			Status:      StatusWarn,
@@ -120,12 +128,14 @@ func (c reposCheck) Run(context.Context) Result {
 			Remediation: validateHint,
 		}
 	}
-	if len(cfg.Projects) == 0 {
-		return Result{Status: StatusOK, Message: "no projects in the central config"}
+	var slugs []string
+	for _, p := range g.Projects() {
+		if !p.External() {
+			slugs = append(slugs, p.Slug())
+		}
 	}
-	slugs := make([]string, len(cfg.Projects))
-	for i, p := range cfg.Projects {
-		slugs[i] = p.Repo.Name
+	if len(slugs) == 0 {
+		return Result{Status: StatusOK, Message: "no projects in the central config"}
 	}
 	total := len(slugs)
 	var unresolved []string

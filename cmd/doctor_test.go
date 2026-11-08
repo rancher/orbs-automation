@@ -253,10 +253,10 @@ func TestDoctorWiring(t *testing.T) {
 		resetDoctorFlags(t)
 		stubGh(t)
 		withToken(t)
-		bad := "apiVersion: gero/v1alpha1\nkind: Project\nname: %s\nspec:\n  repo:\n    name: not-a-slug\n"
+		bad := "apiVersion: gero/v1alpha2\nkind: Project\nname: %s\nspec:\n  repo: {name: not-a-slug}\n"
 		withConfigDir(t, map[string]string{
-			"a.project.yaml": fmt.Sprintf(bad, "a"),
-			"b.project.yaml": fmt.Sprintf(bad, "b"),
+			"a.yaml": fmt.Sprintf(bad, "a"),
+			"b.yaml": fmt.Sprintf(bad, "b"),
 		})
 
 		stdout, _, err := execRoot(t, "doctor")
@@ -271,13 +271,13 @@ func TestDoctorWiring(t *testing.T) {
 		resetDoctorFlags(t)
 		stubGh(t)
 		withToken(t)
-		good := "apiVersion: gero/v1alpha1\nkind: Project\nname: a\nspec:\n  repo:\n    name: gero-test/zz-no-such-repo\n"
-		withConfigDir(t, map[string]string{"a.project.yaml": good})
+		good := "apiVersion: gero/v1alpha2\nkind: Project\nname: a\nspec:\n  repo: {name: gero-test/zz-no-such-repo}\n"
+		withConfigDir(t, map[string]string{"a.yaml": good})
 
 		stdout, _, err := execRoot(t, "doctor")
 
 		require.NoError(t, err, "a warning does not fail the run")
-		assert.Contains(t, stdout, "✔ config: 1 project, 0 externals, 0 lines\n")
+		assert.Contains(t, stdout, "✔ config: 1 project, 0 streams, 0 artifacts, 0 holdings, 0 lines\n")
 		assert.Contains(t, stdout, "⚠ repos: 1 of 1 project has no unique local clone: gero-test/zz-no-such-repo (not found)\n")
 		assert.Contains(t, stdout, "→ not found: clone it under a repos.search directory, or set repos.paths.<slug>; "+
 			"run `gero config resolve repos` for the details")
@@ -316,11 +316,12 @@ func TestDoctorWiring(t *testing.T) {
 func withConfigDir(t *testing.T, files map[string]string) {
 	t.Helper()
 	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
 	if files == nil {
-		files = map[string]string{"rancher.lines.yaml": "apiVersion: gero/v1alpha1\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n"}
+		files = map[string]string{"lines.yaml": "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n"}
 	}
 	for name, content := range files {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", name), []byte(content), 0o600))
 	}
 	t.Setenv("GERO_CONFIG_DIR", dir)
 }

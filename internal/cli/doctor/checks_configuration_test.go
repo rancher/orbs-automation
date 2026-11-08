@@ -5,37 +5,42 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"testing/fstest"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeWorkspace answers the Workspace questions from fixed values and records
 // the slugs it was asked to resolve.
 type fakeWorkspace struct {
-	dir    workspace.ConfigDir
-	dirErr error
-	cfg    config.Config
-	cfgErr error
-	paths  []workspace.RepoPath
-	asked  []string
+	dir      workspace.ConfigDir
+	dirErr   error
+	graph    *chain.Graph
+	chainErr error
+	paths    []workspace.RepoPath
+	asked    []string
 }
 
 func (f *fakeWorkspace) ConfigDir() (workspace.ConfigDir, error) { return f.dir, f.dirErr }
-func (f *fakeWorkspace) Config() (config.Config, error)          { return f.cfg, f.cfgErr }
+func (f *fakeWorkspace) Chain() (*chain.Graph, error)            { return f.graph, f.chainErr }
 
 func (f *fakeWorkspace) RepoPaths(slugs []string) []workspace.RepoPath {
 	f.asked = slugs
 	return f.paths
 }
 
-func projects(slugs ...string) config.Config {
-	var cfg config.Config
-	for _, s := range slugs {
-		cfg.Projects = append(cfg.Projects, config.Project{Repo: config.Repo{Name: s}})
+func projects(t *testing.T, slugs ...string) *chain.Graph {
+	t.Helper()
+	var pairs []string
+	for i, slug := range slugs {
+		pairs = append(pairs, fmt.Sprintf("p%d", i), slug)
 	}
-	return cfg
+	return chaintest.Projects(t, pairs...)
 }
 
 func TestConfigDirCheckMetadata(t *testing.T) {
@@ -93,29 +98,45 @@ func TestConfigCheckMetadata(t *testing.T) {
 }
 
 func TestConfigCheckValid(t *testing.T) {
+	full := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", "a", "", "  repo: {name: acme/a}\n"),
+		chaintest.Doc("Project", "b", "", "  repo: {name: acme/b}\n"),
+		chaintest.Doc("Stream", "s", "{project: a}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "img", "{stream: s}", "  kind: image\n  name: acme/a\n"),
+		chaintest.Doc("Holding", "h", "{project: b, artifact: img}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release}\n"),
+	)
 	tests := []struct {
-		name string
-		cfg  config.Config
-		want string
+		name  string
+		graph *chain.Graph
+		want  string
 	}{
-		{
-			name: "counts what it loaded",
-			cfg: config.Config{
-				Projects:  make([]config.Project, 2),
-				Externals: make([]config.External, 1),
-				Lines:     &config.RancherLines{Lines: make([]config.Line, 5)},
-			},
-			want: "2 projects, 1 external, 5 lines",
-		},
-		{name: "an empty config", cfg: config.Config{}, want: "0 projects, 0 externals, 0 lines"},
+		{"counts what it loaded", full, "2 projects, 1 stream, 1 artifact, 1 holding, 2 lines"},
+		{"an empty config", chaintest.Projects(t), "0 projects, 0 streams, 0 artifacts, 0 holdings, 0 lines"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewConfigCheck(&fakeWorkspace{cfg: tt.cfg}).Run(context.Background())
+			got := NewConfigCheck(&fakeWorkspace{graph: tt.graph}).Run(context.Background())
 
 			assert.Equal(t, Result{Status: StatusOK, Message: tt.want}, got)
 		})
 	}
+}
+
+func TestConfigCheckWarnsOfTheConfigsWarnings(t *testing.T) {
+	g, rep := chain.Load(fstest.MapFS{
+		"lines.yaml": {Data: []byte("apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n")},
+		"p.yaml":     {Data: []byte(chaintest.Doc("Project", "p", "", "  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n"))},
+	}, config.Context{Now: chaintest.Now})
+	require.NoError(t, rep.Err())
+
+	got := NewConfigCheck(&fakeWorkspace{graph: g}).Run(context.Background())
+
+	assert.Equal(t, Result{
+		Status:      StatusWarn,
+		Message:     "1 project, 0 streams, 0 artifacts, 0 holdings, 1 line, 1 warning",
+		Remediation: "run `gero config validate` for the details",
+	}, got)
 }
 
 func TestConfigCheckProblemsFail(t *testing.T) {
@@ -135,7 +156,7 @@ func TestConfigCheckProblemsFail(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewConfigCheck(&fakeWorkspace{cfgErr: tt.err}).Run(context.Background())
+			got := NewConfigCheck(&fakeWorkspace{chainErr: tt.err}).Run(context.Background())
 
 			assert.Equal(t, Result{
 				Status:      StatusFail,
@@ -158,7 +179,7 @@ func TestReposCheckMetadata(t *testing.T) {
 
 func TestReposCheckAllResolved(t *testing.T) {
 	ws := &fakeWorkspace{
-		cfg: projects("o/a", "o/b"),
+		graph: projects(t, "o/a", "o/b"),
 		paths: []workspace.RepoPath{
 			{Slug: "o/a", Path: "/src/a", Source: workspace.PathCwd},
 			{Slug: "o/b", Path: "/src/b", Source: workspace.PathSibling},
@@ -172,7 +193,7 @@ func TestReposCheckAllResolved(t *testing.T) {
 }
 
 func TestReposCheckWithNoProjects(t *testing.T) {
-	ws := &fakeWorkspace{}
+	ws := &fakeWorkspace{graph: chaintest.Projects(t)}
 
 	got := NewReposCheck(ws).Run(context.Background())
 
@@ -225,7 +246,7 @@ func TestReposCheckUnresolvedProjectsWarn(t *testing.T) {
 			for i, p := range tt.paths {
 				slugs[i] = p.Slug
 			}
-			ws := &fakeWorkspace{cfg: projects(slugs...), paths: tt.paths}
+			ws := &fakeWorkspace{graph: projects(t, slugs...), paths: tt.paths}
 
 			got := NewReposCheck(ws).Run(context.Background())
 
@@ -235,11 +256,26 @@ func TestReposCheckUnresolvedProjectsWarn(t *testing.T) {
 }
 
 func TestReposCheckThatCannotReadTheConfigWarns(t *testing.T) {
-	got := NewReposCheck(&fakeWorkspace{cfgErr: errors.New("boom")}).Run(context.Background())
+	got := NewReposCheck(&fakeWorkspace{chainErr: errors.New("boom")}).Run(context.Background())
 
 	assert.Equal(t, Result{
 		Status:      StatusWarn,
 		Message:     "could not read the central config: boom",
 		Remediation: "run `gero config validate` for the details",
 	}, got)
+}
+
+func TestReposCheckLeavesOutARepoOutsideTheOrganization(t *testing.T) {
+	ws := &fakeWorkspace{
+		graph: chaintest.Load(t,
+			chaintest.Doc("Project", "mine", "", "  repo: {name: o/mine}\n"),
+			chaintest.Doc("Project", "theirs", "", "  repo: {name: o/theirs, external: true}\n"),
+		),
+		paths: []workspace.RepoPath{{Slug: "o/mine", Path: "/src/mine", Source: workspace.PathCwd}},
+	}
+
+	got := NewReposCheck(ws).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: "1 of 1 project has a local clone"}, got)
+	assert.Equal(t, []string{"o/mine"}, ws.asked)
 }
