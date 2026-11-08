@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/ship/templates"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
 // Validate is ValidateAt for the current time.

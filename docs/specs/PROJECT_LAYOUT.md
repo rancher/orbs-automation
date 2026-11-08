@@ -39,7 +39,7 @@ internal/ghcli/      finds and runs the gh binary for gero doctor (version only)
 internal/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
 internal/platform/workdir/   the branch a run edits and commits in: made in the engineer's clone or a temporary worktree of it, committed to, and put back when the work ends or fails; shared by the tasks that make a branch and the ones that commit to it
 internal/ship/      one downstream PR: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It still holds most of the actions; they move to internal/task/ and ship keeps the decisions and the order
-internal/ship/templates/  the embedded commit, body and title templates and their placeholder renderer
+internal/platform/templates/  the embedded commit, body and title templates and their placeholder renderer
 internal/updatedispatcher/  applies a bump: strategies claimed by name, the engine built from config, and the step lifecycle around the edit; starts no process   (PUSH_TO_REPO)
 internal/platform/yamledit/  changes one YAML value in place without reflowing the file; the third importer of the YAML library
 internal/github/    gero's access to GitHub: the host and token, the REST client, the rate limit, raw file reads

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/ship/templates"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
