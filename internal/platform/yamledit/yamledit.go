@@ -19,6 +19,9 @@ import (
 var (
 	// ErrKeyNotFound is returned when the path names no key in the document.
 	ErrKeyNotFound = errors.New("key not found")
+	// ErrInvalidPath is returned for a path that is not written in the path syntax:
+	// an empty step, a quote left open, or an index that is not a number.
+	ErrInvalidPath = errors.New("invalid path")
 	// ErrNotScalar is returned when the path names a mapping or a list, which
 	// has no single value to read or replace.
 	ErrNotScalar = errors.New("value is not a scalar")
