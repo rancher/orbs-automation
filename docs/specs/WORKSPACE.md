@@ -6,7 +6,7 @@
 
 ## One door
 
-A command package may not locate the central config, discover a repo or scan for clones itself. Each rule exists once, in `workspace`, so the same inputs cannot resolve differently in different commands. Lint enforces both halves ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)): repositories are opened only through `workspace`, and the config loader (`internal/config/loader`) is importable only from `workspace`, so no command can see config that has skipped defaults or validation.
+A command package may not locate the central config, discover a repo or scan for clones itself. Each rule exists once, in `workspace`, so the same inputs cannot resolve differently in different commands. Lint enforces both halves ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)): repositories are opened only through `workspace`, and the config loaders (`internal/config/loader` and `internal/appconfig`) are importable only from `workspace`, so no command can see config that has skipped defaults or validation.
 
 * Each `internal/cli/<cmd>` calls `workspace.Open(settings, cwd)`. It takes plain values and builds its own real dependencies (file system, go-git opener). A `getenv` joins the parameters when a rule first needs it, such as the CI check for `upstream`. `cmd/` knows nothing about `workspace`.
 * The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake.

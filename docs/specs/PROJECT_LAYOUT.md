@@ -40,9 +40,10 @@ internal/lifecycle/    reads Rancher's lifecycle dates from the SUSE lifecycle p
 internal/...           domain packages as they arrive, such as the reconciler's
 
 internal/apis/meta/    what every version of the config API shares: the envelope of a document (apiVersion, kind, name, refs) and the Scheme that decodes a YAML stream into the kinds each version registers
-internal/apis/v1alpha2/  the kinds of apiVersion gero/v1alpha2, their types and their YAML form   (docs/design/CONFIG_SCHEMA.md)
+internal/apis/v1alpha2/  the kinds of apiVersion gero/v1alpha2: their types, YAML form, defaults and rules, and the rules across a set of documents   (docs/design/CONFIG_SCHEMA.md)
 internal/config/       application config types of apiVersion gero/v1alpha1, their effective getters and the enum values
 internal/config/loader/  application config loader of gero/v1alpha1: YAML decoding, defaults, validation (workspace only)
+internal/appconfig/    application config provider of gero/v1alpha2: reads every YAML file of a directory, validates each document and the set (workspace only; not yet used)
 
 internal/platform/clicfg/     CLI config loader -> Settings            (CLI_CONFIG)
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
@@ -160,7 +161,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
   * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/clicfg`, `internal/platform/config`, `internal/config/loader`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/platform/git/repo` directly. Its pure logic may still take `internal/platform/git` and domain types.
   * `internal/task/**` imports neither `internal/cli`, `internal/ui` nor another task.
-* **Central config has one door.** `internal/config/loader` is importable only from `internal/workspace` (lint-enforced). A command package cannot load config, apply defaults or skip validation: it gets a `config.Project` or `config.Config` from `Workspace`, already defaulted and validated, and imports `internal/config` only for the types and their getters.
+* **Central config has one door.** `internal/config/loader` and `internal/appconfig` are importable only from `internal/workspace` (lint-enforced). A command package cannot load config, apply defaults or skip validation: it gets a `config.Project` or `config.Config` from `Workspace`, already defaulted and validated, and imports `internal/config` only for the types and their getters.
 * **By review:** that tasks are composed only by commands and a conveyor's domain package, and that a package is named for what it provides.
 
 ## Why `clicfg` is under `internal/platform/` and not `internal/cli/`
