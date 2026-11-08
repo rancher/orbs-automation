@@ -20,7 +20,7 @@ type ProjectSpec struct {
 type Repo struct {
 	Name          string `yaml:"name"` // owner/name
 	Owned         bool   `yaml:"owned"`
-	External      bool   `yaml:"-"` // outside our organization
+	External      bool   `yaml:"external"` // outside our organization
 	ManagedBy     string `yaml:"managedBy"`
 	DefaultBranch string `yaml:"defaultBranch"`
 }
