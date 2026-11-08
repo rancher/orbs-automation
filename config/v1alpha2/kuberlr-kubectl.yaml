@@ -1,0 +1,33 @@
+# kuberlr-kubectl: owned, one release stream for each line, one image, takes nothing in.
+apiVersion: gero/v1alpha2
+kind: Project
+name: kuberlr-kubectl
+spec:
+  repo: {name: rancher/kuberlr-kubectl, owned: true}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}                                  # branch omitted: the default branch, while the line is in development
+      - {line: v2.15, branch: release/v8.x}
+      - {line: v2.14, branch: release/v7.x}
+      - {line: v2.13, branch: release/v6.x}
+      - {line: v2.12, branch: release/v5.x}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: kuberlr-kubectl
+refs: {project: kuberlr-kubectl}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.16, series: "9.x"}
+    - {line: v2.15, series: "8.x"}
+    - {line: v2.14, series: "7.x"}
+    - {line: v2.13, series: "6.x"}
+    - {line: v2.12, series: "5.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: kuberlr-kubectl-image
+refs: {stream: kuberlr-kubectl}
+spec: {kind: image, name: rancher/kuberlr-kubectl}

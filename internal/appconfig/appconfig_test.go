@@ -156,3 +156,19 @@ func TestLoadKeepsWarningsAndTheConfig(t *testing.T) {
 	assert.Contains(t, rep.Warnings()[0].Error(), "p.yaml")
 	assert.Len(t, cfg.Projects, 1)
 }
+
+func TestLoadAcceptsTheCheckedInV1alpha2Config(t *testing.T) {
+	cfg, rep := Load(os.DirFS("../../config/v1alpha2"), ctx)
+
+	require.NoError(t, rep.Err())
+	assert.Empty(t, rep.Warnings())
+	assert.Len(t, cfg.Projects, 7)
+	assert.NotNil(t, cfg.Lines)
+	var images []string
+	for _, a := range cfg.Artifacts {
+		if a.Spec.Kind == "image" && strings.HasPrefix(a.Spec.Name, "rancher/rancher") {
+			images = append(images, a.Spec.Name)
+		}
+	}
+	assert.Subset(t, images, []string{"rancher/rancher", "rancher/rancher-agent", "rancher/rancher-server"})
+}

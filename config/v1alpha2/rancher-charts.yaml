@@ -1,0 +1,54 @@
+# rancher-charts: unowned (release team), two branches for each line, no tags.
+# A chart's releases are versions in a list; one stream for each chart. rancher-backup shown.
+apiVersion: gero/v1alpha2
+kind: Project
+name: rancher-charts
+spec:
+  repo: {name: rancher/charts, owned: false, managedBy: release-team}
+  pullRequests: {title: "[{branch}] {package} {chartVersion} {action}", branchPrefix: "bot/{source}-"}
+  branches:
+    layout: perLine
+    stages: [dev, stable]
+    lines:
+      - {line: v2.16, branch: {dev: dev-v2.16, stable: release-v2.16}}
+      - {line: v2.15, branch: {dev: dev-v2.15, stable: release-v2.15}}
+      - {line: v2.14, branch: {dev: dev-v2.14, stable: release-v2.14}}
+      - {line: v2.13, branch: {dev: dev-v2.13, stable: release-v2.13}}
+      - {line: v2.12, branch: {dev: dev-v2.12, stable: release-v2.12}}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: charts-rancher-backup
+refs: {project: rancher-charts}
+spec:
+  scheme: chartVersion         # CHART+upUPSTREAM; prerelease is read from the part after +up
+  lines:
+    - {line: v2.16, series: "111.x"}
+    - {line: v2.15, series: "110.x"}
+    - {line: v2.14, series: "109.x"}
+    - {line: v2.13, series: "108.x"}
+    - {line: v2.12, series: "107.x"}
+---
+# What charts holds of BRO: the two chart URLs in the package file, on the dev branch.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: charts-holds-bro-chart
+refs: {project: rancher-charts, artifact: bro-chart}
+spec:
+  at: {file: packages/rancher-backup/package.yaml, key: url, format: yaml}
+  holds: {kind: release, form: "{url}", stage: dev, accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: charts-holds-bro-crd-chart
+refs: {project: rancher-charts, artifact: bro-crd-chart}
+spec:
+  at: {file: packages/rancher-backup/package.yaml, key: '.additionalCharts[0].upstreamOptions.url', format: yaml}
+  holds: {kind: release, form: "{url}", stage: dev, accept: all}
+---
+# What shipping a BRO release into charts also does beyond writing the two URLs.
+apiVersion: gero/v1alpha2
+kind: Edit
+name: charts-bump-rancher-backup
+refs: {holding: [charts-holds-bro-chart, charts-holds-bro-crd-chart]}
+spec: {strategy: chartsPackageBump, with: {package: rancher-backup}}

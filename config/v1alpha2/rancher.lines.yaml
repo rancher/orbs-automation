@@ -1,0 +1,49 @@
+# The Rancher lines.
+# One document holding the whole set of Rancher lines, newest first.
+# Facts about the lines themselves only; no branches (each project maps its own).
+# Kubernetes ranges come from the table in the rancher-shell README (April 2026).
+# Dates come from https://www.suse.com/lifecycle/#suse-rancher-prime. The phase
+# of a line (development | ga | eom | eol) is worked out from them and the
+# current time, so it is not written here. A line with no dates is in
+# development. An optional `phase:` on a line overrides the dates.
+apiVersion: gero/v1alpha2
+kind: RancherLines
+name: rancher
+spec:
+  lines:
+    - id: v2.16
+      kubernetes:
+        min: "1.35"
+        max: "1.37"
+    - id: v2.15
+      dates:
+        ga: 2026-08-27
+        eom: 2027-02-27
+        eol: 2028-02-27
+      kubernetes:
+        min: "1.34"
+        max: "1.36"
+    - id: v2.14
+      dates:
+        ga: 2026-04-30
+        eom: 2026-10-30
+        eol: 2027-10-10
+      kubernetes:
+        min: "1.33"
+        max: "1.35"
+    - id: v2.13
+      dates:
+        ga: 2025-12-17
+        eom: 2026-06-17
+        eol: 2027-06-17
+      kubernetes:
+        min: "1.32"
+        max: "1.34"
+    - id: v2.12
+      dates:
+        ga: 2025-08-29
+        eom: 2026-02-28
+        eol: 2027-02-28
+      kubernetes:
+        min: "1.31"
+        max: "1.33"

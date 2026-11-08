@@ -1,0 +1,89 @@
+# rancher: the destination, owned by every team. It holds components in one build file;
+# an older line also keeps a charts branch in its Dockerfile.
+apiVersion: gero/v1alpha2
+kind: Project
+name: rancher
+spec:
+  repo: {name: rancher/rancher, owned: false, managedBy: shared}
+  finalDestination: true
+  pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/orbs]}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v2.15}
+      - {line: v2.14, branch: release/v2.14}
+      - {line: v2.13, branch: release/v2.13}
+      - {line: v2.12, branch: release/v2.12}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: rancher
+refs: {project: rancher}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.16, series: "2.16.x"}
+    - {line: v2.15, series: "2.15.x"}
+    - {line: v2.14, series: "2.14.x"}
+    - {line: v2.13, series: "2.13.x"}
+    - {line: v2.12, series: "2.12.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: rancher-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: rancher-agent-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher-agent}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: rancher-server-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher-server, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-shell
+refs: {project: rancher, artifact: shell-image}
+spec:
+  at: {file: build.yaml, key: defaultShellVersion, format: yaml}
+  holds: {kind: release, form: "{image}:{tag}", accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-scc-operator
+refs: {project: rancher, artifact: scc-operator-image}
+spec:
+  at: {file: build.yaml, key: defaultSccOperatorImage, format: yaml}
+  holds: {kind: release, form: "{image}:{tag}", accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-assets
+refs: {project: rancher, artifact: assets-image}
+spec:
+  at: {file: build.yaml, key: defaultAssetsImage, format: yaml}
+  holds: {kind: release, form: "{image}:{tag}", accept: all, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-follows-charts-branch
+refs: {project: rancher, from: rancher-charts}
+spec:
+  at: {file: package/Dockerfile, key: CHART_DEFAULT_BRANCH, format: dockerfile}
+  holds: {kind: branch, lines: {until: v2.15}}
+---
+# After any change to build.yaml, Rancher regenerates its build config (a step of the consumer, not of the producer).
+apiVersion: gero/v1alpha2
+kind: Edit
+name: rancher-build-yaml-steps
+refs: {holding: [rancher-holds-shell, rancher-holds-scc-operator, rancher-holds-assets]}
+spec:
+  postEdit:
+    - {run: scripts/generate-buildconfig}
