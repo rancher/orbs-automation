@@ -29,7 +29,10 @@ func (n Number) Before(o Number) bool { return n[0] < o[0] || (n[0] == o[0] && n
 var lineID = regexp.MustCompile(`^v[0-9]+\.[0-9]+$`)
 
 // Valid reports whether id is a line as it is written in config: v2.16.
-func Valid(id string) bool { return lineID.MatchString(id) }
+func Valid(id string) bool {
+	_, ok := parseNumbers(id)
+	return ok
+}
 
 // Normalize writes a line the one way lines are compared: lowercase, with its v.
 // It does not check that the text is a line.
@@ -43,16 +46,20 @@ func Normalize(id string) string {
 
 // Parse reads a line written with or without its v, in any case, such as 2.16 or
 // V2.16, or a Kubernetes minor such as 1.35. It is false for anything else.
-func Parse(text string) (Number, bool) {
-	id := Normalize(text)
-	if !Valid(id) {
+func Parse(text string) (Number, bool) { return parseNumbers(Normalize(text)) }
+
+// parseNumbers reads a line with its v as its numbers. It is false for text that
+// is not a line, and for a number too big to read.
+func parseNumbers(id string) (Number, bool) {
+	if !lineID.MatchString(id) {
 		return Number{}, false
 	}
 	major, minor, _ := strings.Cut(strings.TrimPrefix(id, "v"), ".")
 	var n Number
-	n[0], _ = strconv.Atoi(major)
-	n[1], _ = strconv.Atoi(minor)
-	return n, true
+	var err1, err2 error
+	n[0], err1 = strconv.Atoi(major)
+	n[1], err2 = strconv.Atoi(minor)
+	return n, err1 == nil && err2 == nil
 }
 
 // Compare orders two lines by their numbers, so v2.9 is before v2.16: negative when
