@@ -386,3 +386,9 @@ func TestLoadACacheOlderThanAGeroVersionWithoutTheLeadingVIsRefreshed(t *testing
 	require.NoError(t, err)
 	assert.Equal(t, "v0.5.0", got.Source.Tag)
 }
+
+func TestSourceDescribesTheReleaseAndHowOldTheCopyIs(t *testing.T) {
+	assert.Equal(t, "bundle v0.5.0, 3 hours old", Source{Tag: "v0.5.0", Age: 3 * time.Hour}.Describe())
+	assert.Equal(t, "bundle v0.5.0, 3 days old", Source{Tag: "v0.5.0", Age: 72 * time.Hour, Stale: true}.Describe())
+	assert.Equal(t, "bundle v0.6.0, under a minute old", Source{Tag: "v0.6.0"}.Describe())
+}
