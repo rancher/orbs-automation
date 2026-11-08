@@ -245,3 +245,24 @@ func TestANameIsALowercaseSlug(t *testing.T) {
 		})
 	}
 }
+
+func TestSchemeListsTheKindsOfAVersionSorted(t *testing.T) {
+	s := twoVersions()
+	assert.Equal(t, []string{"Gadget", "Widget"}, s.Kinds("test/v1"))
+	assert.Equal(t, []string{"Widget"}, s.Kinds("test/v2"))
+	assert.Empty(t, s.Kinds("test/v3"))
+}
+
+func TestSchemeMakesANewObjectOfAKind(t *testing.T) {
+	s := twoVersions()
+	obj, ok := s.New("test/v2", "Widget")
+	require.True(t, ok)
+	assert.IsType(t, new(widgetV2), obj)
+	other, _ := s.New("test/v2", "Widget")
+	assert.NotSame(t, obj, other, "each call is a new object")
+
+	_, ok = s.New("test/v2", "Gadget")
+	assert.False(t, ok, "a kind of another version")
+	_, ok = s.New("test/v3", "Widget")
+	assert.False(t, ok, "an unknown version")
+}
