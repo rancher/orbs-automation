@@ -362,3 +362,27 @@ func TestLoadWithNoReleaseAtAllIsUnavailable(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnavailable)
 	require.ErrorIs(t, err, assetfetch.ErrNotFound)
 }
+
+// GoReleaser stamps {{.Version}} into the binary, which has no leading v, and the
+// tags of the releases have one.
+func TestLoadAGeroVersionWithoutTheLeadingVIsThePrereleaseWithThatTag(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+
+	got, err := g.load("0.6.0-rc.1")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0-rc.1", got.Source.Tag)
+}
+
+func TestLoadACacheOlderThanAGeroVersionWithoutTheLeadingVIsRefreshed(t *testing.T) {
+	g := newRig(t)
+	g.cached("v0.4.0", t0.Add(-time.Hour), "old")
+	g.publish("v0.5.0", "alpha")
+
+	got, err := g.load("0.5.0")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag)
+}
