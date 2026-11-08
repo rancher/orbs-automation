@@ -9,7 +9,7 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 * All Go packages live under `internal/`, except the `main` package (`main.go` at the repo root) and the cobra layer under `cmd/`. The compiler enforces that code outside this module cannot import `internal/`.
 * There is no `pkg/` directory. Moving a package out of `internal/` later is cheap. Retracting a public API is not.
 * **Promotion criteria.** A package leaves `internal/` only when all hold: a real external consumer exists, its API has survived at least one minor release unchanged, and it has no dependency on other `internal/` packages that are not themselves promoted. Promotion is a decision recorded in this spec, not a drive-by move.
-* Data files (`config/`, `config-mock/`, `mock-repos/`) are not Go code and stay at the top level.
+* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level.
 
 ## 2. Layout
 
@@ -26,10 +26,10 @@ internal/ui/           the output seam: Output, Stream and Align (columns laid o
 internal/ui/style/     the one importer of lipgloss: named styles and the Renderer built from clicfg.Terminal; plain when color is off   (CLI_OUTPUT)
 internal/ui/editor/    the one importer of ergochat/readline: the line reader seam, with a plain bufio implementation, for gero repl   (REPL)
 
-internal/workspace/    the one door from Settings to the world: config dir, loaded config, repo paths, upstream, fork   (WORKSPACE)
-internal/ship/         one downstream PR: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It still holds most of the actions; they move to internal/task/ and ship keeps the decisions and the order
+internal/workspace/    the one door from Settings to the world: config dir, the joined config and the update engine, repo paths, upstream, fork   (WORKSPACE)
+internal/ship/         one pull request for each target branch of a consumer: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It still holds most of the actions; they move to internal/task/ and ship keeps the decisions and the order
 internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR, make a tag), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch, bumpcommit and createtag are built
-internal/updatedispatcher/  applies a bump: strategies claimed by name, the engine built from config, and the step lifecycle around the edit; starts no process   (PUSH_TO_REPO)
+internal/bump/         the update engine: the routes of release holdings, the targets of a release, writing a holding in place, the edits' strategies and steps around the write; starts no process   (UPDATE_ENGINE)
 internal/steprun/      runs the pre-edit and post-edit steps of an update
 internal/registry/     image existence checks in the registries a project publishes to   (IMAGES_EXIST)
 internal/tagscheme/    what readers ask of a project's tags: its lines, its newest release, the order of two tags
@@ -41,9 +41,9 @@ internal/...           domain packages as they arrive, such as the reconciler's
 
 internal/apis/meta/    what every version of the config API shares: the envelope of a document (apiVersion, kind, name, refs) and the Scheme that decodes a YAML stream into the kinds each version registers
 internal/apis/v1alpha2/  the kinds of apiVersion gero/v1alpha2: their types, YAML form, defaults and rules, and the rules across a set of documents   (docs/design/CONFIG_SCHEMA.md)
-internal/config/       application config types of apiVersion gero/v1alpha1, their effective getters and the enum values
-internal/config/loader/  application config loader of gero/v1alpha1: YAML decoding, defaults, validation (workspace only)
-internal/appconfig/    application config provider of gero/v1alpha2: reads every YAML file of a directory, validates each document and the set (workspace only; not yet used)
+internal/appconfig/    application config provider of gero/v1alpha2: reads every YAML file of a directory, validates each document and the set
+internal/chain/        the resolved model commands read: projects, streams, artifacts, holdings and edits joined, and the answers across them   (CHAIN_MODEL)
+internal/chainload/    reads a directory into the chain's graph (workspace only)
 
 internal/platform/clicfg/     the user file (schema.go, unversioned: not application config) and the CLI config loader -> Settings   (CLI_CONFIG)
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
@@ -114,7 +114,7 @@ apis    -> internal/platform
 |---|---|---|
 | `internal/platform/` | low-level packages that know nothing of projects, releases or lines: clients, exec, YAML editing, version parsing, templates, the CLI settings loader | other platform packages and third-party libraries |
 | `internal/apis/` | the versioned config contract: the envelope and the kinds of each apiVersion | `internal/platform` and `internal/apis` |
-| domain (`ship`, `workspace`, `updatedispatcher`, `tagscheme`, `calver`, `releasetag`, `registry`, `steprun`, `task/*`, `actor`, `lifecycle`, `config`) | what gero knows about projects, releases and shipping | platform, apis and domain |
+| domain (`ship`, `workspace`, `bump`, `chain`, `chainload`, `appconfig`, `tagscheme`, `calver`, `releasetag`, `registry`, `steprun`, `task/*`, `actor`, `lifecycle`) | what gero knows about projects, releases and shipping | platform, apis and domain |
 | `internal/cli/`, `internal/ui/` | one package per command, and the output seam | everything below them |
 | `cmd/` | the cobra shell | `internal/cli` and the two platform packages named below |
 
@@ -122,8 +122,8 @@ apis    -> internal/platform
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any lower package, but not another command package, with two exceptions: shared packages that are not commands (`identity`, `cdpath`, `termfacts`, `cigate`, `logging`, `buildinfo`), and `doctor`, which reuses `authstatus` and `configresolve` for its checks. Other shared command code goes in a third, smaller package.
 * `internal/task/<name>/` imports the standard library and lower packages, never `internal/cli/...`, cobra, `internal/ui` or another task. Tasks are composed only by `internal/cli/<cmd>/` and by a conveyor's domain package such as `internal/ship`, which is by review.
 * Domain packages never import `internal/cli/...`, `internal/ui` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
-* `internal/platform/clicfg` and `internal/config` (with its `loader`) do not import each other. `Settings` is passed down by the command, never read from a global.
-* `internal/workspace` is where the two meet. It imports `clicfg`, `config`, `config/loader` and `internal/platform/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
+* `internal/platform/clicfg` and the config packages (`internal/chain` and the ones that build it) do not import each other. `Settings` is passed down by the command, never read from a global.
+* `internal/workspace` is where the two meet. It imports `clicfg`, `chain`, `chainload`, `bump` and `internal/platform/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
 * Domain packages take their dependencies as arguments (a `*slog.Logger`, a GitHub client interface, a `Settings` value). No package-level logger, client or config singleton.
 * Interfaces are defined where they are consumed, so a domain package can be tested without the real GitHub client.
 * No import cycles, and no cross-domain imports without a reason recorded here. If two domain packages need each other, the shared part is a third, smaller package.
@@ -158,10 +158,10 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
   * **The layers:** platform imports only platform; apis imports only platform and apis; domain packages do not import `internal/cli` or `internal/ui`; a command does not import another command except the shared helpers (and `doctor` its two named ones).
   * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`.
   * cobra is importable only from `cmd/` and `main.go`.
-  * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/config`, `internal/config/loader`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`.
+  * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/config`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/platform/git/repo` directly. Its pure logic may still take `internal/platform/git` and domain types.
   * `internal/task/**` imports neither `internal/cli`, `internal/ui` nor another task.
-* **Central config has one door.** `internal/config/loader` and `internal/appconfig` are importable only from `internal/workspace` (lint-enforced). A command package cannot load config, apply defaults or skip validation: it gets a `config.Project` or `config.Config` from `Workspace`, already defaulted and validated, and imports `internal/config` only for the types and their getters.
+* **Central config has one door.** `internal/chainload` and `internal/appconfig` are importable only from `internal/workspace` (lint-enforced; `internal/chain` also imports the provider's type). A command package cannot load config, apply defaults or skip validation: it gets a `*chain.Graph` or a `*chain.Project` from `Workspace`, already defaulted and validated, and imports `internal/chain` for the types and their answers.
 * **By review:** that tasks are composed only by commands and a conveyor's domain package, and that a package is named for what it provides.
 
 ## Why `clicfg` is under `internal/platform/` and not `internal/cli/`
