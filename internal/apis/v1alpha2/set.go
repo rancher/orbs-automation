@@ -29,16 +29,21 @@ var refKeys = map[string]map[string]refKey{
 
 // set is the documents of a set, indexed for the checks across them.
 type set struct {
-	ctx   config.Context
-	objs  []Object
-	names map[string]map[string]bool // kind to the names it has
-	rep   *config.Report
+	origin func(Object) string
+	ctx    config.Context
+	objs   []Object
+	names  map[string]map[string]bool // kind to the names it has
+	rep    *config.Report
 }
 
 // at returns a report that names the document on its findings, and adds them to
 // the set's own once reported.
 func (s *set) at(o Object) *config.Report {
-	r := config.NewReport("", 0, fmt.Sprintf("%s %q", o.GetKind(), o.GetName()))
+	source := ""
+	if s.origin != nil {
+		source = s.origin(o)
+	}
+	r := config.NewReport(source, 0, fmt.Sprintf("%s %q", o.GetKind(), o.GetName()))
 	return &r
 }
 
@@ -49,7 +54,14 @@ func (s *set) add(r *config.Report) { s.rep.Findings = append(s.rep.Findings, r.
 // decoded and valid documents. See docs/design/CONFIG_SCHEMA.md, "Rules across
 // documents".
 func ValidateSet(objs []Object, ctx config.Context, r *config.Report) {
-	s := &set{ctx: ctx, objs: objs, names: map[string]map[string]bool{}, rep: r}
+	ValidateSetFrom(objs, nil, ctx, r)
+}
+
+// ValidateSetFrom is ValidateSet for a caller that knows which source, such as a
+// file, each document came from: origin names it, and a finding carries it. origin
+// may be nil.
+func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Context, r *config.Report) {
+	s := &set{origin: origin, ctx: ctx, objs: objs, names: map[string]map[string]bool{}, rep: r}
 	s.uniqueNames()
 	s.refs()
 	s.projects()
