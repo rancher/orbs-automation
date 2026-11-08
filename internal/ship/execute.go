@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // ResultStatus is what a run did for one target.
@@ -74,7 +74,7 @@ type PRRef struct {
 // Executor is what a run needs to make commits.
 type Executor struct {
 	Git     Git
-	Runner  updatedispatcher.StepRunner
+	Runner  bump.StepRunner
 	TempDir string // where worktrees go
 	// Sign makes git sign every commit with the engineer's own key (signCommits).
 	Sign bool
@@ -188,7 +188,7 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 		consumer := res.route.Consumer
 		settings := ws.PushSettings(plan.Consumer)
 		target, err := resolvePushTarget(
-			PushChoice{Flag: in.PushTo, UserRepo: settings.UserRepo, Project: consumer.PullRequests.PushTo, UserDefault: settings.UserDefault},
+			PushChoice{Flag: in.PushTo, UserRepo: settings.UserRepo, Project: consumer.PullRequests().PushTo, UserDefault: settings.UserDefault},
 			PushRemotes{Fork: settings.Fork, Upstream: settings.Upstream}, in.CI)
 		if err != nil {
 			return plan, err
@@ -197,7 +197,7 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 			return plan, errors.New("pushing to the fork needs githubUser in the user file: the PR's head is the fork's owner and the branch")
 		}
 		pub.Push, pub.HeadOwner = target, settings.GitHubUser
-		pub.IsBot, pub.BotLabels, pub.Refresh = in.CI, consumer.PullRequests.BotLabels, in.Refresh
+		pub.IsBot, pub.BotLabels, pub.Refresh = in.CI, consumer.PullRequests().BotLabels, in.Refresh
 		plan.Push = &target
 		if me, err = pub.Remote.Me(ctx); err != nil {
 			return plan, fmt.Errorf("%w: %v", ErrNoRemote, err)
@@ -407,7 +407,7 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	}
 
 	applied, err := Apply{
-		Invocation: r.invocation, Release: r.relOf(release), Branch: tp.Branch,
+		Route: r.route, Target: r.targetOf(tp), Release: release,
 		Message: tp.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign,
 		Name: r.committer.Name, Email: r.committer.Email,
 		OnCommit:    func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Line: tp.Line, Commit: &c}) },

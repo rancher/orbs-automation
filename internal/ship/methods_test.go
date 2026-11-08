@@ -3,32 +3,32 @@ package ship
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// stepsLink is the holding of scc-operator's image in rancher, followed by an edit
+// with steps before the write and, after it, steps for some lines only.
 func stepsLink() link {
-	link := riLink("yamlBump")
-	link.Consumer.Release.Lines = []config.ProjectLine{
+	l := riLink()
+	l.Consumer.Lines = []lineSpec{
 		{Line: "v2.16"}, // development: main
 		{Line: "v2.15", Branch: "release/v2.15"},
 	}
-	link.Method.PreEdit = []config.Step{{Run: config.Command{"pre-method"}}}
-	link.Method.PostEdit = []config.Step{
-		{Run: config.Command{"post-method-new"}, Since: "v2.16"},
-		{Run: config.Command{"post-method-old"}, Until: "v2.15"},
+	l.Pre = []stepSpec{{Run: "pre-method"}, {Run: "pre-edit", From: "producer"}}
+	l.Post = []stepSpec{
+		{Run: "post-method-new", Since: "v2.16"},
+		{Run: "post-method-old", Until: "v2.15"},
+		{Run: "post-edit"},
 	}
-	link.Edge.PreEdit = []config.Step{{Run: config.Command{"pre-edge"}, From: "producer"}}
-	link.Edge.PostEdit = []config.Step{{Run: config.Command{"post-edge"}}}
-	return link
+	return l
 }
 
 func TestCheckPreviewListsTheStepsOfTheTargetBranchsLine(t *testing.T) {
-	ws := loopFixture()
-	l := stepsLink()
-	ws.links = []link{l}
+	ws := loopFixture(t)
+	ws.links = []link{stepsLink()}
 
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
 
@@ -41,60 +41,58 @@ func TestCheckPreviewListsTheStepsOfTheTargetBranchsLine(t *testing.T) {
 	require.NotNil(t, old.Preview)
 	assert.Contains(t, old.Preview.Body, "- Ran `post-method-old`")
 	assert.NotContains(t, old.Preview.Body, "post-method-new")
-	assert.Contains(t, old.Preview.Body, "- Ran `pre-edge`")
+	assert.Contains(t, old.Preview.Body, "- Ran `pre-edit`")
 }
 
-func route(consumer, consumerSlug, method string) updatedispatcher.Route {
-	return updatedispatcher.Route{
-		Consumer: config.Project{Name: consumer, Repo: config.Repo{Name: consumerSlug}},
-		Method:   &updatedispatcher.Method{ActionMethod: updatedispatcher.ActionMethod{Name: method}},
+// routeTo is a route from scc-operator to a consumer, as the engine gives it, with
+// no holdings: only who it is between matters to the choice.
+func routeTo(t *testing.T, consumers ...string) []bump.Route {
+	t.Helper()
+	var pairs []string
+	pairs = append(pairs, "scc-operator", "rancher/scc-operator")
+	pairs = append(pairs, consumers...)
+	g := chaintest.Projects(t, pairs...)
+	var out []bump.Route
+	for i := 0; i < len(consumers); i += 2 {
+		out = append(out, bump.Route{Producer: g.Project("scc-operator"), Consumer: g.Project(consumers[i])})
 	}
+	return out
 }
 
 func TestPickRoute(t *testing.T) {
-	producer := config.Project{Name: "scc-operator"}
-	build := route("rancher", "rancher/rancher", "build-yaml-bump")
-	chart := route("rancher", "rancher/rancher", "chart-bump")
-	other := route("charts", "rancher/charts", "build-yaml-bump")
+	routes := routeTo(t, "rancher", "rancher/rancher", "charts", "rancher/charts")
+	producer := routes[0].Producer
 
 	t.Run("the only route", func(t *testing.T) {
-		got, err := pickRoute(producer, []updatedispatcher.Route{build}, "", "")
+		got, err := pickRoute(producer, routes[:1], "")
 		require.NoError(t, err)
-		assert.Equal(t, "build-yaml-bump", got.Method.Name)
+		assert.Equal(t, "rancher", got.Consumer.Name())
 	})
 	t.Run("several consumers need --to", func(t *testing.T) {
-		_, err := pickRoute(producer, []updatedispatcher.Route{build, other}, "", "")
+		_, err := pickRoute(producer, routes, "")
 		assert.ErrorIs(t, err, ErrAmbiguousConsumer)
 		assert.ErrorContains(t, err, "charts")
 		assert.ErrorContains(t, err, "--to")
 	})
 	t.Run("--to picks by name or slug", func(t *testing.T) {
 		for _, to := range []string{"charts", "rancher/charts", "Charts"} {
-			got, err := pickRoute(producer, []updatedispatcher.Route{build, other}, to, "")
+			got, err := pickRoute(producer, routes, to)
 			require.NoError(t, err, to)
-			assert.Equal(t, "charts", got.Consumer.Name)
+			assert.Equal(t, "charts", got.Consumer.Name())
 		}
 	})
-	t.Run("two methods of one consumer need --method", func(t *testing.T) {
-		_, err := pickRoute(producer, []updatedispatcher.Route{build, chart}, "rancher", "")
-		assert.ErrorIs(t, err, ErrAmbiguousConsumer)
-		assert.ErrorContains(t, err, "--method")
-		got, err := pickRoute(producer, []updatedispatcher.Route{build, chart}, "rancher", "chart-bump")
-		require.NoError(t, err)
-		assert.Equal(t, "chart-bump", got.Method.Name)
-	})
 	t.Run("no route", func(t *testing.T) {
-		_, err := pickRoute(producer, nil, "", "")
+		_, err := pickRoute(producer, nil, "")
 		assert.ErrorIs(t, err, ErrNoConsumer)
-		assert.ErrorContains(t, err, "downstream")
-		_, err = pickRoute(producer, []updatedispatcher.Route{build}, "nobody", "")
+		assert.ErrorContains(t, err, "holds a release")
+		_, err = pickRoute(producer, routes[:1], "nobody")
 		assert.ErrorIs(t, err, ErrNoConsumer)
-		assert.ErrorContains(t, err, "rancher (build-yaml-bump)", "it says where the producer does ship")
+		assert.ErrorContains(t, err, "it ships to rancher", "it says where the producer does ship")
 	})
 }
 
 func TestCheckPreviewHasTheStepCommitsOfTheTargetBranchsLineInTheOrderTheyRun(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	ws.links = []link{stepsLink()}
 
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
@@ -113,6 +111,6 @@ func TestCheckPreviewHasTheStepCommitsOfTheTargetBranchsLineInTheOrderTheyRun(t 
 		runs = append(runs, s.Run)
 		before = append(before, s.BeforeEdit)
 	}
-	assert.Equal(t, []string{"pre-method", "pre-edge", "post-edge", "post-method-old"}, runs)
+	assert.Equal(t, []string{"pre-method", "pre-edit", "post-method-old", "post-edit"}, runs)
 	assert.Equal(t, []bool{true, true, false, false}, before)
 }

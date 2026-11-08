@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +36,7 @@ func refreshing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *
 // withGenerate makes the method run the script after the edit, so a fresh build
 // has a commit that the first one did not.
 func withGenerate(ws *realWorkspace) {
-	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
+	ws.links[0].Post = []stepSpec{{Run: "./scripts/gen.sh"}}
 }
 
 func TestRefreshOfABranchThatIsIdenticalToAFreshBuildChangesNothing(t *testing.T) {

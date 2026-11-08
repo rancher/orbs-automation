@@ -165,7 +165,7 @@ type inDir struct {
 	asked   []string
 }
 
-func (w *inDir) ChainProject(key string) (*chain.Project, error) {
+func (w *inDir) Project(key string) (*chain.Project, error) {
 	w.asked = append(w.asked, key)
 	return w.project, w.err
 }

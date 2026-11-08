@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,113 +17,131 @@ import (
 // now is after v2.15's GA and before its EOM, and after v2.13's EOL.
 var now = time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
 
-func day(y int, m time.Month, d int) time.Time { return time.Date(y, m, d, 0, 0, 0, 0, time.UTC) }
-
-// linesDoc is deliberately not newest first.
-func linesDoc() *config.RancherLines {
-	return &config.RancherLines{Name: "rancher", Lines: []config.Line{
-		{ID: "v2.14", Dates: config.Dates{GA: day(2026, 4, 30), EOM: day(2026, 10, 30), EOL: day(2027, 10, 10)}, Kubernetes: config.KubernetesRange{Min: "1.33", Max: "1.35"}},
-		{ID: "v2.16", Kubernetes: config.KubernetesRange{Min: "1.35", Max: "1.37"}},
-		{ID: "v2.13", Dates: config.Dates{GA: day(2025, 12, 17), EOM: day(2026, 6, 17), EOL: day(2026, 11, 1)}},
-		{ID: "v2.15", Dates: config.Dates{GA: day(2026, 8, 27), EOM: day(2027, 2, 27), EOL: day(2028, 2, 27)}, Kubernetes: config.KubernetesRange{Min: "1.34", Max: "1.36"}},
-	}}
+// docSet is the documents of the fixture, by name and in order, so a test can drop
+// or change one.
+type docSet struct {
+	names []string
+	docs  map[string]string
 }
 
-func method() config.UpdateMethod {
-	return config.UpdateMethod{
-		Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
-		AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
+func (d *docSet) put(name, doc string) {
+	if d.docs == nil {
+		d.docs = map[string]string{}
+	}
+	if _, ok := d.docs[name]; !ok {
+		d.names = append(d.names, name)
+	}
+	d.docs[name] = doc
+}
+
+func (d docSet) list() []string {
+	var out []string
+	for _, n := range d.names {
+		if doc, ok := d.docs[n]; ok {
+			out = append(out, doc)
+		}
+	}
+	return out
+}
+
+func project(name, spec string) string { return chaintest.Doc("Project", name, "", spec) }
+
+func producer(name, image, stream string) []string {
+	return []string{
+		chaintest.Doc("Stream", name, "{project: "+name+"}", stream),
+		chaintest.Doc("Artifact", name+"-image", "{stream: "+name+"}", "  kind: image\n  name: "+image+"\n"),
 	}
 }
 
-func edge(to, key string) config.Edge {
-	return config.Edge{To: to, Method: "build-yaml-bump", Params: map[string]string{"updateKey": key, "value": "{image}:{tag}"}}
+func holding(consumer, producer, key string) string {
+	return chaintest.Doc("Holding", consumer+"-holds-"+producer, "{project: "+consumer+", artifact: "+producer+"-image}",
+		"  at: {file: build.yaml, key: "+key+"}\n  holds: {kind: release, form: \"{image}:{tag}\", accept: all}\n")
 }
 
-func ln(id, branch, version string) config.ProjectLine {
-	return config.ProjectLine{Line: id, Branch: branch, Version: version}
-}
-
-// rancher is the hub: a branch for each of four lines, with v2.16 on main.
-func rancher() config.Project {
-	return config.Project{
-		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}, FinalDestination: true,
-		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
-			ln("v2.16", "", ""), ln("v2.15", "release/v2.15", ""), ln("v2.14", "release/v2.14", ""), ln("v2.13", "release/v2.13", ""),
-		}},
-		UpdateMethods: []config.UpdateMethod{method()},
-		Downstream:    []config.Edge{edge("docs", "rancherDocs")},
+// fixtureDocs is the config of the tests: rancher is the hub, a branch for each of
+// four lines with v2.16 on main; shell has a series for each line but v2.13, and
+// ships to rancher; scc-operator is universal and ships to rancher; docs is shipped
+// to by the hub; charts has lines but is not connected to rancher, and obteam,
+// universal, ships to it. The lines document is deliberately not newest first.
+func fixtureDocs() *docSet {
+	d := &docSet{}
+	d.put("lines", chaintest.Doc("RancherLines", "rancher", "", `  lines:
+    - id: v2.14
+      dates: {ga: 2026-04-30, eom: 2026-10-30, eol: 2027-10-10}
+      kubernetes: {min: "1.33", max: "1.35"}
+    - id: v2.16
+      kubernetes: {min: "1.35", max: "1.37"}
+    - id: v2.13
+      dates: {ga: 2025-12-17, eom: 2026-06-17, eol: 2026-11-01}
+    - id: v2.15
+      dates: {ga: 2026-08-27, eom: 2027-02-27, eol: 2028-02-27}
+      kubernetes: {min: "1.34", max: "1.36"}
+`))
+	d.put("rancher", project("rancher", `  repo: {name: rancher/rancher}
+  finalDestination: true
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v2.15}
+      - {line: v2.14, branch: release/v2.14}
+      - {line: v2.13, branch: release/v2.13}
+`))
+	for i, doc := range producer("rancher", "rancher/rancher", "  lines:\n    - {line: v2.16, series: \"2.16.x\"}\n    - {line: v2.15, series: \"2.15.x\"}\n    - {line: v2.14, series: \"2.14.x\"}\n    - {line: v2.13, series: \"2.13.x\"}\n") {
+		d.put("rancher-"+string(rune('a'+i)), doc)
 	}
-}
-
-// shell has a series for each line but v2.13, and ships to rancher.
-func shell() config.Project {
-	return config.Project{
-		Name: "shell", Repo: config.Repo{Name: "rancher/shell", DefaultBranch: "main", Owned: true},
-		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
-			ln("v2.16", "", "0.9.x"), ln("v2.15", "release/v2.15", "0.8.x"), ln("v2.14", "release/v2.14", "0.7.x"),
-		}},
-		Downstream: []config.Edge{edge("rancher", "defaultShellVersion")},
+	d.put("shell", project("shell", `  repo: {name: rancher/shell, owned: true}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v2.15}
+      - {line: v2.14, branch: release/v2.14}
+`))
+	for i, doc := range producer("shell", "rancher/shell", "  lines:\n    - {line: v2.16, series: \"0.9.x\"}\n    - {line: v2.15, series: \"0.8.x\"}\n    - {line: v2.14, series: \"0.7.x\"}\n") {
+		d.put("shell-"+string(rune('a'+i)), doc)
 	}
-}
-
-// scc is universal: no lines of its own, and it ships to rancher.
-func scc() config.Project {
-	return config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", DefaultBranch: "main", Owned: true},
-		Release:    config.Release{Branching: config.BranchingSingle},
-		Downstream: []config.Edge{edge("rancher", "defaultSccOperatorImage")},
+	d.put("scc", project("scc-operator", "  repo: {name: rancher/scc-operator, owned: true}\n"))
+	for i, doc := range producer("scc-operator", "rancher/scc-operator", "  universal: true\n") {
+		d.put("scc-"+string(rune('a'+i)), doc)
 	}
-}
-
-// docs is shipped to by the hub.
-func docs() config.Project {
-	return config.Project{
-		Name: "docs", Repo: config.Repo{Name: "rancher/docs", DefaultBranch: "main"},
-		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
-			ln("v2.16", "", ""), ln("v2.15", "version-2.15", ""),
-		}},
-		UpdateMethods: []config.UpdateMethod{method()},
+	d.put("docs", project("docs", `  repo: {name: rancher/docs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: version-2.15}
+`))
+	d.put("charts", project("charts", `  repo: {name: rancher/charts, defaultBranch: dev-v2.16}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release-v2.15}
+`))
+	d.put("obteam", project("obteam", "  repo: {name: rancher/ob-team-charts, owned: true}\n"))
+	for i, doc := range producer("obteam", "rancher/ob-team-charts", "  universal: true\n") {
+		d.put("obteam-"+string(rune('a'+i)), doc)
 	}
+	d.put("rancher-holds-shell", holding("rancher", "shell", "defaultShellVersion"))
+	d.put("rancher-holds-scc", holding("rancher", "scc-operator", "defaultSccOperatorImage"))
+	d.put("docs-holds-rancher", holding("docs", "rancher", "rancherDocs"))
+	d.put("charts-holds-obteam", holding("charts", "obteam", "obChart"))
+	return d
 }
 
-// charts has lines but is not connected to rancher: obteam, universal, ships to it.
-func charts() config.Project {
-	return config.Project{
-		Name: "charts", Repo: config.Repo{Name: "rancher/charts", DefaultBranch: "dev-v2.16"},
-		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{
-			ln("v2.16", "", ""), ln("v2.15", "release-v2.15", ""),
-		}},
-		UpdateMethods: []config.UpdateMethod{method()},
-	}
-}
-
-func obteam() config.Project {
-	return config.Project{
-		Name: "obteam", Repo: config.Repo{Name: "rancher/ob-team-charts", DefaultBranch: "main"},
-		Release:    config.Release{Branching: config.BranchingSingle},
-		Downstream: []config.Edge{edge("charts", "obChart")},
-	}
-}
-
-func fixtureConfig() config.Config {
-	return config.Config{
-		Projects: []config.Project{rancher(), shell(), scc(), docs(), charts(), obteam()},
-		Lines:    linesDoc(),
-	}
-}
-
-func engineOf(t *testing.T, cfg config.Config) *updatedispatcher.Engine {
+func graphOf(t *testing.T, d *docSet) (*chain.Graph, *bump.Engine) {
 	t.Helper()
-	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), cfg)
+	g := chaintest.Load(t, d.list()...)
+	engine, err := bump.NewEngine(bump.Builtin(), g)
 	require.NoError(t, err)
-	return engine
+	return g, engine
 }
 
 func resolve(t *testing.T, opts Options) Result {
 	t.Helper()
-	cfg := fixtureConfig()
-	got, err := Resolve(cfg, engineOf(t, cfg), opts, now)
+	g, engine := graphOf(t, fixtureDocs())
+	got, err := Resolve(g, engine, opts, now)
 	require.NoError(t, err)
 	return got
 }
@@ -179,7 +198,7 @@ func TestResolveTheHubIsTheFinalDestination(t *testing.T) {
 	assert.Equal(t, "rancher", got.HubName)
 	v215 := lineOf(t, got, "v2.15")
 	require.NotNil(t, v215.Hub)
-	assert.Equal(t, Node{Project: "rancher/rancher", Name: "rancher", Branch: "release/v2.15"}, *v215.Hub)
+	assert.Equal(t, Node{Project: "rancher/rancher", Name: "rancher", Branch: "release/v2.15", Series: "2.15.x"}, *v215.Hub)
 	dev := lineOf(t, got, "v2.16")
 	require.NotNil(t, dev.Hub)
 	assert.Equal(t, "main", dev.Hub.Branch)
@@ -197,10 +216,11 @@ func TestResolveAHubCanBeNamed(t *testing.T) {
 }
 
 func TestResolveWithNoFinalDestinationAndNoHubNamedIsAnErrorThatSaysHow(t *testing.T) {
-	cfg := fixtureConfig()
-	cfg.Projects[0].FinalDestination = false // the lines document is still named rancher, which is not used
+	d := fixtureDocs()
+	d.put("rancher", strings.Replace(d.docs["rancher"], "  finalDestination: true\n", "", 1)) // the lines document is still named rancher, which is not used
+	g, engine := graphOf(t, d)
 
-	_, err := Resolve(cfg, engineOf(t, cfg), Options{}, now)
+	_, err := Resolve(g, engine, Options{}, now)
 
 	require.ErrorIs(t, err, ErrNoHub)
 	assert.ErrorContains(t, err, "finalDestination")
@@ -208,9 +228,9 @@ func TestResolveWithNoFinalDestinationAndNoHubNamedIsAnErrorThatSaysHow(t *testi
 }
 
 func TestResolveAnUnknownHubIsAnError(t *testing.T) {
-	cfg := fixtureConfig()
+	g, engine := graphOf(t, fixtureDocs())
 
-	_, err := Resolve(cfg, engineOf(t, cfg), Options{Hub: "nope"}, now)
+	_, err := Resolve(g, engine, Options{Hub: "nope"}, now)
 
 	require.ErrorIs(t, err, ErrNoHub)
 	assert.ErrorContains(t, err, "nope")
@@ -223,8 +243,7 @@ func TestResolveTakesFromTheProjectsThatShipToTheHubsBranchForTheLine(t *testing
 	assert.Equal(t, []string{"shell", "scc-operator"}, names(v215.TakesFrom), "in config order")
 	shell := v215.TakesFrom[0]
 	assert.Equal(t, Link{
-		Project: "rancher/shell", Name: "shell", Method: "build-yaml-bump", Series: "0.8.x", Branch: "release/v2.15",
-		Params: map[string]string{"updateKey": "defaultShellVersion", "value": "{image}:{tag}"},
+		Project: "rancher/shell", Name: "shell", Holdings: []string{"rancher-holds-shell"}, Series: "0.8.x", Branch: "release/v2.15",
 	}, shell)
 	scc := v215.TakesFrom[1]
 	assert.True(t, scc.Universal)
@@ -260,9 +279,10 @@ func TestResolveTheFinalDestinationHasNoShipsToEvenWhenItHasEdges(t *testing.T) 
 }
 
 func TestResolveAHubThatIsNotTheFinalDestinationShipsToTheProjectsItShipsTo(t *testing.T) {
-	cfg := fixtureConfig()
-	cfg.Projects[0].FinalDestination = false
-	got, err := Resolve(cfg, engineOf(t, cfg), Options{Hub: "rancher"}, now)
+	d := fixtureDocs()
+	d.put("rancher", strings.Replace(d.docs["rancher"], "  finalDestination: true\n", "", 1))
+	g, engine := graphOf(t, d)
+	got, err := Resolve(g, engine, Options{Hub: "rancher"}, now)
 	require.NoError(t, err)
 	assert.False(t, got.HubIsFinalDestination)
 
@@ -270,7 +290,7 @@ func TestResolveAHubThatIsNotTheFinalDestinationShipsToTheProjectsItShipsTo(t *t
 	require.Len(t, v215.ShipsTo, 1)
 	assert.Equal(t, "docs", v215.ShipsTo[0].Name)
 	assert.Equal(t, []string{"version-2.15"}, v215.ShipsTo[0].Branches)
-	assert.Equal(t, "build-yaml-bump", v215.ShipsTo[0].Method)
+	assert.Equal(t, []string{"docs-holds-rancher"}, v215.ShipsTo[0].Holdings)
 	assert.Empty(t, lineOf(t, got, "v2.14").ShipsTo, "docs has no v2.14 branch to follow it to")
 }
 
@@ -299,9 +319,9 @@ func TestResolveALineFilterKeepsOnlyThoseLinesWithOrWithoutTheV(t *testing.T) {
 }
 
 func TestResolveALineThatIsNotInTheLinesDocumentIsAnError(t *testing.T) {
-	cfg := fixtureConfig()
+	g, engine := graphOf(t, fixtureDocs())
 
-	_, err := Resolve(cfg, engineOf(t, cfg), Options{Lines: []string{"v9.9"}}, now)
+	_, err := Resolve(g, engine, Options{Lines: []string{"v9.9"}}, now)
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "v9.9")
@@ -315,19 +335,20 @@ func TestResolveAPhaseFilterKeepsTheLinesInThosePhases(t *testing.T) {
 }
 
 func TestResolveAnUnknownPhaseIsAnError(t *testing.T) {
-	cfg := fixtureConfig()
+	g, engine := graphOf(t, fixtureDocs())
 
-	_, err := Resolve(cfg, engineOf(t, cfg), Options{Phases: []string{"soon"}}, now)
+	_, err := Resolve(g, engine, Options{Phases: []string{"soon"}}, now)
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "soon")
 }
 
 func TestResolveWithNoLinesDocumentIsAnError(t *testing.T) {
-	cfg := fixtureConfig()
-	cfg.Lines = nil
+	var d docSet
+	d.put("rancher", project("rancher", "  repo: {name: rancher/rancher}\n  finalDestination: true\n"))
+	g, engine := graphOf(t, &d)
 
-	_, err := Resolve(cfg, engineOf(t, cfg), Options{}, now)
+	_, err := Resolve(g, engine, Options{}, now)
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "RancherLines")
@@ -345,21 +366,19 @@ func TestResultIsJSONThatReadsBack(t *testing.T) {
 }
 
 type fakeWorkspace struct {
-	cfg       config.Config
+	graph     *chain.Graph
 	cfgErr    error
-	engine    *updatedispatcher.Engine
+	engine    *bump.Engine
 	engineErr error
 }
 
-func (f fakeWorkspace) Config() (config.Config, error) { return f.cfg, f.cfgErr }
-func (f fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
-	return f.engine, f.engineErr
-}
+func (f fakeWorkspace) Chain() (*chain.Graph, error) { return f.graph, f.cfgErr }
+func (f fakeWorkspace) Bump() (*bump.Engine, error)  { return f.engine, f.engineErr }
 
 func workspaceOf(t *testing.T) fakeWorkspace {
 	t.Helper()
-	cfg := fixtureConfig()
-	return fakeWorkspace{cfg: cfg, engine: engineOf(t, cfg)}
+	g, engine := graphOf(t, fixtureDocs())
+	return fakeWorkspace{graph: g, engine: engine}
 }
 
 func rendered(t *testing.T, format string, opts Options) (string, error) {
@@ -393,7 +412,7 @@ func TestRunTextSaysWhatFeedsAndWhatIsFedWithSeriesBranchAndMethod(t *testing.T)
 
 	require.NoError(t, err)
 	for _, want := range []string{
-		"shell", "0.8.x", "release/v2.15", "build-yaml-bump",
+		"shell", "0.8.x", "release/v2.15", "rancher-holds-shell",
 		"scc-operator", "any release",
 		"docs", "version-2.15",
 		"charts", "release-v2.15", "takes from obteam (any release)",
@@ -402,19 +421,19 @@ func TestRunTextSaysWhatFeedsAndWhatIsFedWithSeriesBranchAndMethod(t *testing.T)
 	}
 }
 
-func TestRunTextSaysWhichKeyEachLinkUpdates(t *testing.T) {
+func TestRunTextSaysWhichHoldingsMakeEachLink(t *testing.T) {
 	out, err := rendered(t, "text", Options{Lines: []string{"v2.15"}})
 
 	require.NoError(t, err)
-	for _, want := range []string{"build-yaml-bump (defaultShellVersion)", "build-yaml-bump (defaultSccOperatorImage)", "build-yaml-bump (rancherDocs)", "via build-yaml-bump (obChart)"} {
+	for _, want := range []string{"rancher-holds-shell", "rancher-holds-scc", "docs-holds-rancher", "via charts-holds-obteam"} {
 		assert.Contains(t, out, want)
 	}
 }
 
-func TestResolveLinksCarryTheParamsOfTheirEdge(t *testing.T) {
+func TestResolveLinksCarryTheHoldingsThatMakeThem(t *testing.T) {
 	got := resolve(t, Options{Lines: []string{"v2.15"}})
 
-	assert.Equal(t, "defaultShellVersion", got.Lines[0].TakesFrom[0].Params["updateKey"])
+	assert.Equal(t, []string{"rancher-holds-shell"}, got.Lines[0].TakesFrom[0].Holdings)
 }
 
 func TestRunTextMarksTheGapsAndCountsThem(t *testing.T) {
@@ -447,7 +466,7 @@ func TestRunErrorsComeBackBeforeAnythingIsWritten(t *testing.T) {
 	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now, nil), "no config directory")
 	ws = workspaceOf(t)
 	ws.engine = nil
-	ws.engineErr = errors.New("method x is not usable")
+	ws.engineErr = errors.New("holding x is not usable")
 	assert.ErrorContains(t, run(&b, ws, "text", Options{}, now, nil), "not usable")
 	assert.Empty(t, b.String())
 }
@@ -463,24 +482,18 @@ func TestRunAnEngineThatIsPartlyUsableIsStillUsed(t *testing.T) {
 	assert.Contains(t, b.String(), "shell")
 }
 
-// assets is used for v2.16 only, and lists only that line: its lines are in its tags
-// and one branch holds them all.
-func assets() config.Project {
-	return config.Project{
-		Name: "rancher-assets", Repo: config.Repo{Name: "rancher/rancher-assets", ManagedBy: "release-team", DefaultBranch: "main"},
-		Release: config.Release{
-			Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage,
-			Lines: []config.ProjectLine{ln("v2.16", "", "")},
-		},
-		Downstream: []config.Edge{edge("rancher", "defaultAssetsImage")},
-	}
-}
-
+// resolveWithAssets adds rancher-assets: used for v2.16 only, listing only that
+// line, its lines in its tags and one branch holding them all.
 func resolveWithAssets(t *testing.T) Result {
 	t.Helper()
-	cfg := fixtureConfig()
-	cfg.Projects = append(cfg.Projects, assets())
-	got, err := Resolve(cfg, engineOf(t, cfg), Options{}, now)
+	d := fixtureDocs()
+	d.put("assets", project("rancher-assets", "  repo: {name: rancher/rancher-assets, managedBy: release-team}\n"))
+	for i, doc := range producer("rancher-assets", "rancher/rancher-assets", "  scheme: calverLineStage\n  lines: [{line: v2.16}]\n") {
+		d.put("assets-"+string(rune('a'+i)), doc)
+	}
+	d.put("rancher-holds-assets", holding("rancher", "rancher-assets", "defaultAssetsImage"))
+	g, engine := graphOf(t, d)
+	got, err := Resolve(g, engine, Options{}, now)
 	require.NoError(t, err)
 	return got
 }

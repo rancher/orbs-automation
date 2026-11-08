@@ -22,7 +22,7 @@ import (
 type Workspace interface {
 	// Project returns the Project with the given config name or owner/name
 	// slug, or the one in the working directory when the key is empty.
-	ChainProject(key string) (*chain.Project, error)
+	Project(key string) (*chain.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
 }
 
@@ -130,7 +130,7 @@ func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
 	if len(slugs) > 0 {
 		slug = slugs[0]
 	}
-	p, err := ws.ChainProject(slug)
+	p, err := ws.Project(slug)
 	if err != nil {
 		return Info{}, err
 	}

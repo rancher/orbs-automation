@@ -7,14 +7,17 @@
 package workspace
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/git/repo"
@@ -51,6 +54,13 @@ type Workspace struct {
 	remoteRefs  func(ctx context.Context, url, token string) (git.Refs, error)
 	remoteFile  func(ctx context.Context, host, token, slug, ref, path string) ([]byte, error)
 	credentials func() (host, token string)
+
+	// The central config is read once for the invocation: every method that needs
+	// it gets the same graph, so the projects and the update engine are the same
+	// objects.
+	chainOnce sync.Once
+	graph     *chain.Graph
+	graphErr  error
 }
 
 // Open returns the Workspace for s and the working directory cwd, reading the
@@ -89,15 +99,34 @@ func defaultCredentials() (host, token string) {
 
 // ConfigDir returns the central config directory: the configDir setting when
 // set (flag, env or user file), else ./config when the working directory holds
-// config/*.project.yaml. It returns ErrNotFound when neither names one.
+// a YAML file there with documents of gero's (an apiVersion of gero/). It returns
+// ErrNotFound when neither names one.
 func (w *Workspace) ConfigDir() (ConfigDir, error) {
 	if w.settings.ConfigDir != "" {
 		return ConfigDir{Dir: w.settings.ConfigDir, Source: w.settings.Source("configDir").String()}, nil
 	}
 	if w.cwdFS != nil {
-		if m, err := fs.Glob(w.cwdFS, "config/*.project.yaml"); err == nil && len(m) > 0 {
+		if hasGeroConfig(w.cwdFS) {
 			return ConfigDir{Dir: filepath.Join(w.cwd, "config"), Source: SourceCwd}, nil
 		}
 	}
 	return ConfigDir{}, ErrNotFound
+}
+
+// hasGeroConfig reports whether config/ of the file system has a YAML file with
+// documents of gero's, which is what makes a working directory the central
+// checkout and not just a repo with a config folder.
+func hasGeroConfig(fsys fs.FS) bool {
+	for _, pattern := range []string{"config/*.yaml", "config/*.yml"} {
+		matches, err := fs.Glob(fsys, pattern)
+		if err != nil {
+			continue
+		}
+		for _, m := range matches {
+			if data, err := fs.ReadFile(fsys, m); err == nil && bytes.Contains(data, []byte("apiVersion: gero/")) {
+				return true
+			}
+		}
+	}
+	return false
 }

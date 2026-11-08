@@ -1,5 +1,5 @@
 // Package steprun runs the steps of an update (the pre and post edit commands of
-// a method or an edge) for the update dispatcher. The dispatcher decides which
+// an edit) for the update engine. The engine decides which
 // steps run and in what order; this package decides how one runs: which program,
 // with what environment, in which directory.
 //
@@ -19,9 +19,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/execx"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // The places a step's program can come from. An empty From is the consumer.
@@ -44,11 +44,11 @@ var (
 // Runner runs steps. The zero value is ready to use.
 type Runner struct{}
 
-var _ updatedispatcher.StepRunner = Runner{}
+var _ bump.StepRunner = Runner{}
 
 // Run runs one step in env.Dir. A step that exits non-zero is an error that ends
 // with the last of what it wrote to stderr, so the cause shows without a log.
-func (Runner) Run(ctx context.Context, step config.Step, env updatedispatcher.StepEnv) error {
+func (Runner) Run(ctx context.Context, step v1alpha2.Step, env bump.StepEnv) error {
 	if len(step.Run) == 0 || step.Run[0] == "" {
 		return ErrEmptyCommand
 	}
@@ -82,8 +82,8 @@ func program(name, dir string) (string, error) {
 	if !strings.ContainsRune(name, '/') {
 		return name, nil
 	}
-	abs, err := updatedispatcher.Within(dir, name)
-	if errors.Is(err, updatedispatcher.ErrOutsideTree) {
+	abs, err := bump.Within(dir, name)
+	if errors.Is(err, bump.ErrOutsideTree) {
 		return "", fmt.Errorf("%w: %v", ErrOutsideClone, err)
 	}
 	return abs, err

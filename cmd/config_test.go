@@ -100,12 +100,12 @@ func TestConfigShowBadUserFile(t *testing.T) {
 }
 
 // inCentralRepo changes into a temp directory that looks like a checkout of
-// the central repo (config/*.project.yaml) and returns its config directory.
+// the central repo (config/ with a file of gero's) and returns its config directory.
 func inCentralRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "config"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "config", "rancher-rancher.project.yaml"), nil, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config", "rancher.yaml"), []byte("apiVersion: gero/v1alpha2\nkind: Project\nname: rancher\nspec:\n  repo: {name: rancher/rancher}\n"), 0o600))
 	t.Chdir(dir)
 	wd, err := os.Getwd()
 	require.NoError(t, err)
@@ -176,8 +176,7 @@ func TestConfigValidateAcceptsTheCheckedInConfig(t *testing.T) {
 func TestConfigValidateReportsProblems(t *testing.T) {
 	isolateGero(t)
 	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", "a.yaml"), []byte(`apiVersion: gero/v1alpha2
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(`apiVersion: gero/v1alpha2
 kind: Project
 name: a
 spec:
@@ -205,10 +204,9 @@ func TestConfigValidateWithoutConfigDirectory(t *testing.T) {
 func centralWith(t *testing.T, slugs ...string) string {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
 	for _, slug := range slugs {
 		_, name, _ := strings.Cut(slug, "/")
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", name+".yaml"), []byte(`apiVersion: gero/v1alpha2
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name+".yaml"), []byte(`apiVersion: gero/v1alpha2
 kind: Project
 name: `+name+`
 spec:

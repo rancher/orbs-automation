@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
@@ -13,16 +13,15 @@ import (
 
 // assetsWorkspace is rancher-assets: one branch, its lines listed and its stages
 // in CalVer tags.
-func assetsWorkspace() *fakeWorkspace {
+func assetsWorkspace(t *testing.T) *fakeWorkspace {
+	t.Helper()
 	return &fakeWorkspace{
-		projects: map[string]config.Project{"rancher/rancher-assets": {
-			Name: "rancher-assets",
-			Repo: config.Repo{Name: "rancher/rancher-assets", ManagedBy: "release-team", DefaultBranch: "main"},
-			Release: config.Release{
-				Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*",
-				RequiresPrerelease: true, Lines: []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}},
-			},
-		}},
+		t: t,
+		docs: []string{
+			chaintest.Lines("v2.16", "v2.15"),
+			chaintest.Doc("Project", "rancher-assets", "", "  repo: {name: rancher/rancher-assets, managedBy: release-team}\n"),
+			chaintest.Doc("Stream", "rancher-assets", "{project: rancher-assets}", "  scheme: calverLineStage\n  requiresPrerelease: true\n  lines: [{line: v2.16}, {line: v2.15}]\n"),
+		},
 		current: "rancher/rancher-assets",
 		paths:   map[string]workspace.RepoPath{"rancher/rancher-assets": {Path: "/src/assets", Source: workspace.PathCwd}},
 		tags: []git.Tag{
@@ -34,7 +33,7 @@ func assetsWorkspace() *fakeWorkspace {
 }
 
 func TestStatusOfAProjectWithItsLinesInTagsHasARowForEachLineOnItsOneBranch(t *testing.T) {
-	got, err := gather(context.Background(), assetsWorkspace(), opener(nil, assert.AnError), nil)
+	got, err := gather(context.Background(), assetsWorkspace(t), opener(nil, assert.AnError), nil)
 
 	require.NoError(t, err)
 	require.Len(t, got.Targets, 2, "the lines it lists, and not v2.14, which has a tag")
@@ -48,7 +47,7 @@ func TestStatusOfAProjectWithItsLinesInTagsHasARowForEachLineOnItsOneBranch(t *t
 }
 
 func TestStatusOfAProjectWithItsLinesInTagsShowsTheNewestReleaseAndDevTagOfEachLine(t *testing.T) {
-	got, err := gather(context.Background(), assetsWorkspace(), opener(nil, assert.AnError), nil)
+	got, err := gather(context.Background(), assetsWorkspace(t), opener(nil, assert.AnError), nil)
 	require.NoError(t, err)
 
 	v216, v215 := got.Targets[0], got.Targets[1]
@@ -59,7 +58,7 @@ func TestStatusOfAProjectWithItsLinesInTagsShowsTheNewestReleaseAndDevTagOfEachL
 }
 
 func TestStatusOfAProjectWithItsLinesInTagsHasNoStateAndNoNextTag(t *testing.T) {
-	got, err := gather(context.Background(), assetsWorkspace(), opener(nil, assert.AnError), nil)
+	got, err := gather(context.Background(), assetsWorkspace(t), opener(nil, assert.AnError), nil)
 	require.NoError(t, err)
 
 	for _, target := range got.Targets {

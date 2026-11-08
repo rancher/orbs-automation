@@ -7,10 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/steprun"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,52 +35,49 @@ func applyRemote(t *testing.T) string {
 	return dir
 }
 
-// invocationFor is scc-operator shipping to rancher through yamlBump, with the
-// given steps after the edit.
-func invocationFor(t *testing.T, post []config.Step) updatedispatcher.Invocation {
+// scene is scc-operator shipping its image into rancher's build.yaml on main,
+// with the given steps around the write.
+type scene struct {
+	route  bump.Route
+	target bump.Target
+}
+
+// invocationFor is the scene with the given steps after the write.
+func invocationFor(t *testing.T, post []stepSpec) scene {
 	t.Helper()
 	return invocationSteps(t, nil, post)
 }
 
-// invocationSteps is invocationFor with steps before the edit as well.
-func invocationSteps(t *testing.T, pre, post []config.Step) updatedispatcher.Invocation {
+// invocationSteps is invocationFor with steps before the write as well.
+func invocationSteps(t *testing.T, pre, post []stepSpec) scene {
 	t.Helper()
-	producer := config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true},
-		Downstream: []config.Edge{{To: "rancher", Method: "build-yaml-bump",
-			Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"}}},
-	}
-	consumer := config.Project{
-		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-		UpdateMethods: []config.UpdateMethod{{
-			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
-			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
-			PreEdit:       pre,
-			PostEdit:      post,
-		}},
-	}
-	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: []config.Project{producer, consumer}})
+	ws := &fakeWorkspace{t: t, producer: universal(), links: []link{{
+		Consumer: projectSpec{Name: "rancher", Repo: "rancher/rancher"},
+		Key:      "image", Pre: pre, Post: post,
+	}}}
+	engine, err := ws.Bump()
+	require.NoError(t, err)
+	producer, err := ws.Project("")
 	require.NoError(t, err)
 	routes := engine.RoutesFrom(producer)
 	require.Len(t, routes, 1)
-	inv, err := engine.Invoke(routes[0])
+	targets, err := routes[0].TargetsFor("")
 	require.NoError(t, err)
-	return inv
+	require.Len(t, targets, 1)
+	return scene{route: routes[0], target: targets[0]}
 }
 
-var applyRelease = updatedispatcher.Release{
-	Tag: "v0.5.3", Version: "0.5.3", Image: "rancher/scc-operator", SourceRepo: "rancher/scc-operator",
-}
+var applyRelease = Release{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}
 
-func applyFor(inv updatedispatcher.Invocation) Apply {
+func applyFor(sc scene) Apply {
 	return Apply{
-		Invocation: inv, Release: applyRelease, Branch: "main", Message: "Update to v0.5.3\n\nbody",
+		Route: sc.route, Target: sc.target, Release: applyRelease, Message: "Update to v0.5.3\n\nbody",
 		Runner: steprun.Runner{}, StepMessage: testStepMessage,
 	}
 }
 
 // testStepMessage is the commit message of a step, as the real one is made.
-func testStepMessage(u updatedispatcher.Unit) (string, error) {
+func testStepMessage(u bump.Unit) (string, error) {
 	return "Run `" + strings.Join(u.Run, " ") + "`\n\nAutomation: gero ship", nil
 }
 
@@ -133,7 +129,7 @@ func TestApplyRunsThePostEditStepsInTheWorkDirectoryAndCommitsWhatTheyMake(t *te
 	put(t, clone, "notes.txt", "engineer's own")
 	w := prepareMain(t, up, clone, false)
 	require.Equal(t, InPlace, w.Place)
-	inv := invocationFor(t, []config.Step{{Run: config.Command{"./scripts/gen.sh"}}})
+	inv := invocationFor(t, []stepSpec{{Run: "./scripts/gen.sh"}})
 
 	res, err := applyFor(inv).Run(bg, w)
 
@@ -180,13 +176,13 @@ func TestApplyAFailingStepIsAStepErrorAndAbortUndoesTheRun(t *testing.T) {
 	up := applyRemote(t)
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, false)
-	inv := invocationFor(t, []config.Step{{Run: config.Command{"false"}}})
+	inv := invocationFor(t, []stepSpec{{Run: "false"}})
 
 	_, err := applyFor(inv).Run(bg, w)
 
-	var stepErr *updatedispatcher.StepError
+	var stepErr *bump.StepError
 	require.True(t, errors.As(err, &stepErr), "got %v", err)
-	assert.Equal(t, updatedispatcher.MethodPostEdit, stepErr.Phase)
+	assert.Equal(t, bump.PostEdit, stepErr.Phase)
 	assert.Equal(t, []string{"false"}, stepErr.Run)
 
 	require.NoError(t, w.Abort(bg))
@@ -225,7 +221,7 @@ func TestApplyCommitsTheEditAndThenWhatEachStepMade(t *testing.T) {
 	put(t, clone, "notes.txt", "engineer's own")
 	w := prepareMain(t, up, clone, false)
 	base := runGit(t, w.Dir, "rev-parse", "HEAD")
-	inv := invocationFor(t, []config.Step{{Run: config.Command{"./scripts/gen.sh"}}})
+	inv := invocationFor(t, []stepSpec{{Run: "./scripts/gen.sh"}})
 
 	res, err := applyFor(inv).Run(bg, w)
 
@@ -247,7 +243,7 @@ func TestApplyAStepThatChangesNothingMakesNoCommit(t *testing.T) {
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, false)
 	base := runGit(t, w.Dir, "rev-parse", "HEAD")
-	inv := invocationFor(t, []config.Step{{Run: config.Command{"true"}}})
+	inv := invocationFor(t, []stepSpec{{Run: "true"}})
 
 	res, err := applyFor(inv).Run(bg, w)
 
@@ -261,7 +257,7 @@ func TestApplyAPreEditStepGetsItsOwnCommitBeforeTheEdit(t *testing.T) {
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, false)
 	base := runGit(t, w.Dir, "rev-parse", "HEAD")
-	inv := invocationSteps(t, []config.Step{{Run: config.Command{"./scripts/pre.sh"}}}, nil)
+	inv := invocationSteps(t, []stepSpec{{Run: "./scripts/pre.sh"}}, nil)
 
 	res, err := applyFor(inv).Run(bg, w)
 
@@ -277,13 +273,13 @@ func TestApplyAFailingStepKeepsTheEarlierCommitsUntilTheWorkIsAborted(t *testing
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, false)
 	base := runGit(t, w.Dir, "rev-parse", "HEAD")
-	inv := invocationFor(t, []config.Step{
-		{Run: config.Command{"./scripts/gen.sh"}}, {Run: config.Command{"false"}},
+	inv := invocationFor(t, []stepSpec{
+		{Run: "./scripts/gen.sh"}, {Run: "false"},
 	})
 
 	_, err := applyFor(inv).Run(bg, w)
 
-	var stepErr *updatedispatcher.StepError
+	var stepErr *bump.StepError
 	require.True(t, errors.As(err, &stepErr))
 	assert.Equal(t, []string{"Update to v0.5.3", "Run `./scripts/gen.sh`"}, subjects(t, w.Dir, base), "what was done before the failure is committed")
 
@@ -296,8 +292,8 @@ func TestApplyAFailureToMakeAStepsMessageIsAFailure(t *testing.T) {
 	up := applyRemote(t)
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, false)
-	a := applyFor(invocationFor(t, []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}))
-	a.StepMessage = func(updatedispatcher.Unit) (string, error) { return "", errors.New("bad placeholder") }
+	a := applyFor(invocationFor(t, []stepSpec{{Run: "./scripts/gen.sh"}}))
+	a.StepMessage = func(bump.Unit) (string, error) { return "", errors.New("bad placeholder") }
 
 	_, err := a.Run(bg, w)
 

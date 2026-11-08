@@ -10,12 +10,12 @@ import (
 // unowned is the fixture's producer made like a project whose releases another
 // team ships: gero reads it and never writes for it.
 func unowned(ws *fakeWorkspace, team string) *fakeWorkspace {
-	ws.producer.Repo.Owned, ws.producer.Repo.ManagedBy = false, team
+	ws.producer.Owned, ws.producer.ManagedBy = false, team
 	return ws
 }
 
 func TestCheckRefusesAProducerThatIsNotOwned(t *testing.T) {
-	_, err := Check(ctx, unowned(fixture(), "release-team"), &fakeProber{}, Input{Project: "scc-operator"})
+	_, err := Check(ctx, unowned(fixture(t), "release-team"), &fakeProber{}, Input{Project: "scc-operator"})
 
 	require.ErrorIs(t, err, ErrNotOwned)
 	assert.ErrorContains(t, err, "scc-operator")
@@ -23,14 +23,14 @@ func TestCheckRefusesAProducerThatIsNotOwned(t *testing.T) {
 }
 
 func TestCheckRefusesAnUnownedProducerThatNamesNoTeamWithoutNamingOne(t *testing.T) {
-	_, err := Check(ctx, unowned(fixture(), ""), &fakeProber{}, Input{Project: "scc-operator"})
+	_, err := Check(ctx, unowned(fixture(t), ""), &fakeProber{}, Input{Project: "scc-operator"})
 
 	require.ErrorIs(t, err, ErrNotOwned)
 	assert.NotContains(t, err.Error(), "orbs", "an unowned project is never assumed to be orbs's")
 }
 
 func TestHoldingsAreStillReadForAProducerThatIsNotOwned(t *testing.T) {
-	got, err := holdings(t, unowned(loopFixture(), "release-team"))
+	got, err := holdings(t, unowned(loopFixture(t), "release-team"))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)

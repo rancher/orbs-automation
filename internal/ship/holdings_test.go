@@ -5,8 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/bump"
+
 	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,11 +21,24 @@ func holdings(t *testing.T, ws *fakeWorkspace) ([]ConsumerHoldings, error) {
 	return Holdings(ctx, ws, producer)
 }
 
-func byBranch(t *testing.T, c ConsumerHoldings) map[string]Holding {
+// view is a consumer branch with what its one holding holds, as the tests read it.
+type view struct {
+	Line, Branch, Head, Current, Stage, Error string
+	Stable, Newest                            *Verdict
+}
+
+func byBranch(t *testing.T, c ConsumerHoldings) map[string]view {
 	t.Helper()
-	out := map[string]Holding{}
+	out := map[string]view{}
 	for _, h := range c.Targets {
-		out[h.Branch] = h
+		v := view{Line: h.Line, Branch: h.Branch, Head: h.Head, Error: h.Error}
+		if len(h.Held) > 0 {
+			v.Current, v.Stage, v.Stable, v.Newest = h.Held[0].Current, h.Held[0].Stage, h.Held[0].Stable, h.Held[0].Newest
+			if v.Error == "" {
+				v.Error = h.Held[0].Error
+			}
+		}
+		out[h.Branch] = v
 	}
 	return out
 }
@@ -40,7 +54,7 @@ func reads(ws *fakeWorkspace, prefix string) int {
 }
 
 func TestHoldingsOfAUniversalProducerAreEveryConsumerBranchAgainstTheLatestStableAndNewest(t *testing.T) {
-	ws := withDevLine(loopFixture())
+	ws := withDevLine(loopFixture(t))
 
 	got, err := holdings(t, ws)
 
@@ -48,7 +62,6 @@ func TestHoldingsOfAUniversalProducerAreEveryConsumerBranchAgainstTheLatestStabl
 	require.Len(t, got, 1)
 	c := got[0]
 	assert.Equal(t, "rancher/rancher", c.Consumer)
-	assert.Equal(t, "build-yaml-bump", c.Method)
 	assert.Empty(t, c.Error)
 	hs := byBranch(t, c)
 	require.Len(t, hs, 3, "every release branch of the consumer")
@@ -58,16 +71,16 @@ func TestHoldingsOfAUniversalProducerAreEveryConsumerBranchAgainstTheLatestStabl
 	assert.Equal(t, "sha-215", behind.Head)
 	assert.Equal(t, "rancher/scc-operator:v0.5.2", behind.Current)
 	require.NotNil(t, behind.Stable)
-	assert.Equal(t, Verdict{Tag: "v0.5.3", Want: "rancher/scc-operator:v0.5.3", UpToDate: false, Relation: updatedispatcher.RelationNewer}, *behind.Stable)
+	assert.Equal(t, Verdict{Tag: "v0.5.3", Want: "rancher/scc-operator:v0.5.3", UpToDate: false, Relation: bump.RelationNewer}, *behind.Stable)
 	require.NotNil(t, behind.Newest)
 	assert.Equal(t, "v0.6.0-rc.1", behind.Newest.Tag, "the newest release of any kind")
-	assert.Equal(t, updatedispatcher.RelationNewer, behind.Newest.Relation)
+	assert.Equal(t, bump.RelationNewer, behind.Newest.Relation)
 
 	current := hs["main"]
 	assert.Equal(t, "v2.16", current.Line)
 	require.NotNil(t, current.Stable)
 	assert.True(t, current.Stable.UpToDate, "main holds the latest stable")
-	assert.Equal(t, updatedispatcher.RelationSame, current.Stable.Relation)
+	assert.Equal(t, bump.RelationSame, current.Stable.Relation)
 	assert.Equal(t, "v0.6.0-rc.1", current.Newest.Tag)
 	assert.False(t, current.Newest.UpToDate, "an rc is newer than what it holds")
 
@@ -75,22 +88,22 @@ func TestHoldingsOfAUniversalProducerAreEveryConsumerBranchAgainstTheLatestStabl
 }
 
 func TestHoldingsWithNoNewerPrereleaseHaveTheSameVerdictForBoth(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	ws.refs["rancher/scc-operator"] = git.Refs{Tags: tags("v0.5.2", "v0.5.3")}
 
 	got, err := holdings(t, ws)
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
-	for _, h := range got[0].Targets {
-		require.NotNil(t, h.Stable, h.Branch)
-		require.NotNil(t, h.Newest, h.Branch)
-		assert.Equal(t, *h.Stable, *h.Newest, h.Branch)
+	for branch, h := range byBranch(t, got[0]) {
+		require.NotNil(t, h.Stable, branch)
+		require.NotNil(t, h.Newest, branch)
+		assert.Equal(t, *h.Stable, *h.Newest, branch)
 	}
 }
 
 func TestHoldingsReadEachFileOnceAndEachRepositoryOnce(t *testing.T) {
-	ws := withDevLine(loopFixture())
+	ws := withDevLine(loopFixture(t))
 
 	got, err := holdings(t, ws)
 
@@ -123,7 +136,7 @@ func TestHoldingsOfAProducerWithLinesGiveEachBranchTheLatestOfItsOwnSeries(t *te
 }
 
 func TestHoldingsABranchWithNoValueIsAnErrorOfItsOwn(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	delete(ws.files, "rancher/rancher@sha-214:build.yaml")
 
 	got, err := holdings(t, ws)
@@ -138,7 +151,7 @@ func TestHoldingsABranchWithNoValueIsAnErrorOfItsOwn(t *testing.T) {
 }
 
 func TestHoldingsAConsumerThatCannotBeReadIsReportedAndDoesNotStopTheRest(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	ws.refsErr = map[string]error{"rancher/rancher": errors.New("network down")}
 
 	got, err := holdings(t, ws)
@@ -151,7 +164,7 @@ func TestHoldingsAConsumerThatCannotBeReadIsReportedAndDoesNotStopTheRest(t *tes
 }
 
 func TestHoldingsAProducerWithNoReleaseHasAConsumerErrorAndNoTargets(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	ws.refs["rancher/scc-operator"] = git.Refs{}
 
 	got, err := holdings(t, ws)
@@ -162,7 +175,7 @@ func TestHoldingsAProducerWithNoReleaseHasAConsumerErrorAndNoTargets(t *testing.
 }
 
 func TestHoldingsOfAProducerThatShipsNowhereAreNone(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	ws.links = nil
 
 	got, err := holdings(t, ws)
@@ -172,8 +185,8 @@ func TestHoldingsOfAProducerThatShipsNowhereAreNone(t *testing.T) {
 }
 
 func TestSourcesAreWhatTheConsumerTakesFromEachProjectThatShipsToIt(t *testing.T) {
-	ws := withDevLine(loopFixture())
-	consumer := ws.links[0].Consumer
+	ws := withDevLine(loopFixture(t))
+	consumer := ws.config().Project("rancher")
 
 	got, err := Sources(ctx, ws, consumer)
 
@@ -181,35 +194,29 @@ func TestSourcesAreWhatTheConsumerTakesFromEachProjectThatShipsToIt(t *testing.T
 	require.Len(t, got, 1)
 	src := got[0]
 	assert.Equal(t, "rancher/scc-operator", src.Producer)
-	assert.Equal(t, "build-yaml-bump", src.Method)
 	assert.Empty(t, src.Error)
 	require.Len(t, src.Targets, 3, "the consumer's own branches")
-	var behind Holding
-	for _, h := range src.Targets {
-		if h.Branch == "release/v2.15" {
-			behind = h
-		}
-	}
+	behind := byBranch(t, ConsumerHoldings{Targets: src.Targets})["release/v2.15"]
 	assert.Equal(t, "rancher/scc-operator:v0.5.2", behind.Current)
 	require.NotNil(t, behind.Stable)
 	assert.Equal(t, "v0.5.3", behind.Stable.Tag)
-	assert.Equal(t, updatedispatcher.RelationNewer, behind.Stable.Relation)
+	assert.Equal(t, bump.RelationNewer, behind.Stable.Relation)
 }
 
 func TestSourcesOfAProjectNothingShipsToAreNone(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 
-	got, err := Sources(ctx, ws, ws.producer)
+	got, err := Sources(ctx, ws, ws.config().Project("scc-operator"))
 
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
 
 func TestSourcesASourceThatCannotBeTracedIsReportedWithItsError(t *testing.T) {
-	ws := loopFixture()
+	ws := loopFixture(t)
 	ws.refsErr = map[string]error{"rancher/scc-operator": errors.New("network down")}
 
-	got, err := Sources(ctx, ws, ws.links[0].Consumer)
+	got, err := Sources(ctx, ws, ws.config().Project("rancher"))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)

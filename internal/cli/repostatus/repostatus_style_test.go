@@ -29,18 +29,18 @@ func status(t *testing.T, ws *fakeWorkspace, c Opener, slugs ...string) Status {
 }
 
 func statuses(t *testing.T) map[string]Status {
-	noHost := fixture()
+	noHost := fixture(t)
 	noHost.refsErr = errors.New("network down")
-	noClone := fixture()
+	noClone := fixture(t)
 	noClone.paths["rancher/rancher"] = workspace.RepoPath{Err: workspace.ErrRepoNotFound}
 	return map[string]Status{
-		"lines":     status(t, fixture(), opener(syncedClone(), nil)),
+		"lines":     status(t, fixture(t), opener(syncedClone(), nil)),
 		"sources":   status(t, shipping(t), opener(syncedClone(), nil), "rancher/rancher"),
 		"consumers": status(t, shipping(t), opener(syncedClone(), nil), "rancher/scc-operator"),
 		"no host":   status(t, noHost, opener(syncedClone(), nil)),
 		"no clone":  status(t, noClone, opener(syncedClone(), nil), "rancher/rancher"),
 		"no trace": {Slug: "rancher/scc-operator", Consumers: []ship.ConsumerHoldings{
-			{Consumer: "rancher/rancher", Name: "rancher", Method: "build-yaml-bump", Error: "network down"},
+			{Consumer: "rancher/rancher", Name: "rancher", Error: "network down"},
 		}, TraceError: "method x is not usable"},
 	}
 }
@@ -83,8 +83,8 @@ func TestHeadingsAndColumnHeadsTakeTheirLook(t *testing.T) {
 	for _, head := range []string{"LINE", "BRANCH", "HEAD", "LATEST STABLE", "LATEST PRE-RELEASE", "STATE", "NEXT", "UNRELEASED", "LOCAL"} {
 		assert.Contains(t, lines, v.Style(style.Dim, head), head)
 	}
-	assert.Contains(t, sources, v.Style(style.Heading, "Sources: scc-operator (rancher/scc-operator), build-yaml-bump"))
-	assert.Contains(t, consumers, v.Style(style.Heading, "Consumers: rancher (rancher/rancher), build-yaml-bump"))
+	assert.Contains(t, sources, v.Style(style.Heading, "Sources: scc-operator (rancher/scc-operator)"))
+	assert.Contains(t, consumers, v.Style(style.Heading, "Consumers: rancher (rancher/rancher)"))
 	for _, head := range []string{"HOLDS", "STATUS"} {
 		assert.Contains(t, sources, v.Style(style.Dim, head), head)
 	}
@@ -99,7 +99,7 @@ func TestWhereALineStandsTakesTheLookOfIt(t *testing.T) {
 
 	assert.Contains(t, lines, v.Style(style.OK, "in sync"))
 	assert.Contains(t, lines, v.Style(style.Warn, "rc open, work since the rc (7 commits)"))
-	onTheRC := fixture()
+	onTheRC := fixture(t)
 	onTheRC.branches[0].Commit = "sha-v2.13.0-rc.10"
 	assert.Contains(t, renderText(status(t, onTheRC, opener(syncedClone(), nil)), v), v.Style(style.Dim, "rc open, head on the rc"))
 	assert.Contains(t, sources, v.Style(style.Warn, "behind v0.5.3"))

@@ -1,8 +1,7 @@
 // Package tagscheme is what every reader of a project's releases asks of its tags:
 // which lines they carry, which line a tag is in, the newest of a line, whether a
-// tag is stable and how two compare. A project's scheme follows from
-// release.branching and release.tagScheme, so ship, repo status, repo tag and
-// lines resolve call it and carry no scheme code of their own
+// tag is stable and how two compare. A stream's scheme follows from its scheme
+// setting, so ship, repo status, repo tag and lines resolve call it and carry no scheme code of their own
 // (docs/specs/CHAIN_TRACING.md). It does no I/O.
 package tagscheme
 
@@ -14,7 +13,6 @@ import (
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
@@ -37,29 +35,12 @@ type Scheme interface {
 	Latest(tags []git.Tag, line string) git.Latest
 	// IsStable reports whether a tag is not a prerelease.
 	IsStable(tag string) bool
-	// Stage is the stage a tag is of (config.StageDev or config.StageStable), or ""
+	// Stage is the stage a tag is of (v1alpha2.StageDev or v1alpha2.StageStable), or ""
 	// for a scheme whose tags carry none, and for a name that is not a release.
 	Stage(tag string) string
 	// Compare orders two tags: negative when a is older, zero when they are equal
 	// or either is not a release tag of the scheme.
 	Compare(a, b string) int
-}
-
-// For returns the scheme of a project: the one release.tagScheme names for a
-// perLineTag project, and semver for every other.
-func For(p config.Project) (Scheme, error) {
-	var lines []lineSeries
-	for _, l := range p.Release.Lines {
-		lines = append(lines, lineSeries{line: l.Line, series: l.Series()})
-	}
-	if p.Release.Branching != config.BranchingPerLineTag {
-		return semverScheme{lines: lines, pattern: p.Release.TagPattern}, nil
-	}
-	inner, err := calver.Builtin().Get(p.Release.TagScheme)
-	if err != nil {
-		return nil, fmt.Errorf("project %s: %w", p.Name, err)
-	}
-	return calverScheme{lines: ids(lines), inner: inner}, nil
 }
 
 // lineSeries is a line a project lists and the version series of its releases.
@@ -85,7 +66,7 @@ type semverScheme struct {
 	accepts func(tag string) bool // nil: every tag the pattern matches
 }
 
-func (semverScheme) Name() string { return config.TagSchemeSemver }
+func (semverScheme) Name() string { return v1alpha2.SchemeSemver }
 
 func (semverScheme) Valid(tag string) bool {
 	_, ok := semver.Parse(tag)
@@ -186,8 +167,8 @@ func (c calverScheme) Latest(tags []git.Tag, line string) git.Latest {
 		}
 		lines = []string{line}
 	}
-	release := c.newest(tags, lines, config.StageStable)
-	dev := c.newest(tags, lines, config.StageDev)
+	release := c.newest(tags, lines, v1alpha2.StageStable)
+	dev := c.newest(tags, lines, v1alpha2.StageDev)
 	var out git.Latest
 	if release != nil {
 		out.Stable = &release.tag
@@ -232,7 +213,7 @@ func (c calverScheme) Stage(tag string) string {
 
 func (c calverScheme) IsStable(tag string) bool {
 	t, ok := c.inner.Parse(tag)
-	return ok && t.Stage == config.StageStable
+	return ok && t.Stage == v1alpha2.StageStable
 }
 
 // Compare orders by the date in the names, so a newer date with the same line is a

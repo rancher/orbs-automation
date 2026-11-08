@@ -21,9 +21,9 @@ var ErrProjectRequired = errors.New("name a project by its config name or owner/
 // Workspace is what Path needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	// ChainProject returns the Project with the given config name or owner/name
+	// Project returns the Project with the given config name or owner/name
 	// slug.
-	ChainProject(key string) (*chain.Project, error)
+	Project(key string) (*chain.Project, error)
 	// ConfiguredRepoPath finds the clone by repos.paths and repos.search only.
 	ConfiguredRepoPath(slug string) (workspace.RepoPath, error)
 }
@@ -45,7 +45,7 @@ func path(ws Workspace, args []string, isDir func(string) bool) (string, error) 
 	if len(args) != 1 || args[0] == "" || args[0] == "." {
 		return "", ErrProjectRequired
 	}
-	p, err := ws.ChainProject(args[0])
+	p, err := ws.Project(args[0])
 	if err != nil {
 		return "", err
 	}

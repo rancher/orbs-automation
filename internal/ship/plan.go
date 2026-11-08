@@ -5,10 +5,10 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/registry"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 var (
@@ -32,17 +32,16 @@ var (
 )
 
 // Reader is what reading the state of a bump needs from the invocation's
-// workspace: the projects and the update methods, and what the host has. It is
+// workspace: the projects and the update engine, and what the host has. It is
 // all that gero repo status needs to trace the consumers. It is defined here,
 // where it is consumed, so tests can use a fake.
 type Reader interface {
-	// Project returns the project of a config name or slug, or the one the working
-	// directory is in when the key is empty.
-	Project(key string) (config.Project, error)
-	// Updates builds the update dispatcher's engine for the central config. It
-	// may return an engine along with an error about methods or edges that are
-	// not usable.
-	Updates() (*updatedispatcher.Engine, error)
+	// Project returns the project of a config name or slug, or the one the
+	// working directory is in when the key is empty.
+	Project(key string) (*chain.Project, error)
+	// Bump builds the update engine for the central config. It may return an
+	// engine along with an error about edits or holdings that are not usable.
+	Bump() (*bump.Engine, error)
 	// UpstreamRefs lists the tags and branch heads of a repository on its host.
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
 	// UpstreamFile reads a file of a repository at a commit from its host.
@@ -79,7 +78,6 @@ type Input struct {
 	Project    string   // the producer, by config name or slug
 	Arg        string   // a tag, a release line of the producer, or empty for the latest
 	To         string   // the consumer, when the producer ships to several
-	Method     string   // the consumer's update method, when the producer uses several of one consumer
 	Lines      []string // the consumer's Rancher lines to ship to, such as v2.15, in place of every branch the release goes to
 	Prerelease bool     // let prereleases count
 	// DryRun is the invocation's --dry-run: compute and report, and create no
@@ -131,20 +129,30 @@ type TargetPlan struct {
 	// Line is the Rancher line the consumer's branch is the branch of, such as
 	// v2.15, or "" for a branch that is in no line. It is how a report names a
 	// target, since a line means the same in every project and a branch does not.
-	Line      string   `json:"line,omitempty"`
-	Current   string   `json:"current"` // what the consumer holds now
-	File      string   `json:"-"`       // the file the method edits; the plan carries it once
-	Release   string   `json:"release"` // the tag of the release that goes to this branch
-	Want      string   `json:"want"`    // what it should hold for that release
-	Status    Status   `json:"status"`
-	Downgrade bool     `json:"downgrade,omitempty"` // the release is older than what the consumer holds
-	Blockers  []string `json:"blockers,omitempty"`
-	Warnings  []string `json:"warnings,omitempty"`
-	Error     string   `json:"error,omitempty"`   // why a failed target could not be checked
-	Preview   *Preview `json:"preview,omitempty"` // what a run would write; none when nothing would be
+	Line    string `json:"line,omitempty"`
+	Release string `json:"release"` // the tag of the release that goes to this branch
+	// Holdings is what each holding written in this branch holds now and should
+	// hold for the release, in the order the config reads them.
+	Holdings  []HoldingPlan `json:"holdings,omitempty"`
+	Status    Status        `json:"status"`
+	Downgrade bool          `json:"downgrade,omitempty"` // the release is older than what the consumer holds
+	Blockers  []string      `json:"blockers,omitempty"`
+	Warnings  []string      `json:"warnings,omitempty"`
+	Error     string        `json:"error,omitempty"`   // why a failed target could not be checked
+	Preview   *Preview      `json:"preview,omitempty"` // what a run would write; none when nothing would be
 	// Result is what a run did for this target: set only by Ship, and only for a
 	// target that was ready.
 	Result *TargetResult `json:"result,omitempty"`
+}
+
+// HoldingPlan is the state of one holding in a consumer branch.
+type HoldingPlan struct {
+	Name      string `json:"name"`    // the holding
+	File      string `json:"file"`    // the consumer's file it is in
+	Current   string `json:"current"` // what the file holds now
+	Want      string `json:"want"`    // what it should hold for the release
+	UpToDate  bool   `json:"upToDate"`
+	Downgrade bool   `json:"downgrade,omitempty"` // the release is older than what the file holds
 }
 
 // Key is what a report calls the target: its Rancher line, which means the same
@@ -165,12 +173,9 @@ type Plan struct {
 	// of the targets. One when every target gets the same, as for a producer that
 	// is not tied to release lines; several when each line gets its own.
 	Releases []Release `json:"releases"`
-	Consumer string    `json:"consumer"`       // the repository slug
-	Method   string    `json:"method"`         // the consumer's update method
-	Strategy string    `json:"strategy"`       // what the method uses to read and write the value
-	File     string    `json:"file"`           // the consumer's file the strategy edits
-	Want     string    `json:"want,omitempty"` // what the consumer should hold, when every target is to hold the same
-	DryRun   bool      `json:"dryRun"`         // the run was a dry run: no branch or PR is created
+	Consumer string    `json:"consumer"` // the repository slug
+	Holdings []string  `json:"holdings"` // the holdings of the producer in the consumer that are written, by name
+	DryRun   bool      `json:"dryRun"`   // the run was a dry run: no branch or PR is created
 	// Refresh says --refresh was given, so the report does not suggest it.
 	Refresh  bool            `json:"refresh,omitempty"`
 	NoPush   bool            `json:"noPush"` // the run stops after the commit, with the branch left in the clone; never set with DryRun
@@ -214,8 +219,8 @@ func (p Plan) ReleaseOf(tag string) Release {
 func (p Plan) Uniform() bool { return len(p.Releases) <= 1 }
 
 // Check runs the state check for in. It resolves the release, finds the
-// consumer, and for each target branch reads what the consumer holds through the
-// strategy; if any branch needs a PR it checks the release's images exist, once.
+// consumer, and for each target branch reads what the consumer holds in each
+// holding; if any branch needs a PR it checks the release's images exist, once.
 // It writes nothing.
 func Check(ctx context.Context, ws Workspace, prober registry.Prober, in Input) (Plan, error) {
 	plan, _, err := check(ctx, ws, prober, in, nil)
@@ -233,9 +238,15 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		return Plan{}, resolution{}, err
 	}
 	specs, named := sel.specs, sel.named
+	if err := res.route.Ready(); err != nil {
+		return Plan{}, resolution{}, err // an edit names a strategy gero does not have yet
+	}
 	plan := Plan{
-		Producer: res.producer.Repo.Name, Consumer: res.route.Consumer.Repo.Name,
-		Method: res.route.Method.Name, Strategy: res.route.Method.StrategyName, DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
+		Producer: res.producer.Slug(), Consumer: res.route.Consumer.Slug(),
+		DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
+	}
+	for _, h := range res.route.Holdings {
+		plan.Holdings = append(plan.Holdings, h.Name())
 	}
 	plan.Notes = sel.notes
 	for _, sp := range specs {
@@ -254,22 +265,18 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 			}
 			// One branch of several that could not be read does not stop the
 			// others: it is reported as failed.
-			tp = TargetPlan{Target: Target{Branch: sp.branch}, Line: res.route.Consumer.LineOfBranch(sp.branch), Release: sp.release.Tag, Status: StatusFailed, Error: err.Error()}
+			tp = TargetPlan{Target: Target{Branch: sp.branch()}, Line: sp.target.Line, Release: sp.release.Tag, Status: StatusFailed, Error: err.Error()}
 		}
 		if tp.Status == StatusReady && !slices.Contains(needsPR, sp.release.Tag) {
 			needsPR = append(needsPR, sp.release.Tag)
-		}
-		if plan.File == "" {
-			plan.File = tp.File
 		}
 		plan.Targets = append(plan.Targets, tp)
 		checked := tp
 		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Line: tp.Line, Target: &checked})
 	}
 	emit(sink, Event{Kind: EventTargetsChecked})
-	plan.Want = sharedWant(plan.Targets)
 	for _, tag := range needsPR {
-		images := registry.CheckLegacyProject(ctx, res.producer, prober, tag)
+		images := registry.CheckProject(ctx, res.producer, prober, tag)
 		plan.Images = append(plan.Images, ReleaseImages{Release: tag, Report: images})
 		plan.Warnings = append(plan.Warnings, images.Warnings...)
 		if images.Failed() {
@@ -283,22 +290,6 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil
-}
-
-// sharedWant is what every target is to hold, or "" when they differ or none was
-// read.
-func sharedWant(targets []TargetPlan) string {
-	want := ""
-	for _, t := range targets {
-		switch {
-		case t.Want == "":
-		case want == "":
-			want = t.Want
-		case want != t.Want:
-			return ""
-		}
-	}
-	return want
 }
 
 // overall is the state of the whole plan.

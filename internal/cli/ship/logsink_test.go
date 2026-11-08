@@ -40,7 +40,6 @@ func TestLogSinkRecordsEachEventWithItsAttributes(t *testing.T) {
 	header := p
 	header.Targets = nil
 	target := p.Targets[0]
-	target.File, target.Want = "build.yaml", "rancher/scc-operator:v0.5.3"
 
 	recs := logged(t, slog.LevelInfo,
 		domain.Event{Kind: domain.EventResolved, Plan: &header},
@@ -57,7 +56,7 @@ func TestLogSinkRecordsEachEventWithItsAttributes(t *testing.T) {
 	assert.Equal(t, "rancher/scc-operator", recs[0]["producer"])
 	assert.Equal(t, "v0.5.3", recs[0]["release"])
 	assert.Equal(t, "rancher/rancher", recs[0]["consumer"])
-	assert.Equal(t, "build-yaml-bump", recs[0]["method"])
+	assert.Equal(t, []any{"rancher-holds-scc"}, recs[0]["holdings"])
 	assert.Equal(t, "target checked", recs[1]["msg"])
 	assert.Equal(t, "release/v2.15", recs[1]["branch"])
 	assert.Equal(t, "ready", recs[1]["status"])

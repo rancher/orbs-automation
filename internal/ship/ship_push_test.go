@@ -56,7 +56,7 @@ func TestShipThePushToFlagBeatsTheForkAndPushesToTheUpstream(t *testing.T) {
 func TestShipTheProjectsPushToIsUsedWhenTheUserSaysNothing(t *testing.T) {
 	ws, clone, ex, _, _ := publishing(t)
 	withFork(t, ws, clone)
-	ws.links[0].Consumer.PullRequests.PushTo = "upstream"
+	ws.links[0].Consumer.PushTo = "upstream"
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
@@ -70,7 +70,7 @@ func TestShipTheUsersPerRepoSettingBeatsTheProjects(t *testing.T) {
 	ws, clone, ex, _, _ := publishing(t)
 	withFork(t, ws, clone)
 	ws.push.UserRepo = "fork"
-	ws.links[0].Consumer.PullRequests.PushTo = "upstream"
+	ws.links[0].Consumer.PushTo = "upstream"
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
@@ -82,9 +82,9 @@ func TestShipInCIPushesToTheUpstreamWhateverTheSettingsSayAndLabelsAsTheBot(t *t
 	ws, clone, ex, remote, lg := publishing(t)
 	withFork(t, ws, clone)
 	ws.push.UserDefault = "fork"
-	ws.links[0].Consumer.PullRequests.PushTo = "fork"
-	ws.links[0].Consumer.PullRequests.Labels = []string{"status/auto-created"}
-	ws.links[0].Consumer.PullRequests.BotLabels = []string{"origin/bot"}
+	ws.links[0].Consumer.PushTo = "fork"
+	ws.links[0].Consumer.Labels = []string{"status/auto-created"}
+	ws.links[0].Consumer.BotLabels = []string{"origin/bot"}
 	remote.labels = []string{"status/auto-created", "origin/bot"}
 	in := realRun()
 	in.CI = true
@@ -100,8 +100,8 @@ func TestShipInCIPushesToTheUpstreamWhateverTheSettingsSayAndLabelsAsTheBot(t *t
 
 func TestShipAnEngineersPRDoesNotGetTheBotLabels(t *testing.T) {
 	ws, _, ex, remote, lg := publishing(t)
-	ws.links[0].Consumer.PullRequests.Labels = []string{"status/auto-created"}
-	ws.links[0].Consumer.PullRequests.BotLabels = []string{"origin/bot"}
+	ws.links[0].Consumer.Labels = []string{"status/auto-created"}
+	ws.links[0].Consumer.BotLabels = []string{"origin/bot"}
 	remote.labels = []string{"status/auto-created", "origin/bot"}
 
 	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)

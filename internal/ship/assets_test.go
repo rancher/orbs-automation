@@ -3,9 +3,8 @@ package ship
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,21 +14,18 @@ import (
 // defaultAssetsImage. The project lists v2.16 and v2.15; v2.14 has a tag and a
 // Rancher branch with no such key. Rancher holds a dev tag on v2.16's branch and a
 // release tag on v2.15's.
-func assetsFixture() *fakeWorkspace {
-	producer := config.Project{
-		Name: "rancher-assets", Repo: config.Repo{Name: "rancher/rancher-assets", ManagedBy: "release-team", DefaultBranch: "main"},
-		Release: config.Release{
-			Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*",
-			Lines: []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}},
-		},
-		Images: []config.Image{{Name: "rancher/rancher-assets"}},
-	}
-	l := riLink("yamlBump")
-	l.Consumer.Release.Lines = []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}
-	l.Edge.Params = map[string]string{"updateKey": "defaultAssetsImage", "value": "{image}:{tag}"}
+func assetsFixture(t *testing.T) *fakeWorkspace {
+	t.Helper()
+	l := riLink()
+	l.Consumer.Lines = []lineSpec{{Line: "v2.16"}, {Line: "v2.15", Branch: "release/v2.15"}, {Line: "v2.14", Branch: "release/v2.14"}}
+	l.Key = "defaultAssetsImage"
 	return &fakeWorkspace{
-		producer: producer,
-		links:    []link{l},
+		t: t,
+		producer: projectSpec{
+			Name: "rancher-assets", Repo: "rancher/rancher-assets", ManagedBy: "release-team", Images: []string{"rancher/rancher-assets"},
+			Scheme: "calverLineStage", Stream: "  lines: [{line: v2.16}, {line: v2.15}]\n",
+		},
+		links: []link{l},
 		refs: map[string]git.Refs{
 			"rancher/rancher-assets": {Tags: tags(
 				"v2.16-20261030T1111Z-dev", "v2.16-20261101T0900Z-dev", "v2.16-20261029T0000Z",
@@ -45,7 +41,7 @@ func assetsFixture() *fakeWorkspace {
 }
 
 func TestHoldingsOfAnAssetsProducerFollowTheLinesItListsThatRancherHas(t *testing.T) {
-	got, err := holdings(t, assetsFixture())
+	got, err := holdings(t, assetsFixture(t))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -58,7 +54,7 @@ func TestHoldingsOfAnAssetsProducerFollowTheLinesItListsThatRancherHas(t *testin
 }
 
 func TestHoldingsOfAnAssetsProducerTakeTheReleaseStageAsStableAndTheNewerDevTagAsNewest(t *testing.T) {
-	got, err := holdings(t, assetsFixture())
+	got, err := holdings(t, assetsFixture(t))
 	require.NoError(t, err)
 	hs := byBranch(t, got[0])
 
@@ -66,22 +62,22 @@ func TestHoldingsOfAnAssetsProducerTakeTheReleaseStageAsStableAndTheNewerDevTagA
 	require.NotNil(t, main.Stable)
 	assert.Equal(t, Verdict{
 		Tag: "v2.16-20261029T0000Z", Want: "rancher/rancher-assets:v2.16-20261029T0000Z",
-		UpToDate: false, Relation: updatedispatcher.RelationOlder,
+		UpToDate: false, Relation: bump.RelationOlder,
 	}, *main.Stable, "the newest release tag is older than the dev tag Rancher holds")
 	require.NotNil(t, main.Newest)
 	assert.Equal(t, "v2.16-20261101T0900Z-dev", main.Newest.Tag)
-	assert.Equal(t, updatedispatcher.RelationNewer, main.Newest.Relation, "a newer date with the same line is a newer image")
+	assert.Equal(t, bump.RelationNewer, main.Newest.Relation, "a newer date with the same line is a newer image")
 
 	v215 := hs["release/v2.15"]
 	require.NotNil(t, v215.Stable)
 	assert.True(t, v215.Stable.UpToDate)
-	assert.Equal(t, updatedispatcher.RelationSame, v215.Stable.Relation)
+	assert.Equal(t, bump.RelationSame, v215.Stable.Relation)
 	require.NotNil(t, v215.Newest)
 	assert.Equal(t, *v215.Stable, *v215.Newest, "no dev tag is newer than the release")
 }
 
 func TestHoldingsOfAnAssetsProducerSayWhichStageIsHeld(t *testing.T) {
-	got, err := holdings(t, assetsFixture())
+	got, err := holdings(t, assetsFixture(t))
 	require.NoError(t, err)
 	hs := byBranch(t, got[0])
 
@@ -90,17 +86,12 @@ func TestHoldingsOfAnAssetsProducerSayWhichStageIsHeld(t *testing.T) {
 }
 
 func TestSourcesOfRancherShowTheAssetsTagItHolds(t *testing.T) {
-	ws := assetsFixture()
-	producer, err := ws.Project("")
-	require.NoError(t, err)
-	ws.producer = producer
-
-	engine, engineErr := ws.Updates()
+	ws := assetsFixture(t)
+	engine, engineErr := ws.Bump()
 	require.NoError(t, engineErr)
-	consumer := ws.links[0].Consumer
+	consumer := ws.config().Project("rancher")
 
-	got := engine.RoutesInto(consumer)
-	require.Len(t, got, 1)
+	require.Len(t, engine.RoutesInto(consumer), 1)
 
 	srcs, err := Sources(ctx, ws, consumer)
 
@@ -112,7 +103,7 @@ func TestSourcesOfRancherShowTheAssetsTagItHolds(t *testing.T) {
 }
 
 func TestAnAssetsProducerHasNoReleaseToShip(t *testing.T) {
-	_, err := Check(ctx, assetsFixture(), &fakeProber{}, Input{Project: "rancher-assets"})
+	_, err := Check(ctx, assetsFixture(t), &fakeProber{}, Input{Project: "rancher-assets"})
 
 	require.ErrorIs(t, err, ErrNotOwned)
 }

@@ -65,7 +65,7 @@ func TestRunRejectsUnknownOutput(t *testing.T) {
 func TestRunOpensWorkspaceInWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "config"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "config", "a.project.yaml"), nil, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config", "a.yaml"), []byte("apiVersion: gero/v1alpha2\nkind: Project\nname: a\n"), 0o600))
 
 	out, err := Run(load(t, "", nil, nil), dir)
 

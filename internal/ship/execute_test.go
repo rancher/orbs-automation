@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
+
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/steprun"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -77,7 +77,7 @@ func newShip(t *testing.T) (*realWorkspace, string, *Executor) {
 	t.Helper()
 	up := shipRemote(t)
 	clone := engineer(t, up)
-	ws := &realWorkspace{fakeWorkspace: fixture(), t: t, up: up}
+	ws := &realWorkspace{fakeWorkspace: fixture(t), t: t, up: up}
 	ws.cloneDir = clone
 	return ws, clone, &Executor{Git: GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
 }
@@ -172,7 +172,7 @@ func TestShipMakesACommitForEachTargetAndFailsOnlyTheOneThatFails(t *testing.T) 
 	runGit(t, ws.up, "rm", "--quiet", "scripts/gen.sh")
 	runGit(t, ws.up, "commit", "--quiet", "-m", "no script here")
 	runGit(t, ws.up, "checkout", "--quiet", "main")
-	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
+	ws.links[0].Post = []stepSpec{{Run: "./scripts/gen.sh"}}
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn(""), ex, nil)
 
@@ -186,7 +186,7 @@ func TestShipMakesACommitForEachTargetAndFailsOnlyTheOneThatFails(t *testing.T) 
 	assert.Equal(t, ResultCommitted, ok.Status)
 	assert.Equal(t, "v0.5.3", runGit(t, clone, "show", botV215+":generated/tag.txt"), "the step ran and its output is committed")
 	assert.Equal(t, ResultFailed, bad.Status)
-	assert.Contains(t, bad.Error, "method postEdit")
+	assert.Contains(t, bad.Error, "postEdit[0]")
 	assert.False(t, branchExistsIn(t, clone, botV214), "the failed target leaves no branch")
 	assert.Equal(t, "main", current(t, clone))
 	assert.Equal(t, oldImage, slurp(t, filepath.Join(clone, "build.yaml")), "and nothing changed in the clone")
@@ -281,7 +281,7 @@ func TestShipWithNoCloneIsFineWhenEverythingIsUpToDate(t *testing.T) {
 	assert.Equal(t, StatusUpToDate, plan.Status)
 }
 
-var _ updatedispatcher.StepRunner = steprun.Runner{}
+var _ bump.StepRunner = steprun.Runner{}
 
 func TestShipRecordsTheCloneAndRemoteItMadeCommitsIn(t *testing.T) {
 	ws, clone, ex := newShip(t)
@@ -305,7 +305,7 @@ func TestShipRecordsNoCloneWhenItMadeNoCommits(t *testing.T) {
 
 func TestShipCommitsTheEditAndEachStepSeparatelyWithTheirOwnMessages(t *testing.T) {
 	ws, clone, ex := newShip(t)
-	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
+	ws.links[0].Post = []stepSpec{{Run: "./scripts/gen.sh"}}
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
@@ -317,7 +317,7 @@ func TestShipCommitsTheEditAndEachStepSeparatelyWithTheirOwnMessages(t *testing.
 	assert.Equal(t, "Run `./scripts/gen.sh`", res.Commits[1].Subject)
 	assert.Equal(t, res.Tip(), runGit(t, clone, "rev-parse", botV215))
 	step := runGit(t, clone, "log", "-1", "--format=%B", botV215)
-	assert.Contains(t, step, "Part of updating scc-operator to v0.5.3: the method postEdit step.")
+	assert.Contains(t, step, "Part of updating scc-operator to v0.5.3: the postEdit step.")
 	assert.Contains(t, step, "Automation: gero ship")
 	assert.Equal(t, "2", runGit(t, clone, "rev-list", "--count", "upstream/release/v2.15.."+botV215), "two commits on the base")
 }

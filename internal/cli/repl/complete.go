@@ -148,7 +148,7 @@ func projectNames(ws ConfigWorkspace) []string {
 // ProjectWorkspace is what ProjectOf needs from a workspace: the project the
 // working directory is in. It is defined here, where it is consumed.
 type ProjectWorkspace interface {
-	ChainProject(key string) (*chain.Project, error)
+	Project(key string) (*chain.Project, error)
 }
 
 // ProjectOf returns the lookup of the config name of the project a directory is
@@ -159,7 +159,7 @@ func ProjectOf(s clicfg.Settings) func(dir string) string {
 }
 
 func projectNameOf(ws ProjectWorkspace) string {
-	p, err := ws.ChainProject(".")
+	p, err := ws.Project(".")
 	if err != nil {
 		return ""
 	}

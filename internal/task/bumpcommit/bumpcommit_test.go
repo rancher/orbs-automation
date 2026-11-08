@@ -12,10 +12,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/workdir"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 var bg = context.Background()
@@ -60,7 +61,7 @@ type fakeRunner struct {
 	failOn string
 }
 
-func (r *fakeRunner) Run(_ context.Context, step config.Step, _ updatedispatcher.StepEnv) error {
+func (r *fakeRunner) Run(_ context.Context, step v1alpha2.Step, _ bump.StepEnv) error {
 	cmd := strings.Join(step.Run, " ")
 	r.ran = append(r.ran, cmd)
 	if cmd == r.failOn {
@@ -77,43 +78,57 @@ func work(t *testing.T, g *fakeGit) *workdir.Work {
 	return workdir.NewInWorktree(g, "/clone", dir, "bot/x-v0.5.3-main", "a test")
 }
 
-func step(cmd ...string) config.Step { return config.Step{Run: config.Command(cmd)} }
+func step(cmd ...string) v1alpha2.Step { return v1alpha2.Step{Run: v1alpha2.Command(cmd)} }
 
-// invocation is scc-operator shipping to rancher through yamlBump, with the given
-// steps before and after the edit.
-func invocation(t *testing.T, pre, post []config.Step) updatedispatcher.Invocation {
+// scene is scc-operator shipping its image to rancher, which holds it in build.yaml,
+// with the given steps before and after the write.
+type scene struct {
+	route  bump.Route
+	target bump.Target
+}
+
+func invocation(t *testing.T, pre, post []v1alpha2.Step) scene {
 	t.Helper()
-	producer := config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"},
-		Downstream: []config.Edge{{To: "rancher", Method: "build-yaml-bump",
-			Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"}}},
+	spec := "  holds: {kind: release, form: \"{image}:{tag}\"}\n"
+	docs := []string{
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, owned: true}\n"),
+		chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher}\n"),
+		chaintest.Doc("Holding", "rancher-holds-scc", "{project: rancher, artifact: scc-image}", "  at: {file: build.yaml, key: image}\n"+spec),
 	}
-	consumer := config.Project{
-		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-		UpdateMethods: []config.UpdateMethod{{
-			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
-			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
-			PreEdit:       pre,
-			PostEdit:      post,
-		}},
+	if len(pre)+len(post) > 0 {
+		docs = append(docs, chaintest.Doc("Edit", "regen", "{holding: rancher-holds-scc}", steps("preEdit", pre)+steps("postEdit", post)))
 	}
-	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: []config.Project{producer, consumer}})
+	g := chaintest.Load(t, docs...)
+	engine, err := bump.NewEngine(bump.Builtin(), g)
 	require.NoError(t, err)
-	routes := engine.RoutesFrom(producer)
+	routes := engine.RoutesFrom(g.Project("scc-operator"))
 	require.Len(t, routes, 1)
-	inv, err := engine.Invoke(routes[0])
+	targets, err := routes[0].TargetsFor("")
 	require.NoError(t, err)
-	return inv
+	require.Len(t, targets, 1)
+	return scene{route: routes[0], target: targets[0]}
 }
 
-func input(w *workdir.Work, inv updatedispatcher.Invocation) Input {
-	return Input{
-		Work: w, Invocation: inv, Branch: "main", Message: "Update to v0.5.3\n\nbody",
-		Release: updatedispatcher.Release{Tag: "v0.5.3", Version: "0.5.3", Image: "rancher/scc-operator", SourceRepo: "rancher/scc-operator"},
+// steps writes the steps of a phase as the YAML of an edit's spec.
+func steps(phase string, list []v1alpha2.Step) string {
+	if len(list) == 0 {
+		return ""
 	}
+	var b strings.Builder
+	b.WriteString("  " + phase + ":\n")
+	for _, st := range list {
+		fmt.Fprintf(&b, "    - {run: [%s]}\n", strings.Join(st.Run, ", "))
+	}
+	return b.String()
 }
 
-func stepMessage(u updatedispatcher.Unit) (string, error) {
+func input(w *workdir.Work, sc scene) Input {
+	return Input{Work: w, Route: sc.route, Target: sc.target, Message: "Update to v0.5.3\n\nbody", Tag: "v0.5.3", Commit: "abc"}
+}
+
+func stepMessage(u bump.Unit) (string, error) {
 	return "Run `" + strings.Join(u.Run, " ") + "`\n\nAutomation: gero ship", nil
 }
 
@@ -174,7 +189,7 @@ func TestRunNothingToCommitAnywhereIsErrNothingChanged(t *testing.T) {
 func TestRunCommitsTheEditAndThenWhatEachStepMade(t *testing.T) {
 	g := &fakeGit{}
 	r := &fakeRunner{}
-	in := input(work(t, g), invocation(t, nil, []config.Step{step("go", "generate"), step("make", "docs")}))
+	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate"), step("make", "docs")}))
 	in.StepMessage = stepMessage
 
 	out, err := Run(bg, r, in)
@@ -191,7 +206,7 @@ func TestRunCommitsTheEditAndThenWhatEachStepMade(t *testing.T) {
 
 func TestRunWithoutAStepMessageAStepsCommitSaysWhatRan(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, nil, []config.Step{step("go", "generate")}))
+	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate")}))
 
 	_, err := Run(bg, &fakeRunner{}, in)
 
@@ -202,7 +217,7 @@ func TestRunWithoutAStepMessageAStepsCommitSaysWhatRan(t *testing.T) {
 
 func TestRunAStepThatChangesNothingMakesNoCommit(t *testing.T) {
 	g := &fakeGit{nothingFor: map[int]bool{2: true}}
-	in := input(work(t, g), invocation(t, nil, []config.Step{step("true")}))
+	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("true")}))
 	in.StepMessage = stepMessage
 
 	out, err := Run(bg, &fakeRunner{}, in)
@@ -213,7 +228,7 @@ func TestRunAStepThatChangesNothingMakesNoCommit(t *testing.T) {
 
 func TestRunAPreEditStepGetsItsOwnCommitBeforeTheEdit(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, []config.Step{step("prepare")}, nil))
+	in := input(work(t, g), invocation(t, []v1alpha2.Step{step("prepare")}, nil))
 	in.StepMessage = stepMessage
 
 	out, err := Run(bg, &fakeRunner{}, in)
@@ -224,21 +239,21 @@ func TestRunAPreEditStepGetsItsOwnCommitBeforeTheEdit(t *testing.T) {
 
 func TestRunAFailingStepIsAStepErrorAndTheCommitsMadeSoFarAreNotReported(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, nil, []config.Step{step("false")}))
+	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("false")}))
 
 	out, err := Run(bg, &fakeRunner{failOn: "false"}, in)
 
-	var stepErr *updatedispatcher.StepError
+	var stepErr *bump.StepError
 	require.True(t, errors.As(err, &stepErr), "got %v", err)
-	assert.Equal(t, updatedispatcher.MethodPostEdit, stepErr.Phase)
+	assert.Equal(t, bump.PostEdit, stepErr.Phase)
 	assert.Equal(t, []string{"false"}, stepErr.Run)
 	assert.Empty(t, out.Commits, "the caller aborts the work, which removes them")
 }
 
 func TestRunAFailureToMakeAStepsMessageIsAFailure(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, nil, []config.Step{step("go", "generate")}))
-	in.StepMessage = func(updatedispatcher.Unit) (string, error) { return "", errors.New("bad placeholder") }
+	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate")}))
+	in.StepMessage = func(bump.Unit) (string, error) { return "", errors.New("bad placeholder") }
 
 	_, err := Run(bg, &fakeRunner{}, in)
 
@@ -259,7 +274,7 @@ func TestRunACommitThatFailsForAnotherReasonStopsTheRun(t *testing.T) {
 func TestRunTellsOnCommitOfEachCommitAsItIsMade(t *testing.T) {
 	g := &fakeGit{}
 	var seen []workdir.CommitInfo
-	in := input(work(t, g), invocation(t, nil, []config.Step{step("go", "generate")}))
+	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate")}))
 	in.StepMessage = stepMessage
 	in.OnCommit = func(c workdir.CommitInfo) { seen = append(seen, c) }
 
@@ -281,11 +296,10 @@ func subjects(commits []workdir.CommitInfo) []string {
 func TestRunEachCommitHasTheFilesItChanged(t *testing.T) {
 	g := &fakeGit{files: map[string][]string{"commit1": {"build.yaml"}, "commit2": {"generated/a.go", "generated/b.go"}}}
 	w := work(t, g)
-	inv := invocation(t, nil, []config.Step{{Run: config.Command{"gen"}}})
+	inv := invocation(t, nil, []v1alpha2.Step{{Run: v1alpha2.Command{"gen"}}})
 
 	out, err := Run(bg, &fakeRunner{}, Input{
-		Work: w, Invocation: inv, Branch: "main", Message: "Update to v0.5.3",
-		Release:     updatedispatcher.Release{Tag: "v0.5.3", Version: "0.5.3", Image: "rancher/scc-operator", SourceRepo: "rancher/scc-operator"},
+		Work: w, Route: inv.route, Target: inv.target, Message: "Update to v0.5.3", Tag: "v0.5.3", Commit: "abc",
 		StepMessage: stepMessage,
 	})
 

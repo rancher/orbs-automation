@@ -17,7 +17,7 @@ type fakeWorkspace struct {
 	keys  []string
 }
 
-func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
+func (f *fakeWorkspace) Project(key string) (*chain.Project, error) {
 	f.keys = append(f.keys, key)
 	if p := f.graph.Project(key); p != nil {
 		return p, nil

@@ -33,7 +33,7 @@ type fakeWorkspace struct {
 	upstream string
 }
 
-func (f fakeWorkspace) ChainProject(string) (*chain.Project, error) { return f.project, nil }
+func (f fakeWorkspace) Project(string) (*chain.Project, error) { return f.project, nil }
 func (f fakeWorkspace) RepoPath(string) (workspace.RepoPath, error) {
 	return workspace.RepoPath{Path: "/work"}, f.pathErr
 }

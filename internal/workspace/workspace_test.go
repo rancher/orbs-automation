@@ -14,7 +14,10 @@ import (
 
 const cwd = "/work/orbs-automation"
 
-var centralRepo = fstest.MapFS{"config/rancher-rancher.project.yaml": {}}
+// geroDoc is a file with a document of gero's.
+var geroDoc = &fstest.MapFile{Data: []byte("apiVersion: gero/v1alpha2\nkind: Project\nname: a\n")}
+
+var centralRepo = fstest.MapFS{"config/rancher.yaml": geroDoc}
 
 func settings(t *testing.T, file string, env, flags map[string]string) clicfg.Settings {
 	t.Helper()
@@ -71,9 +74,9 @@ func TestConfigDirNotFound(t *testing.T) {
 		fsys fstest.MapFS
 	}{
 		{"empty working directory", fstest.MapFS{}},
-		{"config dir without project files", fstest.MapFS{"config/rancher.lines.yaml": {}}},
-		{"project file outside config", fstest.MapFS{"rancher-rancher.project.yaml": {}}},
-		{"nested too deep", fstest.MapFS{"config/sub/rancher-rancher.project.yaml": {}}},
+		{"config dir without a file of gero's", fstest.MapFS{"config/app.yaml": {Data: []byte("port: 80\n")}}},
+		{"a file of gero's outside config", fstest.MapFS{"rancher.yaml": geroDoc}},
+		{"nested too deep", fstest.MapFS{"config/sub/rancher.yaml": geroDoc}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,5 +121,5 @@ func mkProjectFile(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, "config"), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, "config", "rancher-rancher.project.yaml"), nil, 0o600)
+	return os.WriteFile(filepath.Join(dir, "config", "rancher.yaml"), geroDoc.Data, 0o600)
 }

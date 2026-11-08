@@ -3,7 +3,6 @@ package ship
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/stretchr/testify/assert"
@@ -51,7 +50,7 @@ func twoTargets(t *testing.T) (*realWorkspace, *Executor) {
 	put(t, ws.up, "build.yaml", newImage)
 	runGit(t, ws.up, "commit", "--quiet", "-am", "already there")
 	runGit(t, ws.up, "checkout", "--quiet", "main")
-	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}}
+	ws.links[0].Post = []stepSpec{{Run: "./scripts/gen.sh"}}
 	return ws, ex
 }
 
@@ -72,7 +71,7 @@ func TestShipEmitsTheEventsInTheOrderTheWorkHappens(t *testing.T) {
 	require.Len(t, resolved.Plan.Releases, 1)
 	assert.Equal(t, "v0.5.3", resolved.Plan.Releases[0].Tag)
 	assert.Equal(t, "rancher/rancher", resolved.Plan.Consumer)
-	assert.Equal(t, "build-yaml-bump", resolved.Plan.Method)
+	assert.Equal(t, []string{"rancher-h0"}, resolved.Plan.Holdings)
 	assert.Empty(t, resolved.Plan.Targets, "the header only: no branch has been read")
 
 	checked := rec.of(EventTargetChecked)
@@ -81,8 +80,9 @@ func TestShipEmitsTheEventsInTheOrderTheWorkHappens(t *testing.T) {
 	require.NotNil(t, checked[1].Target)
 	assert.Equal(t, "release/v2.15", checked[0].Target.Branch)
 	assert.Equal(t, StatusReady, checked[0].Target.Status)
-	assert.Equal(t, "build.yaml", checked[0].Target.File, "what the file and the wanted value are is known from the first read")
-	assert.Equal(t, "rancher/scc-operator:v0.5.3", checked[0].Target.Want)
+	require.Len(t, checked[0].Target.Holdings, 1)
+	assert.Equal(t, "build.yaml", checked[0].Target.Holdings[0].File, "what the file and the wanted value are is known from the first read")
+	assert.Equal(t, "rancher/scc-operator:v0.5.3", checked[0].Target.Holdings[0].Want)
 	assert.Equal(t, "release/v2.14", checked[1].Target.Branch)
 	assert.Equal(t, StatusUpToDate, checked[1].Target.Status)
 
@@ -140,7 +140,7 @@ func TestShipABlockedReleaseEmitsNoWork(t *testing.T) {
 
 func TestShipAFailureAfterACommitStillEndsTheTarget(t *testing.T) {
 	ws, ex := twoTargets(t)
-	ws.links[0].Method.PostEdit = []config.Step{{Run: config.Command{"./scripts/gen.sh"}}, {Run: config.Command{"false"}}}
+	ws.links[0].Post = []stepSpec{{Run: "./scripts/gen.sh"}, {Run: "false"}}
 	rec := &recording{}
 
 	_, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, rec)

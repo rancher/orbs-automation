@@ -93,8 +93,7 @@ func TestRunReturnsConfigProblems(t *testing.T) {
 
 func TestRunOpensWorkspaceInWorkingDirectory(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", "a.yaml"), []byte(chaintest.Doc("Project", "a", "", "  repo: {name: o/a}\n")), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.yaml"), []byte(chaintest.Doc("Project", "a", "", "  repo: {name: o/a}\n")), 0o600))
 
 	out, err := Run(clicfg.Settings{ConfigDir: dir}, "/elsewhere")
 

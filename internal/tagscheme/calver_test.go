@@ -3,23 +3,10 @@ package tagscheme
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// assets is a project like rancher-assets: one branch, and its lines and stages in
-// CalVer tags.
-func assets() config.Project {
-	return config.Project{
-		Name: "rancher-assets", Repo: config.Repo{Name: "rancher/rancher-assets"},
-		Release: config.Release{
-			Branching: config.BranchingPerLineTag, TagScheme: config.TagSchemeCalverLineStage, TagPattern: "v*",
-			Lines: []config.ProjectLine{{Line: "v2.16"}, {Line: "v2.15"}},
-		},
-	}
-}
 
 // assetsTags are the tags as they come: both stages, several lines, a prod tag
 // with no dev twin, and names that are not releases.
@@ -38,21 +25,9 @@ func assetsTags() []git.Tag {
 
 func calverFor(t *testing.T) Scheme {
 	t.Helper()
-	s, err := For(assets())
-	require.NoError(t, err)
+	s := streamScheme(t, "assets")
 	require.Equal(t, "calverLineStage", s.Name())
 	return s
-}
-
-func TestForAPerLineTagProjectWithAnUnknownSchemeIsAnError(t *testing.T) {
-	p := assets()
-	p.Release.TagScheme = "semver"
-
-	_, err := For(p)
-
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "rancher-assets")
-	assert.ErrorContains(t, err, "calverLineStage", "it lists the schemes there are")
 }
 
 func TestCalverValid(t *testing.T) {
@@ -148,5 +123,5 @@ func TestCalverStageIsTheSuffix(t *testing.T) {
 }
 
 func TestSemverTagsCarryNoStage(t *testing.T) {
-	assert.Equal(t, "", semverFor(t, lined()).Stage("v8.1.0-rc.1"))
+	assert.Equal(t, "", streamScheme(t, "kuberlr").Stage("v8.1.0-rc.1"))
 }

@@ -100,7 +100,7 @@ type Result struct {
 // Workspace is what the command needs from the invocation's workspace. It is
 // defined here, where it is consumed.
 type Workspace interface {
-	ChainProject(key string) (*chain.Project, error)
+	Project(key string) (*chain.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
 	UpstreamFor(slug string) string
 	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
@@ -159,7 +159,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if opts.Tag != "" && (opts.Stable || opts.Bump != BumpPatch) {
 		return ErrTagAndChoice
 	}
-	project, err := ws.ChainProject(opts.Project)
+	project, err := ws.Project(opts.Project)
 	if err != nil {
 		return err
 	}

@@ -2,11 +2,12 @@ package ship
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // Preview is the text a bump would write: the branch, the PR's title, labels and
@@ -19,30 +20,31 @@ type Preview struct {
 	Labels        []string `json:"labels,omitempty"`
 	CommitMessage string   `json:"commitMessage"`
 	Body          string   `json:"body"`
-	// Steps are the steps that run around the edit, in the order they run, each
+	// Steps are the steps that run around the write, in the order they run, each
 	// with the commit it makes when it changes files. Whether it does is only known
-	// once it has run, so these are the commits that may be made besides the edit's.
+	// once it has run, so these are the commits that may be made besides the write's.
 	Steps []StepPreview `json:"steps,omitempty"`
 }
 
 // StepPreview is a step of the bump and the commit it would make.
 type StepPreview struct {
-	Phase string `json:"phase"` // where it runs: method preEdit, edge preEdit, edge postEdit or method postEdit
+	Phase string `json:"phase"` // where it runs: preEdit or postEdit
+	Edit  string `json:"edit"`  // the edit it is a step of
 	Run   string `json:"run"`   // the command
-	// BeforeEdit says the step runs before the edit, so its commit comes first.
+	// BeforeEdit says the step runs before the write, so its commit comes first.
 	BeforeEdit    bool   `json:"beforeEdit,omitempty"`
 	CommitMessage string `json:"commitMessage"`
 }
 
 // previewInput is everything the texts are made from.
 type previewInput struct {
-	producer   config.Project
-	consumer   config.Project
+	producer   *chain.Project
+	consumer   *chain.Project
 	release    Release
 	target     Target
-	check      updatedispatcher.Check     // what the strategy found: the file, the old and new values and the change
-	steps      []updatedispatcher.StepRef // the steps that run around the edit for this branch, in order, with their phase
-	userPrefix string                     // the user's branchPrefix setting, which replaces the project's whole
+	checks     []bump.HoldingCheck // the holdings that change: the file, the old and new values and the change of each
+	steps      []bump.StepRef      // the steps that run around the write for this branch, in order, with their phase
+	userPrefix string              // the user's branchPrefix setting, which replaces the project's whole
 }
 
 // renderPreview fills the texts. The branch name is a prefix, then the tag and
@@ -51,11 +53,11 @@ type previewInput struct {
 // the project's pullRequests.title, else the default. An unknown placeholder in
 // either is an error, though config validation rejects it sooner.
 func renderPreview(in previewInput) (Preview, error) {
-	prs := in.consumer.PullRequests
+	prs := in.consumer.PullRequests()
 	tag := in.release.Tag
 	branchLabel := strings.TrimPrefix(in.target.Branch, "release/")
 	marker := Marker{
-		Source: in.producer.Repo.Name, Consumer: in.consumer.Repo.Name,
+		Source: in.producer.Slug(), Consumer: in.consumer.Slug(),
 		Target: in.target.Branch, Version: tag,
 	}
 	vars := textVars(in)
@@ -95,13 +97,13 @@ func renderPreview(in previewInput) (Preview, error) {
 func stepPreviews(in previewInput) ([]StepPreview, error) {
 	var out []StepPreview
 	for _, ref := range in.steps {
-		message, err := stepMessage(in)(updatedispatcher.Unit{Kind: updatedispatcher.UnitStep, Phase: ref.Phase, Index: ref.Index, Run: ref.Step.Run})
+		message, err := stepMessage(in)(bump.Unit{Kind: bump.UnitStep, Phase: ref.Phase, Edit: ref.Edit, Index: ref.Index, Run: ref.Step.Run})
 		if err != nil {
 			return nil, fmt.Errorf("commit message for %s: %w", strings.Join(ref.Step.Run, " "), err)
 		}
 		out = append(out, StepPreview{
-			Phase: string(ref.Phase), Run: strings.Join(ref.Step.Run, " "),
-			BeforeEdit: ref.Phase == updatedispatcher.MethodPreEdit || ref.Phase == updatedispatcher.EdgePreEdit, CommitMessage: message,
+			Phase: string(ref.Phase), Edit: ref.Edit, Run: strings.Join(ref.Step.Run, " "),
+			BeforeEdit: ref.Phase == bump.PreEdit, CommitMessage: message,
 		})
 	}
 	return out, nil
@@ -111,18 +113,18 @@ func stepPreviews(in previewInput) ([]StepPreview, error) {
 // is: the producer, the consumer, the release and the target.
 func textVars(in previewInput) map[string]string {
 	return map[string]string{
-		"project":          in.producer.Name,
-		"source":           in.producer.Name,
-		"sourceRepo":       in.producer.Repo.Name,
+		"project":          in.producer.Name(),
+		"source":           in.producer.Name(),
+		"sourceRepo":       in.producer.Slug(),
 		"tag":              in.release.Tag,
 		"version":          strings.TrimPrefix(in.release.Tag, "v"),
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
-		"consumer":         in.consumer.Repo.Name,
-		"sourceReleaseURL": "https://github.com/" + in.producer.Repo.Name + "/releases/tag/" + in.release.Tag,
-		"file":             in.check.Change.Path,
-		"from":             in.check.Current,
-		"to":               in.check.Want,
+		"consumer":         in.consumer.Slug(),
+		"sourceReleaseURL": "https://github.com/" + in.producer.Slug() + "/releases/tag/" + in.release.Tag,
+		"file":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Change.Path }),
+		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
+		"to":               joined(in.checks, func(c bump.HoldingCheck) string { return c.Want }),
 	}
 }
 
@@ -131,8 +133,8 @@ func textVars(in previewInput) map[string]string {
 // template. The preview (stepPreviews) and a run (Apply) both use it, so what is
 // previewed is what is committed; whether a step changes files, and so commits at
 // all, is only known once it has run.
-func stepMessage(in previewInput) func(updatedispatcher.Unit) (string, error) {
-	return func(u updatedispatcher.Unit) (string, error) {
+func stepMessage(in previewInput) func(bump.Unit) (string, error) {
+	return func(u bump.Unit) (string, error) {
 		vars := textVars(in)
 		vars["command"] = strings.Join(u.Run, " ")
 		vars["phase"] = string(u.Phase)
@@ -140,10 +142,25 @@ func stepMessage(in previewInput) func(updatedispatcher.Unit) (string, error) {
 	}
 }
 
-// changes lists what a bump changes, from what the strategy did and the
-// post-edit commands that run, one bullet each.
+// joined is a value of each check, in order, with the repeats left out and the
+// rest joined by a comma: one value when the holdings share it.
+func joined(checks []bump.HoldingCheck, of func(bump.HoldingCheck) string) string {
+	var seen []string
+	for _, c := range checks {
+		if v := of(c); !slices.Contains(seen, v) {
+			seen = append(seen, v)
+		}
+	}
+	return strings.Join(seen, ", ")
+}
+
+// changes lists what a bump changes, from what each holding changes and the
+// commands that run around the write, one bullet each.
 func changes(in previewInput) string {
-	lines := []string{"- " + in.check.Change.Description}
+	var lines []string
+	for _, c := range in.checks {
+		lines = append(lines, "- "+c.Change.Description)
+	}
 	for _, ref := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")
 	}

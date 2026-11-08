@@ -7,18 +7,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/ship"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeWorkspace struct {
-	projects   map[string]config.Project
+	t          *testing.T
+	docs       []string // the config, as documents
 	current    string
 	projectErr error
 	paths      map[string]workspace.RepoPath
@@ -29,13 +31,29 @@ type fakeWorkspace struct {
 	refCalls   []string
 	// The rest is for tracing consumers and sources.
 	refsBySlug map[string]git.Refs // used for a slug that is in it, else tags and branches
-	engine     *updatedispatcher.Engine
+	engine     *bump.Engine        // used when set, with engineErr, in place of the real one
 	engineErr  error
 	files      map[string]string // "slug@ref:path"
 	fileCalls  []string
+
+	graph    *chain.Graph
+	graphKey string
 }
 
-func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) { return f.engine, f.engineErr }
+// config joins the documents, again when they have changed since.
+func (f *fakeWorkspace) config() *chain.Graph {
+	if key := strings.Join(f.docs, "\x00"); f.graph == nil || key != f.graphKey {
+		f.graph, f.graphKey = chaintest.Load(f.t, f.docs...), key
+	}
+	return f.graph
+}
+
+func (f *fakeWorkspace) Bump() (*bump.Engine, error) {
+	if f.engine != nil || f.engineErr != nil {
+		return f.engine, f.engineErr
+	}
+	return bump.NewEngine(bump.Builtin(), f.config())
+}
 
 func (f *fakeWorkspace) UpstreamFile(_ context.Context, slug, ref, path string) ([]byte, error) {
 	f.fileCalls = append(f.fileCalls, slug+"@"+ref+":"+path)
@@ -46,15 +64,15 @@ func (f *fakeWorkspace) UpstreamFile(_ context.Context, slug, ref, path string) 
 	return []byte(content), nil
 }
 
-func (f *fakeWorkspace) Project(slug string) (config.Project, error) {
-	f.asked = slug
+func (f *fakeWorkspace) Project(key string) (*chain.Project, error) {
+	f.asked = key
 	if f.projectErr != nil {
-		return config.Project{}, f.projectErr
+		return nil, f.projectErr
 	}
-	if slug == "" {
-		slug = f.current
+	if key == "" {
+		key = f.current
 	}
-	return f.projects[slug], nil
+	return f.config().Project(key), nil
 }
 
 func (f *fakeWorkspace) RepoPath(slug string) (workspace.RepoPath, error) {
@@ -92,17 +110,14 @@ func opener(c Clone, err error) Opener {
 	return func(string) (Clone, error) { return c, err }
 }
 
-func rancherProject() config.Project {
-	return config.Project{
-		Name: "rancher",
-		Repo: config.Repo{Name: "rancher/rancher", Owned: true, DefaultBranch: "main"},
-		Release: config.Release{
-			Branching: "perLine", TagPattern: "v*", RequiresPrerelease: true,
-			Lines: []config.ProjectLine{
-				{Line: "v2.13"}, // a development line has no branch of its own
-				{Line: "v2.12", Version: "v2.12", Branch: "release/v2.12"},
-			},
-		},
+// rancherDocs is rancher: a branch for each of two lines, the development line on
+// main, and one stream with a series for each, with the given extra lines of the
+// stream's spec.
+func rancherDocs(streamExtra string) []string {
+	return []string{
+		chaintest.Lines("v2.13", "v2.12"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, owned: true}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.13}\n      - {line: v2.12, branch: release/v2.12}\n"),
+		chaintest.Doc("Stream", "rancher", "{project: rancher}", "  requiresPrerelease: true\n"+streamExtra+"  lines:\n    - {line: v2.13, series: \"2.13.x\"}\n    - {line: v2.12, series: \"2.12.x\"}\n"),
 	}
 }
 
@@ -110,11 +125,13 @@ func tag(name string) git.Tag { return git.Tag{Name: name, Commit: "sha-" + name
 
 func info(name string) *TagInfo { return &TagInfo{Tag: name, Commit: "sha-" + name} }
 
-func fixture() *fakeWorkspace {
+func fixture(t *testing.T) *fakeWorkspace {
+	t.Helper()
 	return &fakeWorkspace{
-		projects: map[string]config.Project{"rancher/rancher": rancherProject()},
-		current:  "rancher/rancher",
-		paths:    map[string]workspace.RepoPath{"rancher/rancher": {Path: "/src/rancher", Source: workspace.PathCwd}},
+		t:       t,
+		docs:    rancherDocs(""),
+		current: "rancher/rancher",
+		paths:   map[string]workspace.RepoPath{"rancher/rancher": {Path: "/src/rancher", Source: workspace.PathCwd}},
 		tags: []git.Tag{
 			tag("main-abc1234"), tag("v2.13.0-rc.1"), tag("v2.12.1"), tag("v2.12.2-rc.1"),
 			tag("v2.12.0"), tag("v2.13.0-rc.10"), tag("v2.13.0-rc.2"),
@@ -156,7 +173,7 @@ func byLine(st Status) map[string]Target {
 }
 
 func TestStatusReadsTheHostOnce(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	_, err := gather(ctx, ws, opener(syncedClone(), nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/rancher", ws.asked)
@@ -164,7 +181,7 @@ func TestStatusReadsTheHostOnce(t *testing.T) {
 }
 
 func TestStatusLatestTagsPerLine(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	lines := byLine(got)
 	assert.Nil(t, lines["v2.13"].LatestStable, "nothing stable in v2.13 yet")
@@ -174,7 +191,7 @@ func TestStatusLatestTagsPerLine(t *testing.T) {
 }
 
 func TestStatusLinesAndHeads(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	require.Len(t, got.Targets, 2)
 	assert.Equal(t, "main", at(t, got, 0).Branch)
@@ -185,7 +202,7 @@ func TestStatusLinesAndHeads(t *testing.T) {
 }
 
 func TestStatusAMissingBranchHasNoHead(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.branches = []git.Branch{{Name: "main", Commit: "sha-head-main"}}
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
@@ -196,7 +213,7 @@ func TestStatusAMissingBranchHasNoHead(t *testing.T) {
 }
 
 func TestStatusUnreleasedCommitsSinceTheLatestTag(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	lines := byLine(got)
 	require.NotNil(t, lines["v2.13"].Unreleased)
@@ -206,7 +223,7 @@ func TestStatusUnreleasedCommitsSinceTheLatestTag(t *testing.T) {
 }
 
 func TestStatusUnreleasedCountsFromTheStableTagWhenThereIsNoNewerPrerelease(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.tags = []git.Tag{tag("v2.12.1")}
 	c := syncedClone()
 	c.counts = map[string]int{"sha-v2.12.1..sha-head-release/v2.12": 3}
@@ -219,14 +236,14 @@ func TestStatusUnreleasedCountsFromTheStableTagWhenThereIsNoNewerPrerelease(t *t
 func TestStatusUnreleasedIsUnknownWhenTheCloneLacksTheCommit(t *testing.T) {
 	c := syncedClone()
 	c.counts = nil
-	got, err := gather(ctx, fixture(), opener(c, nil), nil)
+	got, err := gather(ctx, fixture(t), opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.Nil(t, byLine(got)["v2.13"].Unreleased, "unknown is not zero")
 	assert.Contains(t, renderText(got, nil), "-")
 }
 
 func TestStatusUnreleasedIsUnknownWithoutATag(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.tags = nil
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
@@ -259,7 +276,7 @@ func TestStatusLocalAgainstTheHost(t *testing.T) {
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, err := gather(ctx, fixture(), opener(tc.clone, nil), nil)
+			got, err := gather(ctx, fixture(t), opener(tc.clone, nil), nil)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, at(t, got, 0).Local)
 		})
@@ -267,10 +284,8 @@ func TestStatusLocalAgainstTheHost(t *testing.T) {
 }
 
 func TestStatusTagsFollowTheTagPattern(t *testing.T) {
-	ws := fixture()
-	p := ws.projects["rancher/rancher"]
-	p.Release.TagPattern = "other-*"
-	ws.projects["rancher/rancher"] = p
+	ws := fixture(t)
+	ws.docs = rancherDocs("  tagPattern: \"other-*\"\n")
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	require.Len(t, got.Targets, 2, "a row per line, even with nothing to report")
@@ -281,10 +296,11 @@ func TestStatusTagsFollowTheTagPattern(t *testing.T) {
 }
 
 func TestStatusSingleBranchProject(t *testing.T) {
-	ws := fixture()
-	p := ws.projects["rancher/rancher"]
-	p.Release.Branching, p.Release.Lines = "single", nil
-	ws.projects["rancher/rancher"] = p
+	ws := fixture(t)
+	ws.docs = []string{
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, owned: true}\n"),
+		chaintest.Doc("Stream", "rancher", "{project: rancher}", "  universal: true\n"),
+	}
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	require.Len(t, got.Targets, 1)
@@ -298,7 +314,7 @@ func TestStatusSingleBranchProject(t *testing.T) {
 }
 
 func TestStatusHostErrorKeepsTheRest(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.refsErr = errors.New("network down")
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
@@ -309,7 +325,7 @@ func TestStatusHostErrorKeepsTheRest(t *testing.T) {
 }
 
 func TestStatusMissingCloneKeepsTheRest(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.paths["rancher/rancher"] = workspace.RepoPath{Err: workspace.ErrRepoNotFound}
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
@@ -321,14 +337,14 @@ func TestStatusMissingCloneKeepsTheRest(t *testing.T) {
 }
 
 func TestStatusUnreadableClone(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(nil, errors.New("boom")), nil)
+	got, err := gather(ctx, fixture(t), opener(nil, errors.New("boom")), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "boom", got.Clone)
 }
 
 func TestStatusProjectErrors(t *testing.T) {
 	for _, want := range []error{workspace.ErrNotProject, workspace.ErrUnknownProject, workspace.ErrNotFound} {
-		ws := fixture()
+		ws := fixture(t)
 		ws.projectErr = want
 		_, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 		assert.ErrorIs(t, err, want)
@@ -336,7 +352,7 @@ func TestStatusProjectErrors(t *testing.T) {
 }
 
 func TestStatusFromCurrentRepository(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	assert.Empty(t, ws.asked, "an empty slug asks for the working directory's Project")
@@ -344,7 +360,7 @@ func TestStatusFromCurrentRepository(t *testing.T) {
 }
 
 func TestRenderTextTable(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	out := renderText(got, nil)
 	for _, want := range []string{
@@ -361,7 +377,7 @@ func TestRenderTagText(t *testing.T) {
 }
 
 func TestRenderJSON(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	out, err := renderJSON(got)
 	require.NoError(t, err)
@@ -387,7 +403,7 @@ func nextTags(t Target) []string {
 }
 
 func TestStatusAnRcAndTheBranchPastItCanHaveAnotherRcButNotAPromotion(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 	v213 := byLine(got)["v2.13"]
 
@@ -398,7 +414,7 @@ func TestStatusAnRcAndTheBranchPastItCanHaveAnotherRcButNotAPromotion(t *testing
 }
 
 func TestStatusAnRcOnTheHeadCanBePromotedAndAnotherRcSaysNothingIsNew(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.branches[0].Commit = "sha-v2.13.0-rc.10" // main's head is the rc
 
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
@@ -412,7 +428,7 @@ func TestStatusAnRcOnTheHeadCanBePromotedAndAnotherRcSaysNothingIsNew(t *testing
 }
 
 func TestStatusAStableTagOnTheHeadIsReleasedAndHasNothingNext(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.tags = []git.Tag{tag("v2.12.1")}
 	ws.branches[1].Commit = "sha-v2.12.1"
 
@@ -425,7 +441,7 @@ func TestStatusAStableTagOnTheHeadIsReleasedAndHasNothingNext(t *testing.T) {
 }
 
 func TestStatusAStableTagWithWorkSinceItNamesTheNextPrerelease(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.tags = []git.Tag{tag("v2.12.1")}
 
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
@@ -438,7 +454,7 @@ func TestStatusAStableTagWithWorkSinceItNamesTheNextPrerelease(t *testing.T) {
 }
 
 func TestStatusALineWithNoTagStartsAtItsSeries(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.tags = nil
 
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
@@ -450,7 +466,7 @@ func TestStatusALineWithNoTagStartsAtItsSeries(t *testing.T) {
 }
 
 func TestStatusABranchTheHostDoesNotHaveHasNoStateAndNothingNext(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.branches = ws.branches[:1]
 
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
@@ -462,7 +478,7 @@ func TestStatusABranchTheHostDoesNotHaveHasNoStateAndNothingNext(t *testing.T) {
 }
 
 func TestRenderTextHasAReleasesSectionWithStateAndNextAndALocalCloneSection(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
 
 	out := renderText(got, nil)
@@ -482,7 +498,7 @@ func TestRenderTextHasAReleasesSectionWithStateAndNextAndALocalCloneSection(t *t
 }
 
 func TestRenderTextAPromotionThatIsAvailableIsNotInParentheses(t *testing.T) {
-	ws := fixture()
+	ws := fixture(t)
 	ws.branches[0].Commit = "sha-v2.13.0-rc.10"
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 	require.NoError(t, err)
@@ -494,33 +510,19 @@ func TestRenderTextAPromotionThatIsAvailableIsNotInParentheses(t *testing.T) {
 	assert.Contains(t, out, "rc open, head on the rc")
 }
 
-// sccOperator is a producer with no release lines, shipping to rancher.
-func sccOperator() config.Project {
-	return config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true, DefaultBranch: "main"},
-		Release: config.Release{Branching: "single", TagPattern: "v*"},
-		Downstream: []config.Edge{{
-			To: "rancher", Method: "build-yaml-bump",
-			Params: map[string]string{"updateKey": "defaultSccOperatorImage", "value": "{image}:{tag}"},
-		}},
-	}
-}
-
 // shipping makes the fixture a project that takes from scc-operator, and
-// scc-operator one that ships to it: both projects, the engine of their update
-// methods, the refs of each and the file rancher holds the value in.
+// scc-operator one that ships to it: both projects, the config that joins them,
+// the refs of each and the file rancher holds the value in.
 func shipping(t *testing.T) *fakeWorkspace {
 	t.Helper()
-	ws := fixture()
-	rancher := rancherProject()
-	rancher.UpdateMethods = []config.UpdateMethod{{
-		Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
-		AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
-	}}
-	ws.projects = map[string]config.Project{"rancher/rancher": rancher, "rancher/scc-operator": sccOperator()}
-	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: []config.Project{sccOperator(), rancher}})
-	require.NoError(t, err)
-	ws.engine = engine
+	ws := fixture(t)
+	ws.docs = append(rancherDocs(""),
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, owned: true}\n"),
+		chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),
+		chaintest.Doc("Holding", "rancher-holds-scc", "{project: rancher, artifact: scc-image}",
+			"  at: {file: build.yaml, key: defaultSccOperatorImage}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n"),
+	)
 	ws.refsBySlug = map[string]git.Refs{
 		"rancher/scc-operator": {
 			Tags:     []git.Tag{tag("v0.5.2"), tag("v0.5.3"), tag("v0.6.0-rc.1")},
@@ -535,15 +537,23 @@ func shipping(t *testing.T) *fakeWorkspace {
 	return ws
 }
 
-func holdingOn(t *testing.T, hs []ship.Holding, branch string) ship.Holding {
+// held is a consumer branch with what its one holding holds.
+type held struct {
+	Line, Branch, Current string
+	Stable, Newest        *ship.Verdict
+}
+
+func holdingOn(t *testing.T, hs []ship.Holding, branch string) held {
 	t.Helper()
 	for _, h := range hs {
 		if h.Branch == branch {
-			return h
+			require.Len(t, h.Held, 1)
+			v := h.Held[0]
+			return held{Line: h.Line, Branch: h.Branch, Current: v.Current, Stable: v.Stable, Newest: v.Newest}
 		}
 	}
 	require.Failf(t, "no such holding", "%s in %v", branch, hs)
-	return ship.Holding{}
+	return held{}
 }
 
 func TestStatusOfAConsumerHasASourceForEachProjectThatShipsToIt(t *testing.T) {
@@ -555,7 +565,6 @@ func TestStatusOfAConsumerHasASourceForEachProjectThatShipsToIt(t *testing.T) {
 	require.Len(t, got.Sources, 1)
 	src := got.Sources[0]
 	assert.Equal(t, "rancher/scc-operator", src.Producer)
-	assert.Equal(t, "build-yaml-bump", src.Method)
 	require.Len(t, src.Targets, 2)
 	main := holdingOn(t, src.Targets, "main")
 	assert.Equal(t, "rancher/scc-operator:v0.5.3", main.Current)
@@ -581,7 +590,7 @@ func TestStatusOfAProducerHasAConsumerForEachProjectItShipsTo(t *testing.T) {
 }
 
 func TestStatusOfAProjectThatShipsNowhereAndTakesFromNoOneHasNeither(t *testing.T) {
-	got, err := gather(ctx, fixture(), opener(syncedClone(), nil), nil)
+	got, err := gather(ctx, fixture(t), opener(syncedClone(), nil), nil)
 
 	require.NoError(t, err)
 	assert.Empty(t, got.Consumers)
@@ -604,10 +613,10 @@ func TestStatusOptionsLeaveOutTheConsumersOrTheSourcesAndTheirRequests(t *testin
 }
 
 func TestStatusAnEngineThatCannotBeUsedIsATraceErrorAndKeepsTheRest(t *testing.T) {
-	ws := fixture()
-	engine, err := updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{})
+	ws := fixture(t)
+	engine, err := bump.NewEngine(bump.Builtin(), chaintest.Projects(t))
 	require.NoError(t, err)
-	ws.engine, ws.engineErr = engine, errors.New("method build-yaml-bump of rancher is not usable")
+	ws.engine, ws.engineErr = engine, errors.New("holding rancher-holds-scc is not usable")
 
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
 
@@ -617,31 +626,31 @@ func TestStatusAnEngineThatCannotBeUsedIsATraceErrorAndKeepsTheRest(t *testing.T
 }
 
 func TestHoldStatus(t *testing.T) {
-	stable := func(tag string, upToDate bool, rel updatedispatcher.Relation) *ship.Verdict {
+	stable := func(tag string, upToDate bool, rel bump.Relation) *ship.Verdict {
 		return &ship.Verdict{Tag: tag, UpToDate: upToDate, Relation: rel}
 	}
 	const (
-		newer = updatedispatcher.RelationNewer
-		same  = updatedispatcher.RelationSame
-		older = updatedispatcher.RelationOlder
+		newer = bump.RelationNewer
+		same  = bump.RelationSame
+		older = bump.RelationOlder
 	)
 	tests := []struct {
 		name string
-		h    ship.Holding
+		h    ship.HeldValue
 		want string
 	}{
-		{"an error", ship.Holding{Error: "no value for the key"}, "unreadable: no value for the key"},
-		{"nothing read", ship.Holding{}, "-"},
-		{"on the release, no prerelease newer", ship.Holding{Stable: stable("v0.5.3", true, same), Newest: stable("v0.5.3", true, same)}, "current"},
-		{"on the release, no newest at all", ship.Holding{Stable: stable("v0.5.3", true, same)}, "current"},
-		{"behind the release", ship.Holding{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.5.3", false, newer)}, "behind v0.5.3"},
-		{"ahead of the release", ship.Holding{Stable: stable("v0.5.3", false, older)}, "ahead of v0.5.3"},
-		{"a version it cannot compare", ship.Holding{Stable: stable("v0.5.3", false, updatedispatcher.RelationUnknown)}, "unknown"},
-		{"on the newest, a prerelease", ship.Holding{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", true, same)}, "current"},
-		{"on the stable, a prerelease is newer", ship.Holding{Stable: stable("v0.5.3", true, same), Newest: stable("v0.6.0-rc.1", false, newer)}, "on stable, v0.6.0-rc.1 is newer"},
-		{"behind the stable, a prerelease is newer", ship.Holding{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.6.0-rc.1", false, newer)}, "behind v0.5.3"},
-		{"between the stable and the newest", ship.Holding{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.2", false, newer)}, "on a prerelease, v0.6.0-rc.2 is newer"},
-		{"past the newest", ship.Holding{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", false, older)}, "ahead of v0.6.0-rc.1"},
+		{"an error", ship.HeldValue{Error: "no value for the key"}, "unreadable: no value for the key"},
+		{"nothing read", ship.HeldValue{}, "-"},
+		{"on the release, no prerelease newer", ship.HeldValue{Stable: stable("v0.5.3", true, same), Newest: stable("v0.5.3", true, same)}, "current"},
+		{"on the release, no newest at all", ship.HeldValue{Stable: stable("v0.5.3", true, same)}, "current"},
+		{"behind the release", ship.HeldValue{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.5.3", false, newer)}, "behind v0.5.3"},
+		{"ahead of the release", ship.HeldValue{Stable: stable("v0.5.3", false, older)}, "ahead of v0.5.3"},
+		{"a version it cannot compare", ship.HeldValue{Stable: stable("v0.5.3", false, bump.RelationUnknown)}, "unknown"},
+		{"on the newest, a prerelease", ship.HeldValue{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", true, same)}, "current"},
+		{"on the stable, a prerelease is newer", ship.HeldValue{Stable: stable("v0.5.3", true, same), Newest: stable("v0.6.0-rc.1", false, newer)}, "on stable, v0.6.0-rc.1 is newer"},
+		{"behind the stable, a prerelease is newer", ship.HeldValue{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.6.0-rc.1", false, newer)}, "behind v0.5.3"},
+		{"between the stable and the newest", ship.HeldValue{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.2", false, newer)}, "on a prerelease, v0.6.0-rc.2 is newer"},
+		{"past the newest", ship.HeldValue{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", false, older)}, "ahead of v0.6.0-rc.1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -656,9 +665,9 @@ func TestRenderTextHasASourcesSectionForWhatTheProjectTakes(t *testing.T) {
 
 	out := renderText(got, nil)
 
-	_, sources, found := strings.Cut(out, "\nSources: scc-operator (rancher/scc-operator), build-yaml-bump\n")
+	_, sources, found := strings.Cut(out, "\nSources: scc-operator (rancher/scc-operator)\n")
 	require.True(t, found, out)
-	for _, want := range []string{"LINE", "BRANCH", "HEAD", "HOLDS", "LATEST STABLE", "STATUS",
+	for _, want := range []string{"LINE", "BRANCH", "HEAD", "HOLDING", "HOLDS", "LATEST STABLE", "STATUS",
 		"rancher/scc-operator:v0.5.3", "v0.5.3", "on stable, v0.6.0-rc.1 is newer", "behind v0.5.3", "release/v2.12"} {
 		assert.Contains(t, sources, want)
 	}
@@ -671,18 +680,18 @@ func TestRenderTextHasAConsumersSectionForWhatTheProjectShips(t *testing.T) {
 
 	out := renderText(got, nil)
 
-	assert.Contains(t, out, "\nConsumers: rancher (rancher/rancher), build-yaml-bump\n")
+	assert.Contains(t, out, "\nConsumers: rancher (rancher/rancher)\n")
 	assert.NotContains(t, out, "Sources:")
 }
 
 func TestRenderTextAConsumerThatCouldNotBeTracedSaysWhy(t *testing.T) {
 	st := Status{Slug: "rancher/scc-operator", Consumers: []ship.ConsumerHoldings{
-		{Consumer: "rancher/rancher", Name: "rancher", Method: "build-yaml-bump", Error: "read the branches of rancher/rancher: network down"},
+		{Consumer: "rancher/rancher", Name: "rancher", Error: "read the branches of rancher/rancher: network down"},
 	}, TraceError: "method x is not usable"}
 
 	out := renderText(st, nil)
 
-	assert.Contains(t, out, "Consumers: rancher (rancher/rancher), build-yaml-bump\n  unavailable: read the branches of rancher/rancher: network down")
+	assert.Contains(t, out, "Consumers: rancher (rancher/rancher)\n  unavailable: read the branches of rancher/rancher: network down")
 	assert.Contains(t, out, "could not trace: method x is not usable")
 }
 

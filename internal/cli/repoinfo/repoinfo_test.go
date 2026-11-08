@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeWorkspace answers ChainProject from graph and from current, the slug of the
+// fakeWorkspace answers Project from graph and from current, the slug of the
 // Project of the working directory, and records what it was asked.
 type fakeWorkspace struct {
 	graph      *chain.Graph
@@ -25,7 +25,7 @@ type fakeWorkspace struct {
 	asked      string
 }
 
-func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
+func (f *fakeWorkspace) Project(key string) (*chain.Project, error) {
 	f.asked = key
 	if f.projectErr != nil {
 		return nil, f.projectErr

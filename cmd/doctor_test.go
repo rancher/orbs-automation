@@ -316,12 +316,11 @@ func TestDoctorWiring(t *testing.T) {
 func withConfigDir(t *testing.T, files map[string]string) {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(dir, "v1alpha2"), 0o750))
 	if files == nil {
 		files = map[string]string{"lines.yaml": "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n"}
 	}
 	for name, content := range files {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "v1alpha2", name), []byte(content), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
 	}
 	t.Setenv("GERO_CONFIG_DIR", dir)
 }

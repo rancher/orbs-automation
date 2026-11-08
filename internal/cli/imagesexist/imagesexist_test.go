@@ -23,7 +23,7 @@ type fakeWorkspace struct {
 	asked   string
 }
 
-func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
+func (f *fakeWorkspace) Project(key string) (*chain.Project, error) {
 	f.asked = key
 	return f.project, f.err
 }

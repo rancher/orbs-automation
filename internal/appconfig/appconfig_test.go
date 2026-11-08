@@ -158,7 +158,7 @@ func TestLoadKeepsWarningsAndTheConfig(t *testing.T) {
 }
 
 func TestLoadAcceptsTheCheckedInV1alpha2Config(t *testing.T) {
-	cfg, rep := Load(os.DirFS("../../config/v1alpha2"), ctx)
+	cfg, rep := Load(os.DirFS("../../config"), ctx)
 
 	require.NoError(t, rep.Err())
 	assert.Empty(t, rep.Warnings())

@@ -24,11 +24,12 @@ func (l logSink) Event(e domain.Event) {
 	case domain.EventResolved:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "ship resolved",
 			slog.String("producer", e.Plan.Producer), slog.String("release", releaseTags(e.Plan)),
-			slog.String("consumer", e.Plan.Consumer), slog.String("method", e.Plan.Method))
+			slog.String("consumer", e.Plan.Consumer), slog.Any("holdings", e.Plan.Holdings))
 	case domain.EventTargetChecked:
 		l.log.LogAttrs(ctx, slog.LevelInfo, "target checked", about(e,
 			slog.String("status", string(e.Target.Status)),
-			slog.String("current", e.Target.Current), slog.String("want", e.Target.Want))...)
+			slog.String("current", valuesOf(*e.Target, func(h domain.HoldingPlan) string { return h.Current })),
+			slog.String("want", valuesOf(*e.Target, func(h domain.HoldingPlan) string { return h.Want })))...)
 	case domain.EventImagesChecked:
 		level, failed := slog.LevelInfo, e.Images.Failed()
 		if failed {

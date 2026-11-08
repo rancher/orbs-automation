@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 )
@@ -34,21 +33,17 @@ type Release struct {
 // host. arg is a tag, used as given; a release line of the producer, which
 // resolves to its latest tag; or empty, the producer's latest tag. A line or an
 // empty arg resolves to the latest stable tag, or with prerelease to the latest
-// of any kind. accept is the consumer's accept.when for this source: an explicit
-// prerelease tag needs prerelease unless the consumer accepts all releases. What
-// a tag, a line and the latest are is the producer's tag scheme's to say
-// (internal/tagscheme).
-func ResolveRelease(producer config.Project, tags []git.Tag, arg string, prerelease bool, accept string) (Release, error) {
-	scheme, err := tagscheme.For(producer)
-	if err != nil {
-		return Release{}, err
-	}
+// of any kind. acceptAll says every holding takes every release (accept: all): an
+// explicit prerelease tag needs prerelease unless they do. What a tag, a line and
+// the latest are is the stream's tag scheme's to say (internal/tagscheme); slug is
+// the producer's owner/name, for the messages.
+func ResolveRelease(scheme tagscheme.Scheme, slug string, tags []git.Tag, arg string, prerelease, acceptAll bool) (Release, error) {
 	var tag *git.Tag
 	switch {
 	case arg == "":
 		tag = newest(scheme.Latest(tags, ""), prerelease)
 		if tag == nil {
-			return Release{}, fmt.Errorf("%w: %s has no release tags", ErrNoRelease, producer.Repo.Name)
+			return Release{}, fmt.Errorf("%w: %s has no release tags", ErrNoRelease, slug)
 		}
 	case scheme.Valid(arg):
 		for i := range tags {
@@ -57,17 +52,17 @@ func ResolveRelease(producer config.Project, tags []git.Tag, arg string, prerele
 			}
 		}
 		if tag == nil {
-			return Release{}, fmt.Errorf("%w: %s has no tag %s", ErrNoRelease, producer.Repo.Name, arg)
+			return Release{}, fmt.Errorf("%w: %s has no tag %s", ErrNoRelease, slug, arg)
 		}
-		if !scheme.IsStable(arg) && !prerelease && accept != config.AcceptAll {
+		if !scheme.IsStable(arg) && !prerelease && !acceptAll {
 			return Release{}, fmt.Errorf("%w: %s is a prerelease and the consumer takes stable releases only; pass --prerelease to ship it", ErrPrerelease, arg)
 		}
 	default:
 		if !slices.Contains(scheme.Lines(tags), arg) {
-			return Release{}, fmt.Errorf("%w: %q is neither a tag nor a release line of %s", ErrNoRelease, arg, producer.Repo.Name)
+			return Release{}, fmt.Errorf("%w: %q is neither a tag nor a release line of %s", ErrNoRelease, arg, slug)
 		}
 		if tag = newest(scheme.Latest(tags, arg), prerelease); tag == nil {
-			return Release{}, fmt.Errorf("%w: %s has no tags in line %s", ErrNoRelease, producer.Repo.Name, arg)
+			return Release{}, fmt.Errorf("%w: %s has no tags in line %s", ErrNoRelease, slug, arg)
 		}
 	}
 	return Release{Tag: tag.Name, Commit: tag.Commit, Line: scheme.LineOf(tag.Name), Stable: scheme.IsStable(tag.Name)}, nil

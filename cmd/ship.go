@@ -28,9 +28,10 @@ resolves to the line's latest stable tag; with neither, the project's latest
 stable tag. A project with a version series for each Rancher line (shell's 0.9.x
 for v2.16, 0.8.x for v2.15) ships each line the latest tag of its own series
 when none is given, and a tag only to the line it is in. --prerelease lets
-prereleases count. The project's
-downstream edges name the consumers and the update method of each; name one
-with --to, and a method with --method, when there are several. Every branch of the consumer that the release goes to is
+prereleases count. The projects
+that hold a release of this one, in their config, are its consumers; name one
+with --to, when there are several. A run writes every holding the project has in
+the consumer, in one pull request for each branch. Every branch of the consumer that the release goes to is
 checked: all its release branches for a project that is not tied to release
 lines, or the branch for the release's line for one that is. --line limits it
 to one Rancher line of the consumer (v2.15 or 2.15), on whichever branch the
@@ -91,7 +92,6 @@ with both flags it is a dry run.`,
 		},
 	}
 	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
-	shipCmd.Flags().StringVar(&in.Method, "method", "", "the consumer's update method, when the project uses several of one consumer's")
 	shipCmd.Flags().StringSliceVar(&in.Lines, "line", nil, "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to; repeat it or separate lines with commas for several")
 	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
 	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")

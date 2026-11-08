@@ -246,7 +246,7 @@ func TestTheLabelsOfTheSummaryAreSecondaryText(t *testing.T) {
 
 	out := renderTextStyled(styledPlans()["acting"], false, st)
 
-	for _, label := range []string{"method", "status", "acting as"} {
+	for _, label := range []string{"holdings", "status", "acting as"} {
 		assert.Contains(t, out, st.Style(style.Dim, label), label)
 	}
 }

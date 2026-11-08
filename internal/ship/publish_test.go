@@ -11,7 +11,7 @@ import (
 const me = "danpock"
 
 // bump is the marker of shipping scc-operator at a version to release/v2.15.
-func bump(version string) Marker {
+func markerFor(version string) Marker {
 	return Marker{Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: "release/v2.15", Version: version}
 }
 
@@ -29,7 +29,7 @@ func numbers(prs []pulls.PR) []int {
 }
 
 func TestDecideNothingOpenIsCreate(t *testing.T) {
-	got := decidePublish(nil, me, bump("v0.5.4"))
+	got := decidePublish(nil, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Empty(t, got.Supersede)
@@ -37,27 +37,27 @@ func TestDecideNothingOpenIsCreate(t *testing.T) {
 }
 
 func TestDecideAnOlderPROfMineIsSuperseded(t *testing.T) {
-	open := []pulls.PR{pr(101, me, bump("v0.5.3"))}
+	open := []pulls.PR{pr(101, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede))
 }
 
 func TestDecideEveryOlderPROfMineIsSuperseded(t *testing.T) {
-	open := []pulls.PR{pr(101, me, bump("v0.5.3")), pr(90, me, bump("v0.5.2")), pr(80, me, bump("v0.5.0-rc.1"))}
+	open := []pulls.PR{pr(101, me, markerFor("v0.5.3")), pr(90, me, markerFor("v0.5.2")), pr(80, me, markerFor("v0.5.0-rc.1"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101, 90, 80}, numbers(got.Supersede), "all of them, in the order given")
 }
 
 func TestDecideThePRAtTheSameVersionIsAlreadyOpen(t *testing.T) {
-	open := []pulls.PR{pr(104, me, bump("v0.5.4"))}
+	open := []pulls.PR{pr(104, me, markerFor("v0.5.4"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishAlreadyOpen, got.Action)
 	require.NotNil(t, got.Open)
@@ -66,18 +66,18 @@ func TestDecideThePRAtTheSameVersionIsAlreadyOpen(t *testing.T) {
 }
 
 func TestDecideAlreadyOpenStillClosesTheOlderOnes(t *testing.T) {
-	open := []pulls.PR{pr(104, me, bump("v0.5.4")), pr(101, me, bump("v0.5.3"))}
+	open := []pulls.PR{pr(104, me, markerFor("v0.5.4")), pr(101, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishAlreadyOpen, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede))
 }
 
 func TestDecideTwoOfMineAtTheSameVersionKeepsTheNewest(t *testing.T) {
-	open := []pulls.PR{pr(106, me, bump("v0.5.4")), pr(104, me, bump("v0.5.4"))}
+	open := []pulls.PR{pr(106, me, markerFor("v0.5.4")), pr(104, me, markerFor("v0.5.4"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishAlreadyOpen, got.Action)
 	require.NotNil(t, got.Open)
@@ -86,9 +86,9 @@ func TestDecideTwoOfMineAtTheSameVersionKeepsTheNewest(t *testing.T) {
 }
 
 func TestDecideANewerPROfMineBlocksTheTargetAndTouchesNothing(t *testing.T) {
-	open := []pulls.PR{pr(110, me, bump("v0.5.5")), pr(101, me, bump("v0.5.3"))}
+	open := []pulls.PR{pr(110, me, markerFor("v0.5.5")), pr(101, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishBlocked, got.Action)
 	require.NotNil(t, got.Newer)
@@ -97,24 +97,24 @@ func TestDecideANewerPROfMineBlocksTheTargetAndTouchesNothing(t *testing.T) {
 }
 
 func TestDecideAPrereleaseIsOlderThanItsRelease(t *testing.T) {
-	open := []pulls.PR{pr(101, me, bump("v0.5.4-rc.1"))}
+	open := []pulls.PR{pr(101, me, markerFor("v0.5.4-rc.1"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede), "the rc is replaced by the release")
 
-	got = decidePublish([]pulls.PR{pr(102, me, bump("v0.5.4"))}, me, bump("v0.5.4-rc.2"))
+	got = decidePublish([]pulls.PR{pr(102, me, markerFor("v0.5.4"))}, me, markerFor("v0.5.4-rc.2"))
 	assert.Equal(t, PublishBlocked, got.Action, "and the release is newer than a later rc")
 }
 
 func TestDecideThePRsOfOthersAreNeverTouched(t *testing.T) {
 	open := []pulls.PR{
-		pr(120, "rancher-bot[bot]", bump("v0.5.3")), // older, someone else's
-		pr(119, "alice", bump("v0.5.2")),
+		pr(120, "rancher-bot[bot]", markerFor("v0.5.3")), // older, someone else's
+		pr(119, "alice", markerFor("v0.5.2")),
 	}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action, "they do not block")
 	assert.Empty(t, got.Supersede, "and are not closed")
@@ -123,11 +123,11 @@ func TestDecideThePRsOfOthersAreNeverTouched(t *testing.T) {
 
 func TestDecideASameOrNewerPROfAnotherAuthorIsReportedAndLeftAlone(t *testing.T) {
 	open := []pulls.PR{
-		pr(120, "rancher-bot[bot]", bump("v0.5.4")),
-		pr(121, "alice", bump("v0.5.5")),
+		pr(120, "rancher-bot[bot]", markerFor("v0.5.4")),
+		pr(121, "alice", markerFor("v0.5.5")),
 	}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{120, 121}, numbers(got.Also))
@@ -136,11 +136,11 @@ func TestDecideASameOrNewerPROfAnotherAuthorIsReportedAndLeftAlone(t *testing.T)
 
 func TestDecideMixesMineAndOthers(t *testing.T) {
 	open := []pulls.PR{
-		pr(120, "rancher-bot[bot]", bump("v0.5.4")),
-		pr(101, me, bump("v0.5.3")),
+		pr(120, "rancher-bot[bot]", markerFor("v0.5.4")),
+		pr(101, me, markerFor("v0.5.3")),
 	}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede), "only mine")
@@ -149,9 +149,9 @@ func TestDecideMixesMineAndOthers(t *testing.T) {
 
 func TestDecideOnlyThisBumpsKeyCounts(t *testing.T) {
 	other := Marker{Source: "rancher/kuberlr-kubectl", Consumer: "rancher/rancher", Target: "release/v2.15", Version: "v0.5.3"}
-	otherTarget := bump("v0.5.3")
+	otherTarget := markerFor("v0.5.3")
 	otherTarget.Target = "main"
-	otherConsumer := bump("v0.5.3")
+	otherConsumer := markerFor("v0.5.3")
 	otherConsumer.Consumer = "rancher/charts"
 	open := []pulls.PR{
 		pr(1, me, other), pr(2, me, otherTarget), pr(3, me, otherConsumer),
@@ -159,26 +159,26 @@ func TestDecideOnlyThisBumpsKeyCounts(t *testing.T) {
 		{Number: 5, Author: me, Body: "<!-- gero:ship v9\nsource: rancher/scc-operator\n-->"},
 	}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Empty(t, got.Supersede, "different source, target or consumer, or no readable marker: not this bump")
 }
 
 func TestDecideAVersionThatIsNotSemverIsLeftAlone(t *testing.T) {
-	open := []pulls.PR{pr(101, me, bump("nightly-1")), pr(102, me, bump("v0.5.3"))}
+	open := []pulls.PR{pr(101, me, markerFor("nightly-1")), pr(102, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, bump("v0.5.4"))
+	got := decidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{102}, numbers(got.Supersede), "what cannot be ordered is not closed on a guess")
 }
 
 func TestDecideWhoIsRunningDecidesWhichPRsAreMine(t *testing.T) {
-	open := []pulls.PR{pr(120, "rancher-bot[bot]", bump("v0.5.3")), pr(101, me, bump("v0.5.3"))}
+	open := []pulls.PR{pr(120, "rancher-bot[bot]", markerFor("v0.5.3")), pr(101, me, markerFor("v0.5.3"))}
 
-	asDan := decidePublish(open, me, bump("v0.5.4"))
-	asTheBot := decidePublish(open, "rancher-bot[bot]", bump("v0.5.4"))
+	asDan := decidePublish(open, me, markerFor("v0.5.4"))
+	asTheBot := decidePublish(open, "rancher-bot[bot]", markerFor("v0.5.4"))
 
 	assert.Equal(t, []int{101}, numbers(asDan.Supersede))
 	assert.Equal(t, []int{120}, numbers(asTheBot.Supersede), "in CI the bot's own are the eligible ones")

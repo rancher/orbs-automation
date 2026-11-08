@@ -49,7 +49,7 @@ type Result struct {
 // Workspace is what the command needs from the invocation's workspace. It is
 // defined here, where it is consumed.
 type Workspace interface {
-	ChainProject(key string) (*chain.Project, error)
+	Project(key string) (*chain.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
 	UpstreamFor(slug string) string
 }
@@ -79,7 +79,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 	if format != clicfg.OutputText && format != clicfg.OutputJSON {
 		return fmt.Errorf("output format %q is not supported by repo branch: use text or json", format)
 	}
-	project, err := ws.ChainProject(opts.Project)
+	project, err := ws.Project(opts.Project)
 	if err != nil {
 		return err
 	}

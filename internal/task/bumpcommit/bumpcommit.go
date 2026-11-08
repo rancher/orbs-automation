@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/workdir"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 )
 
 // ErrNothingChanged is returned when the edit and the steps left nothing to
@@ -22,14 +22,15 @@ var ErrNothingChanged = errors.New("the edit changed nothing")
 // Input is the change to apply, and where.
 type Input struct {
 	// Work is the branch to edit and commit in, as createbranch made it.
-	Work       *workdir.Work
-	Invocation updatedispatcher.Invocation // the route's method bound to the edge's params
-	Release    updatedispatcher.Release    // what the value is made from
-	Branch     string                      // the consumer branch, for the steps' line ranges
-	Message    string                      // the commit message of the edit
+	Work    *workdir.Work
+	Route   bump.Route  // the holdings of the producer in the consumer, with their edits
+	Target  bump.Target // the consumer branch and the holdings written there
+	Tag     string      // the release being shipped
+	Commit  string      // the commit the tag is at
+	Message string      // the commit message of the edit
 	// StepMessage is the commit message for a step that changed files. Without it
 	// the message is just what ran.
-	StepMessage func(updatedispatcher.Unit) (string, error)
+	StepMessage func(bump.Unit) (string, error)
 	// OnCommit, when set, is called with each commit as it is made.
 	OnCommit func(workdir.CommitInfo)
 	Name     string // the commit's author and committer, or empty for the clone's git config
@@ -39,8 +40,8 @@ type Input struct {
 
 // Output is what the run did.
 type Output struct {
-	Commits []workdir.CommitInfo      // the commits made, oldest first
-	Changes []updatedispatcher.Change // what the strategy changed
+	Commits []workdir.CommitInfo // the commits made, oldest first
+	Changes []bump.Change        // what the holdings and the strategies changed
 }
 
 // Tip is the newest commit, or "" when there is none.
@@ -51,18 +52,18 @@ func (o Output) Tip() string {
 	return o.Commits[len(o.Commits)-1].Hash
 }
 
-// Run runs the dispatcher's lifecycle in the work directory (the pre-edit steps,
-// the edit and the post-edit steps) and commits after each of them that changed
-// files: the edit with Message, a step with StepMessage. A unit that changes
-// nothing makes no commit. A step that fails is the dispatcher's *StepError, and
-// the caller aborts the work, which removes the commits made so far. A run in
-// which nothing changed is ErrNothingChanged.
-func Run(ctx context.Context, runner updatedispatcher.StepRunner, in Input) (Output, error) {
+// Run runs the engine's lifecycle in the work directory (the pre-edit steps, the
+// write of the holdings, the strategies and the post-edit steps) and commits after
+// each of them that changed files: the write and a strategy with Message, a step
+// with StepMessage. A unit that changes nothing makes no commit. A step that fails
+// is the engine's *StepError, and the caller aborts the work, which removes the
+// commits made so far. A run in which nothing changed is ErrNothingChanged.
+func Run(ctx context.Context, runner bump.StepRunner, in Input) (Output, error) {
 	w := in.Work
 	var commits []workdir.CommitInfo
-	after := func(ctx context.Context, u updatedispatcher.Unit) error {
+	after := func(ctx context.Context, u bump.Unit) error {
 		message := in.Message
-		if u.Kind == updatedispatcher.UnitStep {
+		if u.Kind == bump.UnitStep {
 			var err error
 			if message, err = messageFor(in, u); err != nil {
 				return fmt.Errorf("the commit message for %s: %w", strings.Join(u.Run, " "), err)
@@ -88,7 +89,7 @@ func Run(ctx context.Context, runner updatedispatcher.StepRunner, in Input) (Out
 		}
 		return nil
 	}
-	res, err := in.Invocation.Run(ctx, updatedispatcher.DirTree(w.Dir), runner, in.Release, in.Branch, w.Dir, after)
+	res, err := in.Route.Run(ctx, bump.DirTree(w.Dir), runner, in.Target, in.Tag, in.Commit, w.Dir, after)
 	if err != nil {
 		return Output{}, err
 	}
@@ -100,7 +101,7 @@ func Run(ctx context.Context, runner updatedispatcher.StepRunner, in Input) (Out
 
 // messageFor is the commit message of a step, from StepMessage or, when there
 // is none, just what ran.
-func messageFor(in Input, u updatedispatcher.Unit) (string, error) {
+func messageFor(in Input, u bump.Unit) (string, error) {
 	if in.StepMessage == nil {
 		return "Run `" + strings.Join(u.Run, " ") + "`", nil
 	}

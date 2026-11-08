@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -24,7 +25,6 @@ type humanSink struct {
 	header    domain.Plan         // from Resolved: who ships what to whom
 	targets   []domain.TargetPlan // the branches read so far
 	inTargets bool                // the table of branches is open
-	wantShown bool                // the value the consumer should hold has been shown
 	prShown   bool
 	working   bool // the section for the work on branches has been started
 	deciding  bool // the section for the open PRs of each branch has been started
@@ -149,14 +149,9 @@ func (h *humanSink) resolved(p *domain.Plan) {
 // first one, after the method and the wanted value that its read made known.
 func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 	if !h.inTargets {
-		method := fmt.Sprintf("  %s  %s (%s", h.label("method"), h.header.Method, h.header.Strategy)
-		if t.File != "" {
-			method += ", " + t.File
-		}
-		h.out.Line(method + ")")
-		if t.Want != "" && h.header.Uniform() {
-			h.out.Line("  " + h.label("want") + "    " + t.Want)
-			h.wantShown = true
+		h.out.Line(fmt.Sprintf("  %s  %s", h.label("holdings"), holdingList(t.Holdings)))
+		if want := valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Want }); want != "" && h.header.Uniform() && len(t.Holdings) == 1 {
+			h.out.Line("  " + h.label("want") + "    " + want)
 		}
 		h.out.Line("")
 		h.heading("Targets")
@@ -168,9 +163,10 @@ func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 		h.inTargets = true
 	}
 	if h.header.Uniform() {
-		h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), t.Current, h.status(string(t.Status)))
+		h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Current }), h.status(string(t.Status)))
 	} else {
-		h.out.Row(t.Key(), t.Branch, t.Release, git.Short(t.Commit), t.Current, t.Want, h.status(string(t.Status)))
+		h.out.Row(t.Key(), t.Branch, t.Release, git.Short(t.Commit),
+			valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Current }), valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Want }), h.status(string(t.Status)))
 	}
 	h.targets = append(h.targets, *t)
 }
@@ -382,9 +378,6 @@ func (h *humanSink) summary(p *domain.Plan) {
 		h.results(p)
 	}
 	h.out.Line("")
-	if !h.wantShown && p.Want != "" {
-		h.out.Line("  " + h.label("want") + "    " + p.Want)
-	}
 	if p.Push != nil {
 		h.out.Line(fmt.Sprintf("  %s  %s (%s), as %s", h.label("push to"), p.Push.Role, p.Push.Remote, p.Push.Source))
 	}
@@ -607,4 +600,25 @@ func stepsText(steps []domain.StepPreview) string {
 		lines = append(lines, fmt.Sprintf("%s  %s  (%s)", where, when, s.Phase))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// valuesOf is one value of each holding of a target, with the repeats left out and
+// the rest joined by a comma: one value when the holdings share it.
+func valuesOf(t domain.TargetPlan, of func(domain.HoldingPlan) string) string {
+	var seen []string
+	for _, hp := range t.Holdings {
+		if v := of(hp); v != "" && !slices.Contains(seen, v) {
+			seen = append(seen, v)
+		}
+	}
+	return strings.Join(seen, ", ")
+}
+
+// holdingList names the holdings of a target and the file each is in.
+func holdingList(holdings []domain.HoldingPlan) string {
+	parts := make([]string, len(holdings))
+	for i, hp := range holdings {
+		parts[i] = fmt.Sprintf("%s (%s)", hp.Name, hp.File)
+	}
+	return strings.Join(parts, ", ")
 }

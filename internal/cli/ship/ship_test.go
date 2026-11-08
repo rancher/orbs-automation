@@ -9,16 +9,20 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
+	"testing/fstest"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/ui"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,34 +34,45 @@ type fakeWorkspace struct {
 	cloneErr error // for CloneDir
 }
 
-func sccProducer() config.Project {
-	return config.Project{
-		Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator", Owned: true}, Release: config.Release{TagPattern: "v*"},
-		Downstream: []config.Edge{{
-			To: "rancher", Method: "build-yaml-bump",
-			Params: map[string]string{"updateKey": "image", "value": "{image}:{tag}"},
-		}},
-	}
+var (
+	graphOnce sync.Once
+	theGraph  *chain.Graph
+)
+
+// graph is the config of the tests: scc-operator, which is universal, ships its
+// image to rancher, whose one line is on its default branch.
+func graph() *chain.Graph {
+	graphOnce.Do(func() {
+		fsys := fstest.MapFS{}
+		for i, d := range []string{
+			chaintest.Lines("v2.16"),
+			chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, owned: true}\n"),
+			chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
+			chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),
+			chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}]\n"),
+			chaintest.Doc("Holding", "rancher-holds-scc", "{project: rancher, artifact: scc-image}",
+				"  at: {file: build.yaml, key: image}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n"),
+		} {
+			fsys[fmt.Sprintf("doc%d.yaml", i)] = &fstest.MapFile{Data: []byte(d)}
+		}
+		g, rep := chain.Load(fsys, config.Context{Now: chaintest.Now})
+		if err := rep.Err(); err != nil {
+			panic(err)
+		}
+		theGraph = g
+	})
+	return theGraph
 }
 
-func (f *fakeWorkspace) Project(string) (config.Project, error) {
+func (f *fakeWorkspace) Project(string) (*chain.Project, error) {
 	if f.err != nil {
-		return config.Project{}, f.err
+		return nil, f.err
 	}
-	return sccProducer(), nil
+	return graph().Project("scc-operator"), nil
 }
 
-func (f *fakeWorkspace) Updates() (*updatedispatcher.Engine, error) {
-	rancher := config.Project{
-		Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"},
-		Release: config.Release{Branching: config.BranchingPerLine, Lines: []config.ProjectLine{{Line: "v2.16"}}},
-		UpdateMethods: []config.UpdateMethod{{
-			Name: "build-yaml-bump", Strategy: "yamlBump", With: map[string]string{"file": "build.yaml"},
-			AllowedParams: []config.AllowedParam{{Key: "updateKey"}, {Key: "value", Default: "{tag}"}},
-			Accept:        config.Accept{When: config.AcceptStable},
-		}},
-	}
-	return updatedispatcher.NewEngine(updatedispatcher.Builtin(), config.Config{Projects: []config.Project{sccProducer(), rancher}})
+func (f *fakeWorkspace) Bump() (*bump.Engine, error) {
+	return bump.NewEngine(bump.Builtin(), graph())
 }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
@@ -95,7 +110,7 @@ func TestRunReady(t *testing.T) {
 	require.NoError(t, err)
 	for _, want := range []string{
 		"rancher/scc-operator", "v0.5.3", "stable", "rancher/rancher", "main", "2222222",
-		"build-yaml-bump", "yamlBump", "build.yaml", "rancher/scc-operator:v0.5.2", "rancher/scc-operator:v0.5.3",
+		"rancher-holds-scc", "build.yaml", "rancher/scc-operator:v0.5.2", "rancher/scc-operator:v0.5.3",
 		"ready", "Nothing was written",
 	} {
 		assert.Contains(t, out, want)
@@ -148,13 +163,18 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	assert.ErrorContains(t, err, "not supported by ship")
 }
 
+// hp is the one holding of a target: its file, what it holds and what it should.
+func hp(current, want string) []domain.HoldingPlan {
+	return []domain.HoldingPlan{{Name: "rancher-holds-scc", File: "build.yaml", Current: current, Want: want}}
+}
+
 func previewPlan() domain.Plan {
 	return domain.Plan{
-		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Method: "build-yaml-bump", Strategy: "yamlBump", File: "build.yaml",
-		Releases: []domain.Release{{Tag: "v0.5.3", Stable: true}}, Want: "b", Status: domain.StatusReady,
+		Producer: "rancher/scc-operator", Consumer: "rancher/rancher", Holdings: []string{"rancher-holds-scc"},
+		Releases: []domain.Release{{Tag: "v0.5.3", Stable: true}}, Status: domain.StatusReady,
 		Targets: []domain.TargetPlan{{
 			Target:  domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},
-			Release: "v0.5.3", Current: "a", Want: "b", Status: domain.StatusReady,
+			Release: "v0.5.3", Holdings: hp("a", "b"), Status: domain.StatusReady,
 			Preview: &domain.Preview{
 				Branch: "bot/scc-operator-v0.5.3-v2.15", Title: "[v2.15] Update scc-operator to v0.5.3",
 				Labels:        []string{"status/auto-created", "team/orbs"},
@@ -273,10 +293,10 @@ func TestRunWithNoBranchChecksTheBranchesTheReleaseGoesTo(t *testing.T) {
 func previewPlanWithTargets() domain.Plan {
 	p := previewPlan()
 	ready := p.Targets[0]
-	upToDate := domain.TargetPlan{Target: domain.Target{Branch: "main", Commit: "3333333cccccc"}, Current: "b", Status: domain.StatusUpToDate}
+	upToDate := domain.TargetPlan{Target: domain.Target{Branch: "main", Commit: "3333333cccccc"}, Holdings: hp("b", "b"), Status: domain.StatusUpToDate}
 	failed := domain.TargetPlan{Target: domain.Target{Branch: "release/v2.12"}, Status: domain.StatusFailed, Error: "read build.yaml: gone"}
 	blocked := domain.TargetPlan{
-		Target: domain.Target{Branch: "release/v2.14", Commit: "4444444dddddd"}, Current: "c", Status: domain.StatusBlocked,
+		Target: domain.Target{Branch: "release/v2.14", Commit: "4444444dddddd"}, Holdings: hp("c", "b"), Status: domain.StatusBlocked,
 		Blockers: []string{"downgrade: older"},
 	}
 	p.Targets = []domain.TargetPlan{upToDate, ready, blocked, failed}
@@ -300,7 +320,7 @@ func TestRenderTextGroupsTheSameReasonAcrossBranches(t *testing.T) {
 	p := previewPlanWithTargets()
 	for _, branch := range []string{"main", "release/v2.15"} {
 		p.Targets = append(p.Targets, domain.TargetPlan{
-			Target: domain.Target{Branch: branch + "-2", Commit: "5555555eeeeeee"}, Current: "c", Status: domain.StatusBlocked,
+			Target: domain.Target{Branch: branch + "-2", Commit: "5555555eeeeeee"}, Holdings: hp("c", "b"), Status: domain.StatusBlocked,
 			Blockers: []string{"downgrade: older"}, Warnings: []string{"this is a downgrade"},
 		})
 	}
@@ -644,12 +664,12 @@ func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 
 func TestInputFromCarriesTheFlagsAndTheSettings(t *testing.T) {
 	s := clicfg.Settings{BranchPrefix: "dan/", DryRun: true}
-	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Lines: []string{"v2.16"}, Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
+	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Lines: []string{"v2.16"}, Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
 
 	got := inputFrom(s, opts)
 
 	assert.Equal(t, domain.Input{
-		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Method: "m", Lines: []string{"v2.16"}, Prerelease: true,
+		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Lines: []string{"v2.16"}, Prerelease: true,
 		BranchPrefix: "dan/", AllowDowngrade: true, DryRun: true, NoPush: true, PushTo: "upstream",
 	}, got)
 }
@@ -1175,11 +1195,10 @@ func eachLine() domain.Plan {
 	p := previewPlan()
 	p.Producer = "rancher/shell"
 	p.Releases = []domain.Release{{Tag: "v0.9.1-rc.2"}, {Tag: "v0.8.3", Stable: true}}
-	p.Want = ""
 	p.Notes = []string{"v2.14: no such release: rancher/shell has no tags in line v2.14"}
 	second := p.Targets[0]
-	p.Targets[0].Line, p.Targets[0].Release, p.Targets[0].Want = "v2.16", "v0.9.1-rc.2", "rancher/shell:v0.9.1-rc.2"
-	second.Line, second.Release, second.Want = "v2.15", "v0.8.3", "rancher/shell:v0.8.3"
+	p.Targets[0].Line, p.Targets[0].Release, p.Targets[0].Holdings = "v2.16", "v0.9.1-rc.2", hp("a", "rancher/shell:v0.9.1-rc.2")
+	second.Line, second.Release, second.Holdings = "v2.15", "v0.8.3", hp("a", "rancher/shell:v0.8.3")
 	second.Preview = nil
 	p.Targets = append(p.Targets, second)
 	p.Images = []domain.ReleaseImages{

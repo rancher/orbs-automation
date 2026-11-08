@@ -31,9 +31,9 @@ const (
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
 	Chain() (*chain.Graph, error)
-	// ChainProject returns the Project with the given config name or owner/name
+	// Project returns the Project with the given config name or owner/name
 	// slug, or the one in the working directory for "" or ".".
-	ChainProject(key string) (*chain.Project, error)
+	Project(key string) (*chain.Project, error)
 	RepoPaths(slugs []string) []workspace.RepoPath
 }
 
@@ -91,7 +91,7 @@ func projectSlugs(ws Workspace, g *chain.Graph, want []string) ([]string, error)
 	}
 	out := make([]string, 0, len(want))
 	for _, key := range want {
-		p, err := ws.ChainProject(key)
+		p, err := ws.Project(key)
 		if err != nil {
 			return nil, err
 		}

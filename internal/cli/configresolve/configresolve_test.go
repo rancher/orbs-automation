@@ -29,9 +29,9 @@ type fakeWorkspace struct {
 	current string
 }
 
-// ChainProject is the real lookup: a key with a slash is a slug, any other a
+// Project is the real lookup: a key with a slash is a slug, any other a
 // name, and "" or "." is the working directory's Project.
-func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
+func (f *fakeWorkspace) Project(key string) (*chain.Project, error) {
 	if f.chainErr != nil {
 		return nil, f.chainErr
 	}
@@ -264,10 +264,9 @@ func TestReposRejectsOtherFormats(t *testing.T) {
 
 func TestReposEndToEnd(t *testing.T) {
 	central, search := t.TempDir(), t.TempDir()
-	require.NoError(t, os.Mkdir(filepath.Join(central, "v1alpha2"), 0o750))
 	for _, slug := range []string{"rancher/rancher", "rancher/charts"} {
 		_, name, _ := strings.Cut(slug, "/")
-		require.NoError(t, os.WriteFile(filepath.Join(central, "v1alpha2", name+".yaml"), []byte(chaintest.Doc("Project", name, "", "  repo: {name: "+slug+"}\n")), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(central, name+".yaml"), []byte(chaintest.Doc("Project", name, "", "  repo: {name: "+slug+"}\n")), 0o600))
 	}
 	repotest.NewRepoAt(t, filepath.Join(search, "rancher-src"), map[string]string{"upstream": "https://github.com/rancher/rancher.git"})
 	s := clicfg.Settings{

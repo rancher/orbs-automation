@@ -13,7 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
@@ -22,7 +24,6 @@ import (
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -96,6 +97,8 @@ type Target struct {
 	// Line and Series are set for a project with a branch per line.
 	Line   string `json:"line,omitempty"`
 	Series string `json:"series,omitempty"`
+	// Stage is set for a line that has a branch for each stage.
+	Stage  string `json:"stage,omitempty"`
 	Branch string `json:"branch"`
 	// IsDefaultBranch is set when the config names no branch for the line, so
 	// Branch is the Project's default branch.
@@ -182,13 +185,13 @@ func gatherWith(ctx context.Context, ws Workspace, open Opener, slugs []string, 
 	if err != nil {
 		return Status{}, err
 	}
-	st := Status{Slug: p.Repo.Name, DefaultBranch: p.Repo.DefaultBranch, Targets: targets(p)}
-	refs, err := ws.UpstreamRefs(ctx, p.Repo.Name)
+	st := Status{Slug: p.Slug(), DefaultBranch: p.DefaultBranch(), Targets: targets(p)}
+	refs, err := ws.UpstreamRefs(ctx, p.Slug())
 	if err != nil {
 		st.Error = err.Error()
 		return st, nil
 	}
-	clone, why := openClone(ws, open, p.Repo.Name)
+	clone, why := openClone(ws, open, p.Slug())
 	st.Clone = why
 	for n := range st.Targets {
 		fill(&st.Targets[n], p, refs, clone)
@@ -200,7 +203,7 @@ func gatherWith(ctx context.Context, ws Workspace, open Opener, slugs []string, 
 // trace adds the consumers and the sources of p to the status, unless the options
 // skip them. What it reads is read by ship.Holdings and ship.Sources, which are the
 // pieces a run of gero ship reads a consumer with.
-func trace(ctx context.Context, ws ship.Reader, p config.Project, opts Options, st *Status) {
+func trace(ctx context.Context, ws ship.Reader, p *chain.Project, opts Options, st *Status) {
 	var problems []string
 	note := func(err error) {
 		if err != nil && !slices.Contains(problems, err.Error()) {
@@ -224,7 +227,7 @@ func trace(ctx context.Context, ws ship.Reader, p config.Project, opts Options, 
 // the releases that go to it: the latest stable, and when a newer prerelease
 // exists the newest. A Relation of newer means the release is newer than what the
 // branch holds, so the branch is behind.
-func holdStatus(h ship.Holding) string {
+func holdStatus(h ship.HeldValue) string {
 	if h.Error != "" {
 		return "unreadable: " + h.Error
 	}
@@ -239,11 +242,11 @@ func holdStatus(h ship.Holding) string {
 			return "current"
 		case stable.UpToDate:
 			return "on stable, " + newest.Tag + " is newer"
-		case stable.Relation == updatedispatcher.RelationNewer:
+		case stable.Relation == bump.RelationNewer:
 			return "behind " + stable.Tag
-		case newest.Relation == updatedispatcher.RelationNewer:
+		case newest.Relation == bump.RelationNewer:
 			return "on a prerelease, " + newest.Tag + " is newer"
-		case newest.Relation == updatedispatcher.RelationOlder:
+		case newest.Relation == bump.RelationOlder:
 			return "ahead of " + newest.Tag
 		}
 		return "unknown"
@@ -251,32 +254,52 @@ func holdStatus(h ship.Holding) string {
 	switch {
 	case stable.UpToDate:
 		return "current"
-	case stable.Relation == updatedispatcher.RelationNewer:
+	case stable.Relation == bump.RelationNewer:
 		return "behind " + stable.Tag
-	case stable.Relation == updatedispatcher.RelationOlder:
+	case stable.Relation == bump.RelationOlder:
 		return "ahead of " + stable.Tag
 	}
 	return "unknown"
 }
 
-// targets lists the release branches of p, before anything is read.
-func targets(p config.Project) []Target {
-	switch p.Release.Branching {
-	case config.BranchingPerLineTag:
-		// Every line is on the one branch, and has no series: its tags say which.
+// targets lists the release branches of p, before anything is read: a row for each
+// line on a branch, one for each stage of a line that has a branch for each, and
+// the one row of a project with a single release branch, or for each line of the
+// stream of a project that finds its lines in its tags.
+func targets(p *chain.Project) []Target {
+	series := func(line string) string {
+		for _, st := range p.Streams() {
+			if sr, ok := st.Series(line); ok {
+				return sr
+			}
+		}
+		return ""
+	}
+	if p.Layout() == v1alpha2.LayoutSingle {
+		// Every line is on the one branch. A stream that lists lines has them in its
+		// tags, so each is a row of its own.
 		var ts []Target
-		for _, l := range p.Release.Lines {
-			ts = append(ts, Target{Line: l.Line, Branch: p.Repo.DefaultBranch, IsDefaultBranch: true})
+		for _, st := range p.Streams() {
+			for _, line := range st.Lines() {
+				ts = append(ts, Target{Line: line, Series: series(line), Branch: p.DefaultBranch(), IsDefaultBranch: true})
+			}
+		}
+		if len(ts) == 0 {
+			return []Target{{Branch: p.DefaultBranch(), IsDefaultBranch: true}}
 		}
 		return ts
-	case config.BranchingPerLine:
-	default:
-		return []Target{{Branch: p.Repo.DefaultBranch, IsDefaultBranch: true}}
 	}
 	var ts []Target
-	for _, l := range p.Release.Lines {
-		branch, isDefault := p.Branch(l)
-		ts = append(ts, Target{Line: l.Line, Series: l.Series(), Branch: branch, IsDefaultBranch: isDefault})
+	for _, lb := range p.LineBranches() {
+		if len(lb.Stages) > 0 {
+			for _, stage := range p.Stages() {
+				if branch, ok := lb.Stages[stage]; ok {
+					ts = append(ts, Target{Line: lb.Line, Series: series(lb.Line), Stage: stage, Branch: branch})
+				}
+			}
+			continue
+		}
+		ts = append(ts, Target{Line: lb.Line, Series: series(lb.Line), Branch: lb.Branch, IsDefaultBranch: lb.IsDefault})
 	}
 	return ts
 }
@@ -284,11 +307,12 @@ func targets(p config.Project) []Target {
 // fill reads the latest tags and the head of t from refs, works out its state and
 // the tags it could have next from them (internal/releasetag, which is what
 // gero repo tag asks), and compares them with the clone, which may be nil.
-func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
-	scheme, err := tagscheme.For(p)
+func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
+	scheme, err := tagscheme.ForProject(p)
 	if err != nil {
 		return
 	}
+	stream := p.Streams()[0]
 	latest := scheme.Latest(refs.Tags, t.Line)
 	t.LatestStable, t.LatestPrerelease = tagInfo(latest.Stable), tagInfo(latest.Prerelease)
 	for _, b := range refs.Branches {
@@ -298,10 +322,10 @@ func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 	}
 	// What tag could be made next is for tags a person makes. A project whose tags
 	// its own CI makes has no next one.
-	if t.Head != "" && p.Release.Branching != config.BranchingPerLineTag {
+	if t.Head != "" && stream.Scheme() != v1alpha2.SchemeCalverLineStage {
 		c := releasetag.Choice{
-			Tags: refs.Tags, Pattern: p.Release.TagPattern, Series: t.Series, Commit: t.Head,
-			RequiresPrerelease: p.Release.RequiresPrerelease,
+			Tags: refs.Tags, Pattern: stream.TagPattern(), Series: t.Series, Commit: t.Head,
+			RequiresPrerelease: stream.RequiresPrerelease(),
 		}
 		t.State, t.Next = string(releasetag.StateOf(c)), nextOf(c)
 	}
@@ -451,10 +475,10 @@ func renderText(st Status, view *style.Renderer) string {
 		b.WriteString(ui.Align(table, view.Width))
 	}
 	for _, src := range st.Sources {
-		renderHoldings(&b, view, fmt.Sprintf("Sources: %s (%s), %s", src.Name, src.Producer, src.Method), src.Error, src.Targets)
+		renderHoldings(&b, view, fmt.Sprintf("Sources: %s (%s)", src.Name, src.Producer), src.Error, src.Targets)
 	}
 	for _, c := range st.Consumers {
-		renderHoldings(&b, view, fmt.Sprintf("Consumers: %s (%s), %s", c.Name, c.Consumer, c.Method), c.Error, c.Targets)
+		renderHoldings(&b, view, fmt.Sprintf("Consumers: %s (%s)", c.Name, c.Consumer), c.Error, c.Targets)
 	}
 	if st.TraceError != "" {
 		b.WriteString("\n" + view.Style(style.Warn, "could not trace: "+st.TraceError) + "\n")
@@ -471,19 +495,31 @@ func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText s
 		return
 	}
 	perLine := slices.ContainsFunc(targets, func(h ship.Holding) bool { return h.Line != "" })
-	table := [][]string{heads(view, perLine, "BRANCH", "HEAD", "HOLDS", "LATEST STABLE", "STATUS")}
+	table := [][]string{heads(view, perLine, "BRANCH", "HEAD", "HOLDING", "HOLDS", "LATEST STABLE", "STATUS")}
 	for _, h := range targets {
-		latest := "-"
-		if h.Stable != nil {
-			latest = h.Stable.Tag
+		if len(h.Held) == 0 {
+			status := "-"
+			if h.Error != "" {
+				status = "unreadable: " + h.Error
+			}
+			table = append(table, row(perLine, h.Line, []string{
+				h.Branch, headCell(view, h.Head), view.Style(style.Dim, "-"), view.Style(style.Dim, "-"), view.Style(style.Dim, "-"), styledBy(view, holdRole, status),
+			}))
+			continue
 		}
-		holds := h.Current
-		if holds == "" {
-			holds = "-"
+		for _, v := range h.Held {
+			latest := "-"
+			if v.Stable != nil {
+				latest = v.Stable.Tag
+			}
+			holds := v.Current
+			if holds == "" {
+				holds = "-"
+			}
+			table = append(table, row(perLine, h.Line, []string{
+				h.Branch, headCell(view, h.Head), v.Name, dashed(view, holds), dashed(view, latest), styledBy(view, holdRole, holdStatus(v)),
+			}))
 		}
-		table = append(table, row(perLine, h.Line, []string{
-			h.Branch, headCell(view, h.Head), dashed(view, holds), dashed(view, latest), styledBy(view, holdRole, holdStatus(h)),
-		}))
 	}
 	b.WriteString(ui.Align(table, view.Width))
 }
@@ -596,8 +632,13 @@ func holdRole(text string) (style.Role, bool) {
 // branchText is the branch, with a note when it is the default branch because the
 // line has none of its own.
 func branchText(t Target, perLine bool) string {
-	if perLine && t.IsDefaultBranch {
+	switch {
+	case t.Branch == "":
+		return "(none yet)"
+	case perLine && t.IsDefaultBranch:
 		return t.Branch + " (default branch)"
+	case t.Stage != "":
+		return t.Branch + " (" + t.Stage + ")"
 	}
 	return t.Branch
 }

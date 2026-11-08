@@ -3,30 +3,45 @@ package ship
 import (
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/updatedispatcher"
+	"github.com/rancher/orbs-automation/internal/bump"
+
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func previewFixture() previewInput {
+// projectWith is a project of the repo, with the pull request conventions given as
+// the flow YAML of the spec's pullRequests, or none.
+func projectWith(t *testing.T, name, repo, pullRequests string) *chain.Project {
+	t.Helper()
+	spec := "  repo: {name: " + repo + "}\n"
+	if pullRequests != "" {
+		spec += "  pullRequests: " + pullRequests + "\n"
+	}
+	return chaintest.Load(t, chaintest.Doc("Project", name, "", spec)).Project(name)
+}
+
+func previewFixture(t *testing.T) previewInput {
+	t.Helper()
 	return previewInput{
-		producer: config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}},
-		consumer: config.Project{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher", DefaultBranch: "main"}},
+		producer: projectWith(t, "scc-operator", "rancher/scc-operator", ""),
+		consumer: projectWith(t, "rancher", "rancher/rancher", ""),
 		release:  Release{Tag: "v0.5.3", Commit: "sha", Stable: true},
 		target:   Target{Branch: "release/v2.15", Commit: "sha-215"},
-		check: updatedispatcher.Check{
+		checks: []bump.HoldingCheck{{Check: bump.Check{
 			Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3",
-			Change: updatedispatcher.Change{
+			Change: bump.Change{
 				Path: "build.yaml", From: "rancher/scc-operator:v0.5.2", To: "rancher/scc-operator:v0.5.3",
 				Description: "Updated `defaultSccOperatorImage` in `build.yaml` from `rancher/scc-operator:v0.5.2` to `rancher/scc-operator:v0.5.3`",
 			},
-		},
+		}}},
 	}
 }
 
 func TestRenderPreviewDefaults(t *testing.T) {
-	got, err := renderPreview(previewFixture())
+	got, err := renderPreview(previewFixture(t))
 	require.NoError(t, err)
 
 	assert.Equal(t, "bot/scc-operator-v0.5.3-v2.15", got.Branch, "what the script made, without the epoch")
@@ -40,7 +55,7 @@ func TestRenderPreviewDefaults(t *testing.T) {
 }
 
 func TestRenderPreviewBodyCarriesTheMarker(t *testing.T) {
-	got, err := renderPreview(previewFixture())
+	got, err := renderPreview(previewFixture(t))
 	require.NoError(t, err)
 	m, ok := ParseMarker(got.Body)
 	require.True(t, ok)
@@ -48,7 +63,7 @@ func TestRenderPreviewBodyCarriesTheMarker(t *testing.T) {
 }
 
 func TestRenderPreviewTheDevelopmentBranch(t *testing.T) {
-	in := previewFixture()
+	in := previewFixture(t)
 	in.target = Target{Branch: "main"}
 	got, err := renderPreview(in)
 	require.NoError(t, err)
@@ -57,12 +72,9 @@ func TestRenderPreviewTheDevelopmentBranch(t *testing.T) {
 }
 
 func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
-	in := previewFixture()
-	in.consumer.PullRequests = config.PullRequests{
-		Title:        "Bump {source} ({version}) on {targetBranch}",
-		BranchPrefix: "auto/{project}/",
-		Labels:       []string{"status/auto-created", "team/orbs"},
-	}
+	in := previewFixture(t)
+	in.consumer = projectWith(t, "rancher", "rancher/rancher",
+		`{title: "Bump {source} ({version}) on {targetBranch}", branchPrefix: "auto/{project}/", labels: [status/auto-created, team/orbs]}`)
 	got, err := renderPreview(in)
 	require.NoError(t, err)
 	assert.Equal(t, "Bump scc-operator (0.5.3) on release/v2.15", got.Title)
@@ -71,8 +83,8 @@ func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
 }
 
 func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
-	in := previewFixture()
-	in.consumer.PullRequests.BranchPrefix = "bot/{source}-"
+	in := previewFixture(t)
+	in.consumer = projectWith(t, "rancher", "rancher/rancher", `{branchPrefix: "bot/{source}-"}`)
 	in.userPrefix = "dan/"
 	got, err := renderPreview(in)
 	require.NoError(t, err)
@@ -80,10 +92,10 @@ func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 }
 
 func TestRenderPreviewListsThePostEditCommands(t *testing.T) {
-	in := previewFixture()
-	in.steps = []updatedispatcher.StepRef{
-		{Phase: updatedispatcher.MethodPostEdit, Step: config.Step{Run: config.Command{"scripts/generate-buildconfig"}}},
-		{Phase: updatedispatcher.MethodPostEdit, Index: 1, Step: config.Step{Run: config.Command{"go", "generate", "./..."}}},
+	in := previewFixture(t)
+	in.steps = []bump.StepRef{
+		{Phase: bump.PostEdit, Step: v1alpha2.Step{Run: v1alpha2.Command{"scripts/generate-buildconfig"}}},
+		{Phase: bump.PostEdit, Index: 1, Step: v1alpha2.Step{Run: v1alpha2.Command{"go", "generate", "./..."}}},
 	}
 	got, err := renderPreview(in)
 	require.NoError(t, err)
@@ -92,39 +104,27 @@ func TestRenderPreviewListsThePostEditCommands(t *testing.T) {
 }
 
 func TestRenderPreviewAPrereleaseKeepsItsTag(t *testing.T) {
-	in := previewFixture()
+	in := previewFixture(t)
 	in.release = Release{Tag: "v0.6.0-rc.1", Stable: false}
-	in.check.Want = "rancher/scc-operator:v0.6.0-rc.1"
+	in.checks[0].Want = "rancher/scc-operator:v0.6.0-rc.1"
 	got, err := renderPreview(in)
 	require.NoError(t, err)
 	assert.Equal(t, "bot/scc-operator-v0.6.0-rc.1-v2.15", got.Branch)
 }
 
-func TestRenderPreviewRejectsAnUnknownPlaceholder(t *testing.T) {
-	in := previewFixture()
-	in.consumer.PullRequests.Title = "Update {nope}"
-	_, err := renderPreview(in)
-	assert.ErrorContains(t, err, "nope")
-
-	in = previewFixture()
-	in.consumer.PullRequests.BranchPrefix = "{nope}/"
-	_, err = renderPreview(in)
-	assert.ErrorContains(t, err, "nope")
-}
-
 func TestRenderPreviewHasTheCommitEachStepWouldMakeInTheOrderTheyRun(t *testing.T) {
-	in := previewFixture()
-	in.steps = []updatedispatcher.StepRef{
-		{Phase: updatedispatcher.MethodPreEdit, Step: config.Step{Run: config.Command{"scripts/prepare"}}},
-		{Phase: updatedispatcher.EdgePostEdit, Step: config.Step{Run: config.Command{"scripts/generate-buildconfig"}}},
-		{Phase: updatedispatcher.MethodPostEdit, Index: 1, Step: config.Step{Run: config.Command{"go", "generate", "./..."}}},
+	in := previewFixture(t)
+	in.steps = []bump.StepRef{
+		{Phase: bump.PreEdit, Step: v1alpha2.Step{Run: v1alpha2.Command{"scripts/prepare"}}},
+		{Phase: bump.PostEdit, Step: v1alpha2.Step{Run: v1alpha2.Command{"scripts/generate-buildconfig"}}},
+		{Phase: bump.PostEdit, Index: 1, Step: v1alpha2.Step{Run: v1alpha2.Command{"go", "generate", "./..."}}},
 	}
 
 	got, err := renderPreview(in)
 
 	require.NoError(t, err)
 	require.Len(t, got.Steps, 3)
-	assert.Equal(t, "method preEdit", got.Steps[0].Phase)
+	assert.Equal(t, "preEdit", got.Steps[0].Phase)
 	assert.True(t, got.Steps[0].BeforeEdit, "a pre-edit step's commit comes before the edit's")
 	assert.Equal(t, "scripts/prepare", got.Steps[0].Run)
 	assert.False(t, got.Steps[1].BeforeEdit)
@@ -137,16 +137,16 @@ func TestRenderPreviewHasTheCommitEachStepWouldMakeInTheOrderTheyRun(t *testing.
 }
 
 func TestRenderPreviewWithNoStepsHasNoStepCommits(t *testing.T) {
-	got, err := renderPreview(previewFixture())
+	got, err := renderPreview(previewFixture(t))
 
 	require.NoError(t, err)
 	assert.Empty(t, got.Steps)
 }
 
 func TestRenderPreviewTheStepMessagesAreTheOnesARunCommits(t *testing.T) {
-	in := previewFixture()
-	in.steps = []updatedispatcher.StepRef{{Phase: updatedispatcher.EdgePostEdit, Index: 2, Step: config.Step{Run: config.Command{"gen", "--all"}}}}
-	want, err := stepMessage(in)(updatedispatcher.Unit{Kind: updatedispatcher.UnitStep, Phase: updatedispatcher.EdgePostEdit, Index: 2, Run: []string{"gen", "--all"}})
+	in := previewFixture(t)
+	in.steps = []bump.StepRef{{Phase: bump.PostEdit, Index: 2, Step: v1alpha2.Step{Run: v1alpha2.Command{"gen", "--all"}}}}
+	want, err := stepMessage(in)(bump.Unit{Kind: bump.UnitStep, Phase: bump.PostEdit, Index: 2, Run: []string{"gen", "--all"}})
 	require.NoError(t, err)
 
 	got, err := renderPreview(in)
