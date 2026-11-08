@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/ghcli"
+	"github.com/rancher/orbs-automation/internal/platform/ghcli"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 )
 
@@ -68,7 +68,7 @@ func (c ghCheck) Run(ctx context.Context) Result {
 	return Result{Status: StatusOK, Message: fmt.Sprintf("%s at %s", version, path)}
 }
 
-// ghBinary is the GhBinary backed by internal/ghcli.
+// ghBinary is the GhBinary backed by internal/platform/ghcli.
 type ghBinary struct{}
 
 func (ghBinary) Locate() (string, error) { return ghcli.Locate(os.Getenv) }

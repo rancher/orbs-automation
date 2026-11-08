@@ -75,7 +75,7 @@ linters:
               desc: go-git is only allowed in internal/platform/git/repo (docs/specs/PROJECT_LAYOUT.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/platform/git/gitcli (each use records why go-git
-        # cannot do it) and internal/ghcli (gero doctor) go through it
+        # cannot do it) and internal/platform/ghcli (gero doctor) go through it
         # (docs/specs/DEPENDENCY_POLICY.md).
         noexec:
           list-mode: lax
