@@ -31,7 +31,7 @@ The release workflow installs `cosign` and `.goreleaser.yaml` signs the `archive
 
 ## Cost
 
-Sigstore verification is the largest dependency gero has: **+16.5 MB stripped (12.7 MB to 29.3 MB)**. It is accepted for this command alone, because a wrong answer here installs attacker code on an engineer's machine.
+Sigstore verification is the largest dependency gero has: **+17.6 MB stripped (13.1 MB to 30.6 MB)**. It is accepted for this command alone, because a wrong answer here installs attacker code on an engineer's machine.
 
 ## Not built yet
 
