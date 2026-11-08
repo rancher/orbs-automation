@@ -1,6 +1,7 @@
 package header
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -24,8 +25,17 @@ func TestPrintIsTheArtAsText(t *testing.T) {
 	assert.Greater(t, strings.Count(art, "\n"), 10, "it is many lines")
 }
 
-func TestPrintOfBytesThatAreNotTheArtIsEmpty(t *testing.T) {
-	_, err := headerFromBytes([]byte("not base64!"))
+func TestBytesThatAreNotTheArtDoNotDecode(t *testing.T) {
+	notGzip := base64.StdEncoding.EncodeToString([]byte("plain text"))
+	for name, encoded := range map[string]string{"not base64": "not base64!", "not gzip": notGzip, "empty": ""} {
+		_, err := headerFromBytes([]byte(encoded))
 
-	assert.Error(t, err)
+		assert.Error(t, err, name)
+		assert.Empty(t, render([]byte(encoded)), name)
+	}
+}
+
+func TestRenderOfTheArtIsPrint(t *testing.T) {
+	assert.Equal(t, Print(), render(headerBytes))
+	assert.NotEmpty(t, Print())
 }

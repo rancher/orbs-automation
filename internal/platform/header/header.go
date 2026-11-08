@@ -28,11 +28,13 @@ func headerFromBytes(encoded []byte) (string, error) {
 }
 
 // Print returns the header art, or "" if it cannot be decoded.
-func Print() string {
-	art, err := headerFromBytes(headerBytes)
+func Print() string { return render(headerBytes) }
+
+// render is the art in encoded, or "" when it does not decode.
+func render(encoded []byte) string {
+	art, err := headerFromBytes(encoded)
 	if err != nil {
 		return ""
 	}
-
 	return art
 }
