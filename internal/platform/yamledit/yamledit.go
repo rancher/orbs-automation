@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -34,10 +35,11 @@ var (
 	ErrUnsupported = errors.New("value cannot be replaced in place")
 )
 
-// Get returns the scalar at path in the first document of src. A path is the
-// keys of nested mappings joined with dots, such as global.kubectl.tag, so a key
-// that itself contains a dot cannot be addressed. A quoted value comes back
-// without its quotes, and a number or a boolean as its text.
+// Get returns the scalar at path in the first document of src. A path is the keys
+// of nested mappings joined with dots, such as global.kubectl.tag, in the syntax
+// of yq: a key with a dot in it is in double quotes ("2.16"), [n] is the nth item
+// of a list, and a leading dot is optional. A quoted value comes back without its
+// quotes, and a number or a boolean as its text.
 func Get(src []byte, path string) (string, error) {
 	node, err := find(src, path)
 	if err != nil {
@@ -55,9 +57,13 @@ func find(src []byte, path string) (*yaml.Node, error) {
 	if path == "" || len(doc.Content) == 0 {
 		return nil, fmt.Errorf("%w: %q", ErrKeyNotFound, path)
 	}
+	steps, err := parsePath(path)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %q", err, path)
+	}
 	node := doc.Content[0]
-	for _, key := range strings.Split(path, ".") {
-		next, err := child(node, key)
+	for _, st := range steps {
+		next, err := st.walk(node)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %q", err, path)
 		}
@@ -70,6 +76,102 @@ func find(src []byte, path string) (*yaml.Node, error) {
 		return nil, fmt.Errorf("%w: %q", ErrNotScalar, path)
 	}
 	return node, nil
+}
+
+// step is one move down a path: a key of a mapping, or an item of a list.
+type step struct {
+	key     string
+	index   int
+	isIndex bool
+}
+
+// walk moves from node to the child the step names, nil when there is none.
+func (st step) walk(node *yaml.Node) (*yaml.Node, error) {
+	if !st.isIndex {
+		return child(node, st.key)
+	}
+	if node.Kind != yaml.SequenceNode || st.index >= len(node.Content) {
+		return nil, nil
+	}
+	return node.Content[st.index], nil
+}
+
+// parsePath reads a path: keys joined by dots, a key in double quotes when it has
+// a dot in it, and [n] for the nth item of a list, as yq writes them. A leading
+// dot is optional, so global.kubectl.tag, .global.kubectl.tag and
+// .items[0].name are all paths, and ."a.b".c is the key c in the key a.b.
+func parsePath(path string) ([]step, error) {
+	var steps []step
+	i := 0
+	if strings.HasPrefix(path, ".") {
+		i++
+	}
+	for i < len(path) {
+		switch {
+		case path[i] == '[':
+			end := strings.IndexByte(path[i:], ']')
+			if end < 0 {
+				return nil, fmt.Errorf("%w: a [ is not closed", ErrInvalidPath)
+			}
+			n, err := strconv.Atoi(path[i+1 : i+end])
+			if err != nil || n < 0 {
+				return nil, fmt.Errorf("%w: %q is not a list index", ErrInvalidPath, path[i+1:i+end])
+			}
+			steps = append(steps, step{index: n, isIndex: true})
+			i += end + 1
+		case path[i] == '"':
+			key, next, err := quotedKey(path, i)
+			if err != nil {
+				return nil, err
+			}
+			steps = append(steps, step{key: key})
+			i = next
+		default:
+			end := strings.IndexAny(path[i:], ".[")
+			if end < 0 {
+				end = len(path) - i
+			}
+			if end == 0 {
+				return nil, fmt.Errorf("%w: a key is empty", ErrInvalidPath)
+			}
+			steps = append(steps, step{key: path[i : i+end]})
+			i += end
+		}
+		if i < len(path) && path[i] == '.' {
+			i++
+			if i == len(path) || path[i] == '.' || path[i] == '[' {
+				return nil, fmt.Errorf("%w: a key is empty", ErrInvalidPath)
+			}
+		} else if i < len(path) && path[i] != '[' {
+			return nil, fmt.Errorf("%w: unexpected %q after a key", ErrInvalidPath, path[i:i+1])
+		}
+	}
+	if len(steps) == 0 {
+		return nil, fmt.Errorf("%w: it names nothing", ErrInvalidPath)
+	}
+	return steps, nil
+}
+
+// quotedKey reads the key in double quotes that starts at path[i], and returns it
+// with the position after the closing quote. A backslash makes the next character
+// the key's own.
+func quotedKey(path string, i int) (key string, next int, err error) {
+	var b strings.Builder
+	for j := i + 1; j < len(path); j++ {
+		switch path[j] {
+		case '\\':
+			j++
+			if j == len(path) {
+				return "", 0, fmt.Errorf("%w: a quote is not closed", ErrInvalidPath)
+			}
+			b.WriteByte(path[j])
+		case '"':
+			return b.String(), j + 1, nil
+		default:
+			b.WriteByte(path[j])
+		}
+	}
+	return "", 0, fmt.Errorf("%w: a quote is not closed", ErrInvalidPath)
 }
 
 // child returns the value of key in a mapping node, nil when node is not a
