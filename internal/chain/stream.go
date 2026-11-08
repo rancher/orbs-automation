@@ -92,4 +92,10 @@ func (s *Stream) LineOf(tag string) (line string, ok bool) {
 
 // Lines returns the ids of the lines the stream lists, as written; none for a
 // universal stream.
-func (s *Stream) Lines() []string { return nil }
+func (s *Stream) Lines() []string {
+	var ids []string
+	for _, l := range s.Doc.Spec.Lines {
+		ids = append(ids, l.Line)
+	}
+	return ids
+}
