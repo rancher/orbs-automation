@@ -94,8 +94,8 @@ func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 func TestRenderPreviewListsThePostEditCommands(t *testing.T) {
 	in := previewFixture(t)
 	in.steps = []bump.StepRef{
-		{Phase: bump.PostEdit, Step: v1alpha2.Step{Run: v1alpha2.Command{"scripts/generate-buildconfig"}}},
-		{Phase: bump.PostEdit, Index: 1, Step: v1alpha2.Step{Run: v1alpha2.Command{"go", "generate", "./..."}}},
+		{Phase: bump.PostEdit, Step: chain.Step{Run: v1alpha2.Command{"scripts/generate-buildconfig"}}},
+		{Phase: bump.PostEdit, Index: 1, Step: chain.Step{Run: v1alpha2.Command{"go", "generate", "./..."}}},
 	}
 	got, err := renderPreview(in)
 	require.NoError(t, err)
@@ -115,9 +115,9 @@ func TestRenderPreviewAPrereleaseKeepsItsTag(t *testing.T) {
 func TestRenderPreviewHasTheCommitEachStepWouldMakeInTheOrderTheyRun(t *testing.T) {
 	in := previewFixture(t)
 	in.steps = []bump.StepRef{
-		{Phase: bump.PreEdit, Step: v1alpha2.Step{Run: v1alpha2.Command{"scripts/prepare"}}},
-		{Phase: bump.PostEdit, Step: v1alpha2.Step{Run: v1alpha2.Command{"scripts/generate-buildconfig"}}},
-		{Phase: bump.PostEdit, Index: 1, Step: v1alpha2.Step{Run: v1alpha2.Command{"go", "generate", "./..."}}},
+		{Phase: bump.PreEdit, Step: chain.Step{Run: v1alpha2.Command{"scripts/prepare"}}},
+		{Phase: bump.PostEdit, Step: chain.Step{Run: v1alpha2.Command{"scripts/generate-buildconfig"}}},
+		{Phase: bump.PostEdit, Index: 1, Step: chain.Step{Run: v1alpha2.Command{"go", "generate", "./..."}}},
 	}
 
 	got, err := renderPreview(in)
@@ -145,7 +145,7 @@ func TestRenderPreviewWithNoStepsHasNoStepCommits(t *testing.T) {
 
 func TestRenderPreviewTheStepMessagesAreTheOnesARunCommits(t *testing.T) {
 	in := previewFixture(t)
-	in.steps = []bump.StepRef{{Phase: bump.PostEdit, Index: 2, Step: v1alpha2.Step{Run: v1alpha2.Command{"gen", "--all"}}}}
+	in.steps = []bump.StepRef{{Phase: bump.PostEdit, Index: 2, Step: chain.Step{Run: v1alpha2.Command{"gen", "--all"}}}}
 	want, err := stepMessage(in)(bump.Unit{Kind: bump.UnitStep, Phase: bump.PostEdit, Index: 2, Run: []string{"gen", "--all"}})
 	require.NoError(t, err)
 

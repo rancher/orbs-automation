@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/lines"
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/chain"
 )
 
@@ -66,7 +64,7 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 	var errs []error
 	seen := map[*chain.Edit]bool{}
 	for _, h := range g.Holdings() {
-		if h.Kind() != v1alpha2.HoldsRelease {
+		if h.Kind() != chain.HoldsRelease {
 			continue
 		}
 		if format := h.Doc.Spec.At.Format; format != formatYAML {
@@ -120,7 +118,7 @@ func (e *Engine) routes(holdings []*chain.Holding, key func(*chain.Holding) *cha
 	bad := map[*chain.Project]bool{}
 	index := map[*chain.Project]int{}
 	for _, h := range holdings {
-		if h.Kind() != v1alpha2.HoldsRelease || h.Artifact() == nil {
+		if h.Kind() != chain.HoldsRelease || h.Artifact() == nil {
 			continue
 		}
 		k := key(h)
@@ -259,7 +257,7 @@ type StepEnv struct {
 // StepRunner runs one step. The engine decides which steps run and in what order;
 // a runner owns how.
 type StepRunner interface {
-	Run(ctx context.Context, step v1alpha2.Step, env StepEnv) error
+	Run(ctx context.Context, step chain.Step, env StepEnv) error
 }
 
 // StepRef is a step with the phase, the edit and the position it has.
@@ -267,7 +265,7 @@ type StepRef struct {
 	Phase Phase
 	Edit  string
 	Index int
-	Step  v1alpha2.Step
+	Step  chain.Step
 }
 
 // Steps returns the steps that run for a target, in the order they run: the
@@ -275,18 +273,18 @@ type StepRef struct {
 // steps whose range holds the target's line run; a branch in no line gets every
 // step that has no range.
 func (r Route) Steps(t Target) (pre, post []StepRef) {
-	collect := func(phase Phase, name string, steps []v1alpha2.Step) []StepRef {
+	collect := func(phase Phase, name string, steps []chain.Step) []StepRef {
 		var out []StepRef
 		for i, st := range steps {
-			if (lines.Range{Since: st.Since, Until: st.Until}).Contains(t.Line) {
+			if st.AppliesTo(t.Line) {
 				out = append(out, StepRef{Phase: phase, Edit: name, Index: i, Step: st})
 			}
 		}
 		return out
 	}
 	for _, ed := range editsOf(r.holdingsOf(t)) {
-		pre = append(pre, collect(PreEdit, ed.Name(), ed.Doc.Spec.PreEdit)...)
-		post = append(post, collect(PostEdit, ed.Name(), ed.Doc.Spec.PostEdit)...)
+		pre = append(pre, collect(PreEdit, ed.Name(), ed.PreEdit())...)
+		post = append(post, collect(PostEdit, ed.Name(), ed.PostEdit())...)
 	}
 	return pre, post
 }

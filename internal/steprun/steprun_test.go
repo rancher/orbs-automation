@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/execx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,14 +27,14 @@ func script(t *testing.T, rel, body string) string {
 }
 
 func run(dir string, cmd ...string) error {
-	return Runner{}.Run(context.Background(), v1alpha2.Step{Run: cmd}, bump.StepEnv{Dir: dir})
+	return Runner{}.Run(context.Background(), chain.Step{Run: cmd}, bump.StepEnv{Dir: dir})
 }
 
 func TestARepositoryScriptRunsInTheCloneWithTheCallsVariables(t *testing.T) {
 	dir := script(t, "scripts/gen", `printf '%s|%s|%s' "$PWD" "$GERO_TAG" "$1" > out.txt`)
 
 	err := Runner{}.Run(context.Background(),
-		v1alpha2.Step{Run: v1alpha2.Command{"scripts/gen", "arg"}},
+		chain.Step{Run: v1alpha2.Command{"scripts/gen", "arg"}},
 		bump.StepEnv{Dir: dir, Env: map[string]string{"GERO_TAG": "v1.2.3"}})
 
 	require.NoError(t, err)
@@ -105,12 +106,12 @@ func TestAStepNeedsACommand(t *testing.T) {
 func TestOnlyTheConsumersFilesAreSupportedForNow(t *testing.T) {
 	dir := script(t, "x.sh", "")
 	for _, from := range []string{FromProducer, FromCentral, "elsewhere"} {
-		err := Runner{}.Run(context.Background(), v1alpha2.Step{Run: v1alpha2.Command{"./x.sh"}, From: from},
+		err := Runner{}.Run(context.Background(), chain.Step{Run: v1alpha2.Command{"./x.sh"}, From: from},
 			bump.StepEnv{Dir: dir})
 
 		require.ErrorIs(t, err, ErrFromUnsupported, from)
 	}
-	require.NoError(t, Runner{}.Run(context.Background(), v1alpha2.Step{Run: v1alpha2.Command{"./x.sh"}, From: FromConsumer},
+	require.NoError(t, Runner{}.Run(context.Background(), chain.Step{Run: v1alpha2.Command{"./x.sh"}, From: FromConsumer},
 		bump.StepEnv{Dir: dir}))
 }
 
@@ -118,7 +119,7 @@ func TestACancelledContextStopsTheStep(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := Runner{}.Run(ctx, v1alpha2.Step{Run: v1alpha2.Command{"true"}}, bump.StepEnv{Dir: t.TempDir()})
+	err := Runner{}.Run(ctx, chain.Step{Run: v1alpha2.Command{"true"}}, bump.StepEnv{Dir: t.TempDir()})
 
 	require.ErrorIs(t, err, context.Canceled)
 }

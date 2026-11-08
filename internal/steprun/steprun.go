@@ -19,8 +19,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/execx"
 )
 
@@ -48,7 +48,7 @@ var _ bump.StepRunner = Runner{}
 
 // Run runs one step in env.Dir. A step that exits non-zero is an error that ends
 // with the last of what it wrote to stderr, so the cause shows without a log.
-func (Runner) Run(ctx context.Context, step v1alpha2.Step, env bump.StepEnv) error {
+func (Runner) Run(ctx context.Context, step chain.Step, env bump.StepEnv) error {
 	if len(step.Run) == 0 || step.Run[0] == "" {
 		return ErrEmptyCommand
 	}

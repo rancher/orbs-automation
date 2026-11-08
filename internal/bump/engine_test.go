@@ -218,7 +218,7 @@ type recorder struct {
 	order *[]string
 }
 
-func (r *recorder) Run(_ context.Context, step v1alpha2.Step, env StepEnv) error {
+func (r *recorder) Run(_ context.Context, step chain.Step, env StepEnv) error {
 	cmd := strings.Join(step.Run, " ")
 	r.steps = append(r.steps, cmd+" "+env.Env["GERO_TAG"]+" "+env.Env["GERO_TARGET_BRANCH"])
 	*r.order = append(*r.order, "run "+cmd)
@@ -241,7 +241,7 @@ func TestStepsOfATargetAreTheEditsStepsForItsLine(t *testing.T) {
 	pre, post := route.Steps(Target{Branch: "dev-v2.16", Line: "v2.16"})
 
 	require.Len(t, pre, 2)
-	assert.Equal(t, StepRef{Phase: PreEdit, Edit: "regen", Index: 0, Step: v1alpha2.Step{Run: v1alpha2.Command{"pre-all"}}}, pre[0])
+	assert.Equal(t, StepRef{Phase: PreEdit, Edit: "regen", Index: 0, Step: chain.Step{Run: v1alpha2.Command{"pre-all"}}}, pre[0])
 	assert.Equal(t, "pre-new", pre[1].Step.Run[0])
 	require.Len(t, post, 2)
 	assert.Equal(t, []string{"gen", "second-post"}, []string{post[0].Step.Run[0], post[1].Step.Run[0]})

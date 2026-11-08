@@ -23,16 +23,44 @@ func (e *Edit) Strategy() string { return e.Doc.Spec.Strategy }
 // With is the strategy's own values.
 func (e *Edit) With() map[string]string { return e.Doc.Spec.With }
 
-// Steps returns the steps to run before and after writing, for a line: those
-// whose since and until hold it.
-func (e *Edit) Steps(line string) (pre, post []v1alpha2.Step) {
-	return stepsFor(e.Doc.Spec.PreEdit, line), stepsFor(e.Doc.Spec.PostEdit, line)
+// Step is a program run around the write of an edit, optionally only for a range
+// of lines.
+type Step struct {
+	Run   []string // the program or script path, then its arguments
+	From  string   // where the program comes from: consumer, producer or central; "" is consumer
+	Since string
+	Until string
 }
 
-func stepsFor(steps []v1alpha2.Step, line string) []v1alpha2.Step {
-	var out []v1alpha2.Step
+// AppliesTo reports whether the step runs for a line.
+func (s Step) AppliesTo(line string) bool {
+	return (lines.Range{Since: s.Since, Until: s.Until}).Contains(line)
+}
+
+// PreEdit returns every step to run before writing, in order, whatever its lines.
+func (e *Edit) PreEdit() []Step { return stepsOf(e.Doc.Spec.PreEdit) }
+
+// PostEdit returns every step to run after writing, in order, whatever its lines.
+func (e *Edit) PostEdit() []Step { return stepsOf(e.Doc.Spec.PostEdit) }
+
+// Steps returns the steps to run before and after writing, for a line: those
+// whose since and until hold it.
+func (e *Edit) Steps(line string) (pre, post []Step) {
+	return stepsFor(e.PreEdit(), line), stepsFor(e.PostEdit(), line)
+}
+
+func stepsOf(steps []v1alpha2.Step) []Step {
+	out := make([]Step, len(steps))
+	for i, st := range steps {
+		out[i] = Step{Run: st.Run, From: st.From, Since: st.Since, Until: st.Until}
+	}
+	return out
+}
+
+func stepsFor(steps []Step, line string) []Step {
+	var out []Step
 	for _, st := range steps {
-		if (lines.Range{Since: st.Since, Until: st.Until}).Contains(line) {
+		if st.AppliesTo(line) {
 			out = append(out, st)
 		}
 	}

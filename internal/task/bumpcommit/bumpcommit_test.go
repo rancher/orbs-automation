@@ -14,6 +14,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/workdir"
@@ -61,7 +62,7 @@ type fakeRunner struct {
 	failOn string
 }
 
-func (r *fakeRunner) Run(_ context.Context, step v1alpha2.Step, _ bump.StepEnv) error {
+func (r *fakeRunner) Run(_ context.Context, step chain.Step, _ bump.StepEnv) error {
 	cmd := strings.Join(step.Run, " ")
 	r.ran = append(r.ran, cmd)
 	if cmd == r.failOn {
@@ -78,7 +79,7 @@ func work(t *testing.T, g *fakeGit) *workdir.Work {
 	return workdir.NewInWorktree(g, "/clone", dir, "bot/x-v0.5.3-main", "a test")
 }
 
-func step(cmd ...string) v1alpha2.Step { return v1alpha2.Step{Run: v1alpha2.Command(cmd)} }
+func step(cmd ...string) chain.Step { return chain.Step{Run: v1alpha2.Command(cmd)} }
 
 // scene is scc-operator shipping its image to rancher, which holds it in build.yaml,
 // with the given steps before and after the write.
@@ -87,7 +88,7 @@ type scene struct {
 	target bump.Target
 }
 
-func invocation(t *testing.T, pre, post []v1alpha2.Step) scene {
+func invocation(t *testing.T, pre, post []chain.Step) scene {
 	t.Helper()
 	spec := "  holds: {kind: release, form: \"{image}:{tag}\"}\n"
 	docs := []string{
@@ -112,7 +113,7 @@ func invocation(t *testing.T, pre, post []v1alpha2.Step) scene {
 }
 
 // steps writes the steps of a phase as the YAML of an edit's spec.
-func steps(phase string, list []v1alpha2.Step) string {
+func steps(phase string, list []chain.Step) string {
 	if len(list) == 0 {
 		return ""
 	}
@@ -189,7 +190,7 @@ func TestRunNothingToCommitAnywhereIsErrNothingChanged(t *testing.T) {
 func TestRunCommitsTheEditAndThenWhatEachStepMade(t *testing.T) {
 	g := &fakeGit{}
 	r := &fakeRunner{}
-	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate"), step("make", "docs")}))
+	in := input(work(t, g), invocation(t, nil, []chain.Step{step("go", "generate"), step("make", "docs")}))
 	in.StepMessage = stepMessage
 
 	out, err := Run(bg, r, in)
@@ -206,7 +207,7 @@ func TestRunCommitsTheEditAndThenWhatEachStepMade(t *testing.T) {
 
 func TestRunWithoutAStepMessageAStepsCommitSaysWhatRan(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate")}))
+	in := input(work(t, g), invocation(t, nil, []chain.Step{step("go", "generate")}))
 
 	_, err := Run(bg, &fakeRunner{}, in)
 
@@ -217,7 +218,7 @@ func TestRunWithoutAStepMessageAStepsCommitSaysWhatRan(t *testing.T) {
 
 func TestRunAStepThatChangesNothingMakesNoCommit(t *testing.T) {
 	g := &fakeGit{nothingFor: map[int]bool{2: true}}
-	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("true")}))
+	in := input(work(t, g), invocation(t, nil, []chain.Step{step("true")}))
 	in.StepMessage = stepMessage
 
 	out, err := Run(bg, &fakeRunner{}, in)
@@ -228,7 +229,7 @@ func TestRunAStepThatChangesNothingMakesNoCommit(t *testing.T) {
 
 func TestRunAPreEditStepGetsItsOwnCommitBeforeTheEdit(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, []v1alpha2.Step{step("prepare")}, nil))
+	in := input(work(t, g), invocation(t, []chain.Step{step("prepare")}, nil))
 	in.StepMessage = stepMessage
 
 	out, err := Run(bg, &fakeRunner{}, in)
@@ -239,7 +240,7 @@ func TestRunAPreEditStepGetsItsOwnCommitBeforeTheEdit(t *testing.T) {
 
 func TestRunAFailingStepIsAStepErrorAndTheCommitsMadeSoFarAreNotReported(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("false")}))
+	in := input(work(t, g), invocation(t, nil, []chain.Step{step("false")}))
 
 	out, err := Run(bg, &fakeRunner{failOn: "false"}, in)
 
@@ -252,7 +253,7 @@ func TestRunAFailingStepIsAStepErrorAndTheCommitsMadeSoFarAreNotReported(t *test
 
 func TestRunAFailureToMakeAStepsMessageIsAFailure(t *testing.T) {
 	g := &fakeGit{}
-	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate")}))
+	in := input(work(t, g), invocation(t, nil, []chain.Step{step("go", "generate")}))
 	in.StepMessage = func(bump.Unit) (string, error) { return "", errors.New("bad placeholder") }
 
 	_, err := Run(bg, &fakeRunner{}, in)
@@ -274,7 +275,7 @@ func TestRunACommitThatFailsForAnotherReasonStopsTheRun(t *testing.T) {
 func TestRunTellsOnCommitOfEachCommitAsItIsMade(t *testing.T) {
 	g := &fakeGit{}
 	var seen []workdir.CommitInfo
-	in := input(work(t, g), invocation(t, nil, []v1alpha2.Step{step("go", "generate")}))
+	in := input(work(t, g), invocation(t, nil, []chain.Step{step("go", "generate")}))
 	in.StepMessage = stepMessage
 	in.OnCommit = func(c workdir.CommitInfo) { seen = append(seen, c) }
 
@@ -296,7 +297,7 @@ func subjects(commits []workdir.CommitInfo) []string {
 func TestRunEachCommitHasTheFilesItChanged(t *testing.T) {
 	g := &fakeGit{files: map[string][]string{"commit1": {"build.yaml"}, "commit2": {"generated/a.go", "generated/b.go"}}}
 	w := work(t, g)
-	inv := invocation(t, nil, []v1alpha2.Step{{Run: v1alpha2.Command{"gen"}}})
+	inv := invocation(t, nil, []chain.Step{{Run: v1alpha2.Command{"gen"}}})
 
 	out, err := Run(bg, &fakeRunner{}, Input{
 		Work: w, Route: inv.route, Target: inv.target, Message: "Update to v0.5.3", Tag: "v0.5.3", Commit: "abc",
