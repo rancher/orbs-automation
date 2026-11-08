@@ -39,9 +39,10 @@ internal/lifecycle/    reads Rancher's lifecycle dates from the SUSE lifecycle p
 internal/...           domain packages as they arrive, such as the reconciler's
 
 internal/apis/meta/    what every version of the config API shares: the envelope of a document (apiVersion, kind, name, refs) and the Scheme that decodes a YAML stream into the kinds each version registers
+internal/apis/lines/    what every version of the config API says of a Rancher line: its id, a range of lines, a line's dates, phase and Kubernetes range
 internal/apis/v1alpha2/  the kinds of apiVersion gero/v1alpha2: their types, YAML form, defaults and rules, and the rules across a set of documents   (docs/design/CONFIG_SCHEMA.md)
 internal/appconfig/    application config provider of gero/v1alpha2: reads every YAML file of a directory, validates each document and the set
-internal/chain/        the resolved model commands read: projects, streams, artifacts, holdings and edits joined, and the answers across them   (CHAIN_MODEL)
+internal/chain/        the resolved model commands read, and the only adapter from an API version to the domain (the `oneversion` lint rule keeps v1alpha2 to appconfig, chain and chainload): projects, streams, artifacts, holdings and edits joined, and the answers across them   (CHAIN_MODEL)
 internal/chainload/    reads a directory into the chain's graph (workspace only)
 
 internal/platform/actor/      who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
@@ -50,7 +51,7 @@ internal/platform/clicfg/     the user file (schema.go, unversioned: not applica
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/platform/errs/       error values shared across gero, such as NotImplemented
-internal/platform/semver/     release tag classification, as the check-semver script did   (CHECK_SEMVER)
+internal/platform/semver/     release tag classification, as the check-semver script did, and a Series of versions (9.x, 0.9.x) that holds versions and overlaps another   (CHECK_SEMVER)
 internal/platform/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/platform/git/repo/   local repository access with go-git; the only importer of go-git
 internal/platform/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx

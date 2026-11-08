@@ -40,8 +40,8 @@ These rules live in code today, on the old types or in the loader. They move her
 | `Artifact.Registries(stable)` | the registries written, else Docker Hub and Prime staging, and Prime production for a stable ([CONFIG_UNITS](CONFIG_UNITS.md), registries are code) |
 | `Artifact.AppliesTo(line)` | the artifact's `lines` range holds the line; a line that does not read as one counts as in range |
 | `Holding.AppliesTo(line)` | the holding's `holds.lines` range holds the line, and the line is one the holder and the producer both list |
-| `Edit.Steps(line)` | the pre and post steps whose `since` and `until` hold the line |
-| `Line.PhaseAt` | already in `apis/v1alpha2` |
+| `Edit.Steps(line)` | the pre and post steps whose `since` and `until` hold the line, as `chain.Step` (the graph's own type, so `bump` and `steprun` do not import the API version) |
+| `Line.PhaseAt` | in `apis/lines`, shared by every version |
 
 No answer is stored in the config that can be worked out from it. There is no implicit image: an Artifact is written for each thing a release produces.
 
@@ -50,3 +50,7 @@ No answer is stored in the config that can be worked out from it. There is no im
 * Writing a holding (render its form, put it at its place) is the update engine's, which reads this graph
 * A named strategy of an Edit (`chartsPackageBump`) is code the engine runs; the graph only names it
 * Validation: the engine of [CONFIG_ENGINE](CONFIG_ENGINE.md) did it before the graph was built
+
+## One adapter
+
+`chain` is the only domain package that reads a version of the API. The names the domain uses (layouts, what a holding holds, `accept`, registry roles) are `chain` constants; the scheme and stage names belong to `tagscheme` and `calver`; and `names_test.go` checks each is the name the config accepts. A new version changes `appconfig`, `chain` and `chainload`. The `oneversion` rule in `.golangci.yml` denies `apis/v1alpha2` anywhere else, tests included. What every version shares, such as a line and its dates, is in `apis/lines`.

@@ -11,7 +11,7 @@ cmd
  └─ cli (internal/cli/*)        ui (internal/ui/*)
      └─ domain (ship, bump, chain, workspace, tagscheme, calver, registry,
         releasetag, steprun, task/*, lifecycle, appconfig)
-         └─ apis (internal/apis/meta, internal/apis/v1alpha2)
+         └─ apis (internal/apis/meta, internal/apis/lines, internal/apis/v1alpha2)
              └─ platform (internal/platform/*)
 ```
 
@@ -34,7 +34,7 @@ cmd
 | (new) | `internal/platform/config`, the engine |
 | git/releasetag | `internal/releasetag` (tag policy, so domain) |
 | calver, tagscheme, registry, bump, chain, chainload, appconfig, steprun, ship, workspace, task/*, lifecycle | stay |
-| apis/meta, apis/v1alpha2 | stay |
+| apis/meta, apis/lines, apis/v1alpha2 | stay |
 | config, config/loader | stay until the cutover from `gero/v1alpha1`, then are deleted |
 | ui, ui/style, ui/editor, cli/*, cmd/* | stay |
 
