@@ -207,3 +207,10 @@ func (p *Project) ReleaseBranches() []string {
 	}
 	return out
 }
+
+// Owned reports whether gero ships from the project's repo.
+func (p *Project) Owned() bool { return false }
+
+// External reports whether the repo is outside the organization: gero never ships
+// into it.
+func (p *Project) External() bool { return false }

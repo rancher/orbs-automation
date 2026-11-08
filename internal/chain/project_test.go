@@ -140,3 +140,18 @@ func TestTheReleaseBranchesOfAProject(t *testing.T) {
 	assert.Equal(t, []string{"main", "release/v2.15", "dev-v2.13", "release-v2.13"}, g.Project("a").ReleaseBranches())
 	assert.Equal(t, []string{"main"}, g.Project("s").ReleaseBranches())
 }
+
+func TestAProjectIsOwnedOrExternal(t *testing.T) {
+	g := chaintest.Load(t,
+		project("mine", "  repo: {name: acme/mine, owned: true}\n"),
+		project("theirs", "  repo: {name: acme/theirs, external: true}\n"),
+		project("plain", "  repo: {name: acme/plain}\n"),
+	)
+
+	assert.True(t, g.Project("mine").Owned())
+	assert.False(t, g.Project("mine").External())
+	assert.False(t, g.Project("theirs").Owned())
+	assert.True(t, g.Project("theirs").External())
+	assert.False(t, g.Project("plain").Owned())
+	assert.False(t, g.Project("plain").External())
+}
