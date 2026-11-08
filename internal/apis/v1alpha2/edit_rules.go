@@ -2,9 +2,9 @@ package v1alpha2
 
 import (
 	"fmt"
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"regexp"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
