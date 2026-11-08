@@ -1,12 +1,12 @@
 // Package identity resolves who a command's commits are attributed to, wiring
-// internal/actor to the real git config and the GitHub user lookup
+// internal/platform/actor to the real git config and the GitHub user lookup
 // (docs/specs/EXECUTION_CONTEXT.md).
 package identity
 
 import (
 	"context"
 
-	"github.com/rancher/orbs-automation/internal/actor"
+	"github.com/rancher/orbs-automation/internal/platform/actor"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/github"

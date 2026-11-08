@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/actor"
 	"github.com/rancher/orbs-automation/internal/cli/identity"
+	"github.com/rancher/orbs-automation/internal/platform/actor"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 

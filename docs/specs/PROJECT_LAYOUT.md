@@ -35,7 +35,6 @@ internal/registry/     image existence checks in the registries a project publis
 internal/tagscheme/    what readers ask of a project's tags: its lines, its newest release, the order of two tags
 internal/calver/       the tag format of projects whose lines are in their tags, such as rancher-assets
 internal/releasetag/   the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
-internal/actor/        who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
 internal/lifecycle/    reads Rancher's lifecycle dates from the SUSE lifecycle page; the only importer of golang.org/x/net/html
 internal/...           domain packages as they arrive, such as the reconciler's
 
@@ -45,6 +44,7 @@ internal/appconfig/    application config provider of gero/v1alpha2: reads every
 internal/chain/        the resolved model commands read: projects, streams, artifacts, holdings and edits joined, and the answers across them   (CHAIN_MODEL)
 internal/chainload/    reads a directory into the chain's graph (workspace only)
 
+internal/platform/actor/      who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
 internal/platform/clicfg/     the user file (schema.go, unversioned: not application config) and the CLI config loader -> Settings   (CLI_CONFIG)
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
@@ -114,7 +114,7 @@ apis    -> internal/platform
 |---|---|---|
 | `internal/platform/` | low-level packages that know nothing of projects, releases or lines: clients, exec, YAML editing, version parsing, templates, the CLI settings loader | other platform packages and third-party libraries |
 | `internal/apis/` | the versioned config contract: the envelope and the kinds of each apiVersion | `internal/platform` and `internal/apis` |
-| domain (`ship`, `workspace`, `bump`, `chain`, `chainload`, `appconfig`, `tagscheme`, `calver`, `releasetag`, `registry`, `steprun`, `task/*`, `actor`, `lifecycle`) | what gero knows about projects, releases and shipping | platform, apis and domain |
+| domain (`ship`, `workspace`, `bump`, `chain`, `chainload`, `appconfig`, `tagscheme`, `calver`, `releasetag`, `registry`, `steprun`, `task/*`, `lifecycle`) | what gero knows about projects, releases and shipping | platform, apis and domain |
 | `internal/cli/`, `internal/ui/` | one package per command, and the output seam | everything below them |
 | `cmd/` | the cobra shell | `internal/cli` and the two platform packages named below |
 

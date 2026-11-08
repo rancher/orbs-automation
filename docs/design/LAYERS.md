@@ -10,7 +10,7 @@ Imports point down, never up:
 cmd
  └─ cli (internal/cli/*)        ui (internal/ui/*)
      └─ domain (ship, bump, chain, workspace, tagscheme, calver, registry,
-        releasetag, steprun, task/*, actor, lifecycle, appconfig)
+        releasetag, steprun, task/*, lifecycle, appconfig)
          └─ apis (internal/apis/meta, internal/apis/v1alpha2)
              └─ platform (internal/platform/*)
 ```
@@ -27,13 +27,13 @@ cmd
 
 | Today | Layer and path |
 |---|---|
-| execx, errs, yamledit, semver, shellenv, workdir, clicfg | `internal/platform/<same>` |
+| execx, errs, yamledit, semver, shellenv, workdir, clicfg, actor | `internal/platform/<same>` |
 | git, git/gitcli, git/repo, git/repo/repotest | `internal/platform/git/...` |
 | github, github/pulls, ghcli | `internal/platform/github`, `.../github/pulls`, `.../ghcli` |
 | ship/templates | `internal/platform/templates` |
 | (new) | `internal/platform/config`, the engine |
 | git/releasetag | `internal/releasetag` (tag policy, so domain) |
-| calver, tagscheme, registry, bump, chain, chainload, appconfig, steprun, ship, workspace, task/*, actor, lifecycle | stay |
+| calver, tagscheme, registry, bump, chain, chainload, appconfig, steprun, ship, workspace, task/*, lifecycle | stay |
 | apis/meta, apis/v1alpha2 | stay |
 | config, config/loader | stay until the cutover from `gero/v1alpha1`, then are deleted |
 | ui, ui/style, ui/editor, cli/*, cmd/* | stay |
