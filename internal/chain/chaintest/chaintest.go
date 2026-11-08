@@ -54,3 +54,17 @@ func Lines(ids ...string) string {
 	}
 	return Doc("RancherLines", "rancher", "", b.String())
 }
+
+// Projects builds a graph of plain projects, given as pairs of a document name and
+// a repo slug: Projects(t, "shell", "rancher/shell", "rancher", "rancher/rancher").
+func Projects(t testing.TB, namesAndSlugs ...string) *chain.Graph {
+	t.Helper()
+	if len(namesAndSlugs)%2 != 0 {
+		t.Fatalf("chaintest.Projects wants pairs of a name and a slug, got %d values", len(namesAndSlugs))
+	}
+	var docs []string
+	for i := 0; i < len(namesAndSlugs); i += 2 {
+		docs = append(docs, Doc("Project", namesAndSlugs[i], "", "  repo: {name: "+namesAndSlugs[i+1]+"}\n"))
+	}
+	return Load(t, docs...)
+}

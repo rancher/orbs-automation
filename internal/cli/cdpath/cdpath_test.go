@@ -2,29 +2,27 @@ package cdpath
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeWorkspace struct {
-	projects []config.Project
-	rows     map[string]workspace.RepoPath
-	keys     []string
+	graph *chain.Graph
+	rows  map[string]workspace.RepoPath
+	keys  []string
 }
 
-func (f *fakeWorkspace) Project(key string) (config.Project, error) {
+func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
 	f.keys = append(f.keys, key)
-	for _, p := range f.projects {
-		if strings.EqualFold(p.Name, key) || strings.EqualFold(p.Repo.Name, key) {
-			return p, nil
-		}
+	if p := f.graph.Project(key); p != nil {
+		return p, nil
 	}
-	return config.Project{}, fmt.Errorf("%q is %w", key, workspace.ErrUnknownProject)
+	return nil, fmt.Errorf("%q is %w", key, workspace.ErrUnknownProject)
 }
 
 func (f *fakeWorkspace) ConfiguredRepoPath(slug string) (workspace.RepoPath, error) {
@@ -32,14 +30,15 @@ func (f *fakeWorkspace) ConfiguredRepoPath(slug string) (workspace.RepoPath, err
 	return rp, rp.Err
 }
 
-func fixture() *fakeWorkspace {
+func fixture(t *testing.T) *fakeWorkspace {
+	t.Helper()
 	return &fakeWorkspace{
-		projects: []config.Project{
-			{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}},
-			{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher"}},
-			{Name: "charts", Repo: config.Repo{Name: "rancher/charts"}},
-			{Name: "shell", Repo: config.Repo{Name: "rancher/shell"}},
-		},
+		graph: chaintest.Projects(t,
+			"scc-operator", "rancher/scc-operator",
+			"rancher", "rancher/rancher",
+			"charts", "rancher/charts",
+			"shell", "rancher/shell",
+		),
 		rows: map[string]workspace.RepoPath{
 			"rancher/scc-operator": {Path: "/src/scc-operator", Source: workspace.PathSettings},
 			"rancher/rancher":      {Path: "/src/rancher", Source: workspace.PathScan},
@@ -54,7 +53,7 @@ func yes(string) bool { return true }
 
 func TestPathByNameAndBySlug(t *testing.T) {
 	for _, key := range []string{"scc-operator", "rancher/scc-operator", "SCC-Operator"} {
-		out, err := path(fixture(), []string{key}, yes)
+		out, err := path(fixture(t), []string{key}, yes)
 
 		require.NoError(t, err, key)
 		assert.Equal(t, "/src/scc-operator\n", out, key)
@@ -62,7 +61,7 @@ func TestPathByNameAndBySlug(t *testing.T) {
 }
 
 func TestPathFindsAClonedProjectUnderASearchDirectory(t *testing.T) {
-	out, err := path(fixture(), []string{"rancher"}, yes)
+	out, err := path(fixture(t), []string{"rancher"}, yes)
 
 	require.NoError(t, err)
 	assert.Equal(t, "/src/rancher\n", out)
@@ -70,7 +69,7 @@ func TestPathFindsAClonedProjectUnderASearchDirectory(t *testing.T) {
 
 func TestPathNeedsAProjectAndNeverTheImplicitOne(t *testing.T) {
 	for _, args := range [][]string{nil, {""}, {"."}, {"rancher", "charts"}} {
-		ws := fixture()
+		ws := fixture(t)
 
 		out, err := path(ws, args, yes)
 
@@ -81,13 +80,13 @@ func TestPathNeedsAProjectAndNeverTheImplicitOne(t *testing.T) {
 }
 
 func TestPathUnknownProject(t *testing.T) {
-	_, err := path(fixture(), []string{"nope"}, yes)
+	_, err := path(fixture(t), []string{"nope"}, yes)
 
 	require.ErrorIs(t, err, workspace.ErrUnknownProject)
 }
 
 func TestPathNoCloneSaysHowToFixIt(t *testing.T) {
-	out, err := path(fixture(), []string{"charts"}, yes)
+	out, err := path(fixture(t), []string{"charts"}, yes)
 
 	require.ErrorIs(t, err, workspace.ErrRepoNotFound)
 	assert.Empty(t, out)
@@ -97,7 +96,7 @@ func TestPathNoCloneSaysHowToFixIt(t *testing.T) {
 }
 
 func TestPathAmbiguousListsTheCandidates(t *testing.T) {
-	_, err := path(fixture(), []string{"shell"}, yes)
+	_, err := path(fixture(t), []string{"shell"}, yes)
 
 	require.ErrorIs(t, err, workspace.ErrRepoAmbiguous)
 	assert.Contains(t, err.Error(), "/src/a/shell, /src/b/shell")
@@ -105,7 +104,7 @@ func TestPathAmbiguousListsTheCandidates(t *testing.T) {
 }
 
 func TestPathThatIsNotADirectoryIsAnError(t *testing.T) {
-	out, err := path(fixture(), []string{"scc-operator"}, func(string) bool { return false })
+	out, err := path(fixture(t), []string{"scc-operator"}, func(string) bool { return false })
 
 	require.Error(t, err)
 	assert.Empty(t, out)

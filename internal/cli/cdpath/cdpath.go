@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -21,9 +21,9 @@ var ErrProjectRequired = errors.New("name a project by its config name or owner/
 // Workspace is what Path needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	// Project returns the Project with the given config name or owner/name
+	// ChainProject returns the Project with the given config name or owner/name
 	// slug.
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 	// ConfiguredRepoPath finds the clone by repos.paths and repos.search only.
 	ConfiguredRepoPath(slug string) (workspace.RepoPath, error)
 }
@@ -45,21 +45,21 @@ func path(ws Workspace, args []string, isDir func(string) bool) (string, error) 
 	if len(args) != 1 || args[0] == "" || args[0] == "." {
 		return "", ErrProjectRequired
 	}
-	p, err := ws.Project(args[0])
+	p, err := ws.ChainProject(args[0])
 	if err != nil {
 		return "", err
 	}
-	rp, err := ws.ConfiguredRepoPath(p.Repo.Name)
+	rp, err := ws.ConfiguredRepoPath(p.Slug())
 	switch {
 	case errors.Is(err, workspace.ErrRepoAmbiguous):
 		return "", fmt.Errorf("%s: %w: %s; set repos.paths.%s to choose one",
-			p.Repo.Name, err, strings.Join(rp.Candidates, ", "), p.Repo.Name)
+			p.Slug(), err, strings.Join(rp.Candidates, ", "), p.Slug())
 	case err != nil:
 		return "", fmt.Errorf("%s: %w: set repos.paths.%s, or clone it under a repos.search directory",
-			p.Repo.Name, err, p.Repo.Name)
+			p.Slug(), err, p.Slug())
 	}
 	if !isDir(rp.Path) {
-		return "", fmt.Errorf("%s: %s (from %s) is not a directory", p.Repo.Name, rp.Path, rp.Source)
+		return "", fmt.Errorf("%s: %s (from %s) is not a directory", p.Slug(), rp.Path, rp.Source)
 	}
 	return rp.Path + "\n", nil
 }
