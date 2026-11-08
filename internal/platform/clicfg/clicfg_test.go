@@ -621,6 +621,25 @@ func TestStatePath(t *testing.T) {
 	}
 }
 
+func TestLoadOfflineIsTheEnvironmentVariableAndNeverTheFile(t *testing.T) {
+	s, err := Load(Inputs{})
+	require.NoError(t, err)
+	assert.False(t, s.Offline)
+
+	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_OFFLINE": "true"})})
+	require.NoError(t, err)
+	assert.True(t, s.Offline)
+
+	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_OFFLINE": "false"}), UserFile: file("offline: true\n")})
+	require.NoError(t, err)
+	assert.False(t, s.Offline, "a user file cannot turn the network off for every command")
+
+	_, err = Load(Inputs{Getenv: env(map[string]string{"GERO_OFFLINE": "sometimes"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "offline")
+	assert.Contains(t, err.Error(), "sometimes")
+}
+
 func TestCacheDir(t *testing.T) {
 	tests := []struct {
 		name string
