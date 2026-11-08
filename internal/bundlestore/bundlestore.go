@@ -196,10 +196,14 @@ func fromCache(e Entry, now time.Time) (Loaded, error) {
 }
 
 // ownRelease is the release tag of the running gero, or "" for a build that is not
-// one, such as "dev".
+// one, such as "dev". GoReleaser stamps the version without the leading v that the
+// tags of the releases have, so it is put back.
 func ownRelease(version string) string {
 	if _, ok := assetfetch.CompareVersions(version, version); !ok {
 		return ""
+	}
+	if !strings.HasPrefix(version, "v") {
+		return "v" + version
 	}
 	return version
 }
