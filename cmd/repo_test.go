@@ -170,7 +170,7 @@ func TestRepoListWiring(t *testing.T) {
 		_, _, err := execRoot(t, "repo", "list", "alpha")
 
 		require.Error(t, err)
-		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Contains(t, err.Error(), `for "gero repo list"`, "the command is there, and refuses the argument")
 	})
 
 	t.Run("without any config it says where config is looked for", func(t *testing.T) {

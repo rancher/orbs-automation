@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repobranch"
 	"github.com/rancher/orbs-automation/internal/cli/repoclone"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
+	"github.com/rancher/orbs-automation/internal/cli/repolist"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
 	"github.com/rancher/orbs-automation/internal/cli/repotag"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
@@ -42,6 +43,38 @@ compares), use repo status.`,
 				return err
 			}
 			out, err := repoinfo.Run(settingsFrom(cmd), cwd, args)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprint(cmd.OutOrStdout(), out)
+			return err
+		},
+	}
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List which projects have a clone on this machine, and which do not",
+		Long: `List the projects of the central config by whether they have a clone on this
+machine, in three lists: the ones that are cloned, with where, the ones that are
+not cloned yet, and the ones with several clones, which gero cannot choose
+between. A project outside the organization is listed only when it is cloned,
+since gero repo clone --all leaves it out.
+
+It reads the disk and never the network. A repos.paths entry whose directory is
+missing is not a clone. Clones are found as every command finds them: the
+repository you are in, repos.paths, the repos.search directories, and the
+neighbors of the repository you are in.
+
+To put the ones that are missing in place, use gero repo clone.
+
+To see how the user file resolves each repository, and from which source,
+use gero config resolve repos.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			out, err := repolist.List(settingsFrom(cmd), cwd)
 			if err != nil {
 				return err
 			}
@@ -283,6 +316,7 @@ is not found or a registry could not be reached.`,
 	repoCmd.AddCommand(imagesCmd)
 	repoCmd.AddCommand(
 		infoCmd,
+		listCmd,
 		statusCmd,
 		branchCmd,
 		cloneCmd,
