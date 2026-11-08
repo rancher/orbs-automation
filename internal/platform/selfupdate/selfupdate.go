@@ -11,6 +11,7 @@ package selfupdate
 
 import (
 	"context"
+	"io"
 	"net/http"
 )
 
@@ -72,3 +73,15 @@ func (u *Updater) Blocked() string { return "" }
 // Apply downloads, verifies and installs the release of s, and returns the
 // version now installed.
 func (u *Updater) Apply(context.Context, Status) (string, error) { return "", nil }
+
+// newUpdater is New with the verifier and the file to replace given, so a test
+// can sign with its own and update a scratch file. A nil verifier is the real
+// one, which pins SignerPattern.
+func newUpdater(Config, signatureVerifier, string) (*Updater, error) { return &Updater{}, nil }
+
+// signatureVerifier is what authenticates a manifest or an archive against its
+// detached signature.
+type signatureVerifier interface {
+	SignatureName(assetName string) string
+	Verify(ctx context.Context, content io.Reader, signature []byte) error
+}
