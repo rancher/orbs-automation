@@ -65,8 +65,7 @@ func checkRange(r *config.Report, path string, rng Range) {
 	if !lineID.MatchString(rng.Since) || !lineID.MatchString(rng.Until) {
 		return
 	}
-	since, until := lineNumbers(rng.Since), lineNumbers(rng.Until)
-	if since[0] > until[0] || (since[0] == until[0] && since[1] > until[1]) {
+	if lineBefore(lineNumbers(rng.Until), lineNumbers(rng.Since)) {
 		r.Errorf(path, "since %s is after until %s", rng.Since, rng.Until)
 	}
 }
