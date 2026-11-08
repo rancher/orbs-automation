@@ -29,6 +29,7 @@ var refKeys = map[string]map[string]refKey{
 
 // set is the documents of a set, indexed for the checks across them.
 type set struct {
+	ctx   config.Context
 	objs  []Object
 	names map[string]map[string]bool // kind to the names it has
 	rep   *config.Report
@@ -47,12 +48,15 @@ func (s *set) add(r *config.Report) { s.rep.Findings = append(s.rep.Findings, r.
 // ValidateSet checks what no one document can alone: the rules across a set of
 // decoded and valid documents. See docs/design/CONFIG_SCHEMA.md, "Rules across
 // documents".
-func ValidateSet(objs []Object, _ config.Context, r *config.Report) {
-	s := &set{objs: objs, names: map[string]map[string]bool{}, rep: r}
+func ValidateSet(objs []Object, ctx config.Context, r *config.Report) {
+	s := &set{ctx: ctx, objs: objs, names: map[string]map[string]bool{}, rep: r}
 	s.uniqueNames()
 	s.refs()
 	s.projects()
 	s.knownLines()
+	s.holdingRefs()
+	s.circular()
+	s.omittedBranches()
 }
 
 // uniqueNames reports each document whose name an earlier document of its kind
@@ -195,6 +199,112 @@ func (s *set) knownLines() {
 				for i, st := range steps.steps {
 					checkSpan(fmt.Sprintf("%s[%d]", steps.path, i), Range{Since: st.Since, Until: st.Until})
 				}
+			}
+		}
+		s.add(r)
+	}
+}
+
+// holdingRefs reports a Holding whose refs do not match what it holds: a release
+// refs an artifact, and a commit or a branch refs the project it is taken from.
+func (s *set) holdingRefs() {
+	for _, o := range s.objs {
+		h, ok := o.(*Holding)
+		if !ok {
+			continue
+		}
+		kind := h.Spec.Holds.Kind
+		want, other := "artifact", "from"
+		if kind != HoldsRelease {
+			want, other = "from", "artifact"
+		}
+		r := s.at(o)
+		if len(h.Refs[want]) == 0 {
+			r.Errorf("refs."+want, "required for a holding of a %s", kind)
+		}
+		if len(h.Refs[other]) > 0 {
+			r.Errorf("refs."+other, "not for a holding of a %s: it refs %s", kind, want)
+		}
+		s.add(r)
+	}
+}
+
+// producer returns the name of the Project a Holding holds something of: the one
+// its artifact's stream is of, or the one it is taken from. It is empty when the
+// refs do not lead to one.
+func (s *set) producer(h *Holding) string {
+	if names := h.Refs["from"]; len(names) == 1 {
+		return names[0]
+	}
+	names := h.Refs["artifact"]
+	if len(names) != 1 {
+		return ""
+	}
+	for _, o := range s.objs {
+		if a, ok := o.(*Artifact); ok && a.Name == names[0] {
+			for _, o := range s.objs {
+				if st, ok := o.(*Stream); ok && len(a.Refs["stream"]) == 1 && st.Name == a.Refs["stream"][0] && len(st.Refs["project"]) == 1 {
+					return st.Refs["project"][0]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// circular warns, once for each pair, of two projects that each hold something
+// of the other, on the holding that completes the pair.
+func (s *set) circular() {
+	type edge struct{ holder, producer string }
+	seen := map[edge]string{} // the edge to the first Holding that makes it
+	warned := map[edge]bool{}
+	for _, o := range s.objs {
+		h, ok := o.(*Holding)
+		if !ok || len(h.Refs["project"]) != 1 {
+			continue
+		}
+		holder, producer := h.Refs["project"][0], s.producer(h)
+		if producer == "" || producer == holder {
+			continue
+		}
+		back, pair := edge{producer, holder}, edge{holder, producer}
+		if first, ok := seen[back]; ok && !warned[back] && !warned[pair] {
+			warned[pair] = true
+			r := s.at(o)
+			r.Warnf("refs", "Project %q holds something of Project %q, which holds something of it (Holding %q): the dependency is circular", holder, producer, first)
+			s.add(r)
+		}
+		if _, ok := seen[pair]; !ok {
+			seen[pair] = h.Name
+		}
+	}
+}
+
+// omittedBranches warns of a line a Project gives no branch once the line is past
+// development: an omitted branch means the default branch, which is for the line
+// in development.
+func (s *set) omittedBranches() {
+	lines := map[string]Line{}
+	for _, o := range s.objs {
+		if l, ok := o.(*RancherLines); ok {
+			for _, ln := range l.Spec.Lines {
+				lines[ln.ID] = ln
+			}
+		}
+	}
+	for _, o := range s.objs {
+		p, ok := o.(*Project)
+		if !ok {
+			continue
+		}
+		r := s.at(o)
+		for i, bl := range p.Spec.Branches.Lines {
+			ln, known := lines[bl.Line]
+			if bl.Branch != nil || !known {
+				continue
+			}
+			if phase := ln.PhaseAt(s.ctx.Now); phase != PhaseDevelopment {
+				r.Warnf(fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
 			}
 		}
 		s.add(r)

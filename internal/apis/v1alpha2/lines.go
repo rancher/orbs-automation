@@ -41,5 +41,21 @@ type KubernetesRange struct {
 }
 
 // PhaseAt is the phase of the line at now: the phase it is forced into, else the
-// one its dates give.
-func (l Line) PhaseAt(_ time.Time) string { return "" }
+// one its dates give. Each phase begins at 00:00 UTC on its date, and a line with
+// no ga date, or one still to come, is in development.
+func (l Line) PhaseAt(now time.Time) string {
+	if l.Phase != "" {
+		return l.Phase
+	}
+	now = now.UTC()
+	reached := func(date time.Time) bool { return !date.IsZero() && !now.Before(date) }
+	switch {
+	case reached(l.Dates.EOL):
+		return PhaseEOL
+	case reached(l.Dates.EOM):
+		return PhaseEOM
+	case reached(l.Dates.GA):
+		return PhaseGA
+	}
+	return PhaseDevelopment
+}
