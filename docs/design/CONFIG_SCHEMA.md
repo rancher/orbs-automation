@@ -20,7 +20,7 @@ The repo as a place. `refs`: none.
 
 | Field | Type | Default | Rules |
 |---|---|---|---|
-| `repo.name` | `owner/name` | required | unique across Projects |
+| `repo.name` | `owner/name` | required | no space; unique across Projects |
 | `repo.owned` | bool | `false` | gero ships from the repo; a holding of an unowned producer is only observed |
 | `repo.external` | bool | `false` | the repo is outside our organization: gero never ships into it and expects no `managedBy`; implies `owned: false`, so setting both is an error |
 | `repo.managedBy` | slug | `orbs` if owned, else unspecified | `shared` is valid |
@@ -57,7 +57,7 @@ What a project releases: the versions and the lines. `refs`: `project` (required
 | `stages` | list of `{name, prerelease}` | from the scheme | override only; `dev` is a prerelease |
 | `lines[].line` | a line id | | must be in `RancherLines` |
 | `lines[].series` | text | | `9.x`, `0.9.x`, `111.x`; the grammar belongs to the scheme; series must not overlap within a stream; none for `calverLineStage`, whose tag carries the line |
-| `universal` | bool | `false` | any release serves every line; then `lines` is not given |
+| `universal` | bool | `false` | any release serves every line; then `lines` is not given; a stream gives its `lines` or is universal |
 | `requiresPrerelease` | bool | `false` | a stable follows an RC of its version; a release may override it, explicitly and recorded |
 
 Scheme defaults for stages: `calverLineStage` gives `dev` (prerelease) and `stable`; `semver` gives none; `chartVersion` takes the stages of the project's branch layout.
@@ -150,6 +150,10 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A selector's `since` is not after its `until`
 * A project that holds something of another, which holds something of it, is a warning: the dependency is circular
 * `repo.external` and `repo.owned` are not both true
+* Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
+* A calver stream is on a project whose layout is `single`; a project holds nothing of itself
+* A holding's `stage` is a stage of its holder's `branches.stages`, and its `stages` are stages of the producer's streams
+* A step run `from: producer` needs a producer that is owned
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
 
 ## Where today's fields went
