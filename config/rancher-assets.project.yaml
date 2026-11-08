@@ -8,7 +8,6 @@ spec:
     owned: false # Will not create PRs for this projects release
     managedBy: release-team
   release:
-    requiresPrerelease: true
     branching: perLineTag
     tagScheme: calverLineStage
     lines:
@@ -19,6 +18,14 @@ spec:
     labels:
       - status/auto-created
       - team/release-team
+  updateMethods:
+    - name: read-lock-yaml
+      strategy: yamlBump
+      with:
+        file: lock.yaml
+      allowedParams:
+        - key: updateKey
+          description: "The name of the key to update/read in lock.yaml file"
   downstream:
     - to: rancher
       method: build-yaml-bump

@@ -1,0 +1,45 @@
+apiVersion: gero/v1alpha1
+kind: Project
+name: backup-restore-operator
+spec:
+  repo:
+    name: rancher/backup-restore-operator
+    owned: true
+  release:
+    branching: perLine
+    requiresPrerelease: true    # stable must come from a commit that already has an RC (overridable per release)
+    lines:
+      - line: v2.16             # illustrative series; no branch while "development"
+        version: "12.x"
+      - line: v2.15
+        version: "11.x"
+        branch: release/v11.x
+      - line: v2.14
+        version: "10.x"
+        branch: release/v10.x
+      - line: v2.13
+        version: "9.x"
+        branch: release/v9.x
+      - line: v2.12
+        version: "8.x"
+        branch: release/v8.x
+  updateMethods:
+    - name: kubectl-tag-bump
+      strategy: yamlBump
+      with:
+        file: charts/rancher-backup/values.yaml
+      allowedParams:
+        - key: updateKey
+          description: "The key of values.yaml that holds the kubectl tag"
+      # charts/rancher-backup/tests/kubectl-image_test.yaml also hardcodes the default tag.
+      # That is not bumped here: unit tests for dynamic values should set the input and
+      # assert the same value, so a default change cannot break them (see
+      # docs/IMPLEMENTATION.md, "Standards for Target Repos").
+  downstream:
+    - to: rancher-charts
+      method: charts-package-bump
+      params:
+        package: rancher-backup
+        updateKey: url
+        value: "https://github.com/{repo}/releases/download/{tag}/rancher-backup-{tag (without V)}.tgz"
+        # TODO but it also needs to update the CRD additnal chart too with same URL but for CRD file

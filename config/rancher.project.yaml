@@ -6,6 +6,8 @@ spec:
   finalDestination: true   # releases end here: the other projects ship to it, and it ships to none
   repo:
     name: rancher/rancher
+    owned: false # Will not create PRs for this projects release
+    managedBy: shared
   release:
     branching: perLine
     lines:
