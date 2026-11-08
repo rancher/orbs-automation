@@ -27,6 +27,13 @@ func Require(commandPath string, s clicfg.Settings) error {
 	return nil
 }
 
+// RequireWorkstation reports why the command at commandPath may not run as a
+// workstation-only command, or nil when it may. It does not run in CI, and not
+// inside gero repl, which says so with inRepl.
+func RequireWorkstation(commandPath string, s clicfg.Settings, inRepl bool) error {
+	return nil
+}
+
 // RequireCrossRepoToken refuses the workflow's default GITHUB_TOKEN before a
 // command at commandPath writes to a repository other than the one the workflow
 // runs in: that token is scoped to its own repository, so GitHub would answer

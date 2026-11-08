@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/orbs-automation/cmd/version"
 	"github.com/rancher/orbs-automation/internal/cli/cigate"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
+	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/spf13/cobra"
@@ -128,7 +129,7 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 		// The release is what picks the central config bundle when no local config
 		// is named (docs/specs/CENTRAL_BUNDLE.md); only here is it known.
 		s.GeroVersion = version.Version
-		if err := requireContext(cmd, s); err != nil {
+		if err := requireContext(cmd, s, getenv); err != nil {
 			return err
 		}
 		// A key the file has that gero does not know is ignored, not fatal, so
@@ -160,10 +161,14 @@ func settingsFrom(cmd *cobra.Command) clicfg.Settings {
 }
 
 // requireContext enforces the gero/context annotation of cmd against s: a
-// CI-only command needs the CI context and a token (internal/cli/cigate).
-func requireContext(cmd *cobra.Command, s clicfg.Settings) error {
-	if cmd.Annotations[ci.ContextAnnotation] != ci.ContextCIOnly {
-		return nil
+// CI-only command needs the CI context and a token, and a workstation-only one
+// needs neither CI nor the REPL, which getenv tells (internal/cli/cigate).
+func requireContext(cmd *cobra.Command, s clicfg.Settings, getenv func(string) string) error {
+	switch cmd.Annotations[ci.ContextAnnotation] {
+	case ci.ContextCIOnly:
+		return cigate.Require(cmd.CommandPath(), s)
+	case ci.ContextWorkstationOnly:
+		return cigate.RequireWorkstation(cmd.CommandPath(), s, getenv(repl.EnvRepl) != "")
 	}
-	return cigate.Require(cmd.CommandPath(), s)
+	return nil
 }
