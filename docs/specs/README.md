@@ -24,6 +24,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [SHELL_SETUP](SHELL_SETUP.md) | `gero shell install`: the marked profile block, completion, and the wrapper that lets `gero cd` change directory |
 | [REPL](REPL.md) | `gero repl`: an interactive prompt over the same commands, its few shell-like commands (`pwd`, `ls`, `cd`, `clear`, `shell`, `exit`), the working directory as state, the line editor with history and completion, the prompt template (`repl.prompt`) |
 | [DOCTOR](DOCTOR.md) | `gero doctor`: workstation health checks, statuses, `--online`, output, exit codes |
+| [SELF_UPDATE](SELF_UPDATE.md) | `gero doctor self-update`: replacing the binary with the newest release, only after its manifest and archive verify against a pinned Sigstore signer; what the release workflow must publish |
 | [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) | Stdlib-first, approved modules, the depguard allow-list |
 | [TESTING](TESTING.md) | How the CLI layer is tested |
 | [CHECK_SEMVER](CHECK_SEMVER.md) | Port of the shared `check-semver` script: decisions, command, library, test plan |

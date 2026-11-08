@@ -31,6 +31,11 @@ jobs:
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # goreleaser signs with cosign, keylessly, as this workflow
+      # (docs/specs/SELF_UPDATE.md).
+      - name: Install cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
       - name: Run GoReleaser
         run: goreleaser release --clean
         env:

@@ -35,6 +35,24 @@ archives:
         - gero
       name_template: '{{ .Binary }}_{{ .Os }}_{{ .Arch }}'
 
+# Each archive and the checksum manifest get a keyless Sigstore bundle named
+# <file>.sigstore.json, signed by this workflow's identity (the release workflow
+# on a version tag). gero doctor self-update refuses a release without them
+# (docs/specs/SELF_UPDATE.md).
+signs:
+  - id: archives
+    cmd: cosign
+    artifacts: archive
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
+    output: true
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
+    output: true
+
 release:
   prerelease: auto
   draft: true
