@@ -89,3 +89,7 @@ func (s *Stream) LineOf(tag string) (line string, ok bool) {
 	}
 	return "", false
 }
+
+// Lines returns the ids of the lines the stream lists, as written; none for a
+// universal stream.
+func (s *Stream) Lines() []string { return nil }

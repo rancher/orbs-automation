@@ -150,3 +150,15 @@ func TestAProjectFindsTheStreamAndLineOfATag(t *testing.T) {
 	_, ok = mono.LineOf("other/v1.0.0")
 	assert.False(t, ok)
 }
+
+func TestTheLinesAStreamLists(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		project("a", "  repo: {name: acme/a}\n"),
+		stream("s", "a", "  lines:\n    - {line: v2.16, series: \"0.10.x\"}\n    - {line: v2.15, series: \"0.9.x\"}\n"),
+		stream("u", "a", "  universal: true\n"),
+	)
+
+	assert.Equal(t, []string{"v2.16", "v2.15"}, g.Project("a").Streams()[0].Lines())
+	assert.Empty(t, g.Project("a").Streams()[1].Lines())
+}
