@@ -111,13 +111,13 @@ spec:
 	assert.Equal(t, "perLine", p.Spec.Branches.Layout)
 	assert.Equal(t, []string{"dev", "stable"}, p.Spec.Branches.Stages)
 
-	lines := p.Spec.Branches.Lines
-	require.Len(t, lines, 4)
-	assert.Nil(t, lines[0].Branch, "omitted: the default branch")
-	require.NotNil(t, lines[1].Branch, "an empty string is written, so it is not omitted")
-	assert.Equal(t, Branch{}, *lines[1].Branch, "no branch yet")
-	assert.Equal(t, &Branch{Name: "release/v2.15"}, lines[2].Branch)
-	assert.Equal(t, &Branch{Stages: map[string]string{"dev": "dev-v2.14", "stable": "release-v2.14"}}, lines[3].Branch)
+	branchLines := p.Spec.Branches.Lines
+	require.Len(t, branchLines, 4)
+	assert.Nil(t, branchLines[0].Branch, "omitted: the default branch")
+	require.NotNil(t, branchLines[1].Branch, "an empty string is written, so it is not omitted")
+	assert.Equal(t, Branch{}, *branchLines[1].Branch, "no branch yet")
+	assert.Equal(t, &Branch{Name: "release/v2.15"}, branchLines[2].Branch)
+	assert.Equal(t, &Branch{Stages: map[string]string{"dev": "dev-v2.14", "stable": "release-v2.14"}}, branchLines[3].Branch)
 }
 
 func TestDecodeExternalRepo(t *testing.T) {

@@ -208,23 +208,23 @@ func (s *selection) add(target bump.Target, release Release) {
 // producer's order.
 func (r resolution) eachLine(in Input) (selection, error) {
 	sel := selection{named: len(in.Lines) > 0}
-	var lines []string
+	var names []string
 	if sel.named {
 		for _, line := range in.Lines {
 			canonical, ok := r.consumerLine(line)
 			if !ok {
 				return selection{}, r.noSuchLine(line)
 			}
-			lines = append(lines, canonical)
+			names = append(names, canonical)
 		}
 	} else {
 		for _, line := range r.scheme.Lines(r.tags) {
 			if _, ok := r.consumerLine(line); ok {
-				lines = append(lines, line)
+				names = append(names, line)
 			}
 		}
 	}
-	for _, line := range lines {
+	for _, line := range names {
 		release, err := ResolveRelease(r.scheme, r.producer.Slug(), r.tags, line, in.Prerelease, acceptsAll(r.route))
 		if err != nil {
 			if sel.named {
