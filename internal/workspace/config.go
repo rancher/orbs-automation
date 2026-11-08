@@ -35,12 +35,24 @@ func (w *Workspace) Chain() (*chain.Graph, error) {
 	return w.graph, w.graphErr
 }
 
-// loadChain reads and joins the config once.
+// loadChain reads and joins the config once, from the local directory or, when
+// none is named, from the bundle (ConfigSource).
 func (w *Workspace) loadChain() (*chain.Graph, error) {
-	dir, err := w.CentralConfigDir()
+	src, err := w.ConfigSource()
 	if err != nil {
 		return nil, err
 	}
+	if src.Bundle != nil {
+		g, rep := chainload.Load(w.bundleFiles.FS, engine.Context{Now: time.Now()})
+		if err := rep.Err(); err != nil {
+			return nil, fmt.Errorf("config bundle %s: %w", src.Bundle.Tag, err)
+		}
+		if g.Empty() {
+			return nil, fmt.Errorf("config bundle %s: %w", src.Bundle.Tag, ErrEmptyConfig)
+		}
+		return g, nil
+	}
+	dir := src.Dir
 	g, rep := chainload.Load(os.DirFS(dir.Dir), engine.Context{Now: time.Now()})
 	if err := rep.Err(); err != nil {
 		return nil, fmt.Errorf("config directory %s: %w", dir.Dir, err)

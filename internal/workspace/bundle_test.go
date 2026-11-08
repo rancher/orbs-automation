@@ -133,9 +133,12 @@ func TestWhenTheBundleCannotBeLoadedTheConfigIsNotFoundAndSaysWhy(t *testing.T) 
 }
 
 func TestABundleWithNoConfigInItIsEmptyConfigAndNamesTheBundle(t *testing.T) {
-	b := publishedBundle(t, "v0.5.0")
+	// Compile refuses an empty config, so this is a bundle made by hand.
+	h, fsys, err := bundle.Parse([]byte("apiVersion: gero-bundle/v1\nkind: Bundle\nformatVersion: 1\ngeroVersion: v0.5.0\nsourceCommit: abc\ncompiledAt: 2026-01-02T03:04:05Z\n"))
+	require.NoError(t, err)
+	b := &fakeBundle{loaded: bundlestore.Loaded{Header: h, FS: fsys, Source: bundlestore.Source{Tag: "v0.5.0"}}}
 
-	_, err := Open(settings(t, "", nil, nil), t.TempDir()).WithBundle(b).Chain()
+	_, err = Open(settings(t, "", nil, nil), t.TempDir()).WithBundle(b).Chain()
 
 	require.ErrorIs(t, err, ErrEmptyConfig)
 	assert.Contains(t, err.Error(), "v0.5.0")

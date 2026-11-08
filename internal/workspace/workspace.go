@@ -85,6 +85,7 @@ func open(s clicfg.Settings, cwd string, cwdFS fs.FS) *Workspace {
 		remoteRefs:  repo.ListRemoteRefs,
 		remoteFile:  rawFile,
 		credentials: defaultCredentials,
+		bundle:      bundleFor(s),
 	}
 }
 
