@@ -120,8 +120,14 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // Kinds lists the kinds registered for an apiVersion, sorted. A version that is
 // not registered has none.
-func (s *Scheme) Kinds(apiVersion string) []string { return nil }
+func (s *Scheme) Kinds(apiVersion string) []string { return sortedKeys(s.versions[apiVersion]) }
 
 // New returns a new, empty object of a kind of an apiVersion, and false when the
 // scheme has no such kind.
-func (s *Scheme) New(apiVersion, kind string) (Object, bool) { return nil, false }
+func (s *Scheme) New(apiVersion, kind string) (Object, bool) {
+	newObject, ok := s.versions[apiVersion][kind]
+	if !ok {
+		return nil, false
+	}
+	return newObject(), true
+}
