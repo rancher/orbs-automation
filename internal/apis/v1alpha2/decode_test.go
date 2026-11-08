@@ -127,7 +127,7 @@ spec:
   repo: {name: third-party/example-sdk, external: true}
 `)
 
-	assert.Equal(t, Repo{Name: "third-party/example-sdk", External: true}, p.Spec.Repo)
+	assert.Equal(t, Repo{Name: "third-party/example-sdk", External: true, DefaultBranch: "main"}, p.Spec.Repo)
 }
 
 func TestDecodeRepoIsNotExternalByDefault(t *testing.T) {
@@ -273,6 +273,7 @@ func TestDecodeSeveralDocuments(t *testing.T) {
 apiVersion: gero/v1alpha2
 kind: Project
 name: a
+spec: {repo: {name: acme/a}}
 ---
 apiVersion: gero/v1alpha2
 kind: Stream
@@ -335,6 +336,7 @@ name: first
 apiVersion: gero/v1alpha2
 kind: Project
 name: good
+spec: {repo: {name: acme/good}}
 ---
 apiVersion: gero/v1alpha2
 kind: Project
