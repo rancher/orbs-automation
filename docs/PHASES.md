@@ -52,7 +52,7 @@ Two flows, in order:
 | v0.9 | later | **The chain flow runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0: the loose ends in [TODO](../TODO.md), the process docs reviewed, field names settled | v0.6, v0.7, v0.8 |
 | | | **POC review with the team,** at the end of v0.x, when the author is done with it: show the POC flow and the chain flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before v1.0.0 | v0.9 |
 
-`gero init` is built (the four basic keys); `gero repo clone` is not.
+`gero init` is built; `gero repo clone` is not.
 
 v0.8 depends only on the config model, so it can be taken at any point before v0.9.
 
