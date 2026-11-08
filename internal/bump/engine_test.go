@@ -375,3 +375,36 @@ func TestTheRegistryFindsStrategiesByName(t *testing.T) {
 	assert.Panics(t, func() { r.Register(namedStrategy{"a"}) })
 	assert.Equal(t, []string{"chartsPackageBump"}, Builtin().Names())
 }
+
+func TestTargetsOnALineOfTheConsumerAreItsBranchesForEachStage(t *testing.T) {
+	e, g, err := buildEngine(t)
+	require.NoError(t, err)
+	route := e.RoutesFrom(g.Project("prod"))[0]
+
+	got, err := route.TargetsOn("v2.15")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"dev-v2.15 (v2.15): cons-image, cons-chart"}, branches(got))
+
+	got, err = e.RoutesFrom(g.Project("lined"))[0].TargetsOn("2.16")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rel-v2.16 (v2.16): cons-lined"}, branches(got), "a line without its v")
+
+	_, err = route.TargetsOn("v2.99")
+	require.ErrorIs(t, err, ErrNoBranches)
+	assert.Contains(t, err.Error(), "v2.99")
+}
+
+func TestTargetsOnALineLeavesOutAHoldingThatDoesNotApplyToIt(t *testing.T) {
+	e, g, err := buildEngine(t, d("Holding", "late", "{project: cons, artifact: lined-image}", "  at: {file: x.yaml, key: img}\n  holds: {kind: release, stage: dev, lines: {since: v2.16}}\n"))
+	require.NoError(t, err)
+	route := e.RoutesFrom(g.Project("lined"))[0]
+
+	got, err := route.TargetsOn("v2.15")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rel-v2.15 (v2.15): cons-lined"}, branches(got))
+
+	got, err = route.TargetsOn("v2.16")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"rel-v2.16 (v2.16): cons-lined", "dev-v2.16 (v2.16): late"}, branches(got))
+}

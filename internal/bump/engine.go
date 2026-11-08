@@ -440,3 +440,9 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	}
 	return res, nil
 }
+
+// TargetsOn returns the targets of a line of the consumer, in order: for each
+// holding that applies to the line, the consumer's branch of the line for the
+// holding's stage. It is how a run to named lines of the consumer finds its
+// branches. It is an error when no holding of the route has a branch for the line.
+func (r Route) TargetsOn(string) ([]Target, error) { return nil, nil }
