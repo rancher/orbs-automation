@@ -156,6 +156,20 @@ linters:
               desc: the config loader is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
             - pkg: github.com/rancher/orbs-automation/internal/appconfig
               desc: the application config provider is only allowed in internal/workspace, internal/chain and internal/chainload; get config from a Workspace (docs/specs/WORKSPACE.md)
+        # A version of the config API is spelled in config and nowhere else. The domain
+        # reads the graph, which owns its vocabulary, so a new version changes the
+        # adapter and not the domain (docs/design/CHAIN_MODEL.md).
+        oneversion:
+          list-mode: lax
+          files:
+            - "!**/internal/apis/**"
+            - "!**/internal/appconfig/**"
+            - "!**/internal/chain/**"
+            - "!**/internal/chainload/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/apis/v1alpha2
+              desc: a version of the config API is only allowed in internal/appconfig, internal/chain and internal/chainload; read the chain graph (docs/design/CHAIN_MODEL.md)
         # go-gh is used for token and host resolution only, through
         # internal/platform/github.GoGh. Its pkg/api is not approved
         # (docs/specs/DEPENDENCY_POLICY.md).
