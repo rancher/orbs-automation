@@ -96,8 +96,9 @@ func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 			return git.Latest{}
 		}
 		var inLine []git.Tag
+		parsed, parsedOK := semver.ParseSeries(series) // read once, not for each tag
 		for _, t := range tags {
-			if semver.InSeries(t.Name, series) {
+			if v, ok := semver.Parse(t.Name); ok && parsedOK && parsed.Contains(v) {
 				inLine = append(inLine, t)
 			}
 		}

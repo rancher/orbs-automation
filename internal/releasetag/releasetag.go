@@ -126,6 +126,7 @@ func Check(in Input) (Decision, error) {
 func Newest(in Input) *git.Tag {
 	var best *git.Tag
 	var bestV semver.Version
+	series, seriesOK := semver.ParseSeries(in.Series) // read once, not for each tag
 	for i := range in.Tags {
 		t := in.Tags[i]
 		if in.Pattern != "" {
@@ -133,11 +134,11 @@ func Newest(in Input) *git.Tag {
 				continue
 			}
 		}
-		if in.Series != "" && !semver.InSeries(t.Name, in.Series) {
-			continue
-		}
 		v, ok := semver.Parse(t.Name)
 		if !ok {
+			continue
+		}
+		if in.Series != "" && !(seriesOK && series.Contains(v)) {
 			continue
 		}
 		if best == nil || semver.Compare(v, bestV) > 0 {
