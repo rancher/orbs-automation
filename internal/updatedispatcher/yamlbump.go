@@ -7,8 +7,8 @@ import (
 	"regexp"
 
 	"github.com/rancher/orbs-automation/internal/platform/semver"
+	"github.com/rancher/orbs-automation/internal/platform/yamledit"
 	"github.com/rancher/orbs-automation/internal/ship/templates"
-	"github.com/rancher/orbs-automation/internal/yamledit"
 )
 
 // YAMLBump keeps a release's value at one key of a YAML file. The method fixes

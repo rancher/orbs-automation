@@ -94,11 +94,11 @@ linters:
             - "!**/internal/clicfg/**"
             - "!**/internal/config/loader/**"
             - "!**/internal/apis/**"
-            - "!**/internal/yamledit/**"
+            - "!**/internal/platform/yamledit/**"
             - "!$test"
           deny:
             - pkg: go.yaml.in/yaml
-              desc: YAML is only allowed in internal/clicfg, internal/config/loader, internal/apis and internal/yamledit (docs/specs/DEPENDENCY_POLICY.md)
+              desc: YAML is only allowed in internal/clicfg, internal/config/loader, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
         # The HTML parser reads the SUSE lifecycle page and nothing else
         # (docs/specs/DEPENDENCY_POLICY.md).
         nohtml:

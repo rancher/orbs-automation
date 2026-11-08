@@ -10,10 +10,10 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/config"
 	"github.com/rancher/orbs-automation/internal/git"
+	"github.com/rancher/orbs-automation/internal/platform/yamledit"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/updatedispatcher"
 	"github.com/rancher/orbs-automation/internal/workspace"
-	"github.com/rancher/orbs-automation/internal/yamledit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
