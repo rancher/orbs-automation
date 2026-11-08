@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -61,6 +62,14 @@ type Workspace struct {
 	chainOnce sync.Once
 	graph     *chain.Graph
 	graphErr  error
+
+	// The central bundle, for when no local config is named. Nil means none:
+	// there is no release context, or this is CI, which has a checkout.
+	bundle      BundleSource
+	sourceOnce  sync.Once
+	source      ConfigSource
+	sourceErr   error
+	bundleFiles *bundlestore.Loaded
 }
 
 // Open returns the Workspace for s and the working directory cwd, reading the
