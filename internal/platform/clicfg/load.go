@@ -259,6 +259,13 @@ func resolveRepos(r fileRepos, home string, getenv func(string) string) (Repos, 
 		}
 		out.Search = append(out.Search, p)
 	}
+	if r.CloneRoot != "" {
+		p, err := absPath("repos.cloneRoot", r.CloneRoot, home, getenv)
+		if err != nil {
+			return Repos{}, err
+		}
+		out.CloneRoot = p
+	}
 	for slug, dir := range r.Paths {
 		if !slugRE.MatchString(slug) {
 			return Repos{}, fmt.Errorf("repos.paths: %q is not an owner/name slug", slug)
