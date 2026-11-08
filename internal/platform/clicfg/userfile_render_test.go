@@ -63,7 +63,6 @@ func TestRenderUserFileQuotesWhatYAMLWouldRead(t *testing.T) {
 		{"boolean word", "true", `branchPrefix: "true"`},
 		{"number", "42", `branchPrefix: "42"`},
 		{"quote", `a"b`, `branchPrefix: "a\"b"`},
-		{"empty", "", `branchPrefix: ""`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := RenderUserFile(UserFileValues{GitHubUser: "u", Fork: "f", Upstream: "up", BranchPrefix: tc.prefix})

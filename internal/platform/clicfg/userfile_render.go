@@ -24,7 +24,7 @@ type UserFileValues struct {
 }
 
 // RenderUserFile returns the text of a new user file with v: the schema comment,
-// then the keys.
+// then the keys that are set, in the order of docs/specs/CLI_CONFIG.md.
 func RenderUserFile(v UserFileValues) string {
 	var b strings.Builder
 	b.WriteString(UserFileSchemaComment + "\n")
@@ -34,7 +34,24 @@ func RenderUserFile(v UserFileValues) string {
 		{"upstream", v.Upstream},
 		{"branchPrefix", v.BranchPrefix},
 	} {
-		b.WriteString(kv[0] + ": " + yamlScalar(kv[1]) + "\n")
+		if kv[1] != "" {
+			b.WriteString(kv[0] + ": " + yamlScalar(kv[1]) + "\n")
+		}
+	}
+	if v.ConfigDir != "" {
+		b.WriteString("configDir: " + pathScalar(v.ConfigDir) + "\n")
+	}
+	if len(v.Search) > 0 || v.CloneRoot != "" {
+		b.WriteString("repos:\n")
+	}
+	if len(v.Search) > 0 {
+		b.WriteString("  search:\n")
+		for _, dir := range v.Search {
+			b.WriteString("    - " + pathScalar(dir) + "\n")
+		}
+	}
+	if v.CloneRoot != "" {
+		b.WriteString("  cloneRoot: " + pathScalar(v.CloneRoot) + "\n")
 	}
 	return b.String()
 }
@@ -51,6 +68,18 @@ var yamlWords = map[string]bool{
 // when that is certain, double-quoted otherwise.
 func yamlScalar(v string) string {
 	if plainScalar.MatchString(v) && !yamlWords[strings.ToLower(v)] {
+		return v
+	}
+	return strconv.Quote(v)
+}
+
+var plainPath = regexp.MustCompile(`^[~/$][A-Za-z0-9_./@${}~-]*$`)
+
+// pathScalar is yamlScalar for a path: "~/src", "/src" and "$HOME/src" stay plain,
+// since a path is read for a leading "~" and for $VAR, and anything with a space
+// or another character YAML reads is quoted.
+func pathScalar(v string) string {
+	if plainPath.MatchString(v) && v != "~" {
 		return v
 	}
 	return strconv.Quote(v)

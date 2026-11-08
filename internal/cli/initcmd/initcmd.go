@@ -20,10 +20,6 @@ import (
 // ErrExists is returned when the user file exists and Force was not given.
 var ErrExists = errors.New("the user file exists")
 
-// ErrNeedsValues is returned when a value is missing and cannot be asked for:
-// the input is not a terminal.
-var ErrNeedsValues = errors.New("values are missing and there is no terminal to ask on")
-
 // Options are the choices of one run.
 type Options struct {
 	// The values of the file. One left empty is asked for on a terminal, and an
@@ -72,9 +68,14 @@ func Run(o Options) (string, error) {
 		return "", fmt.Errorf("%w: %s; pass --force to replace it", ErrExists, path)
 	}
 
-	v := clicfg.UserFileValues{GitHubUser: o.GitHubUser, Fork: o.Fork, Upstream: o.Upstream, BranchPrefix: o.BranchPrefix}
-	if err := fill(o, &v); err != nil {
-		return "", err
+	v := clicfg.UserFileValues{
+		GitHubUser: o.GitHubUser, Fork: o.Fork, Upstream: o.Upstream, BranchPrefix: o.BranchPrefix,
+		ConfigDir: o.ConfigDir, Search: cleanList(o.Search), CloneRoot: o.CloneRoot,
+	}
+	if o.Interactive {
+		if err := ask(o, &v); err != nil {
+			return "", err
+		}
 	}
 	for _, f := range []struct{ name, value string }{
 		{"GitHub login", v.GitHubUser}, {"fork remote", v.Fork},
@@ -86,6 +87,17 @@ func Run(o Options) (string, error) {
 	}
 
 	content := clicfg.RenderUserFile(v)
+	// What is written has to be what the next command accepts: a path that is not
+	// absolute is refused here, naming its key, and not by every command after.
+	if _, err := clicfg.Load(clicfg.Inputs{
+		Getenv:       withoutGeroVars(o.Getenv),
+		UserFile:     strings.NewReader(content),
+		UserFileName: "the new user file",
+		Home:         o.Home,
+	}); err != nil {
+		return "", err
+	}
+
 	var out strings.Builder
 	if o.DryRun {
 		fmt.Fprintf(&out, "%s\n\n%s\n", view.Style(style.Heading, "Write to "+path+":"), content)
@@ -100,69 +112,104 @@ func Run(o Options) (string, error) {
 		verb = "Replaced"
 	}
 	fmt.Fprintf(&out, "%s %s\n", view.Style(style.OK, verb), path)
+	if content == clicfg.UserFileSchemaComment+"\n" {
+		out.WriteString(view.Style(style.Dim, "Nothing was entered, so the file holds only the schema comment.") + "\n")
+	}
 	return out.String(), nil
 }
 
-// fill gives v the values still empty: asked for on a terminal, and without one
-// an error that names the flags.
-func fill(o Options, v *clicfg.UserFileValues) error {
-	if !o.Interactive {
-		var missing []string
-		for _, f := range []struct{ flag, value string }{
-			{"--github-user", v.GitHubUser}, {"--fork", v.Fork},
-			{"--upstream", v.Upstream}, {"--branch-prefix", v.BranchPrefix},
-		} {
-			if f.value == "" {
-				missing = append(missing, f.flag)
-			}
-		}
-		if len(missing) > 0 {
-			return fmt.Errorf("%w: pass %s", ErrNeedsValues, strings.Join(missing, ", "))
-		}
-		return nil
-	}
+// searchVersusCloneRoot says how the two path keys differ. They look alike, and
+// a person who takes one for the other puts new clones where they are not found,
+// or scans the wrong place.
+const searchVersusCloneRoot = `repos.search and repos.cloneRoot are not the same:
+  repos.search     directories gero scans for clones you already have. It only
+                   finds what is there; it never puts anything there.
+  repos.cloneRoot  the one directory gero repo clone puts new clones in, as
+                   <root>/<name>. It is for clones that do not exist yet.
+The clone root is not added to the search list for you.`
+
+// ask puts a question to each value still empty, on o.Out, and reads the answer
+// from o.In. An empty answer, or the end of the input, skips the question: its
+// value stays empty and its key is left out of the file.
+func ask(o Options, v *clicfg.UserFileValues) error {
 	view := style.New(o.Terminal)
 	in := bufio.NewReader(o.In)
-	ask := func(question, def string) (string, error) {
-		prompt := view.Style(style.Heading, question)
-		if def != "" {
-			prompt += " " + view.Style(style.Dim, "["+def+"]")
+	var started bool
+	line := func(question string) (string, error) {
+		if !started {
+			started = true
+			if _, err := fmt.Fprintln(o.Out, view.Style(style.Dim, "Enter to skip any question: its key is then left out of the file.")); err != nil {
+				return "", err
+			}
 		}
-		if _, err := fmt.Fprint(o.Out, prompt+" "); err != nil {
+		if _, err := fmt.Fprint(o.Out, view.Style(style.Heading, question)+" "); err != nil {
 			return "", err
 		}
-		line, err := in.ReadString('\n')
+		text, err := in.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
 			return "", err
 		}
-		if answer := strings.TrimSpace(line); answer != "" {
-			return answer, nil
-		}
-		return def, nil
+		return strings.TrimSpace(text), nil
 	}
-	var err error
-	if v.GitHubUser == "" {
-		if v.GitHubUser, err = ask("Your GitHub login:", ""); err != nil {
+	for _, q := range []struct {
+		dest     *string
+		question string
+	}{
+		{&v.GitHubUser, "Your GitHub login:"},
+		{&v.Fork, "Remote that holds your fork (for example origin):"},
+		{&v.Upstream, "Remote that is the real source (for example upstream):"},
+		{&v.BranchPrefix, "Prefix of your branch names (for example me/):"},
+		{&v.ConfigDir, "Directory of the central config, configDir:"},
+	} {
+		if *q.dest != "" {
+			continue
+		}
+		answer, err := line(q.question)
+		if err != nil {
 			return err
 		}
-		if v.GitHubUser == "" {
-			return errors.New("a GitHub login is needed")
-		}
+		*q.dest = answer
 	}
-	if v.Fork == "" {
-		if v.Fork, err = ask("Remote that holds your fork:", "origin"); err != nil {
+	if len(v.Search) == 0 || v.CloneRoot == "" {
+		if _, err := fmt.Fprintln(o.Out, "\n"+view.Style(style.Dim, searchVersusCloneRoot)+"\n"); err != nil {
 			return err
 		}
 	}
-	if v.Upstream == "" {
-		if v.Upstream, err = ask("Remote that is the real source:", "upstream"); err != nil {
+	if len(v.Search) == 0 {
+		answer, err := line("Directories to scan for your existing clones, repos.search (comma-separated):")
+		if err != nil {
 			return err
 		}
+		v.Search = cleanList(strings.Split(answer, ","))
 	}
-	if v.BranchPrefix == "" {
-		if v.BranchPrefix, err = ask("Prefix of your branch names:", v.GitHubUser+"/"); err != nil {
+	if v.CloneRoot == "" {
+		answer, err := line("Directory for new clones, repos.cloneRoot:")
+		if err != nil {
 			return err
 		}
+		v.CloneRoot = answer
 	}
 	return nil
+}
+
+// cleanList trims each entry and drops the empty ones.
+func cleanList(in []string) []string {
+	var out []string
+	for _, s := range in {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// withoutGeroVars hides the GERO_* variables from the loader, so a bad value in
+// the environment is not blamed on the file about to be written.
+func withoutGeroVars(getenv func(string) string) func(string) string {
+	return func(name string) string {
+		if strings.HasPrefix(name, "GERO_") {
+			return ""
+		}
+		return getenv(name)
+	}
 }

@@ -279,7 +279,7 @@ func TestRunExplainsHowSearchDiffersFromTheCloneRoot(t *testing.T) {
 	assert.Contains(t, out, "already have")
 	assert.Contains(t, out, "new clones")
 	assert.Contains(t, out, "not added")
-	assert.Less(t, strings.Index(out, "already have"), strings.Index(out, "scan"), "the note comes before the first of the two questions")
+	assert.Less(t, strings.Index(out, "already have"), strings.Index(out, "Directories to scan"), "the note comes before the first of the two questions")
 }
 
 func TestRunDoesNotExplainWhenNeitherPathIsAsked(t *testing.T) {

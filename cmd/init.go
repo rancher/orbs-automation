@@ -46,7 +46,10 @@ line points an editor at the JSON Schema of the file.`,
 			if os.Getenv(repl.EnvRepl) != "" {
 				return errors.New("gero init asks questions and writes a file, which the REPL is not for: exit the REPL, or run it in your shell")
 			}
-			// --upstream is the global flag, which names the same remote.
+			// --upstream and --config-dir are the global flags, which name the same
+			// remote and directory. The options outlive a run in a test, so a flag not
+			// given is cleared and not left from the last.
+			o.Upstream, o.ConfigDir = "", ""
 			if f := cmd.Flags().Lookup("upstream"); f != nil && f.Changed {
 				o.Upstream = f.Value.String()
 			}
