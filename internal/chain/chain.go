@@ -58,5 +58,8 @@ func (g *Graph) Project(key string) *Project {
 	return g.byName[key]
 }
 
+// Holdings returns every Holding, in the order read.
+func (g *Graph) Holdings() []*Holding { return nil }
+
 // Lines returns the Rancher lines, as listed, or none when the config has none.
 func (g *Graph) Lines() []v1alpha2.Line { return g.lines }

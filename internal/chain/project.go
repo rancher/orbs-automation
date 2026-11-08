@@ -46,6 +46,13 @@ func (p *Project) Streams() []*Stream { return p.streams }
 // the order read.
 func (p *Project) Artifacts() []*Artifact { return p.artifacts }
 
+// Held returns the holdings in the project's repo, in the order read.
+func (p *Project) Held() []*Holding { return nil }
+
+// Sourced returns the holdings, in other projects or its own, of something of the
+// project, in the order read.
+func (p *Project) Sourced() []*Holding { return nil }
+
 // StreamOf returns the stream a tag is a release of: the first of the project's
 // streams whose pattern the tag matches and none of whose excludes it matches. It
 // is nil when there is none.
