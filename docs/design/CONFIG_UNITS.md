@@ -41,7 +41,7 @@ Writing is the same path in reverse: render the form from a release and put it a
 
 | Kind | Does | `refs` | `spec` |
 |---|---|---|---|
-| `Project` | the repo as a place, and its branch layout | none | `repo` (name, `owned`, `managedBy`, default branch), `finalDestination`, `pullRequests` (title, branch prefix, labels, push target), `branches` (layout, stages, and the branch for each line) |
+| `Project` | the repo as a place, and its branch layout | none | `repo` (name, `owned`, `external`, `managedBy`, default branch), `finalDestination`, `pullRequests` (title, branch prefix, labels, push target), `branches` (layout, stages, and the branch for each line) |
 | `Stream` | what a project releases: the versions and the lines | `project` | `scheme`, `stages` (override only), `lines` (each with its series), `universal` |
 | `Artifact` | one thing each release of a stream produces | `stream` | `kind` (`image` or `file`), `name` (an image's repository path, or a file name template such as `rancher-backup-{version}.tgz`), `lines` (which lines produce it), `registries` (an image's override of the default by release kind) |
 | `Holding` | a named rule: where a piece of information lives in a repo, and what it holds | `project` (whose repo), and `artifact` (a release) or `from` (a project whose commit or branch it holds) | `at` (`file`, `key`, `format`) and `holds` (`kind`: `release`, `commit` or `branch`; `form`; `lines`; `stage` or `stages`; `accept`) |
@@ -178,7 +178,7 @@ spec:
 | edge `lines`, `stage`; method `accept` | Holding `holds` |
 | edge and method `preEdit` and `postEdit`; strategies | Edit |
 | `downstream` | derived from Holdings |
-| `External` and its relationships | unchanged for now |
+| `External` and its relationships | no kind: a third-party repo is a Project with `repo.external: true`; `trackOnly` and `react` are a Holding that holds its release (observed); `notify` is not modelled until a case needs it |
 
 ## What the fixture showed
 

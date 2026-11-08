@@ -22,6 +22,7 @@ The repo as a place. `refs`: none.
 |---|---|---|---|
 | `repo.name` | `owner/name` | required | unique across Projects |
 | `repo.owned` | bool | `false` | gero ships from the repo; a holding of an unowned producer is only observed |
+| `repo.external` | bool | `false` | the repo is outside our organization: gero never ships into it and expects no `managedBy`; implies `owned: false`, so setting both is an error |
 | `repo.managedBy` | slug | `orbs` if owned, else unspecified | `shared` is valid |
 | `repo.defaultBranch` | string | `main` | |
 | `finalDestination` | bool | `false` | at most one Project |
@@ -135,8 +136,9 @@ Extra steps when shipping, beyond writing the form. `refs`: `holding`, a list (r
 
 ## Unchanged kinds
 
+There is no `External` kind: a third-party repo is a Project with `repo.external: true`.
+
 * **`RancherLines`:** a line's id, dates, Kubernetes range and optional phase override ([config/README](../../config/README.md))
-* **`External`:** a third-party project and its relationships (`trackOnly`, `react`, `notify`)
 * **`WorkflowsConfig`:** rendering of workflows into a repo, kept in the repo
 
 ## Rules across documents
@@ -146,6 +148,8 @@ Extra steps when shipping, beyond writing the form. `refs`: `holding`, a list (r
 * Every line named is in `RancherLines`; a stream's series do not overlap
 * A holding's `from` or `artifact` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
 * A selector's `since` is not after its `until`
+* A project that holds something of another, which holds something of it, is a warning: the dependency is circular
+* `repo.external` and `repo.owned` are not both true
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
 
 ## Where today's fields went
