@@ -1,18 +1,20 @@
-package chain_test
+package chainload_test
 
 import (
 	"strings"
 	"testing"
 	"testing/fstest"
 
-	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/chainload"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var ctx = config.Context{Now: chaintest.Now}
+
+func project(name, spec string) string { return chaintest.Doc("Project", name, "", spec) }
 
 func files(m map[string]string) fstest.MapFS {
 	fsys := fstest.MapFS{}
@@ -23,7 +25,7 @@ func files(m map[string]string) fstest.MapFS {
 }
 
 func TestLoadJoinsTheConfigAndKeepsItsWarnings(t *testing.T) {
-	g, rep := chain.Load(files(map[string]string{
+	g, rep := chainload.Load(files(map[string]string{
 		"lines.yaml": "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n",
 		"p.yaml":     project("p", "  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n"),
 	}), ctx)
@@ -37,7 +39,7 @@ func TestLoadJoinsTheConfigAndKeepsItsWarnings(t *testing.T) {
 }
 
 func TestLoadOfABadConfigIsNoGraphAndTheProblems(t *testing.T) {
-	g, rep := chain.Load(files(map[string]string{"bad.yaml": project("p", "  repo: {name: nope}\n")}), ctx)
+	g, rep := chainload.Load(files(map[string]string{"bad.yaml": project("p", "  repo: {name: nope}\n")}), ctx)
 
 	assert.Nil(t, g)
 	require.Error(t, rep.Err())
@@ -45,7 +47,7 @@ func TestLoadOfABadConfigIsNoGraphAndTheProblems(t *testing.T) {
 }
 
 func TestLoadOfNothingIsAnEmptyGraph(t *testing.T) {
-	g, rep := chain.Load(files(map[string]string{"README.md": "hello"}), ctx)
+	g, rep := chainload.Load(files(map[string]string{"README.md": "hello"}), ctx)
 
 	require.NoError(t, rep.Err())
 	require.NotNil(t, g)

@@ -9,7 +9,6 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
-	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,10 +123,10 @@ func TestConfigCheckValid(t *testing.T) {
 }
 
 func TestConfigCheckWarnsOfTheConfigsWarnings(t *testing.T) {
-	g, rep := chain.Load(fstest.MapFS{
+	g, rep := chaintest.LoadFS(fstest.MapFS{
 		"lines.yaml": {Data: []byte("apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n")},
 		"p.yaml":     {Data: []byte(chaintest.Doc("Project", "p", "", "  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n"))},
-	}, config.Context{Now: chaintest.Now})
+	})
 	require.NoError(t, rep.Err())
 
 	got := NewConfigCheck(&fakeWorkspace{graph: g}).Run(context.Background())

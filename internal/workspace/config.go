@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chainload"
 	engine "github.com/rancher/orbs-automation/internal/platform/config"
 )
 
@@ -40,7 +41,7 @@ func (w *Workspace) loadChain() (*chain.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	g, rep := chain.Load(os.DirFS(dir.Dir), engine.Context{Now: time.Now()})
+	g, rep := chainload.Load(os.DirFS(dir.Dir), engine.Context{Now: time.Now()})
 	if err := rep.Err(); err != nil {
 		return nil, fmt.Errorf("config directory %s: %w", dir.Dir, err)
 	}

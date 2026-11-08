@@ -11,7 +11,6 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,10 +61,10 @@ func TestRunSummarizesAConfigWithoutLines(t *testing.T) {
 }
 
 func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
-	g, rep := chain.Load(files(map[string]string{
+	g, rep := chaintest.LoadFS(files(map[string]string{
 		"lines.yaml": "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n",
 		"p.yaml":     chaintest.Doc("Project", "p", "", "  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n"),
-	}), config.Context{Now: chaintest.Now})
+	}))
 	require.NoError(t, rep.Err())
 
 	out, err := run(fakeWorkspace{dir: workspace.ConfigDir{Dir: "/work/config"}, graph: g}, nil)
@@ -108,7 +107,7 @@ func TestRunWithoutCentralCheckout(t *testing.T) {
 	assert.ErrorIs(t, err, workspace.ErrNotFound)
 }
 
-// files is a file system of the given files, for chain.Load.
+// files is a file system of the given files, for chaintest.LoadFS.
 func files(m map[string]string) fstest.MapFS {
 	fsys := fstest.MapFS{}
 	for name, data := range m {

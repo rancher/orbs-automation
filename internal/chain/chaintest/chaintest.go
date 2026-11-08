@@ -4,6 +4,7 @@ package chaintest
 
 import (
 	"fmt"
+	"io/fs"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/appconfig"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chainload"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
@@ -67,4 +69,10 @@ func Projects(t testing.TB, namesAndSlugs ...string) *chain.Graph {
 		docs = append(docs, Doc("Project", namesAndSlugs[i], "", "  repo: {name: "+namesAndSlugs[i+1]+"}\n"))
 	}
 	return Load(t, docs...)
+}
+
+// LoadFS reads the config under a file system as the workspace does, at Now, and
+// returns the graph, nil when the config has an error, with every finding.
+func LoadFS(fsys fs.FS) (*chain.Graph, config.Report) {
+	return chainload.Load(fsys, config.Context{Now: Now})
 }

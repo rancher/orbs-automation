@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -55,7 +54,7 @@ func graph() *chain.Graph {
 		} {
 			fsys[fmt.Sprintf("doc%d.yaml", i)] = &fstest.MapFile{Data: []byte(d)}
 		}
-		g, rep := chain.Load(fsys, config.Context{Now: chaintest.Now})
+		g, rep := chaintest.LoadFS(fsys)
 		if err := rep.Err(); err != nil {
 			panic(err)
 		}

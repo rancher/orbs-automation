@@ -21,8 +21,12 @@ type Graph struct {
 
 // Build joins the documents of a config that has passed every rule. A document
 // whose refs do not lead anywhere is not possible in such a config.
-func Build(cfg appconfig.Config) *Graph {
-	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty()}
+func Build(cfg appconfig.Config) *Graph { return BuildWith(cfg, nil) }
+
+// BuildWith is Build for a caller that has the warnings the config was loaded
+// with, which the graph keeps.
+func BuildWith(cfg appconfig.Config, warnings []config.Finding) *Graph {
+	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty(), warnings: warnings}
 	for _, doc := range cfg.Projects {
 		p := &Project{Doc: doc, graph: g}
 		g.projects = append(g.projects, p)
@@ -95,3 +99,10 @@ func (g *Graph) Holdings() []*Holding { return g.holdings }
 
 // Lines returns the Rancher lines, as listed, or none when the config has none.
 func (g *Graph) Lines() []v1alpha2.Line { return g.lines }
+
+// Warnings returns the warnings found when the config was loaded, in the order
+// reported.
+func (g *Graph) Warnings() []config.Finding { return g.warnings }
+
+// Empty reports whether the config has no project and no lines.
+func (g *Graph) Empty() bool { return g.empty }

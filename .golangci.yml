@@ -85,20 +85,19 @@ linters:
           deny:
             - pkg: os/exec
               desc: os/exec is only allowed in internal/platform/execx; run programs through it (docs/specs/DEPENDENCY_POLICY.md)
-        # YAML stays in the loaders, the config engine, the versioned config API and yamledit, so
+        # YAML stays in the config engine, the versioned config API and yamledit, so
         # moving to a new YAML major version touches known files only
         # (docs/specs/DEPENDENCY_POLICY.md).
         noyaml:
           list-mode: lax
           files:
             - "!**/internal/platform/config/**"
-            - "!**/internal/config/loader/**"
             - "!**/internal/apis/**"
             - "!**/internal/platform/yamledit/**"
             - "!$test"
           deny:
             - pkg: go.yaml.in/yaml
-              desc: YAML is only allowed in internal/platform/config, internal/config/loader, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
+              desc: YAML is only allowed in internal/platform/config, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
         # The HTML parser reads the SUSE lifecycle page and nothing else
         # (docs/specs/DEPENDENCY_POLICY.md).
         nohtml:
@@ -148,15 +147,15 @@ linters:
           list-mode: lax
           files:
             - "!**/internal/workspace/**"
-            - "!**/internal/config/loader/**"
             - "!**/internal/appconfig/**"
             - "!**/internal/chain/**"
+            - "!**/internal/chainload/**"
             - "!$test"
           deny:
-            - pkg: github.com/rancher/orbs-automation/internal/config/loader
+            - pkg: github.com/rancher/orbs-automation/internal/chainload
               desc: the config loader is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
             - pkg: github.com/rancher/orbs-automation/internal/appconfig
-              desc: the application config provider is only allowed in internal/workspace and internal/chain; get config from a Workspace (docs/specs/WORKSPACE.md)
+              desc: the application config provider is only allowed in internal/workspace, internal/chain and internal/chainload; get config from a Workspace (docs/specs/WORKSPACE.md)
         # go-gh is used for token and host resolution only, through
         # internal/platform/github.GoGh. Its pkg/api is not approved
         # (docs/specs/DEPENDENCY_POLICY.md).
