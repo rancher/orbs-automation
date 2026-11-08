@@ -24,6 +24,11 @@ The primary user config fields that are worth prompting for are:
 
 ## Result
 After accepting user inputs it would save to relevant field(s) in file and then subsequent `gero` commands are more configured.
+The file it writes starts with the `yaml-language-server` comment that points at the user file schema on the `main` branch of the repository, so an editor validates and completes the file from the first edit ([APP_CONFIG](../specs/APP_CONFIG.md#json-schemas)):
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/user-config.schema.json
+```
 On a fresh workstation it would enable `gero repo clone [project name] [--all]` or similar to help clone individual projects or all (owned only).
 
 ## Goal: a repo clone tool to fetch team projects
