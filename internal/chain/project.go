@@ -2,6 +2,7 @@ package chain
 
 import (
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
@@ -261,4 +262,24 @@ func (p *Project) LineBranches() []LineBranch {
 // each listed line for the stage, where a line has one for each, and its one
 // branch where it has one. With no stage it is the release branches. A single
 // layout has its default branch.
-func (p *Project) BranchesOfStage(_ string) []string { return nil }
+func (p *Project) BranchesOfStage(stage string) []string {
+	if stage == "" || p.single() {
+		return p.ReleaseBranches()
+	}
+	var out []string
+	for _, bl := range p.Doc.Spec.Branches.Lines {
+		var b string
+		switch {
+		case bl.Branch == nil:
+			b = p.DefaultBranch()
+		case bl.Branch.Stages != nil:
+			b = bl.Branch.Stages[stage]
+		default:
+			b = bl.Branch.Name
+		}
+		if b != "" && !slices.Contains(out, b) {
+			out = append(out, b)
+		}
+	}
+	return out
+}
