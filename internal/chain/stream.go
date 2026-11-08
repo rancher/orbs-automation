@@ -1,10 +1,10 @@
 package chain
 
 import (
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"path"
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
-	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 // Stream is what a project releases.
@@ -83,7 +83,7 @@ func (s *Stream) LineOf(tag string) (line string, ok bool) {
 		return "", false
 	}
 	for _, l := range s.Doc.Spec.Lines {
-		if l.Series != "" && git.InSeries(tag, l.Series) {
+		if l.Series != "" && semver.InSeries(tag, l.Series) {
 			return l.Line, true
 		}
 	}

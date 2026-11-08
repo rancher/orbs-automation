@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"path"
 	"regexp"
-	"strconv"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // The schemes a Stream may name, and the defaults of a Stream.
@@ -79,9 +78,8 @@ func (s *Stream) validateLines(r *config.Report) {
 	spec := s.Spec
 	seen := map[string]bool{}
 	type taken struct {
-		line  string
-		major uint64
-		minor int64 // -1: the whole major
+		line   string
+		series semver.Series
 	}
 	var series []taken
 	for i, l := range spec.Lines {
@@ -122,28 +120,15 @@ func (s *Stream) validateLines(r *config.Report) {
 			}
 		}
 
-		major, minor := parseSeries(l.Series)
+		parsed, _ := semver.ParseSeries(l.Series) // it matched the grammar above
 		for _, t := range series {
-			if t.major == major && (t.minor < 0 || minor < 0 || t.minor == minor) {
+			if t.series.Overlaps(parsed) {
 				r.Errorf(at+".series", "%q overlaps the series of line %s", l.Series, t.line)
 				break
 			}
 		}
-		series = append(series, taken{line: l.Line, major: major, minor: minor})
+		series = append(series, taken{line: l.Line, series: parsed})
 	}
-}
-
-// parseSeries reads a series that already matched the grammar: its major, and its
-// minor or -1 when it has none.
-func parseSeries(series string) (major uint64, minor int64) {
-	parts := strings.Split(strings.TrimSuffix(series, ".x"), ".")
-	major, _ = strconv.ParseUint(parts[0], 10, 64)
-	minor = -1
-	if len(parts) > 1 {
-		m, _ := strconv.ParseInt(parts[1], 10, 64)
-		minor = m
-	}
-	return major, minor
 }
 
 // The stage names the schemes give; a stage named dev is a prerelease.

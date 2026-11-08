@@ -77,7 +77,7 @@ func (s semverScheme) Lines([]git.Tag) []string { return ids(s.lines) }
 
 func (s semverScheme) LineOf(tag string) string {
 	for _, l := range s.lines {
-		if l.series != "" && git.InSeries(tag, l.series) {
+		if l.series != "" && semver.InSeries(tag, l.series) {
 			return l.line
 		}
 	}
@@ -92,7 +92,7 @@ func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 		}
 		var inLine []git.Tag
 		for _, t := range tags {
-			if git.InSeries(t.Name, series) {
+			if semver.InSeries(t.Name, series) {
 				inLine = append(inLine, t)
 			}
 		}

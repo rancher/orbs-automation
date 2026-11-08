@@ -105,7 +105,7 @@ func Check(in Input) (Decision, error) {
 	if !ok {
 		return Decision{}, fmt.Errorf("%w: %s", ErrNotAVersion, in.Tag)
 	}
-	if in.Series != "" && !git.InSeries(in.Tag, in.Series) {
+	if in.Series != "" && !semver.InSeries(in.Tag, in.Series) {
 		return Decision{}, fmt.Errorf("%w: %s is not in %s", ErrNotInSeries, in.Tag, in.Series)
 	}
 	if in.RequiresPrerelease && !v.IsPrerelease() && !hasPrereleaseOf(v, in) {
@@ -133,7 +133,7 @@ func Newest(in Input) *git.Tag {
 				continue
 			}
 		}
-		if in.Series != "" && !git.InSeries(t.Name, in.Series) {
+		if in.Series != "" && !semver.InSeries(t.Name, in.Series) {
 			continue
 		}
 		v, ok := semver.Parse(t.Name)
