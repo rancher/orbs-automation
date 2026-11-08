@@ -4,8 +4,9 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,7 @@ func colored() *style.Renderer {
 	return style.New(clicfg.Terminal{StdoutTTY: true, Profile: clicfg.Profile256})
 }
 
-func report(t *testing.T, tag string, results map[string]registry.Result) Report {
+func report(t *testing.T, tag string, results map[string]ociregistry.Result) Report {
 	t.Helper()
 	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, &fakeChecker{results: results}, "", tag)
 	require.NoError(t, err)
@@ -29,10 +30,10 @@ func report(t *testing.T, tag string, results map[string]registry.Result) Report
 func reports(t *testing.T) map[string]Report {
 	return map[string]Report{
 		"all found": report(t, "v0.5.3", nil),
-		"not found": report(t, "v0.5.3-rc.1", map[string]registry.Result{
-			"stgregistry.suse.com rancher/scc-operator:v0.5.3-rc.1": {Status: registry.NotFound}}),
-		"unreachable": report(t, "v1", map[string]registry.Result{
-			"registry-1.docker.io rancher/scc-operator:v1": {Status: registry.Unreachable, Detail: "429 Too Many Requests"}}),
+		"not found": report(t, "v0.5.3-rc.1", map[string]ociregistry.Result{
+			"stgregistry.suse.com rancher/scc-operator:v0.5.3-rc.1": {Status: ociregistry.NotFound}}),
+		"unreachable": report(t, "v1", map[string]ociregistry.Result{
+			"registry-1.docker.io rancher/scc-operator:v1": {Status: ociregistry.Unreachable, Detail: "429 Too Many Requests"}}),
 		"no images": {Project: "rancher/x", Tag: "v1", Stable: true, Warnings: []string{"nothing to check"}},
 	}
 }

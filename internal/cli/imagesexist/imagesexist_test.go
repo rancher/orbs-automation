@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,12 +33,12 @@ func (f *fakeWorkspace) Project(key string) (*chain.Project, error) {
 // default. It records what it was asked, and can be slowed to check ordering.
 type fakeChecker struct {
 	mu      sync.Mutex
-	results map[string]registry.Result
+	results map[string]ociregistry.Result
 	asked   []string
 	delay   map[string]time.Duration
 }
 
-func (f *fakeChecker) Exists(_ context.Context, host, image, tag string) registry.Result {
+func (f *fakeChecker) Exists(_ context.Context, host, image, tag string) ociregistry.Result {
 	key := host + " " + image + ":" + tag
 	time.Sleep(f.delay[host])
 	f.mu.Lock()
@@ -46,7 +47,7 @@ func (f *fakeChecker) Exists(_ context.Context, host, image, tag string) registr
 	if r, ok := f.results[key]; ok {
 		return r
 	}
-	return registry.Result{Status: registry.Found}
+	return ociregistry.Result{Status: ociregistry.Found}
 }
 
 // project is a project of the given repo with one stream and the artifacts given.
@@ -113,12 +114,12 @@ func TestCheckPrereleaseSkipsPrimeProduction(t *testing.T) {
 }
 
 func TestCheckFailsOnNotFoundAndOnUnreachable(t *testing.T) {
-	for name, res := range map[string]registry.Result{
-		"not found":   {Status: registry.NotFound},
-		"unreachable": {Status: registry.Unreachable, Detail: "500 Internal Server Error"},
+	for name, res := range map[string]ociregistry.Result{
+		"not found":   {Status: ociregistry.NotFound},
+		"unreachable": {Status: ociregistry.Unreachable, Detail: "500 Internal Server Error"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			c := &fakeChecker{results: map[string]registry.Result{"stgregistry.suse.com rancher/scc-operator:v0.5.3": res}}
+			c := &fakeChecker{results: map[string]ociregistry.Result{"stgregistry.suse.com rancher/scc-operator:v0.5.3": res}}
 			got, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v0.5.3")
 			require.NoError(t, err)
 			assert.True(t, got.Failed())
@@ -171,8 +172,8 @@ func TestCheckProjectErrors(t *testing.T) {
 }
 
 func TestRenderText(t *testing.T) {
-	c := &fakeChecker{results: map[string]registry.Result{
-		"stgregistry.suse.com rancher/scc-operator:v0.5.3-rc.1": {Status: registry.NotFound},
+	c := &fakeChecker{results: map[string]ociregistry.Result{
+		"stgregistry.suse.com rancher/scc-operator:v0.5.3-rc.1": {Status: ociregistry.NotFound},
 	}}
 	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v0.5.3-rc.1")
 	require.NoError(t, err)
@@ -200,8 +201,8 @@ func TestRenderTextAllFound(t *testing.T) {
 }
 
 func TestRenderTextShowsWhyUnreachable(t *testing.T) {
-	c := &fakeChecker{results: map[string]registry.Result{
-		"registry-1.docker.io rancher/scc-operator:v1": {Status: registry.Unreachable, Detail: "429 Too Many Requests"},
+	c := &fakeChecker{results: map[string]ociregistry.Result{
+		"registry-1.docker.io rancher/scc-operator:v1": {Status: ociregistry.Unreachable, Detail: "429 Too Many Requests"},
 	}}
 	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v1")
 	require.NoError(t, err)

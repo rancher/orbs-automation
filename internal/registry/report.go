@@ -7,18 +7,19 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
-// Prober looks for one image in one registry. Checker is the real one.
+// Prober looks for one image in one registry. ociregistry.Checker is the real one.
 type Prober interface {
-	Exists(ctx context.Context, host, image, tag string) Result
+	Exists(ctx context.Context, host, image, tag string) ociregistry.Result
 }
 
 // Skipped is the status of a registry a release of the tag does not go to.
 const Skipped = "skipped"
 
-// Row is the outcome for one image in one registry. Status is a Status value,
+// Row is the outcome for one image in one registry. Status is an ociregistry.Status value,
 // or Skipped.
 type Row struct {
 	Image     string `json:"image"`
@@ -44,7 +45,7 @@ type Report struct {
 // looked for.
 func (r Report) Failed() bool {
 	for _, row := range r.Rows {
-		if row.Status == string(NotFound) || row.Status == string(Unreachable) {
+		if row.Status == string(ociregistry.NotFound) || row.Status == string(ociregistry.Unreachable) {
 			return true
 		}
 	}

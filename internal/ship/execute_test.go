@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/bump"
 
 	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/steprun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -245,8 +246,8 @@ func TestShipARerunWithCommitsOnTheBranchIsAFailureNamingIt(t *testing.T) {
 
 func TestShipMakesNoCommitWhenSomethingBlocksTheRelease(t *testing.T) {
 	ws, clone, ex := newShip(t)
-	p := &fakeProber{results: map[string]registry.Result{
-		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: registry.NotFound},
+	p := &fakeProber{results: map[string]ociregistry.Result{
+		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: ociregistry.NotFound},
 	}}
 
 	plan, err := Ship(bg, ws, p, shipIn("v2.15"), ex, nil)

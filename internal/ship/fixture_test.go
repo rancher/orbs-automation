@@ -11,11 +11,12 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/registry"
 )
 
 // lineSpec is a line a project lists and the branch it is on; no branch is the
@@ -256,18 +257,18 @@ func (f *fakeWorkspace) UpstreamFile(_ context.Context, slug, ref, path string) 
 
 type fakeProber struct {
 	mu      sync.Mutex
-	results map[string]registry.Result
+	results map[string]ociregistry.Result
 	calls   int
 }
 
-func (f *fakeProber) Exists(_ context.Context, host, image, tag string) registry.Result {
+func (f *fakeProber) Exists(_ context.Context, host, image, tag string) ociregistry.Result {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
 	if r, ok := f.results[host+" "+image+":"+tag]; ok {
 		return r
 	}
-	return registry.Result{Status: registry.Found}
+	return ociregistry.Result{Status: ociregistry.Found}
 }
 
 func tags(names ...string) []git.Tag {

@@ -3,8 +3,9 @@ package ship
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
-	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -123,8 +124,8 @@ func TestShipWithoutAnExecutorEmitsOnlyTheCheck(t *testing.T) {
 
 func TestShipABlockedReleaseEmitsNoWork(t *testing.T) {
 	ws, ex := twoTargets(t)
-	p := &fakeProber{results: map[string]registry.Result{
-		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: registry.NotFound},
+	p := &fakeProber{results: map[string]ociregistry.Result{
+		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: ociregistry.NotFound},
 	}}
 	rec := &recording{}
 

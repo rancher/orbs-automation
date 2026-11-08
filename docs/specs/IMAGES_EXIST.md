@@ -40,6 +40,8 @@ spec:
 
 ## The registry client
 
+It is `internal/platform/ociregistry`, which knows nothing of which registries gero uses; `internal/registry` has the three roles (their hosts and when each applies) and the report.
+
 Standard `net/http`, no module, and no `docker` binary: `docker manifest inspect` is a manifest request, so the client makes one. It sends `HEAD /v2/<name>/manifests/<tag>` with the `Accept` types for image manifests and indexes. On a 401 with a bearer challenge it asks the named realm for an anonymous token and retries once. A 200 is found, a 404 is not found, and anything else, including a 401 after the retry, is unreachable with the status.
 
 Reads are anonymous in every registry the script checks, so no credentials are used. Authentication for publishing stays in Vault and in the release workflow, never here. A registry that needs a login to read is reported as unreachable, not worked around.

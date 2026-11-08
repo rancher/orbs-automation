@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
@@ -89,7 +90,7 @@ func TestARunStylesTheImagesSectionAndItsStatuses(t *testing.T) {
 	var out bytes.Buffer
 
 	err := runToStyled(context.Background(), &out, nil, readyWorkspace(),
-		fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false, st)
+		fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputText, in, false, st)
 
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), st.Style(style.Heading, "Images"))
@@ -122,7 +123,7 @@ func TestTheJSONReportIsNeverStyled(t *testing.T) {
 	run := func(st *style.Renderer) string {
 		var out bytes.Buffer
 		err := runToStyled(context.Background(), &out, nil, readyWorkspace(),
-			fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in, false, st)
+			fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputJSON, in, false, st)
 		require.NoError(t, err)
 		return out.String()
 	}
@@ -135,7 +136,7 @@ func TestARunWritesTheStyledTextAndItsPlainTextIsTheSame(t *testing.T) {
 	run := func(st *style.Renderer) string {
 		var out bytes.Buffer
 		err := runToStyled(context.Background(), &out, nil, readyWorkspace(),
-			fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in, false, st)
+			fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputText, in, false, st)
 		require.NoError(t, err)
 		return out.String()
 	}

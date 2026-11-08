@@ -31,7 +31,7 @@ internal/ship/         one pull request for each target branch of a consumer: th
 internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR, make a tag), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch, bumpcommit and createtag are built
 internal/bump/         the update engine: the routes of release holdings, the targets of a release, writing a holding in place, the edits' strategies and steps around the write; starts no process   (UPDATE_ENGINE)
 internal/steprun/      runs the pre-edit and post-edit steps of an update
-internal/registry/     image existence checks in the registries a project publishes to   (IMAGES_EXIST)
+internal/registry/     image existence checks in the registries a project publishes to: the registries gero uses and the report over a project's image artifacts   (IMAGES_EXIST)
 internal/tagscheme/    what readers ask of a project's tags: its lines, its newest release, the order of two tags
 internal/calver/       the tag format of projects whose lines are in their tags, such as rancher-assets
 internal/releasetag/   the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
@@ -45,6 +45,7 @@ internal/chain/        the resolved model commands read: projects, streams, arti
 internal/chainload/    reads a directory into the chain's graph (workspace only)
 
 internal/platform/actor/      who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
+internal/platform/ociregistry/ asks an image registry whether an image exists: the manifest request and the anonymous token, no knowledge of which registries gero uses
 internal/platform/clicfg/     the user file (schema.go, unversioned: not application config) and the CLI config loader -> Settings   (CLI_CONFIG)
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec

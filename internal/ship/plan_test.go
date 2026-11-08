@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/yamledit"
-	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,8 +57,8 @@ func TestCheckAlreadyUpToDate(t *testing.T) {
 }
 
 func TestCheckBlockedByAMissingImage(t *testing.T) {
-	p := &fakeProber{results: map[string]registry.Result{
-		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: registry.NotFound},
+	p := &fakeProber{results: map[string]ociregistry.Result{
+		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: ociregistry.NotFound},
 	}}
 	got, err := Check(ctx, fixture(t), p, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
@@ -208,7 +209,7 @@ func TestCheckHasNoPreviewWhenAlreadyUpToDate(t *testing.T) {
 }
 
 func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
-	p := &fakeProber{results: map[string]registry.Result{"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: registry.NotFound}}}
+	p := &fakeProber{results: map[string]ociregistry.Result{"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: ociregistry.NotFound}}}
 	got, err := Check(ctx, fixture(t), p, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, got.Status)

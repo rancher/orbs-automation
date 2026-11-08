@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
@@ -17,11 +19,11 @@ import (
 // else. It records what it was asked.
 type fakeProber struct {
 	mu      sync.Mutex
-	results map[string]Result
+	results map[string]ociregistry.Result
 	asked   []string
 }
 
-func (f *fakeProber) Exists(_ context.Context, host, image, tag string) Result {
+func (f *fakeProber) Exists(_ context.Context, host, image, tag string) ociregistry.Result {
 	key := host + " " + image + ":" + tag
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -29,7 +31,7 @@ func (f *fakeProber) Exists(_ context.Context, host, image, tag string) Result {
 	if r, ok := f.results[key]; ok {
 		return r
 	}
-	return Result{Status: Found}
+	return ociregistry.Result{Status: ociregistry.Found}
 }
 
 // sccOperator is a project with one universal stream and one image.
@@ -82,7 +84,7 @@ func TestCheckProjectPrereleaseSkipsPrimeProduction(t *testing.T) {
 }
 
 func TestCheckProjectFails(t *testing.T) {
-	p := &fakeProber{results: map[string]Result{"stgregistry.suse.com rancher/scc-operator:v1": {Status: Unreachable, Detail: "500"}}}
+	p := &fakeProber{results: map[string]ociregistry.Result{"stgregistry.suse.com rancher/scc-operator:v1": {Status: ociregistry.Unreachable, Detail: "500"}}}
 	got := CheckProject(context.Background(), sccOperator(t), p, "v1")
 	assert.True(t, got.Failed())
 	assert.Equal(t, "500", got.Rows[1].Detail)

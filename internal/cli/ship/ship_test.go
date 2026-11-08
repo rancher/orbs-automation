@@ -13,6 +13,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
@@ -93,9 +95,11 @@ func (f *fakeWorkspace) PushSettings(string) domain.PushSettings {
 	return domain.PushSettings{Upstream: "upstream"}
 }
 
-type fakeProber struct{ result registry.Result }
+type fakeProber struct{ result ociregistry.Result }
 
-func (f fakeProber) Exists(context.Context, string, string, string) registry.Result { return f.result }
+func (f fakeProber) Exists(context.Context, string, string, string) ociregistry.Result {
+	return f.result
+}
 
 var in = domain.Input{Project: "scc-operator", Lines: []string{"v2.16"}}
 
@@ -104,7 +108,7 @@ func readyWorkspace() *fakeWorkspace {
 }
 
 func TestRunReady(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
 	for _, want := range []string{
@@ -126,7 +130,7 @@ func TestRunAlreadyUpToDate(t *testing.T) {
 }
 
 func TestRunBlockedKeepsTheReport(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.NotFound}}, nil, clicfg.OutputText, in)
 	assert.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out, "blocked")
 	assert.Contains(t, out, "not found", "the missing images are listed")
@@ -140,7 +144,7 @@ func TestRunErrorsPrintNothing(t *testing.T) {
 }
 
 func TestRunJSON(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputJSON, in)
 	require.NoError(t, err)
 	var got domain.Plan
 	require.NoError(t, json.Unmarshal([]byte(out), &got))
@@ -150,7 +154,7 @@ func TestRunJSON(t *testing.T) {
 }
 
 func TestRunJSONWhenBlocked(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputJSON, in)
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.NotFound}}, nil, clicfg.OutputJSON, in)
 	assert.ErrorIs(t, err, ErrBlocked)
 	assert.True(t, json.Valid([]byte(out)))
 }
@@ -212,14 +216,14 @@ func TestRenderTextHasNoPreviewWhenThereIsNone(t *testing.T) {
 }
 
 func TestRunShowsThePreviewFromTheDomain(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		nil, clicfg.OutputText, in)
 	require.NoError(t, err)
 	assert.Contains(t, out, "bot/scc-operator-v0.5.3-main")
 }
 
 func TestRunJSONHasTheFullPreview(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		nil, clicfg.OutputJSON, in)
 	require.NoError(t, err)
 	var got domain.Plan
@@ -264,7 +268,7 @@ func TestRunNotInAProjectSaysToNameOne(t *testing.T) {
 
 func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 	ws := &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.9.0\n"}}
-	prober := fakeProber{result: registry.Result{Status: registry.Found}}
+	prober := fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}
 
 	out, err := runWith(context.Background(), ws, prober, nil, clicfg.OutputText, in)
 	assert.ErrorIs(t, err, ErrBlocked)
@@ -282,7 +286,7 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 }
 
 func TestRunWithNoBranchChecksTheBranchesTheReleaseGoesTo(t *testing.T) {
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		nil, clicfg.OutputText, domain.Input{Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Contains(t, out, "Targets")
@@ -347,7 +351,7 @@ func TestRenderTextSaysWhetherItWasADryRun(t *testing.T) {
 func TestRunPassesADryRunToThePlan(t *testing.T) {
 	dry := in
 	dry.DryRun = true
-	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		nil, clicfg.OutputJSON, dry)
 	require.NoError(t, err)
 	var got domain.Plan
@@ -470,7 +474,7 @@ func TestRunPassesNoPushToThePlanExceptInADryRun(t *testing.T) {
 	for _, tc := range []struct{ dry, want bool }{{false, true}, {true, false}} {
 		opts := in
 		opts.NoPush, opts.DryRun = true, tc.dry
-		out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+		out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 			nil, clicfg.OutputJSON, opts)
 		require.NoError(t, err)
 		var got domain.Plan
@@ -486,7 +490,7 @@ func TestRunWithAnExecutorAndNoCloneReportsThePlanAndTheError(t *testing.T) {
 	opts := in
 	opts.NoPush = true
 
-	out, err := runWith(context.Background(), ws, fakeProber{result: registry.Result{Status: registry.Found}},
+	out, err := runWith(context.Background(), ws, fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		&domain.Executor{}, clicfg.OutputText, opts)
 
 	require.ErrorIs(t, err, domain.ErrNoClone)
@@ -499,7 +503,7 @@ func TestRunWithoutAnExecutorOnlyChecks(t *testing.T) {
 	ws := readyWorkspace()
 	ws.cloneErr = errors.New("never asked")
 
-	out, err := runWith(context.Background(), ws, fakeProber{result: registry.Result{Status: registry.Found}},
+	out, err := runWith(context.Background(), ws, fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
@@ -574,9 +578,9 @@ type observingProber struct {
 	seen *string
 }
 
-func (p observingProber) Exists(context.Context, string, string, string) registry.Result {
+func (p observingProber) Exists(context.Context, string, string, string) ociregistry.Result {
 	*p.seen = p.out.String()
-	return registry.Result{Status: registry.Found}
+	return ociregistry.Result{Status: ociregistry.Found}
 }
 
 func TestRunToShowsTheBranchesBeforeTheSlowImageCheck(t *testing.T) {
@@ -594,7 +598,7 @@ func TestRunToShowsTheBranchesBeforeTheSlowImageCheck(t *testing.T) {
 }
 
 func TestRunToTextIsTheReportRunWithReturns(t *testing.T) {
-	ws, prober := readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}
+	ws, prober := readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}
 	var out bytes.Buffer
 
 	err := runPlain(context.Background(), &out, nil, ws, prober, nil, clicfg.OutputText, in)
@@ -621,7 +625,7 @@ func TestRunToJSONIsOneDocumentAtTheEnd(t *testing.T) {
 func TestRunToReturnsTheErrorAfterTheReport(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.NotFound}}, nil, clicfg.OutputText, in)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.NotFound}}, nil, clicfg.OutputText, in)
 
 	require.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out.String(), "status  blocked", "the report was written first")
@@ -631,7 +635,7 @@ func TestRunToLogsTheEventsBesideTheTextReport(t *testing.T) {
 	var out, logs bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	err := runPlain(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in)
+	err := runPlain(context.Background(), &out, log, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "Targets", "the report is still written")
@@ -644,7 +648,7 @@ func TestRunToLogsTheEventsAndKeepsJSONOnStdoutAsOneDocument(t *testing.T) {
 	var out, logs bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	err := runPlain(context.Background(), &out, log, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputJSON, in)
+	err := runPlain(context.Background(), &out, log, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputJSON, in)
 
 	require.NoError(t, err)
 	var plan domain.Plan
@@ -656,7 +660,7 @@ func TestRunToLogsTheEventsAndKeepsJSONOnStdoutAsOneDocument(t *testing.T) {
 func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}}, nil, clicfg.OutputText, in)
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputText, in)
 
 	require.NoError(t, err)
 }
@@ -814,7 +818,7 @@ func declining() *domain.Executor {
 func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		declining(), clicfg.OutputText, in)
 
 	require.ErrorIs(t, err, domain.ErrDeclined)
@@ -825,7 +829,7 @@ func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
 func TestRunToADeclinedRunInJSONStillWritesThePlan(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: registry.Result{Status: registry.Found}},
+	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		declining(), clicfg.OutputJSON, in)
 
 	require.ErrorIs(t, err, domain.ErrDeclined)

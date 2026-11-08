@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -33,7 +35,7 @@ type Workspace interface {
 
 // Checker looks for one image in one registry.
 type Checker interface {
-	Exists(ctx context.Context, host, image, tag string) registry.Result
+	Exists(ctx context.Context, host, image, tag string) ociregistry.Result
 }
 
 // Skipped, Row and Report are the registry package's: the check itself lives
@@ -54,7 +56,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd, project, tag string) (stri
 	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
 		return "", fmt.Errorf("output format %q is not supported by repo images exist: use text or json", s.Output)
 	}
-	report, err := check(ctx, workspace.Open(s, cwd), registry.Checker{}, project, tag)
+	report, err := check(ctx, workspace.Open(s, cwd), ociregistry.Checker{}, project, tag)
 	if err != nil {
 		return "", err
 	}
@@ -83,9 +85,9 @@ func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (R
 // statusRole is the look of the status of an image in a registry.
 func statusRole(status string) (style.Role, bool) {
 	switch status {
-	case string(registry.Found):
+	case string(ociregistry.Found):
 		return style.OK, true
-	case string(registry.NotFound), string(registry.Unreachable):
+	case string(ociregistry.NotFound), string(ociregistry.Unreachable):
 		return style.Error, true
 	case Skipped:
 		return style.Dim, true
@@ -121,9 +123,9 @@ func renderText(r Report, view *style.Renderer) string {
 			status += " (" + row.Detail + ")"
 		}
 		switch row.Status {
-		case string(registry.NotFound):
+		case string(ociregistry.NotFound):
 			notFound++
-		case string(registry.Unreachable):
+		case string(ociregistry.Unreachable):
 			unreachable++
 		}
 		table = append(table, []string{row.Image, row.Label, status, row.Reference})
