@@ -48,7 +48,7 @@ func TestInitRefusesAnExistingFileUnlessForced(t *testing.T) {
 // A file the settings cannot load is the one init has to be able to replace.
 func TestInitForceReplacesAFileThatDoesNotLoad(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("noSuchKey: 1\n"), 0o644))
+	require.NoError(t, os.WriteFile(path, []byte("pushTo: forks\n"), 0o644))
 	t.Setenv("GERO_CONFIG", path)
 
 	_, _, err := execRoot(t, append([]string{"init", "--force"}, initFlags...)...)

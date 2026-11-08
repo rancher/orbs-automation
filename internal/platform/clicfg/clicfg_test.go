@@ -167,8 +167,6 @@ func TestLoadFileErrors(t *testing.T) {
 		yaml    string
 		wantErr string
 	}{
-		{"unknown key", "upstrem: x\n", "upstrem"},
-		{"unknown nested key", "repos:\n  root: /x\n", "root"},
 		{"malformed", "upstream: [\n", "gero-test.yaml"},
 		{"invalid output", "output: xml\n", "output"},
 		{"relative configDir", "configDir: rel/dir\n", "absolute"},
@@ -647,4 +645,41 @@ func TestTheUserFileStillRejectsUnknownKeysUnderRepl(t *testing.T) {
 	_, err := Load(Inputs{UserFile: strings.NewReader("repl:\n  promt: x\n")})
 
 	assert.Error(t, err)
+}
+
+func TestLoadUnknownKeysAreWarningsAndTheValidKeysStillLoad(t *testing.T) {
+	s, err := Load(Inputs{
+		UserFile:     file("configDir: /cfg\nupstrem: x\nrepos:\n  search: [/w]\n  cloneDir: /c\n"),
+		UserFileName: "gero-test.yaml",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/cfg", s.ConfigDir)
+	assert.Equal(t, []string{"/w"}, s.Repos.Search)
+	require.Len(t, s.Warnings, 2)
+	assert.Contains(t, s.Warnings[0], "gero-test.yaml")
+	assert.Contains(t, s.Warnings[0], "line 2")
+	assert.Contains(t, s.Warnings[0], "upstrem")
+	assert.Contains(t, s.Warnings[1], "line 5")
+	assert.Contains(t, s.Warnings[1], "cloneDir")
+}
+
+func TestLoadAnInvalidValueStillFailsWithAnUnknownKeyBesideIt(t *testing.T) {
+	_, err := Load(Inputs{UserFile: file("upstrem: x\noutput: xml\n"), UserFileName: "gero-test.yaml"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "output")
+}
+
+func TestLoadAWrongTypeStillFails(t *testing.T) {
+	_, err := Load(Inputs{UserFile: file("repos:\n  search: not-a-list\n"), UserFileName: "gero-test.yaml"})
+
+	require.Error(t, err)
+}
+
+func TestLoadNoWarningsForAGoodFile(t *testing.T) {
+	s, err := Load(Inputs{UserFile: file("output: json\n")})
+
+	require.NoError(t, err)
+	assert.Empty(t, s.Warnings)
 }

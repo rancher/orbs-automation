@@ -195,3 +195,44 @@ func TestNoErrorsIsANilErr(t *testing.T) {
 	assert.NoError(t, r.Err())
 	assert.Empty(t, r.Warnings())
 }
+
+func TestLoadTolerantTurnsUnknownKeysIntoWarningsAndKeepsTheRest(t *testing.T) {
+	var w widget
+
+	r := LoadTolerant("w.yaml", []byte("layout: perLine\nsize: 3\nbogus: 1\nextra: 2\n"), &w, Context{})
+
+	require.NoError(t, r.Err())
+	assert.Equal(t, "perLine", w.Layout)
+	assert.Equal(t, 3, w.Size)
+	warnings := r.Warnings()
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0].Msg, "line 3")
+	assert.Contains(t, warnings[0].Msg, "bogus")
+	assert.Contains(t, warnings[1].Msg, "line 4")
+	assert.Equal(t, "w.yaml", warnings[0].Source)
+	assert.Equal(t, []string{"defaults", "validate"}, w.calls, "still defaulted and validated")
+}
+
+func TestLoadTolerantStillReportsWhatIsWrong(t *testing.T) {
+	for name, data := range map[string]string{
+		"a rule that fails": "layout: wrong\nbogus: 1\n",
+		"a wrong type":      "size: many\nbogus: 1\n",
+		"not valid YAML":    "layout: [\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var w widget
+
+			r := LoadTolerant("w.yaml", []byte(data), &w, Context{})
+
+			assert.Error(t, r.Err())
+		})
+	}
+}
+
+func TestLoadStaysStrict(t *testing.T) {
+	var w widget
+
+	r := Load("w.yaml", []byte("layout: perLine\nbogus: 1\n"), &w, Context{})
+
+	assert.Error(t, r.Err())
+}

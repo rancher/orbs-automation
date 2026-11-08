@@ -118,7 +118,7 @@ func TestLoadSettingsWithoutUserFile(t *testing.T) {
 }
 
 func TestLoadSettingsReportsFileErrors(t *testing.T) {
-	e := userFile(t, "upstrem: x\n")
+	e := userFile(t, "pushTo: forks\n")
 
 	err := loadSettings(env(e), t.TempDir())(flagged(t), nil)
 

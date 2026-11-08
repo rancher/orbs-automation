@@ -90,7 +90,7 @@ func TestConfigShowTextByDefault(t *testing.T) {
 
 func TestConfigShowBadUserFile(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(p, []byte("upstrem: x\n"), 0o600))
+	require.NoError(t, os.WriteFile(p, []byte("pushTo: forks\n"), 0o600))
 	t.Setenv("GERO_CONFIG", p)
 
 	stdout, _, err := execRoot(t, "config", "show")

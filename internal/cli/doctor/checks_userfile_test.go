@@ -67,7 +67,7 @@ func TestUserFileCheckFileThatWouldStopACommandFails(t *testing.T) {
 		content string
 		want    string
 	}{
-		{"an unknown key", "bogus: 1\n", "bogus"},
+		{"a value that is not allowed", "pushTo: forks\n", "pushTo"},
 		{"a path that is not absolute", "configDir: relative/dir\n", "absolute"},
 		{"a file that is not YAML", "output: [unclosed\n", "yaml"},
 	}
@@ -106,4 +106,19 @@ func TestUserFileCheckJudgesTheFileNotTheEnvironment(t *testing.T) {
 	got := NewUserFileCheck(env).Run(context.Background())
 
 	assert.Equal(t, Result{Status: StatusOK, Message: path}, got)
+}
+
+// A key that is not known does not stop a command, so the check passes with a
+// warning that names it, and the keys that are valid are in effect.
+func TestUserFileCheckUnknownKeyWarns(t *testing.T) {
+	path := writeUserFile(t, "output: json\nrepos:\n  cloneDir: /x\n")
+	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path})
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	assert.Equal(t, StatusWarn, got.Status)
+	assert.Contains(t, got.Message, path)
+	assert.Contains(t, got.Message, "line 3")
+	assert.Contains(t, got.Message, "cloneDir")
+	assert.Contains(t, got.Remediation, "docs/specs/CLI_CONFIG.md")
 }
