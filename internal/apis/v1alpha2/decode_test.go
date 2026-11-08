@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,9 +55,9 @@ func TestDecodeFixture(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 44, total)
+	assert.Equal(t, 45, total)
 	assert.Equal(t, map[string]int{
-		KindProject: 12, KindStream: 9, KindArtifact: 10, KindHolding: 11, KindEdit: 2,
+		KindProject: 12, KindStream: 9, KindArtifact: 10, KindHolding: 11, KindEdit: 2, KindRancherLines: 1,
 	}, kinds)
 }
 
@@ -215,6 +216,32 @@ spec:
 		Strategy: "chartsPackageBump",
 		With:     map[string]string{"package": "rancher-backup"},
 	}, e.Spec)
+}
+
+func TestDecodeRancherLines(t *testing.T) {
+	l := decodeOne[*RancherLines](t, `
+apiVersion: gero/v1alpha2
+kind: RancherLines
+name: rancher
+spec:
+  lines:
+    - id: v2.17
+      kubernetes: {min: "1.36", max: "1.38"}
+    - id: v2.15
+      phase: eom
+      dates: {ga: 2026-08-27, eom: 2027-02-27, eol: 2028-02-27}
+      kubernetes: {min: "1.34", max: "1.36"}
+`)
+
+	require.Len(t, l.Spec.Lines, 2)
+	assert.Equal(t, Line{ID: "v2.17", Kubernetes: KubernetesRange{Min: "1.36", Max: "1.38"}}, l.Spec.Lines[0])
+	got := l.Spec.Lines[1]
+	assert.Equal(t, "v2.15", got.ID)
+	assert.Equal(t, "eom", got.Phase)
+	assert.Equal(t, time.Date(2026, 8, 27, 0, 0, 0, 0, time.UTC), got.Dates.GA)
+	assert.Equal(t, time.Date(2027, 2, 27, 0, 0, 0, 0, time.UTC), got.Dates.EOM)
+	assert.Equal(t, time.Date(2028, 2, 27, 0, 0, 0, 0, time.UTC), got.Dates.EOL)
+	assert.Equal(t, KubernetesRange{Min: "1.34", Max: "1.36"}, got.Kubernetes)
 }
 
 func TestDecodeSeveralDocuments(t *testing.T) {
