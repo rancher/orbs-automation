@@ -6,7 +6,7 @@
 
 ## One door
 
-A command package may not locate the central config, discover a repo or scan for clones itself. Each rule exists once, in `workspace`, so the same inputs cannot resolve differently in different commands. Lint enforces both halves ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)): repositories are opened only through `workspace`, and the config loaders (`internal/config/loader` and `internal/appconfig`) are importable only from `workspace`, so no command can see config that has skipped defaults or validation.
+A command package may not locate the central config, discover a repo or scan for clones itself. Each rule exists once, in `workspace`, so the same inputs cannot resolve differently in different commands. Lint enforces both halves ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)): repositories are opened only through `workspace`, and the config loaders (`internal/chainload` and `internal/appconfig`) are importable only from `workspace`, so no command can see config that has skipped defaults or validation.
 
 * Each `internal/cli/<cmd>` calls `workspace.Open(settings, cwd)`. It takes plain values and builds its own real dependencies (file system, go-git opener). A `getenv` joins the parameters when a rule first needs it, such as the CI check for `upstream`. `cmd/` knows nothing about `workspace`.
 * The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake.
@@ -18,10 +18,10 @@ A command package may not locate the central config, discover a repo or scan for
 
 A value in the central config can differ from the value an operation should act on. There are two layers, and each has one home:
 
-* **Within the config.** A field omitted in the YAML is either filled at load, when a default is safe and conservative (`repo.defaultBranch`, `release.tagPattern`, and the others in [`config/README.md`](../../config/README.md)), or left empty and resolved by a getter on the type that owns the inputs, such as `Project.Branch(line)` (a development line with no branch lives on the default branch). The struct field is the **raw** value, exactly what was written, and validation reads it. A getter is the **effective** value, and anything that acts on a line reads that.
+* **Within the config.** A field omitted in the YAML is either filled at load, when a default is safe and conservative (`repo.defaultBranch`, `tagPattern`, and the others in [`config/README.md`](../../config/README.md)), or left empty and resolved by a getter of the graph that owns the inputs, such as `Project.BranchOfLine(line, stage)` (a development line with no branch lives on the default branch) or `Project.Steward()`. The field of the document is the **raw** value, exactly what was written, and validation reads it. A getter of `internal/chain` is the **effective** value, and anything that acts on a line reads that.
 * **Config and CLI settings together.** A value that needs both, such as the upstream remote for one repo (a `repos.overrides` entry, else the global `upstream`), is a `Workspace` method. `clicfg` and `config` do not import each other, so only `workspace` can combine them. The rule for these is **replace, not merge**: the central config carries a CI-oriented default, and a user setting for the same thing replaces it whole. `pullRequests.branchPrefix` (a template of simple placeholders such as `{source}`) is replaced entirely by the user's `branchPrefix`, and what the user leaves out or adds is their call. Nothing in `gero` may depend on a branch name's shape, so a replacement cannot break it; an unknown placeholder is rejected.
 
-`Workspace.Config()` and `Workspace.Project()` return config with defaults applied and validated; the loader is not reachable from anywhere else. `Workspace.Updates()` builds the update dispatcher's engine from that config, reporting every method or edge problem at once, so a command that applies a bump and `config validate` use the same check. A field with a fallback says so in its comment and names its getter, and a test over the config types fails when a field is added without being classed as plain, defaulted at load or resolved by a getter.
+`Workspace.Chain()` and `Workspace.Project()` return the config joined (`internal/chain`), with defaults applied and validated, and read once for the invocation, so every caller has the same graph; the loader is not reachable from anywhere else. `Workspace.Bump()` builds the update engine from that graph, reporting every edit or holding problem at once, so a command that applies a bump and `config validate` use the same check. A field with a fallback says so in its comment and names its getter.
 
 ## Inferred defaults
 
@@ -35,7 +35,7 @@ flag > env > user file > inferred from CWD repo > built-in default > error
 |---|---|
 | Current repo slug | `owner/name` parsed from remote URLs, matched against central-config `spec.repo.name` |
 | Local path for a slug | The CWD repo if its slug matches; else `repos.paths`; else the `repos.search` scan; else the flat sibling `<parent of CWD repo>/<name>` |
-| `configDir` | Nearest ancestor of the CWD containing `config/*.project.yaml` |
+| `configDir` | `./config` when the CWD has a YAML file there with documents of gero's (an `apiVersion` of `gero/`) |
 | `upstream` | Remote whose URL matches the slug; else the only remote; in CI, `origin` |
 | `fork` | Remote with the same repo name under a different owner |
 | `githubUser` | Owner of the fork remote's URL (no network call) |
