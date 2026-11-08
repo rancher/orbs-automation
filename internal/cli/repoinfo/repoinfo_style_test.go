@@ -21,7 +21,7 @@ func colored() *style.Renderer {
 
 func info(t *testing.T, c Clone, err error) Info {
 	t.Helper()
-	got, gerr := gather(fixture(), opener(c, err), nil)
+	got, gerr := gather(fixture(t), opener(c, err), nil)
 	require.NoError(t, gerr)
 	return got
 }
@@ -66,10 +66,10 @@ func TestHeadingsAndLabelsAndColumnHeadsTakeTheirLook(t *testing.T) {
 
 	out := renderText(infos(t)["clean"], v)
 
-	for _, h := range []string{"rancher/rancher", "Release lines", "Local clone"} {
+	for _, h := range []string{"rancher/rancher", "Branches", "Stream rancher", "Local clone"} {
 		assert.Contains(t, out, v.Style(style.Heading, h), h)
 	}
-	for _, label := range []string{"owned", "managed by", "default branch", "release branching", "tag pattern", "path", "branch", "commit", "work tree"} {
+	for _, label := range []string{"owned", "managed by", "default branch", "branch layout", "tag pattern", "path", "branch", "commit", "work tree"} {
 		assert.Contains(t, out, v.Style(style.Dim, label), label)
 	}
 	for _, head := range []string{"LINE", "SERIES", "BRANCH"} {

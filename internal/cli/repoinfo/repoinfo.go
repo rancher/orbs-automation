@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
@@ -22,7 +22,7 @@ import (
 type Workspace interface {
 	// Project returns the Project with the given config name or owner/name
 	// slug, or the one in the working directory when the key is empty.
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 	RepoPath(slug string) (workspace.RepoPath, error)
 }
 
@@ -40,30 +40,51 @@ type Opener func(dir string) (Clone, error)
 
 // Info is everything the command reports about one repository.
 type Info struct {
-	Slug          string      `json:"slug"`
-	Owned         bool        `json:"owned"`
-	ManagedBy     string      `json:"managedBy,omitempty"` // the team responsible; empty when an unowned project names none
-	DefaultBranch string      `json:"defaultBranch"`
-	Release       ReleaseInfo `json:"release"`
-	Local         LocalInfo   `json:"local"`
+	Slug          string       `json:"slug"`
+	Owned         bool         `json:"owned"`
+	External      bool         `json:"external,omitempty"`
+	ManagedBy     string       `json:"managedBy,omitempty"` // the team responsible; empty when an unowned project names none
+	DefaultBranch string       `json:"defaultBranch"`
+	Branches      BranchesInfo `json:"branches"`
+	Streams       []StreamInfo `json:"streams,omitempty"`
+	Local         LocalInfo    `json:"local"`
 }
 
-// ReleaseInfo is the Project's release policy with defaults applied.
-type ReleaseInfo struct {
-	Branching          string     `json:"branching"`
-	TagPattern         string     `json:"tagPattern"`
-	RequiresPrerelease bool       `json:"requiresPrerelease"`
-	Lines              []LineInfo `json:"lines,omitempty"`
+// BranchesInfo is how the Project's releases are laid out over branches.
+type BranchesInfo struct {
+	Layout string     `json:"layout"`
+	Stages []string   `json:"stages,omitempty"`
+	Lines  []LineInfo `json:"lines,omitempty"`
 }
 
-// LineInfo maps one Rancher line to the Project's series and branch.
+// LineInfo maps one Rancher line to the Project's branch.
 type LineInfo struct {
 	Line   string `json:"line"`
-	Series string `json:"series"`
-	Branch string `json:"branch"`
+	Branch string `json:"branch,omitempty"`
 	// IsDefaultBranch is set when the config names no branch, so Branch is the
 	// Project's default branch.
 	IsDefaultBranch bool `json:"isDefaultBranch,omitempty"`
+	// Pending is set when the line has no branch yet.
+	Pending bool `json:"pending,omitempty"`
+	// Stages is the branch of each stage, for a line that has one for each.
+	Stages map[string]string `json:"stages,omitempty"`
+}
+
+// StreamInfo is one release stream of the Project: what is released, which tags
+// are releases, and the version series of each line.
+type StreamInfo struct {
+	Name               string           `json:"name"`
+	Scheme             string           `json:"scheme"`
+	TagPattern         string           `json:"tagPattern"`
+	Universal          bool             `json:"universal,omitempty"`
+	RequiresPrerelease bool             `json:"requiresPrerelease"`
+	Lines              []StreamLineInfo `json:"lines,omitempty"`
+}
+
+// StreamLineInfo is the version series of a line in a stream.
+type StreamLineInfo struct {
+	Line   string `json:"line"`
+	Series string `json:"series,omitempty"`
 }
 
 // LocalInfo is the local clone and its state. Error is set instead of the
@@ -109,28 +130,35 @@ func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
 	if len(slugs) > 0 {
 		slug = slugs[0]
 	}
-	p, err := ws.Project(slug)
+	p, err := ws.ChainProject(slug)
 	if err != nil {
 		return Info{}, err
 	}
 	i := Info{
-		Slug:          p.Repo.Name,
-		Owned:         p.Repo.Owned,
+		Slug:          p.Slug(),
+		Owned:         p.Owned(),
+		External:      p.External(),
 		ManagedBy:     p.Steward(),
-		DefaultBranch: p.Repo.DefaultBranch,
-		Release: ReleaseInfo{
-			Branching:          p.Release.Branching,
-			TagPattern:         p.Release.TagPattern,
-			RequiresPrerelease: p.Release.RequiresPrerelease,
-		},
+		DefaultBranch: p.DefaultBranch(),
+		Branches:      BranchesInfo{Layout: p.Layout(), Stages: p.Stages()},
 	}
-	for _, l := range p.Release.Lines {
-		branch, isDefault := p.Branch(l)
-		i.Release.Lines = append(i.Release.Lines, LineInfo{
-			Line: l.Line, Series: l.Series(), Branch: branch, IsDefaultBranch: isDefault,
+	for _, lb := range p.LineBranches() {
+		i.Branches.Lines = append(i.Branches.Lines, LineInfo{
+			Line: lb.Line, Branch: lb.Branch, IsDefaultBranch: lb.IsDefault, Pending: lb.Pending, Stages: lb.Stages,
 		})
 	}
-	i.Local = local(ws, open, p.Repo.Name)
+	for _, st := range p.Streams() {
+		si := StreamInfo{
+			Name: st.Name(), Scheme: st.Scheme(), TagPattern: st.TagPattern(),
+			Universal: st.Universal(), RequiresPrerelease: st.RequiresPrerelease(),
+		}
+		for _, line := range st.Lines() {
+			series, _ := st.Series(line)
+			si.Lines = append(si.Lines, StreamLineInfo{Line: line, Series: series})
+		}
+		i.Streams = append(i.Streams, si)
+	}
+	i.Local = local(ws, open, p.Slug())
 	return i, nil
 }
 
@@ -170,14 +198,21 @@ func renderText(i Info, view *style.Renderer) string {
 	var b strings.Builder
 	section(&b, view, i.Slug, func(row func(label, value string)) {
 		row("owned", yesNo(i.Owned))
+		if i.External {
+			row("external", "yes")
+		}
 		row("managed by", orUnspecified(i.ManagedBy))
 		row("default branch", i.DefaultBranch)
-		row("release branching", i.Release.Branching)
-		row("tag pattern", i.Release.TagPattern)
-		row("requires prerelease", yesNo(i.Release.RequiresPrerelease))
+		row("branch layout", i.Branches.Layout)
+		if len(i.Branches.Stages) > 0 {
+			row("branch stages", strings.Join(i.Branches.Stages, ", "))
+		}
 	})
-	if len(i.Release.Lines) > 0 {
-		renderLines(&b, view, i)
+	if len(i.Branches.Lines) > 0 {
+		renderBranches(&b, view, i)
+	}
+	for _, st := range i.Streams {
+		renderStream(&b, view, st)
 	}
 	renderLocal(&b, view, i.Local)
 	return b.String()
@@ -195,15 +230,50 @@ func section(b *strings.Builder, view *style.Renderer, heading string, rows func
 	b.WriteString(ui.Align(table, view.Width))
 }
 
-func renderLines(b *strings.Builder, view *style.Renderer, i Info) {
-	b.WriteString("\n" + view.Style(style.Heading, "Release lines") + "\n")
-	table := [][]string{{"  " + view.Style(style.Dim, "LINE"), view.Style(style.Dim, "SERIES"), view.Style(style.Dim, "BRANCH")}}
-	for _, l := range i.Release.Lines {
-		branch := l.Branch
-		if l.IsDefaultBranch {
-			branch += " (default branch)"
+func renderBranches(b *strings.Builder, view *style.Renderer, i Info) {
+	b.WriteString("\n" + view.Style(style.Heading, "Branches") + "\n")
+	table := [][]string{{"  " + view.Style(style.Dim, "LINE"), view.Style(style.Dim, "BRANCH")}}
+	for _, l := range i.Branches.Lines {
+		table = append(table, []string{"  " + l.Line, branchText(l, i.Branches.Stages)})
+	}
+	b.WriteString(ui.Align(table, view.Width))
+}
+
+// branchText is the branch of a line as one cell: the branch, the default branch
+// said so, a branch for each stage, or none yet.
+func branchText(l LineInfo, stages []string) string {
+	switch {
+	case l.IsDefaultBranch:
+		return l.Branch + " (default branch)"
+	case l.Pending:
+		return "(none yet)"
+	case len(l.Stages) > 0:
+		var parts []string
+		for _, stage := range stages {
+			if branch, ok := l.Stages[stage]; ok {
+				parts = append(parts, stage+": "+branch)
+			}
 		}
-		table = append(table, []string{"  " + l.Line, l.Series, branch})
+		return strings.Join(parts, ", ")
+	}
+	return l.Branch
+}
+
+func renderStream(b *strings.Builder, view *style.Renderer, st StreamInfo) {
+	section(b, view, "Stream "+st.Name, func(row func(label, value string)) {
+		row("scheme", st.Scheme)
+		row("tag pattern", st.TagPattern)
+		row("requires prerelease", yesNo(st.RequiresPrerelease))
+		if st.Universal {
+			row("lines", "every line")
+		}
+	})
+	if len(st.Lines) == 0 {
+		return
+	}
+	table := [][]string{{"  " + view.Style(style.Dim, "LINE"), view.Style(style.Dim, "SERIES")}}
+	for _, l := range st.Lines {
+		table = append(table, []string{"  " + l.Line, l.Series})
 	}
 	b.WriteString(ui.Align(table, view.Width))
 }
