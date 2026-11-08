@@ -72,3 +72,8 @@ func decodeFile(r io.Reader, name string) (fileConfig, error) {
 	}
 	return fc, nil
 }
+
+// UserFile is an empty value of the type the user file decodes into, so a tool
+// that describes the file (tools/genschema) can read its shape without the type
+// being exported.
+func UserFile() any { return fileConfig{} }

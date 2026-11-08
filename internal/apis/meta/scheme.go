@@ -14,8 +14,12 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
-// slug is what the name of a document may look like.
-var slug = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+// SlugPattern is what the name of a document may look like, as a regular
+// expression: a to z, 0 to 9 and hyphens, starting and ending with a letter or a
+// digit.
+const SlugPattern = `^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`
+
+var slug = regexp.MustCompile(SlugPattern)
 
 // Scheme knows which kinds each apiVersion has, and decodes documents into them.
 type Scheme struct {
