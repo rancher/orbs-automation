@@ -1,12 +1,12 @@
 package meta
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -38,68 +38,64 @@ type head struct {
 	ObjectMeta `yaml:",inline"`
 }
 
-// DecodeReport is Decode that also returns the findings of every document, errors
-// and warnings, in the order reported. ctx is what validation may depend on.
-func (s *Scheme) DecodeReport(_ io.Reader, _ string, _ config.Context) ([]Object, config.Report) {
-	return nil, config.Report{}
-}
-
-// Decode reads every document of a YAML stream into the typed object of its
-// apiVersion and kind. source names the stream in errors, normally a file name.
-// A document with an unsupported apiVersion, an unknown kind, no name or a field
-// its kind does not have is an error that names the source and the document; the
-// other documents are still decoded, and every error is returned together.
-func (s *Scheme) Decode(r io.Reader, source string) ([]Object, error) {
+// DecodeReport reads every document of a YAML stream into the typed object of its
+// apiVersion and kind, then defaults and validates each through the engine, and
+// returns the objects that are valid with the findings of every document, errors
+// and warnings, in the order of the documents. source names the stream in
+// findings, normally a file name, and ctx is what validation may depend on.
+//
+// A document with an unsupported apiVersion, an unknown kind, no name, a field its
+// kind does not have or a rule it breaks is dropped, and the others are still
+// decoded. A YAML syntax error stops the stream.
+func (s *Scheme) DecodeReport(r io.Reader, source string, ctx config.Context) ([]Object, config.Report) {
 	dec := yaml.NewDecoder(r)
 	var objs []Object
-	var errs []error
+	var all config.Report
 	for i := 1; ; i++ {
 		var node yaml.Node
 		if err := dec.Decode(&node); errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", source, err))
+			all.Findings = append(all.Findings, config.Finding{Source: source, Msg: err.Error()})
 			break // the stream is not YAML past here
 		}
-		obj, err := s.decodeDocument(&node)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: document %d: %w", source, i, err))
-			continue
+		obj, rep := s.decodeDocument(source, i, &node, ctx)
+		all.Findings = append(all.Findings, rep.Findings...)
+		if obj != nil && rep.Err() == nil {
+			objs = append(objs, obj)
 		}
-		objs = append(objs, obj)
 	}
-	return objs, errors.Join(errs...)
+	return objs, all
 }
 
-func (s *Scheme) decodeDocument(node *yaml.Node) (Object, error) {
+// Decode is DecodeReport for a caller that wants the objects and an error: the
+// errors of every document joined, warnings left out, and validation as of now.
+func (s *Scheme) Decode(r io.Reader, source string) ([]Object, error) {
+	objs, rep := s.DecodeReport(r, source, config.Context{Now: time.Now()})
+	return objs, rep.Err()
+}
+
+func (s *Scheme) decodeDocument(source string, doc int, node *yaml.Node, ctx config.Context) (Object, config.Report) {
+	fail := func(format string, args ...any) (Object, config.Report) {
+		return nil, config.Report{Findings: []config.Finding{{Source: source, Doc: doc, Msg: fmt.Sprintf(format, args...)}}}
+	}
 	var h head
 	if err := node.Decode(&h); err != nil {
-		return nil, err
+		return fail("%v", err)
 	}
 	kinds, ok := s.versions[h.APIVersion]
 	if !ok {
-		return nil, fmt.Errorf("apiVersion %q is not supported, want one of %s", h.APIVersion, strings.Join(sortedKeys(s.versions), ", "))
+		return fail("apiVersion %q is not supported, want one of %s", h.APIVersion, strings.Join(sortedKeys(s.versions), ", "))
 	}
 	newObject, ok := kinds[h.Kind]
 	if !ok {
-		return nil, fmt.Errorf("kind %q is not known in %s: use one of %s", h.Kind, h.APIVersion, strings.Join(sortedKeys(kinds), ", "))
+		return fail("kind %q is not known in %s: use one of %s", h.Kind, h.APIVersion, strings.Join(sortedKeys(kinds), ", "))
 	}
 	if h.Name == "" {
-		return nil, errors.New("name is required")
-	}
-	// yaml.Node.Decode cannot reject unknown fields, so the document is encoded
-	// again and decoded with them rejected.
-	raw, err := yaml.Marshal(node)
-	if err != nil {
-		return nil, err
+		return fail("name is required")
 	}
 	obj := newObject()
-	dec := yaml.NewDecoder(bytes.NewReader(raw))
-	dec.KnownFields(true)
-	if err := dec.Decode(obj); err != nil {
-		return nil, err
-	}
-	return obj, nil
+	return obj, config.LoadNode(source, doc, fmt.Sprintf("%s %q", h.Kind, h.Name), node, obj, ctx)
 }
 
 func sortedKeys[V any](m map[string]V) []string {
