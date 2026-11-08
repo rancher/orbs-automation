@@ -82,7 +82,7 @@ type Registry struct {
 func NewRegistry() *Registry { return &Registry{schemes: map[string]Scheme{}} }
 
 // Builtin returns a registry with every scheme gero has. The list is explicit on
-// purpose, as updatedispatcher.Builtin's is.
+// purpose, as bump.Builtin's is.
 func Builtin() *Registry {
 	r := NewRegistry()
 	r.Register(LineStage{})

@@ -1,8 +1,8 @@
 // Package appconfig reads the central application config of the v1alpha2 shape
 // from an fs.FS: it finds the documents in every YAML file, decodes, defaults and
-// validates each one, then checks the set as a whole. It takes no CLI settings and
-// is not yet used: internal/workspace becomes its one importer when the commands
-// move to this shape, as it is for internal/config/loader today.
+// validates each one, then checks the set as a whole. It takes no CLI settings;
+// internal/chain builds the model commands read from what it returns, and
+// internal/chainload and internal/workspace are the only ones that call it.
 package appconfig
 
 import (

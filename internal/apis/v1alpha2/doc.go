@@ -8,6 +8,5 @@
 // The envelope and the decoding are shared by every version, in
 // internal/apis/meta; this package defines its kinds and registers them.
 //
-// The old shape, apiVersion gero/v1alpha1, is internal/config; it keeps loading
-// the real config until the cutover.
+// The old shape, apiVersion gero/v1alpha1, is gone: a document of it is refused.
 package v1alpha2
