@@ -39,3 +39,7 @@ type KubernetesRange struct {
 	Min string `yaml:"min"`
 	Max string `yaml:"max"`
 }
+
+// PhaseAt is the phase of the line at now: the phase it is forced into, else the
+// one its dates give.
+func (l Line) PhaseAt(_ time.Time) string { return "" }

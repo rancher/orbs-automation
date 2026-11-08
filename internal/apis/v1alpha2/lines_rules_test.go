@@ -2,6 +2,7 @@ package v1alpha2
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
 	"github.com/stretchr/testify/assert"
@@ -68,6 +69,37 @@ func TestRancherLinesRules(t *testing.T) {
 
 			assert.Nil(t, l, "lines that break a rule are dropped")
 			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+		})
+	}
+}
+
+func TestALinePhaseFollowsItsDatesAndTheTime(t *testing.T) {
+	d := func(day string) time.Time {
+		v, err := time.Parse("2006-01-02", day)
+		require.NoError(t, err)
+		return v
+	}
+	dated := Line{ID: "v2.14", Dates: Dates{GA: d("2026-04-30"), EOM: d("2026-10-30"), EOL: d("2027-10-10")}}
+	tests := []struct {
+		name string
+		line Line
+		now  time.Time
+		want string
+	}{
+		{"no dates", Line{ID: "v2.16"}, d("2026-11-07"), PhaseDevelopment},
+		{"before the ga", dated, d("2026-04-29"), PhaseDevelopment},
+		{"on the ga date", dated, d("2026-04-30"), PhaseGA},
+		{"between ga and eom", dated, d("2026-10-29"), PhaseGA},
+		{"on the eom date", dated, d("2026-10-30"), PhaseEOM},
+		{"on the eol date", dated, d("2027-10-10"), PhaseEOL},
+		{"after the eol date", dated, d("2028-01-01"), PhaseEOL},
+		{"a ga with no eom or eol", Line{ID: "v2.15", Dates: Dates{GA: d("2026-08-27")}}, d("2026-11-07"), PhaseGA},
+		{"a phase over the dates", Line{ID: "v2.14", Phase: PhaseEOL, Dates: dated.Dates}, d("2026-05-01"), PhaseEOL},
+		{"a time that is not in UTC", dated, time.Date(2026, 4, 30, 1, 0, 0, 0, time.FixedZone("x", 2*3600)), PhaseDevelopment},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.line.PhaseAt(tt.now))
 		})
 	}
 }

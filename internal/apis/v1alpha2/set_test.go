@@ -220,3 +220,121 @@ func TestLinesInRancherLinesAreFine(t *testing.T) {
 
 	assert.Empty(t, rep.Findings)
 }
+
+// hasSetWarning reports whether a warning on the labelled document has the path
+// and a message that contains want.
+func hasSetWarning(rep config.Report, label, path, want string) bool {
+	for _, f := range rep.Warnings() {
+		if f.Label == label && f.Path == path && strings.Contains(f.Msg, want) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAHoldingRefsWhatItsKindHolds(t *testing.T) {
+	p := doc("Project", "p", "", projectSpec)
+	q := doc("Project", "q", "", "  repo: {name: acme/b}\n")
+	s := doc("Stream", "s", "{project: q}", streamSpec)
+	a := doc("Artifact", "a", "{stream: s}", artifactSpec)
+	commit := "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"
+	branch := "  at: {file: f.yaml, key: .a}\n  holds: {kind: branch}\n"
+	tests := []struct {
+		name, holding, path, want string
+	}{
+		{"a release with no artifact", doc("Holding", "h", "{project: p}", holdingSpec), "refs.artifact", "required"},
+		{"a release with a from", doc("Holding", "h", "{project: p, artifact: a, from: q}", holdingSpec), "refs.from", "release"},
+		{"a commit with no from", doc("Holding", "h", "{project: p}", commit), "refs.from", "required"},
+		{"a commit with an artifact", doc("Holding", "h", "{project: p, from: q, artifact: a}", commit), "refs.artifact", "commit"},
+		{"a branch with no from", doc("Holding", "h", "{project: p}", branch), "refs.from", "required"},
+		{"a branch with an artifact", doc("Holding", "h", "{project: p, from: q, artifact: a}", branch), "refs.artifact", "branch"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rep := validateSet(t, p, q, s, a, tt.holding)
+
+			assert.True(t, hasSetError(rep, `Holding "h"`, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+		})
+	}
+}
+
+func TestAHoldingOfTheRightRefsIsFine(t *testing.T) {
+	rep := validateSet(t,
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "s", "{project: q}", streamSpec),
+		doc("Artifact", "a", "{stream: s}", artifactSpec),
+		doc("Holding", "hr", "{project: p, artifact: a}", holdingSpec),
+		doc("Holding", "hc", "{project: p, from: q}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"),
+	)
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestProjectsThatHoldSomethingOfEachOtherAreAWarning(t *testing.T) {
+	set := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "sp", "{project: p}", streamSpec),
+		doc("Stream", "sq", "{project: q}", streamSpec),
+		doc("Artifact", "ap", "{stream: sp}", artifactSpec),
+		doc("Artifact", "aq", "{stream: sq}", "  kind: image\n  name: acme/b\n"),
+		doc("Holding", "p-holds-q", "{project: p, artifact: aq}", holdingSpec),
+	}
+
+	t.Run("one way is fine", func(t *testing.T) {
+		assert.Empty(t, validateSet(t, set...).Findings)
+	})
+	t.Run("both ways is a warning on the later holding", func(t *testing.T) {
+		rep := validateSet(t, append(set, doc("Holding", "q-holds-p", "{project: q, artifact: ap}", holdingSpec))...)
+
+		assert.NoError(t, rep.Err(), "a circular dependency is not an error")
+		assert.True(t, hasSetWarning(rep, `Holding "q-holds-p"`, "refs", "circular"), "%v", rep.Findings)
+		assert.Len(t, rep.Warnings(), 1)
+	})
+	t.Run("through a commit it is too", func(t *testing.T) {
+		rep := validateSet(t, append(set, doc("Holding", "q-tracks-p", "{project: q, from: p}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"))...)
+
+		assert.True(t, hasSetWarning(rep, `Holding "q-tracks-p"`, "refs", "circular"), "%v", rep.Findings)
+	})
+	t.Run("a project that holds its own is not", func(t *testing.T) {
+		rep := validateSet(t, append(set, doc("Holding", "p-holds-p", "{project: p, artifact: ap}", holdingSpec))...)
+
+		assert.Empty(t, rep.Warnings())
+	})
+}
+
+func TestALineWithNoBranchAfterDevelopmentIsAWarning(t *testing.T) {
+	lines := doc("RancherLines", "rancher", "", `  lines:
+    - id: v2.16
+    - id: v2.15
+      dates: {ga: 2026-08-27, eom: 2027-02-27}
+    - id: v2.14
+      dates: {ga: 2026-04-30, eom: 2026-10-30}
+`)
+	project := func(branchLines string) string {
+		return doc("Project", "p", "", projectSpec+"  branches:\n    layout: perLine\n    lines: ["+branchLines+"]\n")
+	}
+
+	tests := []struct {
+		name, lines, want string
+	}{
+		{"a line in development", "{line: v2.16}", ""},
+		{"a line at ga", "{line: v2.15}", "ga"},
+		{"a line at eom", "{line: v2.14}", "eom"},
+		{"a line at ga with a branch", "{line: v2.15, branch: release/v2.15}", ""},
+		{"a line at ga with no branch yet", "{line: v2.15, branch: \"\"}", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rep := validateSet(t, lines, project(tt.lines))
+
+			assert.NoError(t, rep.Err())
+			if tt.want == "" {
+				assert.Empty(t, rep.Findings)
+				return
+			}
+			assert.True(t, hasSetWarning(rep, `Project "p"`, "spec.branches.lines[0].branch", tt.want), "%v", rep.Findings)
+		})
+	}
+}
