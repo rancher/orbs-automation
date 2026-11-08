@@ -1,6 +1,6 @@
 # Central Bundle
 
-**Status:** draft. Nothing here is built.
+**Status:** draft. The producer is built, `tools/compilebundle`, which writes the config chunk; the reader in `gero`, the release wiring, the templates and the generated chunk are not.
 
 How the central repo's shared content ships as one file with each `gero` release, and how the CLI uses that file when no local checkout is available. The content is the application config ([APP_CONFIG](APP_CONFIG.md)) and the workflow templates for `gero workflows sync` ([ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md)). How a local directory is found is in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config).
 
@@ -16,20 +16,30 @@ One multi-document YAML file. It is chunks of the same documents the repo holds,
 
 | Chunk | Meaning |
 |---|---|
-| Header | The first document. Bundle format version, the `gero` release tag it was compiled for, the source commit, the compile time |
-| Config | The `config/` documents as written, in a fixed order, so compiling the same tree twice gives the same bytes |
-| Templates | The workflow templates, as documents carrying their path and content |
+| Header | The first document: `apiVersion: gero-bundle/v1`, `kind: Bundle`, `formatVersion`, `geroVersion` (the release tag it was compiled for), `sourceCommit` and `compiledAt`. It is not a config kind and is not in `gero/v1alpha2`: the reader takes it off before the config |
+| Config | The documents of each `config/` YAML file, in the order of the file names, each file after a `# source: <file>` comment. They are as written, except that the `# yaml-language-server` comment at the top of a file and a leading `---` are dropped: the comment only works as a file's first line, and the bundle is not edited, so it carries none. Compiling the same tree twice gives the same bytes |
+| Templates | Later. The workflow templates, as documents carrying their path and content. Today the templates are compiled into the binary and the bundle holds none |
 | Generated | Documents of a kind that marks them as compile-time output, always after the others. Never mixed into the config documents, so a reader can tell hand-written content from generated data |
 
-The seam for config is `config.Load`, which takes an `fs.FS`: the config chunk is read into the same loader through an in-memory file system, so validation and defaults are shared and commands do not know where the config came from. Templates get the same treatment when `workflows sync` exists.
+The seam for config is `chainload.Load`, which takes an `fs.FS` (`appconfig.Load` under it): the config chunk is read into the same loader through an in-memory file system, so validation and defaults are shared and commands do not know where the config came from. Templates get the same treatment when `workflows sync` exists.
 
 **Generated is a place, not a plan.** No generated document exists yet. The expected use is caches that save work at run time, for example API results that rarely change. Each one needs its own spec before it is added, including who refreshes it and what happens when it is stale.
 
 ## Compile command
 
-`gero ci:compile-bundle` is CI-only ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). It reads the central repo's directories, validates the config as `gero config validate` does, runs any generating steps, and writes the bundle to a path given as a flag. It fails on invalid input, so a bad bundle is never produced.
+`tools/compilebundle` is a developer tool under `tools/`, like `tools/genschema`: not part of `gero`, importing its packages. It runs at release time and writes `gero-config-bundle.yaml` into `dist/`, beside what GoReleaser writes. Run it from the repository root, after GoReleaser, which empties `dist/` when it starts:
 
-The release job of the central repo runs it and attaches the bundle to the GitHub release next to the `gero` binaries, with a checksum file.
+```
+go run ./tools/compilebundle --version v0.5.0 --commit "$(git rev-parse HEAD)" --date "$(git show -s --format=%cI HEAD)"
+```
+
+`--config` (default `config`) is the directory to bundle and `--out` (default `dist`) where to write it. The version, commit and date go in the header and are flags, never read from git or the clock, so the same input gives the same bytes. The tool loads the directory with `chainload.Load`, as every command does, and fails on invalid or empty config, so a bad bundle is never produced. It then loads the body of the bundle back, through an in-memory file system as a reader will, and fails unless it gives the same projects, holdings and lines. It writes nothing on failure. A test compiles the real `config/`, so a bad edit fails `go test ./...`.
+
+Not wired yet, for when the release is set up:
+
+* Run it in the release job after `goreleaser release --clean`, with the tag, `GITHUB_SHA` and the commit time.
+* Add the bundle to `checksums.txt` and to the `subject-path` of the provenance attestation in `.github/workflows/release.yaml`.
+* Attach it to the release with `gh release upload`, or `release.extra_files` of GoReleaser, before the release is published.
 
 ## Releases, fetching and verifying
 

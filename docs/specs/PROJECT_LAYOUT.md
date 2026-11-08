@@ -9,7 +9,7 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 * All Go packages live under `internal/`, except the `main` package (`main.go` at the repo root) and the cobra layer under `cmd/`. The compiler enforces that code outside this module cannot import `internal/`.
 * There is no `pkg/` directory. Moving a package out of `internal/` later is cheap. Retracting a public API is not.
 * **Promotion criteria.** A package leaves `internal/` only when all hold: a real external consumer exists, its API has survived at least one minor release unchanged, and it has no dependency on other `internal/` packages that are not themselves promoted. Promotion is a decision recorded in this spec, not a drive-by move.
-* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level, and so does `generated/`, which holds files that a tool writes and a test keeps current. A developer tool that is not part of `gero` is a `main` under `tools/` (today `tools/genschema`, which writes the JSON Schemas of the config, [APP_CONFIG](APP_CONFIG.md#json-schemas)); it may import `internal/` and nothing imports it.
+* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level, and so does `generated/`, which holds files that a tool writes and a test keeps current. A developer tool that is not part of `gero` is a `main` under `tools/` (today `tools/genschema`, which writes the JSON Schemas of the config, [APP_CONFIG](APP_CONFIG.md#json-schemas), and `tools/compilebundle`, which writes the central config bundle for a release, [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#compile-command)); it may import `internal/` and nothing imports it.
 
 ## 2. Layout
 

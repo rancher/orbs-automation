@@ -16,7 +16,7 @@ The primary user config fields that are worth prompting for are:
 - `branchPrefix` - A branch prefix - support minimal vars - to use when creating PRs via the tooling
 - `centralConfigDir` - The directory path to the ORBS automation repo's config dir - for now clone is kept in sync manually
   - This item will matter less when:
-    - Build the config bundle renderer,
+    - Build the config bundle renderer (built: `tools/compilebundle`, [CENTRAL_BUNDLE](../specs/CENTRAL_BUNDLE.md)),
     - Update the tooling to be able to use the release file sourced config, AND
     - we setup the release repo for these tools
 - `repos.search` - Would be useful to have set

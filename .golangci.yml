@@ -152,10 +152,11 @@ linters:
             - "!**/internal/appconfig/**"
             - "!**/internal/chain/**"
             - "!**/internal/chainload/**"
+            - "!**/tools/compilebundle/**"
             - "!$test"
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/chainload
-              desc: the config loader is only allowed in internal/workspace; get config from a Workspace (docs/specs/WORKSPACE.md)
+              desc: the config loader is only allowed in internal/workspace, and in tools/compilebundle, which checks a bundle loads back; get config from a Workspace (docs/specs/WORKSPACE.md)
             - pkg: github.com/rancher/orbs-automation/internal/appconfig
               desc: the application config provider is only allowed in internal/workspace, internal/chain and internal/chainload; get config from a Workspace (docs/specs/WORKSPACE.md)
         # A version of the config API is spelled in config and nowhere else. The domain
