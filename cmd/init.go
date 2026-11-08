@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/rancher/orbs-automation/internal/cli/initcmd"
+	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/spf13/cobra"
 )
@@ -32,6 +34,9 @@ of the file.`,
 		// without it when it has to, as gero doctor does.
 		PersistentPreRunE: loadSettingsForDoctor(os.Getenv, home),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if os.Getenv(repl.EnvRepl) != "" {
+				return errors.New("gero init asks questions and writes a file, which the REPL is not for: exit the REPL, or run it in your shell")
+			}
 			// --upstream is the global flag, which names the same remote.
 			if f := cmd.Flags().Lookup("upstream"); f != nil && f.Changed {
 				o.Upstream = f.Value.String()

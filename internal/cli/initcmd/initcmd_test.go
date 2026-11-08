@@ -201,7 +201,7 @@ func TestRunInCIIsRefusedWithoutAnExplicitPath(t *testing.T) {
 	_, err := Run(o)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CI")
+	assert.Contains(t, err.Error(), "in CI")
 	assert.NoFileExists(t, path)
 }
 

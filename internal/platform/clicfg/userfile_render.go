@@ -1,5 +1,11 @@
 package clicfg
 
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
+
 // UserFileSchemaComment is the first line of a user file gero writes: it points
 // the YAML language server of an editor at the schema of the user file on the
 // main branch (docs/specs/APP_CONFIG.md#json-schemas).
@@ -14,7 +20,34 @@ type UserFileValues struct {
 }
 
 // RenderUserFile returns the text of a new user file with v: the schema comment,
-// then the keys. It is not written yet.
-func RenderUserFile(UserFileValues) string {
-	return ""
+// then the keys.
+func RenderUserFile(v UserFileValues) string {
+	var b strings.Builder
+	b.WriteString(UserFileSchemaComment + "\n")
+	for _, kv := range [][2]string{
+		{"githubUser", v.GitHubUser},
+		{"fork", v.Fork},
+		{"upstream", v.Upstream},
+		{"branchPrefix", v.BranchPrefix},
+	} {
+		b.WriteString(kv[0] + ": " + yamlScalar(kv[1]) + "\n")
+	}
+	return b.String()
+}
+
+var plainScalar = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_./@-]*$`)
+
+// yamlWords are the plain words YAML 1.1 reads as something other than a string.
+var yamlWords = map[string]bool{
+	"y": true, "n": true, "yes": true, "no": true, "true": true, "false": true,
+	"on": true, "off": true, "null": true,
+}
+
+// yamlScalar returns v as a YAML scalar that reads back as the same string: plain
+// when that is certain, double-quoted otherwise.
+func yamlScalar(v string) string {
+	if plainScalar.MatchString(v) && !yamlWords[strings.ToLower(v)] {
+		return v
+	}
+	return strconv.Quote(v)
 }
