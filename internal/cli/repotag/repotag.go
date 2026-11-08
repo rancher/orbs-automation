@@ -1,6 +1,6 @@
 // Package repotag holds the logic of gero repo tag: making a tag on the head of
 // the upstream branch of a release line: the tag is chosen and checked by
-// internal/git/releasetag and made by the createtag task. It is
+// internal/releasetag and made by the createtag task. It is
 // framework-free: cmd/ owns the cobra wiring (docs/specs/TASK_COMMANDS.md).
 package repotag
 
@@ -16,9 +16,9 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
+	"github.com/rancher/orbs-automation/internal/releasetag"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/rancher/orbs-automation/internal/ui/style"

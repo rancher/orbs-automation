@@ -31,7 +31,7 @@ internal/ui/style/   the one importer of lipgloss: named styles and the Renderer
 internal/ui/editor/  the one importer of ergochat/readline: the line reader seam, with a plain bufio implementation, for gero repl   (REPL)
 internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR, make a tag), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch, bumpcommit and createtag are built
 internal/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
-internal/git/releasetag/  the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
+internal/releasetag/  the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
 internal/platform/git/repo/   local repository access with go-git; the only importer of go-git
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/platform/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
@@ -71,7 +71,7 @@ Package names beyond these are decided with the code that needs them. A package 
 
 * `createbranch`: a new branch for a project and release line, based on the upstream branch, made in the engineer's clone or in a temporary worktree of it, or an earlier branch of ours reused when it is current.
 * `bumpcommit`: apply one change set and make its commits. The change and its commits are never separated.
-* `createtag`: make a lightweight tag at a commit in the engineer's clone, after the line's rules for its tags ([`internal/git/releasetag`](../../internal/git/releasetag/releasetag.go)) have said it may be made. It never moves a tag, and sending it is a push.
+* `createtag`: make a lightweight tag at a commit in the engineer's clone, after the line's rules for its tags ([`internal/releasetag`](../../internal/releasetag/releasetag.go)) have said it may be made. It never moves a tag, and sending it is a push.
 * `pushbranch`: push a branch.
 * `createpr`: open the PR for a branch that is pushed, with the labels the repository has. Closing the PRs it supersedes is not part of it: `ship` also does that when a PR is already open and nothing is created, so it is a step of its own, not built as a task yet.
 * More are added when a second caller needs them, not before.

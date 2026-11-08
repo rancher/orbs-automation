@@ -15,9 +15,9 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/clicfg"
 	"github.com/rancher/orbs-automation/internal/config"
-	"github.com/rancher/orbs-automation/internal/git/releasetag"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
+	"github.com/rancher/orbs-automation/internal/releasetag"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -282,7 +282,7 @@ func targets(p config.Project) []Target {
 }
 
 // fill reads the latest tags and the head of t from refs, works out its state and
-// the tags it could have next from them (internal/git/releasetag, which is what
+// the tags it could have next from them (internal/releasetag, which is what
 // gero repo tag asks), and compares them with the clone, which may be nil.
 func fill(t *Target, p config.Project, refs git.Refs, clone Clone) {
 	scheme, err := tagscheme.For(p)

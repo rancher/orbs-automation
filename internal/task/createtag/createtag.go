@@ -2,13 +2,13 @@
 // in the engineer's clone: one action, run alone or as a step of a longer process
 // (docs/specs/PROJECT_LAYOUT.md, Tasks). Which tag, and on which commit, is the
 // caller's to say; the task checks that it is a tag the line can have
-// (internal/git/releasetag), and never moves or replaces one.
+// (internal/releasetag), and never moves or replaces one.
 package createtag
 
 import (
 	"context"
 
-	"github.com/rancher/orbs-automation/internal/git/releasetag"
+	"github.com/rancher/orbs-automation/internal/releasetag"
 )
 
 // Input says which tag to make, on what, and what the repository holds already.
