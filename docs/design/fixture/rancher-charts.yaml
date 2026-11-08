@@ -1,5 +1,6 @@
 # rancher-charts: unowned (release team), two branches for each line, no tags.
 # A chart's releases are versions in a list; one stream for each chart. rancher-backup shown.
+apiVersion: gero/v1alpha2
 kind: Project
 name: rancher-charts
 spec:
@@ -15,6 +16,7 @@ spec:
       - {line: v2.13, branch: {dev: dev-v2.13, stable: release-v2.13}}
       - {line: v2.12, branch: {dev: dev-v2.12, stable: release-v2.12}}
 ---
+apiVersion: gero/v1alpha2
 kind: Stream
 name: charts-rancher-backup
 refs: {project: rancher-charts}
@@ -28,6 +30,7 @@ spec:
     - {line: v2.12, series: "107.x"}
 ---
 # What charts holds of BRO: the two chart URLs in the package file, on the dev branch.
+apiVersion: gero/v1alpha2
 kind: Holding
 name: charts-holds-bro-chart
 refs: {project: rancher-charts, artifact: bro-chart}
@@ -35,6 +38,7 @@ spec:
   at: {file: packages/rancher-backup/package.yaml, key: url, format: yaml}
   holds: {kind: release, form: "{url}", stage: dev, accept: all}
 ---
+apiVersion: gero/v1alpha2
 kind: Holding
 name: charts-holds-bro-crd-chart
 refs: {project: rancher-charts, artifact: bro-crd-chart}
@@ -43,6 +47,7 @@ spec:
   holds: {kind: release, form: "{url}", stage: dev, accept: all}
 ---
 # What shipping a BRO release into charts also does beyond writing the two URLs.
+apiVersion: gero/v1alpha2
 kind: Edit
 name: charts-bump-rancher-backup
 refs: {holding: [charts-holds-bro-chart, charts-holds-bro-crd-chart]}

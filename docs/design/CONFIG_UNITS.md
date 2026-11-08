@@ -1,6 +1,6 @@
 # Config Units
 
-**Status:** working notes, 2026-11-07. The decisions so far on breaking the config into smaller units, kept in one place. [CONFIG_REVIEW](CONFIG_REVIEW.md) has the gaps and questions this answers; the [fixture](fixture/README.md) writes the seven projects in this shape; [CONFIG_SCHEMA](CONFIG_SCHEMA.md) is the field reference. Breaking changes are acceptable now; nothing here is built.
+**Status:** working notes, 2026-11-07. The decisions so far on breaking the config into smaller units, kept in one place. [CONFIG_REVIEW](CONFIG_REVIEW.md) has the gaps and questions this answers; the [fixture](fixture/README.md) writes the seven projects in this shape; [CONFIG_SCHEMA](CONFIG_SCHEMA.md) is the field reference. Breaking changes are acceptable now. The new shape is `apiVersion: gero/v1alpha2`; the old shape stays `gero/v1alpha1` until the cutover.
 
 ## What the tooling works from
 

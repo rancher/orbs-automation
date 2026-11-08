@@ -1,10 +1,12 @@
 # scc-operator: owned, one stream for every line (universal), one image.
+apiVersion: gero/v1alpha2
 kind: Project
 name: scc-operator
 spec:
   repo: {name: rancher/scc-operator, owned: true}
   branches: {layout: single}
 ---
+apiVersion: gero/v1alpha2
 kind: Stream
 name: scc-operator
 refs: {project: scc-operator}
@@ -13,6 +15,7 @@ spec:
   requiresPrerelease: true
   universal: true            # no series; any release serves every line
 ---
+apiVersion: gero/v1alpha2
 kind: Artifact
 name: scc-operator-image
 refs: {stream: scc-operator}

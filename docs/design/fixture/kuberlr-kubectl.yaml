@@ -1,4 +1,5 @@
 # kuberlr-kubectl: owned, one release stream for each line, one image, takes nothing in.
+apiVersion: gero/v1alpha2
 kind: Project
 name: kuberlr-kubectl
 spec:
@@ -12,6 +13,7 @@ spec:
       - {line: v2.13, branch: release/v6.x}
       - {line: v2.12, branch: release/v5.x}
 ---
+apiVersion: gero/v1alpha2
 kind: Stream
 name: kuberlr-kubectl
 refs: {project: kuberlr-kubectl}
@@ -24,6 +26,7 @@ spec:
     - {line: v2.13, series: "6.x"}
     - {line: v2.12, series: "5.x"}
 ---
+apiVersion: gero/v1alpha2
 kind: Artifact
 name: kuberlr-kubectl-image
 refs: {stream: kuberlr-kubectl}

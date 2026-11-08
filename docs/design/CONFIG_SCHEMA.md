@@ -6,7 +6,7 @@
 
 | Field | Is | Rules |
 |---|---|---|
-| `apiVersion` | the schema version | one value for the new shape (name to be chosen) |
+| `apiVersion` | the schema version | `gero/v1alpha2`; the old shape is `gero/v1alpha1`, and a document says which it is |
 | `kind` | what the document is | one of the kinds below |
 | `name` | its identity | a lowercase slug (`a-z`, `0-9`, `-`); unique within its kind; used in logs, errors and `refs` |
 | `refs` | references to other documents | names only, a name or a list of names; the key says the target kind; every name must exist |

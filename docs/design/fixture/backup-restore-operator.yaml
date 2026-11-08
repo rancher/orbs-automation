@@ -1,5 +1,6 @@
 # backup-restore-operator: owned, one stream for each line, an image and two chart packages.
 # It holds the kuberlr image in its chart values, and its chart packages are held by rancher-charts.
+apiVersion: gero/v1alpha2
 kind: Project
 name: backup-restore-operator
 spec:
@@ -13,6 +14,7 @@ spec:
       - {line: v2.13, branch: release/v9.x}
       - {line: v2.12, branch: release/v8.x}
 ---
+apiVersion: gero/v1alpha2
 kind: Stream
 name: backup-restore-operator
 refs: {project: backup-restore-operator}
@@ -26,22 +28,26 @@ spec:
     - {line: v2.13, series: "9.x"}
     - {line: v2.12, series: "8.x"}
 ---
+apiVersion: gero/v1alpha2
 kind: Artifact
 name: bro-image
 refs: {stream: backup-restore-operator}
 spec: {kind: image, name: rancher/backup-restore-operator}
 ---
+apiVersion: gero/v1alpha2
 kind: Artifact
 name: bro-chart
 refs: {stream: backup-restore-operator}
 spec: {kind: file, name: "rancher-backup-{version}.tgz"}
 ---
+apiVersion: gero/v1alpha2
 kind: Artifact
 name: bro-crd-chart
 refs: {stream: backup-restore-operator}
 spec: {kind: file, name: "rancher-backup-crd-{version}.tgz"}
 ---
 # What BRO holds: the kuberlr image tag in its chart values.
+apiVersion: gero/v1alpha2
 kind: Holding
 name: bro-holds-kuberlr
 refs: {project: backup-restore-operator, artifact: kuberlr-kubectl-image}
