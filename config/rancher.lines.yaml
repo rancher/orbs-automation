@@ -1,3 +1,4 @@
+# The Rancher lines.
 # One document holding the whole set of Rancher lines, newest first.
 # Facts about the lines themselves only; no branches (each project maps its own).
 # Kubernetes ranges come from the table in the rancher-shell README (April 2026).
@@ -5,7 +6,7 @@
 # of a line (development | ga | eom | eol) is worked out from them and the
 # current time, so it is not written here. A line with no dates is in
 # development. An optional `phase:` on a line overrides the dates.
-apiVersion: gero/v1alpha1
+apiVersion: gero/v1alpha2
 kind: RancherLines
 name: rancher
 spec:
