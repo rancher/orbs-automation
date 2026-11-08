@@ -38,7 +38,7 @@ func world(extra ...string) []string {
 		d("Holding", "cons-chart", "{project: cons, artifact: prod-chart}", "  at: {file: pkg.yaml, key: url}\n  holds: {kind: release, form: \"{url}\", stage: dev}\n"),
 		d("Holding", "cons-lined", "{project: cons, artifact: lined-image}", "  at: {file: build.yaml, key: lined}\n  holds: {kind: release, form: \"{image}:{tag}\", stage: stable}\n"),
 		d("Holding", "other-image", "{project: other, artifact: prod-image}", "  at: {file: other.yaml, key: image}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n"),
-		d("Holding", "cons-commit", "{project: cons, from: prod}", "  at: {file: lock.yaml, key: .commit}\n  holds: {kind: commit, stages: [dev]}\n"),
+		d("Holding", "cons-commit", "{project: cons, from: prod}", "  at: {file: lock.yaml, key: .commit}\n  holds: {kind: commit}\n"),
 	}
 	return append(docs, extra...)
 }
