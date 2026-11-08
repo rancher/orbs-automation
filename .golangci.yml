@@ -91,7 +91,6 @@ linters:
         noyaml:
           list-mode: lax
           files:
-            - "!**/internal/platform/clicfg/**"
             - "!**/internal/platform/config/**"
             - "!**/internal/config/loader/**"
             - "!**/internal/apis/**"
@@ -99,7 +98,7 @@ linters:
             - "!$test"
           deny:
             - pkg: go.yaml.in/yaml
-              desc: YAML is only allowed in internal/platform/clicfg, internal/platform/config, internal/config/loader, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
+              desc: YAML is only allowed in internal/platform/config, internal/config/loader, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
         # The HTML parser reads the SUSE lifecycle page and nothing else
         # (docs/specs/DEPENDENCY_POLICY.md).
         nohtml:

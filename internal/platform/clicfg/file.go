@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"go.yaml.in/yaml/v3"
+	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
 // fileConfig is the on-disk shape of the user file. Keep it in step with the
@@ -50,18 +50,27 @@ func userFileLabel(name string) string {
 	return name
 }
 
-// decodeFile parses the user file strictly: an unknown key is an error. A nil
-// reader or an empty file is an empty config.
+// SetDefaults does nothing: a key left out of the file is filled by the layers
+// above it, with provenance, which one pass over the file cannot see.
+func (*fileConfig) SetDefaults() {}
+
+// Validate does nothing: the values are checked when they are resolved, with the
+// layer each came from.
+func (*fileConfig) Validate(config.Context, *config.Report) {}
+
+// decodeFile parses the user file strictly through the config engine: an unknown
+// key is an error. A nil reader or an empty file is an empty config.
 func decodeFile(r io.Reader, name string) (fileConfig, error) {
 	var fc fileConfig
 	if r == nil {
 		return fc, nil
 	}
-	name = userFileLabel(name)
-	dec := yaml.NewDecoder(r)
-	dec.KnownFields(true)
-	if err := dec.Decode(&fc); err != nil && !errors.Is(err, io.EOF) {
-		return fileConfig{}, fmt.Errorf("%s: %w", name, err)
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return fileConfig{}, fmt.Errorf("%s: %w", userFileLabel(name), err)
+	}
+	if err := config.Load(userFileLabel(name), data, &fc, config.Context{}).Err(); err != nil {
+		return fileConfig{}, err
 	}
 	return fc, nil
 }
