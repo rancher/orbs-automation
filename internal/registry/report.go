@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
@@ -50,35 +51,40 @@ func (r Report) Failed() bool {
 	return false
 }
 
-// CheckProject looks for the images the Project publishes (its effective
-// images) for a release of tag, in each registry the release goes to. An image
-// with since is left out, not checked and not listed, when the tag's line is
-// older; a tag in none of the Project's lines gets a plain check and a warning.
-// Prime production is skipped for a prerelease. The checks run in parallel and
-// the rows keep config order.
-func CheckProject(ctx context.Context, p config.Project, c Prober, tag string) Report {
-	report := Report{Project: p.Repo.Name, Tag: tag, Stable: !semver.Classify(tag).HasPrerelease}
+// CheckProject looks for the images the Project publishes (the image artifacts
+// of its streams) for a release of tag, in each registry the release goes to. An
+// image that applies only from a line on is left out, not checked and not listed,
+// when the tag's line is older; a tag in none of the Project's lines gets a plain
+// check and a warning. Prime production is skipped for a prerelease. The checks
+// run in parallel and the rows keep config order.
+func CheckProject(ctx context.Context, p *chain.Project, c Prober, tag string) Report {
+	report := Report{Project: p.Slug(), Tag: tag, Stable: !semver.Classify(tag).HasPrerelease}
 	type job struct {
 		row  int
 		host string
 	}
 	var jobs []job
-	images := p.EffectiveImages()
-	line := p.LineOf(tag)
-	if line == "" && anySince(images) {
+	var images []*chain.Artifact
+	for _, a := range p.Artifacts() {
+		if a.IsImage() {
+			images = append(images, a)
+		}
+	}
+	line, _ := p.LineOf(tag)
+	if line == "" && anyRanged(images) {
 		// Nothing to compare since with, so no image is held back: the check
 		// is a plain one, and the report says the rule was not applied.
 		report.Warnings = append(report.Warnings, fmt.Sprintf(
 			"the tag %s is in none of the release lines of %s, so since was not applied and every image was checked",
-			tag, p.Repo.Name))
+			tag, p.Slug()))
 	}
 	for _, img := range images {
 		if !img.AppliesTo(line) {
 			continue // not expected for this tag, so it is neither checked nor listed
 		}
-		for _, role := range img.Registries {
+		for _, role := range img.Registries(true) {
 			reg, _ := Lookup(role) // validation has rejected an unknown role
-			row := Row{Image: img.Name, Registry: role, Label: reg.Label, Reference: reg.Reference(img.Name, tag)}
+			row := Row{Image: img.Ref(), Registry: role, Label: reg.Label, Reference: reg.Reference(img.Ref(), tag)}
 			if Applies(role, tag) {
 				jobs = append(jobs, job{row: len(report.Rows), host: reg.Host})
 			} else {
@@ -103,9 +109,10 @@ func CheckProject(ctx context.Context, p config.Project, c Prober, tag string) R
 	return report
 }
 
-func anySince(images []config.Image) bool {
+// anyRanged reports whether any image applies to some lines only.
+func anyRanged(images []*chain.Artifact) bool {
 	for _, img := range images {
-		if img.Since != "" {
+		if img.Doc.Spec.Lines != (v1alpha2.Range{}) {
 			return true
 		}
 	}

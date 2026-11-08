@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -26,9 +26,9 @@ var ErrNotPublished = errors.New("some images are not published where they must 
 // Workspace is what the command needs from the invocation's workspace. It is
 // defined here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	// Project returns the Project with the given config name or owner/name
+	// ChainProject returns the Project with the given config name or owner/name
 	// slug, or the one in the working directory when the key is empty.
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 }
 
 // Checker looks for one image in one registry.
@@ -73,7 +73,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd, project, tag string) (stri
 }
 
 func check(ctx context.Context, ws Workspace, c Checker, project, tag string) (Report, error) {
-	p, err := ws.Project(project)
+	p, err := ws.ChainProject(project)
 	if err != nil {
 		return Report{}, err
 	}

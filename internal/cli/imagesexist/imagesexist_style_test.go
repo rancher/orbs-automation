@@ -21,7 +21,7 @@ func colored() *style.Renderer {
 
 func report(t *testing.T, tag string, results map[string]registry.Result) Report {
 	t.Helper()
-	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, &fakeChecker{results: results}, "", tag)
+	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, &fakeChecker{results: results}, "", tag)
 	require.NoError(t, err)
 	return r
 }

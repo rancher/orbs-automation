@@ -269,7 +269,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	emit(sink, Event{Kind: EventTargetsChecked})
 	plan.Want = sharedWant(plan.Targets)
 	for _, tag := range needsPR {
-		images := registry.CheckProject(ctx, res.producer, prober, tag)
+		images := registry.CheckLegacyProject(ctx, res.producer, prober, tag)
 		plan.Images = append(plan.Images, ReleaseImages{Release: tag, Report: images})
 		plan.Warnings = append(plan.Warnings, images.Warnings...)
 		if images.Failed() {

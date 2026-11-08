@@ -3,11 +3,13 @@ package imagesexist
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/registry"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -16,12 +18,12 @@ import (
 )
 
 type fakeWorkspace struct {
-	project config.Project
+	project *chain.Project
 	err     error
 	asked   string
 }
 
-func (f *fakeWorkspace) Project(key string) (config.Project, error) {
+func (f *fakeWorkspace) ChainProject(key string) (*chain.Project, error) {
 	f.asked = key
 	return f.project, f.err
 }
@@ -47,14 +49,34 @@ func (f *fakeChecker) Exists(_ context.Context, host, image, tag string) registr
 	return registry.Result{Status: registry.Found}
 }
 
-func sccProject() config.Project {
-	return config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}}
+// project is a project of the given repo with one stream and the artifacts given.
+func project(t *testing.T, name, repo, stream string, artifacts ...string) *chain.Project {
+	t.Helper()
+	docs := []string{
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", name, "", "  repo: {name: "+repo+"}\n"),
+		chaintest.Doc("Stream", name, "{project: "+name+"}", stream),
+	}
+	for i, spec := range artifacts {
+		docs = append(docs, chaintest.Doc("Artifact", fmt.Sprintf("image-%d", i), "{stream: "+name+"}", spec))
+	}
+	return chaintest.Load(t, docs...).Project(name)
+}
+
+const (
+	universal    = "  universal: true\n"
+	rancherImage = "  kind: image\n  name: rancher/rancher\n  registries: [dockerhub]\n"
+	serverImage  = "  kind: image\n  name: rancher/rancher-server\n  registries: [dockerhub]\n  lines: {since: v2.16}\n"
+)
+
+func sccProject(t *testing.T) *chain.Project {
+	return project(t, "scc-operator", "rancher/scc-operator", universal, "  kind: image\n  name: rancher/scc-operator\n")
 }
 
 var ctx = context.Background()
 
 func TestCheckStableTagGoesToEveryRegistry(t *testing.T) {
-	ws := &fakeWorkspace{project: sccProject()}
+	ws := &fakeWorkspace{project: sccProject(t)}
 	c := &fakeChecker{}
 
 	got, err := check(ctx, ws, c, "", "v0.5.3")
@@ -77,7 +99,7 @@ func TestCheckStableTagGoesToEveryRegistry(t *testing.T) {
 
 func TestCheckPrereleaseSkipsPrimeProduction(t *testing.T) {
 	c := &fakeChecker{}
-	got, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v0.5.3-rc.1")
+	got, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v0.5.3-rc.1")
 
 	require.NoError(t, err)
 	assert.False(t, got.Stable)
@@ -97,7 +119,7 @@ func TestCheckFailsOnNotFoundAndOnUnreachable(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			c := &fakeChecker{results: map[string]registry.Result{"stgregistry.suse.com rancher/scc-operator:v0.5.3": res}}
-			got, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v0.5.3")
+			got, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v0.5.3")
 			require.NoError(t, err)
 			assert.True(t, got.Failed())
 			assert.Equal(t, string(res.Status), got.Rows[1].Status)
@@ -107,11 +129,10 @@ func TestCheckFailsOnNotFoundAndOnUnreachable(t *testing.T) {
 }
 
 func TestCheckUsesTheProjectsImages(t *testing.T) {
-	p := sccProject()
-	p.Images = []config.Image{
-		{Name: "rancher/scc-operator", Registries: []string{config.RegistryDockerHub}},
-		{Name: "rancher/scc-operator-extras"},
-	}
+	p := project(t, "scc-operator", "rancher/scc-operator", universal,
+		"  kind: image\n  name: rancher/scc-operator\n  registries: [dockerhub]\n",
+		"  kind: image\n  name: rancher/scc-operator-extras\n",
+	)
 	got, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
 
@@ -129,14 +150,14 @@ func TestCheckUsesTheProjectsImages(t *testing.T) {
 
 func TestCheckKeepsConfigOrderWhateverFinishesFirst(t *testing.T) {
 	c := &fakeChecker{delay: map[string]time.Duration{"registry-1.docker.io": 30 * time.Millisecond}}
-	got, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v1.0.0")
+	got, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v1.0.0")
 	require.NoError(t, err)
 	assert.Equal(t, "dockerhub", got.Rows[0].Registry, "the slow one is still first")
 	assert.Equal(t, "prime-production", got.Rows[2].Registry)
 }
 
 func TestCheckPassesTheProjectKey(t *testing.T) {
-	ws := &fakeWorkspace{project: sccProject()}
+	ws := &fakeWorkspace{project: sccProject(t)}
 	_, err := check(ctx, ws, &fakeChecker{}, "scc-operator", "v1.0.0")
 	require.NoError(t, err)
 	assert.Equal(t, "scc-operator", ws.asked)
@@ -153,7 +174,7 @@ func TestRenderText(t *testing.T) {
 	c := &fakeChecker{results: map[string]registry.Result{
 		"stgregistry.suse.com rancher/scc-operator:v0.5.3-rc.1": {Status: registry.NotFound},
 	}}
-	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v0.5.3-rc.1")
+	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v0.5.3-rc.1")
 	require.NoError(t, err)
 
 	out := renderText(r, nil)
@@ -171,7 +192,7 @@ func TestRenderText(t *testing.T) {
 }
 
 func TestRenderTextAllFound(t *testing.T) {
-	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, &fakeChecker{}, "", "v0.5.3")
+	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, &fakeChecker{}, "", "v0.5.3")
 	require.NoError(t, err)
 	out := renderText(r, nil)
 	assert.Contains(t, out, "stable")
@@ -182,7 +203,7 @@ func TestRenderTextShowsWhyUnreachable(t *testing.T) {
 	c := &fakeChecker{results: map[string]registry.Result{
 		"registry-1.docker.io rancher/scc-operator:v1": {Status: registry.Unreachable, Detail: "429 Too Many Requests"},
 	}}
-	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, c, "", "v1")
+	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, c, "", "v1")
 	require.NoError(t, err)
 	out := renderText(r, nil)
 	assert.Contains(t, out, "unreachable (429 Too Many Requests)")
@@ -190,7 +211,7 @@ func TestRenderTextShowsWhyUnreachable(t *testing.T) {
 }
 
 func TestRenderJSON(t *testing.T) {
-	r, err := check(ctx, &fakeWorkspace{project: sccProject()}, &fakeChecker{}, "", "v0.5.3")
+	r, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, &fakeChecker{}, "", "v0.5.3")
 	require.NoError(t, err)
 	out, err := renderJSON(r)
 	require.NoError(t, err)
@@ -209,18 +230,13 @@ func TestFailedIsFalseForAnEmptyReport(t *testing.T) {
 	assert.False(t, Report{}.Failed())
 }
 
-func riProject() config.Project {
-	return config.Project{
-		Name: "rancher",
-		Repo: config.Repo{Name: "rancher/rancher"},
-		Release: config.Release{Branching: "perLine", Lines: []config.ProjectLine{
-			{Line: "v2.16"}, {Line: "v2.15"},
-		}},
-		Images: []config.Image{
-			{Name: "rancher/rancher", Registries: []string{config.RegistryDockerHub}},
-			{Name: "rancher/rancher-server", Since: "v2.16", Registries: []string{config.RegistryDockerHub}},
-		},
+const rancherStream = "  lines:\n    - {line: v2.16, series: \"2.16.x\"}\n    - {line: v2.15, series: \"2.15.x\"}\n"
+
+func riProject(t *testing.T, artifacts ...string) *chain.Project {
+	if len(artifacts) == 0 {
+		artifacts = []string{rancherImage, serverImage}
 	}
+	return project(t, "rancher", "rancher/rancher", rancherStream, artifacts...)
 }
 
 func rowFor(t *testing.T, r Report, image string) Row {
@@ -236,7 +252,7 @@ func rowFor(t *testing.T, r Report, image string) Row {
 
 func TestCheckLeavesOutAnImageBeforeItsLine(t *testing.T) {
 	c := &fakeChecker{}
-	got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", "v2.15.3")
+	got, err := check(ctx, &fakeWorkspace{project: riProject(t)}, c, "", "v2.15.3")
 	require.NoError(t, err)
 
 	require.Len(t, got.Rows, 1, "an image the tag is too old for is not in the report at all")
@@ -250,21 +266,16 @@ func TestCheckLeavesOutAnImageBeforeItsLine(t *testing.T) {
 func TestCheckChecksAnImageFromItsLineOn(t *testing.T) {
 	for _, tag := range []string{"v2.16.0", "v2.16.0-rc.1"} {
 		c := &fakeChecker{}
-		got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", tag)
+		got, err := check(ctx, &fakeWorkspace{project: riProject(t)}, c, "", tag)
 		require.NoError(t, err)
 		assert.Equal(t, "found", rowFor(t, got, "rancher/rancher-server").Status, tag)
 	}
 }
 
 func TestCheckFindsTheLineThroughTheSeries(t *testing.T) {
-	p := config.Project{
-		Name: "kuberlr-kubectl",
-		Repo: config.Repo{Name: "rancher/kuberlr-kubectl"},
-		Release: config.Release{Branching: "perLine", Lines: []config.ProjectLine{
-			{Line: "v2.16", Version: "9.x"}, {Line: "v2.15", Version: "8.x"},
-		}},
-		Images: []config.Image{{Name: "rancher/kuberlr-kubectl-new", Since: "v2.16", Registries: []string{config.RegistryDockerHub}}},
-	}
+	p := project(t, "kuberlr-kubectl", "rancher/kuberlr-kubectl",
+		"  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n",
+		"  kind: image\n  name: rancher/kuberlr-kubectl-new\n  registries: [dockerhub]\n  lines: {since: v2.16}\n")
 	old, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v8.1.2")
 	require.NoError(t, err)
 	assert.Empty(t, old.Rows, "8.x is v2.15, before the image's line")
@@ -277,7 +288,7 @@ func TestCheckFindsTheLineThroughTheSeries(t *testing.T) {
 
 func TestCheckATagInNoLineIsAPlainCheckWithAWarning(t *testing.T) {
 	c := &fakeChecker{}
-	got, err := check(ctx, &fakeWorkspace{project: riProject()}, c, "", "v1.0.0")
+	got, err := check(ctx, &fakeWorkspace{project: riProject(t)}, c, "", "v1.0.0")
 	require.NoError(t, err)
 
 	assert.Equal(t, "found", rowFor(t, got, "rancher/rancher-server").Status, "no since rule is applied")
@@ -289,19 +300,17 @@ func TestCheckATagInNoLineIsAPlainCheckWithAWarning(t *testing.T) {
 }
 
 func TestCheckNoWarningWhenNoImageHasASince(t *testing.T) {
-	got, err := check(ctx, &fakeWorkspace{project: sccProject()}, &fakeChecker{}, "", "v1.0.0")
+	got, err := check(ctx, &fakeWorkspace{project: sccProject(t)}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
 	assert.Empty(t, got.Warnings, "with nothing to compare, an unknown line does not matter")
 
-	p := riProject()
-	p.Images = p.Images[:1] // no since
-	got, err = check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v1.0.0")
+	got, err = check(ctx, &fakeWorkspace{project: riProject(t, rancherImage)}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
 	assert.Empty(t, got.Warnings)
 }
 
 func TestRenderTextHasNoRowForAnImageBeforeItsLine(t *testing.T) {
-	skipped, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v2.15.3")
+	skipped, err := check(ctx, &fakeWorkspace{project: riProject(t)}, &fakeChecker{}, "", "v2.15.3")
 	require.NoError(t, err)
 	out := renderText(skipped, nil)
 	assert.NotContains(t, out, "rancher-server")
@@ -309,7 +318,7 @@ func TestRenderTextHasNoRowForAnImageBeforeItsLine(t *testing.T) {
 }
 
 func TestRenderTextShowsWarnings(t *testing.T) {
-	warned, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v1.0.0")
+	warned, err := check(ctx, &fakeWorkspace{project: riProject(t)}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
 	out := renderText(warned, nil)
 	assert.Contains(t, out, "Warning: ")
@@ -317,9 +326,7 @@ func TestRenderTextShowsWarnings(t *testing.T) {
 }
 
 func TestRenderTextWhenNoImageIsExpected(t *testing.T) {
-	p := riProject()
-	p.Images = []config.Image{{Name: "rancher/rancher-server", Since: "v2.16", Registries: []string{config.RegistryDockerHub}}}
-	r, err := check(ctx, &fakeWorkspace{project: p}, &fakeChecker{}, "", "v2.15.3")
+	r, err := check(ctx, &fakeWorkspace{project: riProject(t, serverImage)}, &fakeChecker{}, "", "v2.15.3")
 	require.NoError(t, err)
 	assert.Empty(t, r.Rows)
 	assert.False(t, r.Failed())
@@ -330,7 +337,7 @@ func TestRenderTextWhenNoImageIsExpected(t *testing.T) {
 }
 
 func TestRenderJSONHasTheWarnings(t *testing.T) {
-	warned, err := check(ctx, &fakeWorkspace{project: riProject()}, &fakeChecker{}, "", "v1.0.0")
+	warned, err := check(ctx, &fakeWorkspace{project: riProject(t)}, &fakeChecker{}, "", "v1.0.0")
 	require.NoError(t, err)
 	out, err := renderJSON(warned)
 	require.NoError(t, err)

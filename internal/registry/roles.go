@@ -6,13 +6,13 @@
 package registry
 
 import (
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 // Registry is a place images are published.
 type Registry struct {
-	Role  string // one of the config.Registry* values
+	Role  string // one of the v1alpha2.Registry* values
 	Label string // for people: "Docker Hub"
 	Host  string // where the registry API is
 	Name  string // how a reference to it is written, which can differ from Host
@@ -25,14 +25,14 @@ func Lookup(role string) (Registry, bool) {
 }
 
 var registries = map[string]Registry{
-	config.RegistryDockerHub: {
-		Role: config.RegistryDockerHub, Label: "Docker Hub", Host: "registry-1.docker.io", Name: "docker.io",
+	v1alpha2.RegistryDockerHub: {
+		Role: v1alpha2.RegistryDockerHub, Label: "Docker Hub", Host: "registry-1.docker.io", Name: "docker.io",
 	},
-	config.RegistryPrimeStaging: {
-		Role: config.RegistryPrimeStaging, Label: "Prime Staging", Host: "stgregistry.suse.com", Name: "stgregistry.suse.com",
+	v1alpha2.RegistryPrimeStaging: {
+		Role: v1alpha2.RegistryPrimeStaging, Label: "Prime Staging", Host: "stgregistry.suse.com", Name: "stgregistry.suse.com",
 	},
-	config.RegistryPrimeProduction: {
-		Role: config.RegistryPrimeProduction, Label: "Prime Production", Host: "registry.rancher.com", Name: "registry.rancher.com",
+	v1alpha2.RegistryPrimeProduction: {
+		Role: v1alpha2.RegistryPrimeProduction, Label: "Prime Production", Host: "registry.rancher.com", Name: "registry.rancher.com",
 	},
 }
 
@@ -44,7 +44,7 @@ func Applies(role, tag string) bool {
 	if _, ok := registries[role]; !ok {
 		return false
 	}
-	return role != config.RegistryPrimeProduction || !semver.Classify(tag).HasPrerelease
+	return role != v1alpha2.RegistryPrimeProduction || !semver.Classify(tag).HasPrerelease
 }
 
 // Reference returns the full reference to an image in a registry, such as
