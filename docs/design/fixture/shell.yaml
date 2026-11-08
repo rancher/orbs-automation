@@ -1,0 +1,31 @@
+# shell: owned, one stream for each line, one image; Rancher holds it.
+kind: Project
+name: shell
+spec:
+  repo: {name: rancher/shell, owned: true}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v2.15}
+      - {line: v2.14, branch: release/v2.14}
+      - {line: v2.13, branch: release/v2.13}
+      - {line: v2.12, branch: release/v2.12}
+---
+kind: Stream
+name: shell
+refs: {project: shell}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  lines:
+    - {line: v2.16, series: "0.9.x"}
+    - {line: v2.15, series: "0.8.x"}
+    - {line: v2.14, series: "0.7.x"}
+    - {line: v2.13, series: "0.6.x"}
+    - {line: v2.12, series: "0.5.x"}
+---
+kind: Artifact
+name: shell-image
+refs: {stream: shell}
+spec: {kind: image, name: rancher/shell}

@@ -1,0 +1,153 @@
+# Config Schema
+
+**Status:** draft field reference, 2026-11-07. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
+
+## Every document
+
+| Field | Is | Rules |
+|---|---|---|
+| `apiVersion` | the schema version | one value for the new shape (name to be chosen) |
+| `kind` | what the document is | one of the kinds below |
+| `name` | its identity | a lowercase slug (`a-z`, `0-9`, `-`); unique within its kind; used in logs, errors and `refs` |
+| `refs` | references to other documents | names only, a name or a list of names; the key says the target kind; every name must exist |
+| `spec` | the document's own fields | strict: an unknown field is an error |
+
+Nothing depends on which file a document is in or its place in the file. Several documents may share a file.
+
+## Project
+
+The repo as a place. `refs`: none.
+
+| Field | Type | Default | Rules |
+|---|---|---|---|
+| `repo.name` | `owner/name` | required | unique across Projects |
+| `repo.owned` | bool | `false` | gero ships from the repo; a holding of an unowned producer is only observed |
+| `repo.managedBy` | slug | `orbs` if owned, else unspecified | `shared` is valid |
+| `repo.defaultBranch` | string | `main` | |
+| `finalDestination` | bool | `false` | at most one Project |
+| `pullRequests.title`, `.branchPrefix` | template | none | variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, … |
+| `pullRequests.labels`, `.botLabels` | list | none | |
+| `pullRequests.pushTo` | `fork` or `upstream` | none | |
+| `branches.layout` | `single` or `perLine` | `single` | `single`: every release is on the default branch, and `lines` is not given |
+| `branches.stages` | list of names | none | for a layout whose stages are branches (charts: `dev`, `stable`) |
+| `branches.lines[].line` | a line id | required | must be in `RancherLines`; listed once |
+| `branches.lines[].branch` | see below | omitted | |
+
+`branch` has four forms:
+
+| Written | Means |
+|---|---|
+| omitted | the default branch, for the line in development; after that a warning |
+| `""` | the line has no branch yet; reported as unresolved |
+| a string | that branch |
+| a map of stage to string | a branch for each stage; the keys must be in `branches.stages` |
+
+At most one line of a Project resolves to the default branch.
+
+## Stream
+
+What a project releases: the versions and the lines. `refs`: `project` (required).
+
+| Field | Type | Default | Rules |
+|---|---|---|---|
+| `scheme` | `semver`, `calverLineStage` or `chartVersion` | `semver` | decides how releases are listed, ordered, classified as stable or prerelease, and mapped to a line |
+| `tagPattern` | glob | `v*` | which tags are releases |
+| `tagExclude` | list of globs | none | tags that match are not releases (`*-hotfix*`) |
+| `stages` | list of `{name, prerelease}` | from the scheme | override only; `dev` is a prerelease |
+| `lines[].line` | a line id | | must be in `RancherLines` |
+| `lines[].series` | text | | `9.x`, `0.9.x`, `111.x`; the grammar belongs to the scheme; series must not overlap within a stream; none for `calverLineStage`, whose tag carries the line |
+| `universal` | bool | `false` | any release serves every line; then `lines` is not given |
+| `requiresPrerelease` | bool | `false` | a stable follows an RC of its version; a release may override it, explicitly and recorded |
+
+Scheme defaults for stages: `calverLineStage` gives `dev` (prerelease) and `stable`; `semver` gives none; `chartVersion` takes the stages of the project's branch layout.
+
+## Artifact
+
+One thing each release of a stream produces. `refs`: `stream` (required).
+
+| Field | Type | Default | Rules |
+|---|---|---|---|
+| `kind` | `image` or `file` | required | |
+| `name` | text | required | an image: its repository path. A file: a name template; variables `tag`, `version` |
+| `lines` | `{since, until}` | every line | the lines that produce it |
+| `registries` | list | by release kind | an image only; `dockerhub`, `prime-staging`, `prime-production`; the default is Docker Hub and Prime staging always, Prime production for a stable |
+
+An image is checked in its registries; a file on the GitHub release **(provisional: exists only)**.
+
+## Holding
+
+A named rule for where a piece of information lives in a repo, and what it holds of a producer.
+
+`refs`:
+
+| Key | Target | Rules |
+|---|---|---|
+| `project` | Project | required: the repo whose file it is |
+| `artifact` | Artifact | for `holds.kind: release` |
+| `from` | Project | for `holds.kind: commit` or `branch`: the project whose commit or branch it holds **(provisional)** |
+
+Exactly one of `artifact` and `from`, matching `holds.kind`.
+
+`spec.at`: where to look.
+
+| Field | Type | Default | Rules |
+|---|---|---|---|
+| `file` | template | required | variables `line`, `stage`, `branch` |
+| `key` | template | required | rendered first, then read in the format's own style (below) |
+| `format` | name | `yaml` | `yaml` or `dockerfile` now; others documented below |
+
+`spec.holds`: what it holds.
+
+| Field | Type | Default | Rules |
+|---|---|---|---|
+| `kind` | `release`, `commit` or `branch` | required | |
+| `form` | template | `{tag}` | for `release`; how the text is written; variables `image`, `tag`, `version`, `url`, `file`, `sourceRepo`, `commit`, `base`, `upstream`; only modifiers that can be undone |
+| `lines` | `{since, until}` | every line the holder and the producer both list | |
+| `stage` | stage name | none | the stage branch of the holder where the holding is found |
+| `stages` | list of stage names | none | for `commit` or `branch`: which stages of the producer are read; the key uses `{stage}` |
+| `accept` | `stable` or `all` | `stable` | which releases the holding takes; an RC to a `stable` holding needs an explicit request |
+
+## Edit **(provisional shape)**
+
+Extra steps when shipping, beyond writing the form. `refs`: `holding`, a list (required).
+
+| Field | Type | Rules |
+|---|---|---|
+| `preEdit`, `postEdit` | list of steps | a step is `run` (a program, or a list of arguments), `since`, `until`, `from` |
+| `strategy` | name | a named rule that needs code (`chartsPackageBump`) |
+| `with` | map | the strategy's own values, declared by the strategy |
+
+## Templates, formats and paths
+
+* A template is text with `{variable}` parts and optional modifiers after `|`: `upper`, `lower`, `title`, `trimprefix:P`, `trimsuffix:S`, `replace:FROM=TO` (whole value). An unknown variable or modifier is an error.
+* Variables in `at`: `line` (`v2.16`), `stage`, `branch`. Variables in `form` and an artifact's `name` are listed in the tables above and in [CONFIG_UNITS](CONFIG_UNITS.md#templates).
+* A format reads the text at a key and replaces it, leaving the rest of the file unchanged, comments included.
+
+| Format | `key` is | Listed |
+|---|---|---|
+| `yaml` | a path in `yq` syntax: keys, quoted keys for a dot inside one, `[n]` for a list item; a leading dot is optional | now |
+| `dockerfile` | an `ARG` or `ENV` name | now |
+| `json`, `toml` | the same path syntax as `yaml` | documented |
+| `env` | a variable name in a `KEY=value` file | documented |
+| `makefile` | a variable name in `VAR = value` or `VAR ?= value` | documented |
+| `gomod` | a module path | documented |
+| `regex` | a pattern with one capture group | documented |
+
+## Unchanged kinds
+
+* **`RancherLines`:** a line's id, dates, Kubernetes range and optional phase override ([config/README](../../config/README.md))
+* **`External`:** a third-party project and its relationships (`trackOnly`, `react`, `notify`)
+* **`WorkflowsConfig`:** rendering of workflows into a repo, kept in the repo
+
+## Rules across documents
+
+* Names are unique within a kind; every `refs` name exists and is of the kind its key says
+* Repo slugs are unique; at most one `finalDestination`; at most one line of a Project resolves to the default branch
+* Every line named is in `RancherLines`; a stream's series do not overlap
+* A holding's `from` or `artifact` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
+* A selector's `since` is not after its `until`
+* A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
+
+## Where today's fields went
+
+[CONFIG_UNITS](CONFIG_UNITS.md#where-todays-fields-go) has the mapping. `release.branching: perLineTag` is no longer a layout: a project whose lines are only in its tags is `branches.layout: single` with a Stream whose scheme gives the line.

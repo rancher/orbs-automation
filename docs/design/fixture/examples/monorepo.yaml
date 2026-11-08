@@ -1,0 +1,28 @@
+# Not Rancher: a monorepo whose packages are tagged separately (pkg-a/v1.2.3),
+# and an image that pins one package's version in a Dockerfile.
+kind: Project
+name: mono
+spec:
+  repo: {name: acme/mono, owned: true}
+  branches: {layout: single}
+---
+kind: Stream
+name: mono-pkg-a
+refs: {project: mono}
+spec: {scheme: semver, tagPattern: "pkg-a/v*", universal: true}
+---
+kind: Artifact
+name: mono-pkg-a-image
+refs: {stream: mono-pkg-a}
+spec: {kind: image, name: acme/pkg-a}
+---
+kind: Project
+name: deployer
+spec: {repo: {name: acme/deployer}, branches: {layout: single}}
+---
+kind: Holding
+name: deployer-holds-pkg-a
+refs: {project: deployer, artifact: mono-pkg-a-image}
+spec:
+  at: {file: Dockerfile, key: PKG_A_VERSION, format: dockerfile}
+  holds: {kind: release, form: "{version}"}

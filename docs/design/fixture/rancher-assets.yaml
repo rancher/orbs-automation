@@ -1,0 +1,31 @@
+# rancher-assets: unowned (release team), one branch, lines and stages in the tags.
+# It holds a charts commit for each line and stage in its lock file.
+kind: Project
+name: rancher-assets
+spec:
+  repo: {name: rancher/rancher-assets, owned: false, managedBy: release-team}
+  pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/release-team]}
+  branches: {layout: single}
+---
+kind: Stream
+name: rancher-assets
+refs: {project: rancher-assets}
+spec:
+  scheme: calverLineStage      # gives the stages dev and stable, and the line in the tag
+  lines:
+    - {line: v2.16}
+---
+kind: Artifact
+name: assets-image
+refs: {stream: rancher-assets}
+spec: {kind: image, name: rancher/rancher-assets}
+---
+kind: Holding
+name: assets-pins-charts
+refs: {project: rancher-assets, from: rancher-charts}
+spec:
+  at:
+    file: lock.yaml
+    format: yaml
+    key: '.chart-versions."{line|trimprefix:v}".upstream-refs.{stage|replace:stable=prod}.charts.commit'
+  holds: {kind: commit, stages: [dev, stable]}

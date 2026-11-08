@@ -1,0 +1,38 @@
+# Not Rancher: a Go library released by tag, held by two services in go.mod. No lines, no stages.
+kind: Project
+name: libfoo
+spec:
+  repo: {name: acme/libfoo, owned: true}
+  branches: {layout: single}
+---
+kind: Stream
+name: libfoo
+refs: {project: libfoo}
+spec: {scheme: semver, universal: true}
+---
+kind: Artifact
+name: libfoo-source
+refs: {stream: libfoo}
+spec: {kind: file, name: "libfoo-{version}.zip"}
+---
+kind: Project
+name: svc-a
+spec: {repo: {name: acme/svc-a}, branches: {layout: single}}
+---
+kind: Holding
+name: svc-a-holds-libfoo
+refs: {project: svc-a, artifact: libfoo-source}
+spec:
+  at: {file: go.mod, key: github.com/acme/libfoo, format: gomod}
+  holds: {kind: release, form: "{tag}", accept: all}
+---
+kind: Project
+name: svc-b
+spec: {repo: {name: acme/svc-b}, branches: {layout: single}}
+---
+kind: Holding
+name: svc-b-holds-libfoo
+refs: {project: svc-b, artifact: libfoo-source}
+spec:
+  at: {file: go.mod, key: github.com/acme/libfoo, format: gomod}
+  holds: {kind: release, form: "{tag}"}

@@ -1,0 +1,50 @@
+# backup-restore-operator: owned, one stream for each line, an image and two chart packages.
+# It holds the kuberlr image in its chart values, and its chart packages are held by rancher-charts.
+kind: Project
+name: backup-restore-operator
+spec:
+  repo: {name: rancher/backup-restore-operator, owned: true}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v11.x}
+      - {line: v2.14, branch: release/v10.x}
+      - {line: v2.13, branch: release/v9.x}
+      - {line: v2.12, branch: release/v8.x}
+---
+kind: Stream
+name: backup-restore-operator
+refs: {project: backup-restore-operator}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  lines:
+    - {line: v2.16, series: "12.x"}
+    - {line: v2.15, series: "11.x"}
+    - {line: v2.14, series: "10.x"}
+    - {line: v2.13, series: "9.x"}
+    - {line: v2.12, series: "8.x"}
+---
+kind: Artifact
+name: bro-image
+refs: {stream: backup-restore-operator}
+spec: {kind: image, name: rancher/backup-restore-operator}
+---
+kind: Artifact
+name: bro-chart
+refs: {stream: backup-restore-operator}
+spec: {kind: file, name: "rancher-backup-{version}.tgz"}
+---
+kind: Artifact
+name: bro-crd-chart
+refs: {stream: backup-restore-operator}
+spec: {kind: file, name: "rancher-backup-crd-{version}.tgz"}
+---
+# What BRO holds: the kuberlr image tag in its chart values.
+kind: Holding
+name: bro-holds-kuberlr
+refs: {project: backup-restore-operator, artifact: kuberlr-kubectl-image}
+spec:
+  at: {file: charts/rancher-backup/values.yaml, key: global.kubectl.tag, format: yaml}
+  holds: {kind: release, form: "{tag}"}
