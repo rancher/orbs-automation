@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -135,18 +136,18 @@ func TestACompletionIsSortedSoTheListIsStable(t *testing.T) {
 }
 
 type configOnly struct {
-	cfg config.Config
-	err error
+	graph *chain.Graph
+	err   error
 }
 
-func (c configOnly) Config() (config.Config, error) { return c.cfg, c.err }
+func (c configOnly) Chain() (*chain.Graph, error) { return c.graph, c.err }
 
 func TestProjectNamesAreTheConfigNamesSorted(t *testing.T) {
-	ws := configOnly{cfg: config.Config{Projects: []config.Project{
-		{Name: "shell", Repo: config.Repo{Name: "rancher/shell"}},
-		{Name: "rancher", Repo: config.Repo{Name: "rancher/rancher"}},
-		{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}},
-	}}}
+	ws := configOnly{graph: chaintest.Projects(t,
+		"shell", "rancher/shell",
+		"rancher", "rancher/rancher",
+		"scc-operator", "rancher/scc-operator",
+	)}
 
 	got := projectNames(ws)
 
@@ -155,22 +156,22 @@ func TestProjectNamesAreTheConfigNamesSorted(t *testing.T) {
 
 func TestProjectNamesWithoutAConfigAreNone(t *testing.T) {
 	assert.Empty(t, projectNames(configOnly{err: errors.New("no config directory")}))
-	assert.Empty(t, projectNames(configOnly{}))
+	assert.Empty(t, projectNames(configOnly{graph: chaintest.Projects(t)}))
 }
 
 type inDir struct {
-	project config.Project
+	project *chain.Project
 	err     error
 	asked   []string
 }
 
-func (w *inDir) Project(key string) (config.Project, error) {
+func (w *inDir) ChainProject(key string) (*chain.Project, error) {
 	w.asked = append(w.asked, key)
 	return w.project, w.err
 }
 
 func TestTheProjectOfADirectoryIsTheNameOfTheOneItIsIn(t *testing.T) {
-	ws := &inDir{project: config.Project{Name: "scc-operator", Repo: config.Repo{Name: "rancher/scc-operator"}}}
+	ws := &inDir{project: chaintest.Projects(t, "scc-operator", "rancher/scc-operator").Project("scc-operator")}
 
 	assert.Equal(t, "scc-operator", projectNameOf(ws))
 	assert.Equal(t, []string{"."}, ws.asked, "the one whose repository the directory is in")

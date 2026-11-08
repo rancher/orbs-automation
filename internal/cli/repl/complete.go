@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/config"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -122,7 +122,7 @@ func withPrefix(words []string, prefix string) []string {
 // ConfigWorkspace is what ProjectNames needs from the invocation's workspace. It
 // is defined here, where it is consumed, so tests can use a fake.
 type ConfigWorkspace interface {
-	Config() (config.Config, error)
+	Chain() (*chain.Graph, error)
 }
 
 // ProjectNames lists the projects of the central config by config name, sorted,
@@ -133,13 +133,13 @@ func ProjectNames(s clicfg.Settings, cwd string) []string {
 }
 
 func projectNames(ws ConfigWorkspace) []string {
-	cfg, err := ws.Config()
+	g, err := ws.Chain()
 	if err != nil {
 		return nil
 	}
-	names := make([]string, 0, len(cfg.Projects))
-	for _, p := range cfg.Projects {
-		names = append(names, p.Name)
+	names := make([]string, 0, len(g.Projects()))
+	for _, p := range g.Projects() {
+		names = append(names, p.Name())
 	}
 	sort.Strings(names)
 	return names
@@ -148,7 +148,7 @@ func projectNames(ws ConfigWorkspace) []string {
 // ProjectWorkspace is what ProjectOf needs from a workspace: the project the
 // working directory is in. It is defined here, where it is consumed.
 type ProjectWorkspace interface {
-	Project(key string) (config.Project, error)
+	ChainProject(key string) (*chain.Project, error)
 }
 
 // ProjectOf returns the lookup of the config name of the project a directory is
@@ -159,9 +159,9 @@ func ProjectOf(s clicfg.Settings) func(dir string) string {
 }
 
 func projectNameOf(ws ProjectWorkspace) string {
-	p, err := ws.Project(".")
+	p, err := ws.ChainProject(".")
 	if err != nil {
 		return ""
 	}
-	return p.Name
+	return p.Name()
 }
