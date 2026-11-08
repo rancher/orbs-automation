@@ -1,5 +1,5 @@
-// Package fakehub is a fake GitHub releases API for tests: an httptest server that
-// serves the few endpoints gero reads (the latest release, a release by tag, the
+// Package fakehub is a fake GitHub releases API for tests: an http.RoundTripper,
+// so it opens no port, that serves the few endpoints gero reads (the latest release, a release by tag, the
 // list of releases, and an asset's bytes) for releases a test publishes. It lets a
 // test imagine what a published release looks like, including the ways one goes
 // wrong: a tampered asset, a missing checksum, a rate limit. It is test support,
@@ -24,10 +24,11 @@ import (
 // writes it.
 const ChecksumsName = "checksums.txt"
 
-// Hub is the fake host. Publish releases on it and point a client at URL.
-type Hub struct {
-	srv *httptest.Server
+// baseURL is where the fake host claims to be. No request leaves the process.
+const baseURL = "http://fakehub.test"
 
+// Hub is the fake host. Publish releases on it and make requests with Client.
+type Hub struct {
 	mu       sync.Mutex
 	releases []*release
 	assets   map[int64]*asset
@@ -58,18 +59,29 @@ type failure struct {
 	header   map[string]string
 }
 
-// New starts a Hub that is closed when the test ends.
+// New returns an empty Hub.
 func New(t testing.TB) *Hub {
 	t.Helper()
-	h := &Hub{assets: map[int64]*asset{}, nextID: 1000, clock: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
-	h.srv = httptest.NewServer(http.HandlerFunc(h.serve))
-	t.Cleanup(h.srv.Close)
-	return h
+	return &Hub{assets: map[int64]*asset{}, nextID: 1000, clock: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 }
 
 // URL is the base URL of the API, for the client to use in place of
 // https://api.github.com.
-func (h *Hub) URL() string { return h.srv.URL }
+func (h *Hub) URL() string { return baseURL }
+
+// Client is an HTTP client whose requests the Hub answers, and whose redirects and
+// timeouts are the defaults.
+func (h *Hub) Client() *http.Client {
+	return &http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
+		rec := httptest.NewRecorder()
+		h.serve(rec, r)
+		return rec.Result(), nil
+	})}
+}
+
+type roundTripper func(*http.Request) (*http.Response, error)
+
+func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 // Option changes a release as it is published.
 type Option func(*spec)
@@ -263,7 +275,7 @@ func (h *Hub) apiRelease(rel *release) map[string]any {
 	for _, a := range rel.assets {
 		assets = append(assets, map[string]any{
 			"name": a.name, "size": len(a.data),
-			"url": fmt.Sprintf("%s/repos/rancher/orbs-automation/releases/assets/%d", h.srv.URL, a.id),
+			"url": fmt.Sprintf("%s/repos/rancher/orbs-automation/releases/assets/%d", baseURL, a.id),
 		})
 	}
 	return map[string]any{
