@@ -12,9 +12,9 @@
 | `rancher-charts.yaml` | Project, one chart Stream, 2 Holdings, Edit |
 | `rancher.yaml` | Project, Stream, Artifact, 4 Holdings, Edit |
 | `rancher.lines.yaml` | RancherLines, as in the real config |
-| `examples/library.yaml` | a Go library, two services holding it in `go.mod` |
+| `examples/library.yaml` | a library, two services holding it in their Dockerfiles |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |
-| `examples/external.yaml` | a third-party SDK as an external Project, tracked by a Holding in BRO |
+| `examples/external.yaml` | a third-party SDK as an external Project, tracked by a Holding in BRO's chart values |
 
 ## The questions the tools must answer
 

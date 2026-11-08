@@ -36,11 +36,11 @@ func loadProject(t *testing.T, spec string) (*Project, config.Report) {
 	return objs[0].(*Project), rep
 }
 
-// hasFinding reports whether a finding of the severity has the path and a message
-// that contains want.
-func hasFinding(rep config.Report, sev config.Severity, path, want string) bool {
+// hasError reports whether an error finding has the path and a message that
+// contains want.
+func hasError(rep config.Report, path, want string) bool {
 	for _, f := range rep.Findings {
-		if f.Severity == sev && f.Path == path && strings.Contains(f.Msg, want) {
+		if f.Severity == config.Error && f.Path == path && strings.Contains(f.Msg, want) {
 			return true
 		}
 	}
@@ -115,7 +115,7 @@ func TestProjectRules(t *testing.T) {
 			p, rep := loadProject(t, tt.spec)
 
 			assert.Nil(t, p, "a project that breaks a rule is dropped")
-			assert.True(t, hasFinding(rep, config.Error, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
 		})
 	}
 }

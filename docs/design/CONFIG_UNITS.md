@@ -191,7 +191,7 @@ The [fixture](fixture/README.md) writes the seven projects, plus a Go library an
 * **Stages follow the layout.** Charts' stages are its two branches for each line (a Project fact); Assets' come from its tag scheme (a Stream fact)
 * **A commit or a branch is of a repo, not of an artifact.** Assets holds a charts commit and older Rancher holds a charts branch (O10)
 * **Consumer steps attach to a file, not a holding.** Rancher regenerates its build config after any change to `build.yaml` (O11)
-* **The shape is not Rancher-specific.** The library and monorepo fit with `universal`, `tagPattern` and the formats `gomod` and `dockerfile`; lines and stages are simply absent
+* **The shape is not Rancher-specific.** The library and monorepo fit with `universal`, `tagPattern` and the format `dockerfile`; lines and stages are simply absent
 * **Verbosity:** shell is three documents, Assets four, charts five, BRO six, Rancher eight. All can share one file
 
 ## Open

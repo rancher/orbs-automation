@@ -1,4 +1,4 @@
-# Not ours: a third-party SDK that backup-restore-operator tracks in its go.mod.
+# Not ours: a third-party SDK that backup-restore-operator tracks in its chart values.
 # repo.external marks a repo outside our organization; what we hold of it is a Holding.
 apiVersion: gero/v1alpha2
 kind: Project
@@ -23,5 +23,5 @@ kind: Holding
 name: bro-tracks-example-sdk
 refs: {project: backup-restore-operator, artifact: example-sdk-source}
 spec:
-  at: {file: go.mod, key: third-party/example-sdk, format: gomod}
+  at: {file: charts/rancher-backup/values.yaml, key: .global.sdk.tag, format: yaml}
   holds: {kind: release, form: "{tag}", accept: all}

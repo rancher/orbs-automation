@@ -64,7 +64,7 @@ func TestArtifactRules(t *testing.T) {
 			a, rep := loadArtifact(t, tt.spec)
 
 			assert.Nil(t, a, "an artifact that breaks a rule is dropped")
-			assert.True(t, hasFinding(rep, config.Error, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
 		})
 	}
 }

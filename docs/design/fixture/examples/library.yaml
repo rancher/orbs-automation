@@ -1,4 +1,4 @@
-# Not Rancher: a Go library released by tag, held by two services in go.mod. No lines, no stages.
+# Not Rancher: a library released by tag, held by two services in their Dockerfiles. No lines, no stages.
 apiVersion: gero/v1alpha2
 kind: Project
 name: libfoo
@@ -28,7 +28,7 @@ kind: Holding
 name: svc-a-holds-libfoo
 refs: {project: svc-a, artifact: libfoo-source}
 spec:
-  at: {file: go.mod, key: github.com/acme/libfoo, format: gomod}
+  at: {file: Dockerfile, key: LIBFOO_VERSION, format: dockerfile}
   holds: {kind: release, form: "{tag}", accept: all}
 ---
 apiVersion: gero/v1alpha2
@@ -41,5 +41,5 @@ kind: Holding
 name: svc-b-holds-libfoo
 refs: {project: svc-b, artifact: libfoo-source}
 spec:
-  at: {file: go.mod, key: github.com/acme/libfoo, format: gomod}
+  at: {file: Dockerfile, key: LIBFOO_VERSION, format: dockerfile}
   holds: {kind: release, form: "{tag}"}
