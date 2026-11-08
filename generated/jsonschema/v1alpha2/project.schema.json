@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Project",
+  "$defs": {
+    "BranchLine": {
+      "properties": {
+        "line": {
+          "type": "string"
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "description": "Branch is nil when the field is omitted, which means the default branch for\na line in development."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "BranchLine is the branch of one Rancher line."
+    },
+    "Branches": {
+      "properties": {
+        "layout": {
+          "type": "string",
+          "enum": [
+            "single",
+            "perLine"
+          ],
+          "description": "single or perLine"
+        },
+        "stages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "for a layout whose stages are branches"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/BranchLine"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Branches is the repo's branch layout."
+    },
+    "Project": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Project"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/ProjectSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Project is a repo as a place: who owns it, how its pull requests look, and which branch each Rancher line is on."
+    },
+    "ProjectSpec": {
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/Repo"
+        },
+        "finalDestination": {
+          "type": "boolean"
+        },
+        "pullRequests": {
+          "$ref": "#/$defs/PullRequests"
+        },
+        "branches": {
+          "$ref": "#/$defs/Branches"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ProjectSpec is the fields of a Project."
+    },
+    "PullRequests": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "branchPrefix": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "botLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pushTo": {
+          "type": "string",
+          "enum": [
+            "fork",
+            "upstream"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "PullRequests holds the conventions for PRs opened against the repo."
+    },
+    "Repo": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "owner/name"
+        },
+        "owned": {
+          "type": "boolean"
+        },
+        "external": {
+          "type": "boolean",
+          "description": "outside our organization"
+        },
+        "managedBy": {
+          "type": "string"
+        },
+        "defaultBranch": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Repo identifies the repository."
+    }
+  },
+  "title": "gero gero/v1alpha2 Project"
+}

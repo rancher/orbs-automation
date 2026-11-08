@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/RancherLines",
+  "$defs": {
+    "Dates": {
+      "properties": {
+        "ga": {
+          "type": "string",
+          "format": "date"
+        },
+        "eom": {
+          "type": "string",
+          "format": "date"
+        },
+        "eol": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Dates are the lifecycle dates of a line, as published on the SUSE lifecycle page."
+    },
+    "KubernetesRange": {
+      "properties": {
+        "min": {
+          "type": "string"
+        },
+        "max": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "KubernetesRange is the supported Kubernetes minor range of a line."
+    },
+    "Line": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "development",
+            "ga",
+            "eom",
+            "eol"
+          ],
+          "description": "optional override: development, ga, eom or eol"
+        },
+        "dates": {
+          "$ref": "#/$defs/Dates"
+        },
+        "kubernetes": {
+          "$ref": "#/$defs/KubernetesRange"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Line is one Rancher line."
+    },
+    "RancherLines": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "RancherLines"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/RancherLinesSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "RancherLines is the set of Rancher lines and facts about each."
+    },
+    "RancherLinesSpec": {
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "RancherLinesSpec is the fields of RancherLines."
+    }
+  },
+  "title": "gero gero/v1alpha2 RancherLines"
+}

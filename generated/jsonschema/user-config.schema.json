@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/fileConfig",
+  "$defs": {
+    "fileConfig": {
+      "properties": {
+        "configDir": {
+          "type": "string"
+        },
+        "output": {
+          "type": "string",
+          "enum": [
+            "text",
+            "json",
+            "env"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ]
+        },
+        "upstream": {
+          "type": "string"
+        },
+        "fork": {
+          "type": "string"
+        },
+        "githubUser": {
+          "type": "string"
+        },
+        "branchPrefix": {
+          "type": "string"
+        },
+        "pushTo": {
+          "type": "string",
+          "enum": [
+            "fork",
+            "upstream"
+          ]
+        },
+        "signCommits": {
+          "type": "boolean"
+        },
+        "repos": {
+          "$ref": "#/$defs/fileRepos"
+        },
+        "repl": {
+          "$ref": "#/$defs/fileRepl"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "fileRepl": {
+      "properties": {
+        "prompt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "fileRepoOverride": {
+      "properties": {
+        "upstream": {
+          "type": "string"
+        },
+        "pushTo": {
+          "type": "string",
+          "enum": [
+            "fork",
+            "upstream"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "fileRepos": {
+      "properties": {
+        "search": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "paths": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "overrides": {
+          "additionalProperties": {
+            "$ref": "#/$defs/fileRepoOverride"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    }
+  },
+  "title": "gero user config"
+}

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Holding",
+  "$defs": {
+    "At": {
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "a template"
+        },
+        "key": {
+          "type": "string",
+          "description": "a template, then a path in the format's own style"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "yaml",
+            "dockerfile"
+          ],
+          "description": "yaml or dockerfile"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "At is where to look."
+    },
+    "Holding": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Holding"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/HoldingSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Holding is a named rule for where a piece of information lives in a repo, and what it holds of a producer."
+    },
+    "HoldingSpec": {
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/At"
+        },
+        "holds": {
+          "$ref": "#/$defs/Holds"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "HoldingSpec is the fields of a Holding."
+    },
+    "Holds": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "release",
+            "commit",
+            "branch"
+          ],
+          "description": "release, commit or branch"
+        },
+        "form": {
+          "type": "string",
+          "description": "a template: how the text is written"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "accept": {
+          "type": "string",
+          "enum": [
+            "stable",
+            "all"
+          ],
+          "description": "stable or all"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Holds is what the place holds of a producer."
+    },
+    "Range": {
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "a line id: from this line on"
+        },
+        "until": {
+          "type": "string",
+          "description": "a line id: up to and including this line"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Range limits something to the Rancher lines from Since to Until, either of which may be left out."
+    }
+  },
+  "title": "gero gero/v1alpha2 Holding"
+}

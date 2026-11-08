@@ -1,0 +1,828 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Artifact": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Artifact"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/ArtifactSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Artifact is one thing each release of a stream produces."
+    },
+    "ArtifactSpec": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "image",
+            "file"
+          ],
+          "description": "image or file"
+        },
+        "name": {
+          "type": "string",
+          "description": "an image's repository path, or a file name template"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range"
+        },
+        "registries": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "dockerhub",
+              "prime-staging",
+              "prime-production"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ArtifactSpec is the fields of an Artifact."
+    },
+    "At": {
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "a template"
+        },
+        "key": {
+          "type": "string",
+          "description": "a template, then a path in the format's own style"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "yaml",
+            "dockerfile"
+          ],
+          "description": "yaml or dockerfile"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "At is where to look."
+    },
+    "BranchLine": {
+      "properties": {
+        "line": {
+          "type": "string"
+        },
+        "branch": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          ],
+          "description": "Branch is nil when the field is omitted, which means the default branch for\na line in development."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "BranchLine is the branch of one Rancher line."
+    },
+    "Branches": {
+      "properties": {
+        "layout": {
+          "type": "string",
+          "enum": [
+            "single",
+            "perLine"
+          ],
+          "description": "single or perLine"
+        },
+        "stages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "for a layout whose stages are branches"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/BranchLine"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Branches is the repo's branch layout."
+    },
+    "Dates": {
+      "properties": {
+        "ga": {
+          "type": "string",
+          "format": "date"
+        },
+        "eom": {
+          "type": "string",
+          "format": "date"
+        },
+        "eol": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Dates are the lifecycle dates of a line, as published on the SUSE lifecycle page."
+    },
+    "Edit": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Edit"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/EditSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Edit is the extra steps when shipping, beyond writing a holding's form."
+    },
+    "EditSpec": {
+      "properties": {
+        "preEdit": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array"
+        },
+        "postEdit": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array"
+        },
+        "strategy": {
+          "type": "string"
+        },
+        "with": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "EditSpec is the fields of an Edit."
+    },
+    "Holding": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Holding"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/HoldingSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Holding is a named rule for where a piece of information lives in a repo, and what it holds of a producer."
+    },
+    "HoldingSpec": {
+      "properties": {
+        "at": {
+          "$ref": "#/$defs/At"
+        },
+        "holds": {
+          "$ref": "#/$defs/Holds"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "HoldingSpec is the fields of a Holding."
+    },
+    "Holds": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "release",
+            "commit",
+            "branch"
+          ],
+          "description": "release, commit or branch"
+        },
+        "form": {
+          "type": "string",
+          "description": "a template: how the text is written"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "stages": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "accept": {
+          "type": "string",
+          "enum": [
+            "stable",
+            "all"
+          ],
+          "description": "stable or all"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Holds is what the place holds of a producer."
+    },
+    "KubernetesRange": {
+      "properties": {
+        "min": {
+          "type": "string"
+        },
+        "max": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "KubernetesRange is the supported Kubernetes minor range of a line."
+    },
+    "Line": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "development",
+            "ga",
+            "eom",
+            "eol"
+          ],
+          "description": "optional override: development, ga, eom or eol"
+        },
+        "dates": {
+          "$ref": "#/$defs/Dates"
+        },
+        "kubernetes": {
+          "$ref": "#/$defs/KubernetesRange"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Line is one Rancher line."
+    },
+    "Project": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Project"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/ProjectSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Project is a repo as a place: who owns it, how its pull requests look, and which branch each Rancher line is on."
+    },
+    "ProjectSpec": {
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/Repo"
+        },
+        "finalDestination": {
+          "type": "boolean"
+        },
+        "pullRequests": {
+          "$ref": "#/$defs/PullRequests"
+        },
+        "branches": {
+          "$ref": "#/$defs/Branches"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ProjectSpec is the fields of a Project."
+    },
+    "PullRequests": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "branchPrefix": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "botLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pushTo": {
+          "type": "string",
+          "enum": [
+            "fork",
+            "upstream"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "PullRequests holds the conventions for PRs opened against the repo."
+    },
+    "RancherLines": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "RancherLines"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/RancherLinesSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "RancherLines is the set of Rancher lines and facts about each."
+    },
+    "RancherLinesSpec": {
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/Line"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "RancherLinesSpec is the fields of RancherLines."
+    },
+    "Range": {
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "a line id: from this line on"
+        },
+        "until": {
+          "type": "string",
+          "description": "a line id: up to and including this line"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Range limits something to the Rancher lines from Since to Until, either of which may be left out."
+    },
+    "Repo": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "owner/name"
+        },
+        "owned": {
+          "type": "boolean"
+        },
+        "external": {
+          "type": "boolean",
+          "description": "outside our organization"
+        },
+        "managedBy": {
+          "type": "string"
+        },
+        "defaultBranch": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Repo identifies the repository."
+    },
+    "Stage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "prerelease": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Stage is a tier of a stream's releases."
+    },
+    "Step": {
+      "properties": {
+        "run": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "since": {
+          "type": "string"
+        },
+        "until": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string",
+          "enum": [
+            "consumer",
+            "producer",
+            "central"
+          ],
+          "description": "where the program comes from"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Step is a command run around an edit, optionally only for a range of lines."
+    },
+    "Stream": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Stream"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/StreamSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Stream is what a project releases: the versions, and the lines they serve."
+    },
+    "StreamLine": {
+      "properties": {
+        "line": {
+          "type": "string"
+        },
+        "series": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "StreamLine is one Rancher line a stream serves, and its version series."
+    },
+    "StreamSpec": {
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "enum": [
+            "semver",
+            "calverLineStage",
+            "chartVersion"
+          ],
+          "description": "semver, calverLineStage or chartVersion"
+        },
+        "tagPattern": {
+          "type": "string"
+        },
+        "tagExclude": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": "array"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/StreamLine"
+          },
+          "type": "array"
+        },
+        "universal": {
+          "type": "boolean"
+        },
+        "requiresPrerelease": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "StreamSpec is the fields of a Stream."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Artifact"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/Artifact"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Edit"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/Edit"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Holding"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/Holding"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Project"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/Project"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "RancherLines"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/RancherLines"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Stream"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/Stream"
+      }
+    }
+  ],
+  "title": "gero gero/v1alpha2 documents"
+}

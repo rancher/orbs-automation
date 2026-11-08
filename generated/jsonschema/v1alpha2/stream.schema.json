@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Stream",
+  "$defs": {
+    "Stage": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "prerelease": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Stage is a tier of a stream's releases."
+    },
+    "Stream": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Stream"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/StreamSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Stream is what a project releases: the versions, and the lines they serve."
+    },
+    "StreamLine": {
+      "properties": {
+        "line": {
+          "type": "string"
+        },
+        "series": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "StreamLine is one Rancher line a stream serves, and its version series."
+    },
+    "StreamSpec": {
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "enum": [
+            "semver",
+            "calverLineStage",
+            "chartVersion"
+          ],
+          "description": "semver, calverLineStage or chartVersion"
+        },
+        "tagPattern": {
+          "type": "string"
+        },
+        "tagExclude": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "stages": {
+          "items": {
+            "$ref": "#/$defs/Stage"
+          },
+          "type": "array"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/StreamLine"
+          },
+          "type": "array"
+        },
+        "universal": {
+          "type": "boolean"
+        },
+        "requiresPrerelease": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "StreamSpec is the fields of a Stream."
+    }
+  },
+  "title": "gero gero/v1alpha2 Stream"
+}

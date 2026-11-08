@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Artifact",
+  "$defs": {
+    "Artifact": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Artifact"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "spec": {
+          "$ref": "#/$defs/ArtifactSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Artifact is one thing each release of a stream produces."
+    },
+    "ArtifactSpec": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "image",
+            "file"
+          ],
+          "description": "image or file"
+        },
+        "name": {
+          "type": "string",
+          "description": "an image's repository path, or a file name template"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range"
+        },
+        "registries": {
+          "items": {
+            "type": "string",
+            "enum": [
+              "dockerhub",
+              "prime-staging",
+              "prime-production"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ArtifactSpec is the fields of an Artifact."
+    },
+    "Range": {
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "a line id: from this line on"
+        },
+        "until": {
+          "type": "string",
+          "description": "a line id: up to and including this line"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Range limits something to the Rancher lines from Since to Until, either of which may be left out."
+    }
+  },
+  "title": "gero gero/v1alpha2 Artifact"
+}
