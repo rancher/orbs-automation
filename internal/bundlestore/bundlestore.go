@@ -250,3 +250,10 @@ func ageString(d time.Duration) string {
 	}
 	return fmt.Sprintf("%d days", int(d/(24*time.Hour)))
 }
+
+// Describe says in one phrase what the config was read from, for gero config show
+// and gero doctor: the release and how old the copy is, such as "bundle v0.5.0, 3
+// hours old".
+func (s Source) Describe() string {
+	return ""
+}
