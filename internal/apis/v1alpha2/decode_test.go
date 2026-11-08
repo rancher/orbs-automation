@@ -1,13 +1,14 @@
 package v1alpha2
 
 import (
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
