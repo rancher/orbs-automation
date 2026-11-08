@@ -17,12 +17,13 @@ import (
 // (docs/specs/WORKSPACE.md). It is defined here, where it is consumed, so tests
 // can use a fake; *workspace.Workspace satisfies it.
 type Workspace interface {
-	CentralConfigDir() (workspace.CentralConfigDir, error)
+	ConfigSource() (workspace.ConfigSource, error)
 	Chain() (*chain.Graph, error)
 	RepoPaths(slugs []string) []workspace.RepoPath
 }
 
-// configDirCheck finds the central config directory and says where it came from.
+// configDirCheck finds what the central config is read from and says where it came
+// from: a local directory, or the central bundle with its release and age.
 type configDirCheck struct{ ws Workspace }
 
 // NewConfigDirCheck returns the check named "central-config-dir".
@@ -31,20 +32,29 @@ func NewConfigDirCheck(ws Workspace) Check { return configDirCheck{ws: ws} }
 func (configDirCheck) Name() string     { return "central-config-dir" }
 func (configDirCheck) Category() string { return "configuration" }
 func (configDirCheck) Description() string {
-	return "Finds the central config directory and says where it came from"
+	return "Finds the central config, a directory or the central bundle, and says where it came from"
 }
 func (configDirCheck) Online() bool    { return false }
 func (configDirCheck) Needs() []string { return nil }
 
 func (c configDirCheck) Run(context.Context) Result {
-	dir, err := c.ws.CentralConfigDir()
+	src, err := c.ws.ConfigSource()
 	switch {
 	case errors.Is(err, workspace.ErrNotFound):
-		return Result{Status: StatusFail, Message: "no central config directory found", Remediation: workspace.NotFoundHint}
+		remediation := workspace.NotFoundHint + "; or run gero doctor --online to fetch the central config bundle"
+		if err != workspace.ErrNotFound {
+			// The bundle was tried and failed, and the rest of the error says why.
+			remediation = workspace.NotFoundHint + strings.TrimPrefix(err.Error(), workspace.ErrNotFound.Error())
+		}
+		return Result{Status: StatusFail, Message: "no central config directory found", Remediation: remediation}
 	case err != nil:
 		return Result{Status: StatusFail, Message: err.Error()}
+	case src.Bundle != nil && src.Bundle.Stale:
+		return Result{Status: StatusWarn, Message: src.Bundle.Describe(), Remediation: src.Bundle.Note}
+	case src.Bundle != nil:
+		return Result{Status: StatusOK, Message: src.Bundle.Describe()}
 	}
-	return Result{Status: StatusOK, Message: fmt.Sprintf("%s (%s)", dir.Dir, dir.Source)}
+	return Result{Status: StatusOK, Message: fmt.Sprintf("%s (%s)", src.Dir.Dir, src.Dir.Source)}
 }
 
 // configCheck loads the central application config and reports whether it is
