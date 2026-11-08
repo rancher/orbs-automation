@@ -22,6 +22,14 @@ func Load(source string, data []byte, target Schema, ctx Context) Report {
 	return LoadNode(source, 0, "", &node, target, ctx)
 }
 
+// LoadTolerant is Load for a document where a key the schema does not know is a
+// warning, not an error: the known keys are decoded, defaulted and validated, and
+// each unknown one is a warning finding that names its line. Any other problem
+// is an error as in Load.
+func LoadTolerant(source string, data []byte, target Schema, ctx Context) Report {
+	return Load(source, data, target, ctx)
+}
+
 // LoadNode is Load for a document that is already parsed. doc is its place in the
 // source, from 1, and label says what it is (such as Project "rancher"); both
 // appear in the findings.

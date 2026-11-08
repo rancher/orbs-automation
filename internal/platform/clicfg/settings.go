@@ -72,8 +72,11 @@ type Settings struct {
 	PushTo       string // fork or upstream: where branches are pushed, unless a repo or the flag says
 	Repos        Repos
 	UserFile     string // path of the user file that was loaded; empty when none applied
-	CI           bool   // the process runs in CI rather than on a workstation
-	BotUser      string // GERO_BOT_USER: the bot's login, from the workflow; env only
+	// Warnings are what was wrong with the user file and did not stop it loading,
+	// such as a key gero does not know, each naming the file and the line.
+	Warnings []string
+	CI       bool   // the process runs in CI rather than on a workstation
+	BotUser  string // GERO_BOT_USER: the bot's login, from the workflow; env only
 	// DryRun is --dry-run or GERO_DRY_RUN: a command that writes computes and
 	// prints what it would do, and changes nothing. There is no user-file key, so
 	// it is never on without being asked for in the invocation.
