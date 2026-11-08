@@ -136,8 +136,9 @@ Commands that read the central `config/` find it in this order:
 2. `GERO_CENTRAL_CONFIG_DIR`
 3. `centralConfigDir` in the user file
 4. `./config`, when the working directory is a checkout of the central repo (reported as source `cwd`)
+5. The central config bundle of the `gero` release, from the user's cache or fetched ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), only when none of 1 to 4 is named, and never in CI
 
-If none resolves, the command fails with a message listing these four places. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow.
+A local source always wins. One that is named but broken (a missing directory, invalid or empty config) is an error and never falls back to the bundle, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow, to the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
 
 ## Not built yet
 
