@@ -45,7 +45,7 @@ The bundle ships with each `gero` release, as the asset `gero-config-bundle.yaml
 [release.yaml](../../.github/workflows/release.yaml) then does what GoReleaser cannot:
 
 * The provenance attestation covers the bundle, with the archives and `checksums.txt`.
-* GoReleaser signs `checksums.txt` and each archive with keyless Sigstore, which is what `gero doctor self-update` verifies ([SELF_UPDATE](SELF_UPDATE.md)). The bundle is listed in `checksums.txt`, so that signature covers it too.
+* A step signs `checksums.txt` and each archive with keyless Sigstore, uploads the bundles to the draft and fails the release if one is missing, which is what `gero doctor self-update` verifies ([SELF_UPDATE](SELF_UPDATE.md)). The bundle is listed in `checksums.txt`, so that signature covers it too.
 * Before the draft is published, a step fails the release unless the bundle is on it, in `checksums.txt`, and the uploaded copy has the hash `checksums.txt` lists.
 
 [ci.yml](../../.github/workflows/ci.yml) runs `goreleaser check` and a snapshot release on every pull request, and checks that the bundle is in the snapshot's `checksums.txt`, so a change to the wiring fails before a tag does.
