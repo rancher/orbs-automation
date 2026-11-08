@@ -284,6 +284,7 @@ apiVersion: gero/v1alpha2
 kind: Artifact
 name: a-image
 refs: {stream: a}
+spec: {kind: image, name: acme/a}
 `)
 
 	require.Len(t, objs, 3)

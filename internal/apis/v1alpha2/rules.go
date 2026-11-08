@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
@@ -50,4 +51,31 @@ func quoteAll(items []string) string {
 		q[i] = fmt.Sprintf("%q", it)
 	}
 	return strings.Join(q, ", ")
+}
+
+// checkRange reports an error at path unless the range's ends are Rancher lines
+// and the since is not after the until.
+func checkRange(r *config.Report, path string, rng Range) {
+	if rng.Since != "" && !lineID.MatchString(rng.Since) {
+		r.Errorf(path+".since", "%q is not a Rancher line: write it like v2.16", rng.Since)
+	}
+	if rng.Until != "" && !lineID.MatchString(rng.Until) {
+		r.Errorf(path+".until", "%q is not a Rancher line: write it like v2.16", rng.Until)
+	}
+	if !lineID.MatchString(rng.Since) || !lineID.MatchString(rng.Until) {
+		return
+	}
+	since, until := lineNumbers(rng.Since), lineNumbers(rng.Until)
+	if since[0] > until[0] || (since[0] == until[0] && since[1] > until[1]) {
+		r.Errorf(path, "since %s is after until %s", rng.Since, rng.Until)
+	}
+}
+
+// lineNumbers reads a line id that already matched lineID as its major and minor.
+func lineNumbers(id string) [2]int {
+	major, minor, _ := strings.Cut(strings.TrimPrefix(id, "v"), ".")
+	var n [2]int
+	n[0], _ = strconv.Atoi(major)
+	n[1], _ = strconv.Atoi(minor)
+	return n
 }
