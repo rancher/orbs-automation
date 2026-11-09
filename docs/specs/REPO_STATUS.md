@@ -38,8 +38,8 @@ The clone's facts only, as their own section: the commits on the branch since th
 
 Shown only for a project that takes from others (**Sources**, the projects that ship to it) or ships to others (**Consumers**, the projects it ships to); a project that does neither has neither. Each is a section per project, with a row per consumer branch that the producer's releases go to. They are the same data from the two ends, built from the pieces `gero ship` reads a consumer with, so they agree with what a run would do ([PUSH_TO_REPO](PUSH_TO_REPO.md)): `ship.Holdings` for Consumers and `ship.Sources` for Sources, over the branches and the release `ship` would pick for each, and `Invocation.Check` over the consumer's file on the host.
 
-* **HOLDING** is the holding of the producer's release that the row is about, and **HOLDS** is the value it reads from the consumer's file on that branch. A consumer branch that holds two files of one release has a row for each.
-* **STATUS** compares it with the line's latest stable release and, when a prerelease is newer, with the newest: `current`; `on stable, <tag> is newer`; `on a prerelease, <tag> is newer`; `behind <tag>`; `ahead of <tag>`; `unknown` when a version cannot be compared; `unreadable: <why>` when the branch has no value to read. One consumer that cannot be traced is its own line (`unavailable: <why>`) and the others are shown.
+* **HOLDING** is the holding of the producer's release that the row is about, and **HOLDS** is the value it reads from the consumer's file on that branch. A consumer branch that holds two files of one release has a row for each. A holding with several locations (a module in a repo's root and nested `go.mod` files) shows each distinct value of them, in the order the holding lists them, when they differ, and the one value when they agree.
+* **STATUS** compares it with the line's latest stable release and, when a prerelease is newer, with the newest: `current`; `on stable, <tag> is newer`; `on a prerelease, <tag> is newer`; `behind <tag>`; `ahead of <tag>`; `unknown` when a version cannot be compared; `unreadable: <why>` when the branch has no value to read. When the locations of a holding hold different values, `; locations differ` follows it (the rule `locations-differ`), unless the holding's document acknowledges it for that line, which says nothing here. One consumer that cannot be traced is its own line (`unavailable: <why>`) and the others are shown.
 * **Cost.** A ref listing for each project and one small file read for each branch, whatever the number of releases it is compared with. They are on by default for a project that ships or takes, and `--no-consumers` and `--no-sources` leave them out. A public repository needs no token.
 
 ## JSON and failures
@@ -48,11 +48,10 @@ Shown only for a project that takes from others (**Sources**, the projects that 
 
 ## Not built yet
 
-Each has a `TODO(release-state)`, `TODO(releasetag)` or `TODO(locations)` at the code where it goes.
+Each has a `TODO(release-state)` or `TODO(releasetag)` at the code where it goes.
 
 * How many releases a branch is behind, which needs the tags between two releases and the version the strategy found (`ship.Holding`, and `git.LatestReleases` for the per-series index).
 * The open PR for a branch, so a consumer that is behind can say a bump is already proposed (`ship.Holding`). It would be a tier of its own, with its cost, using the PR lookup and the marker `ship` uses.
-* A holding with several locations, such as Rancher's nested `go.mod` files: HOLDS shows the first location's value. `bump.Check` has every location and says when they differ (`Check.Differ`), so a row can show that the locations are out of step, which is the `locations-differ` finding (`ship.heldValue`).
 * The images a release publishes, as `repo images exist` checks them (`repostatus.Options`).
 * `ship`'s own `ResolveRelease`, `latest` and `lineSeries` folded into `internal/releasetag`, so a line's "latest" has one definition (`ship/release.go`).
 
