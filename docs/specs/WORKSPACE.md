@@ -1,6 +1,6 @@
 # Workspace
 
-**Status:** implemented for the central config (a directory or the release bundle), the current repository and local repo paths, except the inference of the upstream, fork, `githubUser` and release line.
+**Status:** implemented for the central config (a directory or the release bundle), the current repository and local repo paths.
 
 `internal/workspace` is the one door from CLI settings to the world: the central config directory, the loaded application config, the current repository, and the local path, upstream and fork for a repo slug. Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md). The config it loads is in [APP_CONFIG](APP_CONFIG.md).
 
@@ -24,32 +24,11 @@ A value in the central config can differ from the value an operation should act 
 
 `Workspace.Chain()` and `Workspace.Project()` return the config joined (`internal/chain`), with defaults applied and validated, and read once for the invocation, so every caller has the same graph; the loader is not reachable from anywhere else. `Workspace.Bump()` builds the update engine from that graph, reporting every edit or holding problem at once, so a command that applies a bump and `config validate` use the same check. A field with a fallback says so in its comment and names its getter.
 
-## Inferred defaults
+## Defaults from the working directory
 
-Most settings can be left unset because they are inferred from the repo at the working directory, its remotes and its branch. The local path for a slug and the `./config` directory are built; the rest of the table is the design for inference, not built yet. Full precedence per value:
+Every setting comes from a flag, the environment, the user file or a built-in default, in that order ([CLI_CONFIG](CLI_CONFIG.md)). Two things are also read from the working directory: the local path for a slug is the repository the working directory is in when its remotes name the slug ([Resolving repo paths](#resolving-repo-paths)), and `./config` is the central config when the working directory is a checkout of the central repo ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)). A user-file value always beats both.
 
-```
-flag > env > user file > inferred from CWD repo > built-in default > error
-```
-
-| Value | Inferred default |
-|---|---|
-| Current repo slug | `owner/name` parsed from remote URLs, matched against central-config `spec.repo.name` |
-| Local path for a slug | The CWD repo if its slug matches; else `repos.paths`; else the `repos.search` scan; else the flat sibling `<parent of CWD repo>/<name>` |
-| `centralConfigDir` | `./config` when the CWD has a YAML file there with documents of gero's (an `apiVersion` of `gero/`), and the bundle when no local directory is named ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)) |
-| `upstream` | Remote whose URL matches the slug; else the only remote; in CI, `origin` |
-| `fork` | Remote with the same repo name under a different owner |
-| `githubUser` | Owner of the fork remote's URL (no network call) |
-| Release line | `main` is the development line; `release/vX.Y` is that line |
-| `output` | `text`. The separate `color` setting is `auto` unless set, and its rules are in [CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities) |
-| `branchPrefix` | None |
-
-Rules:
-
-* Inference never picks silently among several candidates. Ambiguity is an error naming the key to set.
-* A user-file value always beats inference.
-* `gero config show` reports each value's source (`flag`, `env`, `file`, `inferred (reason)`, `default`), and verbose mode logs inferred values before any write (push, PR).
-* `gero config show` may report one slug's resolved path with an `inferred (reason)` source, but it never enumerates repos. When `repos.search` is set, the text output ends with a line pointing at `gero config resolve repos`. Json and env never carry it.
+The upstream remote, the fork, `githubUser` and the release line are set by the user (`gero init` writes them) and never guessed. Inferring them from remotes and branch names is a wishlist item, not a goal ([Wishlist](#wishlist)).
 
 ## Resolving repo paths
 
@@ -76,8 +55,11 @@ Rules:
 
 ## Not built yet
 
-* Inference of the upstream, fork, `githubUser` and release line from remotes, and the `inferred` source in `config show`.
 * `config resolve repos --verbose` **(leaning)**: log the scanned directories, the remotes read from each clone, and why each candidate matched or not.
+
+## Wishlist
+
+* Inferring the upstream (the remote whose URL matches the slug, else the only remote), the fork (the same repository name under another owner), `githubUser` (the owner of the fork remote) and the release line (`main` is the development line, `release/vX.Y` is that line) from the working directory's repository, with an `inferred (reason)` source in `gero config show`. Inference would never pick silently among several candidates, and a user-file value would always win. Not needed while the user file sets them; it could help someone who runs without one.
 
 ## Open questions
 

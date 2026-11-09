@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** implemented, except the `host` setting and the `inferred` source (see [Not built yet](#not-built-yet)).
+**Status:** implemented, except the `host` setting (see [Not built yet](#not-built-yet)).
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md). Inferring values from the working directory, and resolving repo paths, are in [WORKSPACE](WORKSPACE.md).
 
@@ -31,7 +31,7 @@ Highest wins:
                                   command RunE
 ```
 
-`GH_TOKEN` and `GITHUB_TOKEN` keep their meaning and are consumed by the GitHub access layer ([GITHUB_ACCESS](GITHUB_ACCESS.md)), not by this loader. Values that are left unset can be inferred from the repository at the working directory, which sits between the user file and the defaults ([WORKSPACE](WORKSPACE.md)).
+`GH_TOKEN` and `GITHUB_TOKEN` keep their meaning and are consumed by the GitHub access layer ([GITHUB_ACCESS](GITHUB_ACCESS.md)), not by this loader. A few values are read from the working directory, such as the local path of a repository ([WORKSPACE](WORKSPACE.md)); the rest are never guessed from it.
 
 ### Flag source
 
@@ -153,7 +153,6 @@ A source that is named but broken (a missing directory or file, invalid or empty
 
 ## Not built yet
 
-* The `inferred` source in `gero config show` ([WORKSPACE](WORKSPACE.md)).
 * A `host` setting (`GERO_HOST`, `--host`) for a GitHub host other than github.com. Today the host is `GH_HOST`, else the one in `gh`'s config, else github.com ([GITHUB_ACCESS](GITHUB_ACCESS.md)).
 
 ## Open questions

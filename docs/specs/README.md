@@ -15,7 +15,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [PUSH_TO_REPO](PUSH_TO_REPO.md) | The write half of a downstream bump: the work branch in the engineer's clone, remotes, branch and PR identity, per-target outcomes, what changes from today's scripts |
 | [CI_SHIP](CI_SHIP.md) | `gero ci:ship`: the same bump as `gero ship` run by a workflow as the bot, what it shares and what CI adds |
 | [METADATA](METADATA.md) | Labels and hidden markers (draft, not built): the marker as the record, label classes, owned versus shared repos, control labels |
-| [WORKSPACE](WORKSPACE.md) | The one door from settings to the world: inferred defaults (designed, not built), current repo, resolving repo paths |
+| [WORKSPACE](WORKSPACE.md) | The one door from settings to the world: the central config source, current repo, resolving repo paths |
 | [APP_CONFIG](APP_CONFIG.md) | Application config: document shape, kinds, placement, validation |
 | [CLI_OUTPUT](CLI_OUTPUT.md) | stdout and stderr, `--json`, terminal capabilities and color, styling (`internal/ui/style`), logging, the interactive boundary |
 | [GITHUB_ACCESS](GITHUB_ACCESS.md) | Token and host, REST, local git, subprocesses, consumer-side interfaces |
