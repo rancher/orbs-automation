@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// RuleUnknownKey is the rule of the warning for a key a user file does not have.
+const RuleUnknownKey = "unknown-key"
+
 // Severity says whether a finding makes the object invalid.
 type Severity int
 
@@ -27,7 +30,8 @@ type Finding struct {
 }
 
 // Error returns the finding as one line naming the source, the document, the path
-// and the message, leaving out what is not set.
+// and the message, leaving out what is not set, and the rule of a warning at the
+// end in brackets.
 func (f Finding) Error() string {
 	parts := make([]string, 0, 5)
 	if f.Source != "" {
@@ -43,7 +47,11 @@ func (f Finding) Error() string {
 		parts = append(parts, f.Path)
 	}
 	parts = append(parts, f.Msg)
-	return strings.Join(parts, ": ")
+	text := strings.Join(parts, ": ")
+	if f.Rule != "" {
+		text += " [" + f.Rule + "]"
+	}
+	return text
 }
 
 // Report collects the findings of one document.
@@ -62,21 +70,21 @@ func NewReport(source string, doc int, label string) Report {
 	return Report{source: source, doc: doc, label: label}
 }
 
-func (r *Report) add(sev Severity, path, msg string) {
+func (r *Report) add(sev Severity, rule, path, msg string) {
 	r.Findings = append(r.Findings, Finding{
-		Severity: sev, Source: r.source, Doc: r.doc, Label: r.label, Path: path, Msg: msg,
+		Severity: sev, Source: r.source, Doc: r.doc, Label: r.label, Path: path, Rule: rule, Msg: msg,
 	})
 }
 
 // Errorf reports an error at path.
 func (r *Report) Errorf(path, format string, args ...any) {
-	r.add(Error, path, fmt.Sprintf(format, args...))
+	r.add(Error, "", path, fmt.Sprintf(format, args...))
 }
 
 // Warnf reports a warning of a rule at path. The rule is the stable id that
 // names the warning, which a document can acknowledge.
-func (r *Report) Warnf(_, path, format string, args ...any) {
-	r.add(Warning, path, fmt.Sprintf(format, args...))
+func (r *Report) Warnf(rule, path, format string, args ...any) {
+	r.add(Warning, rule, path, fmt.Sprintf(format, args...))
 }
 
 // Err returns the errors as one error that joins them, or nil when there are

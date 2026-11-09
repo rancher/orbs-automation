@@ -30,7 +30,7 @@ func load(source string, data []byte, target Schema, ctx Context, tolerant bool)
 	var node yaml.Node
 	if err := yaml.Unmarshal(data, &node); err != nil {
 		r := NewReport(source, 0, "")
-		r.add(Error, "", err.Error())
+		r.add(Error, "", "", err.Error())
 		return r
 	}
 	return loadNode(source, 0, "", &node, target, ctx, tolerant)
@@ -53,14 +53,14 @@ func loadNode(source string, doc int, label string, node *yaml.Node, target Sche
 		// again and decoded with them rejected.
 		raw, err := yaml.Marshal(node)
 		if err != nil {
-			r.add(Error, "", err.Error())
+			r.add(Error, "", "", err.Error())
 			return r
 		}
 		dec := yaml.NewDecoder(bytes.NewReader(raw))
 		dec.KnownFields(true)
 		if err := dec.Decode(target); err != nil && !errors.Is(err, io.EOF) {
 			if !tolerant || !r.tolerate(err) {
-				r.add(Error, "", err.Error())
+				r.add(Error, "", "", err.Error())
 				return r
 			}
 		}
@@ -85,7 +85,7 @@ func (r *Report) tolerate(err error) bool {
 	}
 	for _, msg := range te.Errors {
 		m := unknownField.FindStringSubmatch(msg)
-		r.add(Warning, "", fmt.Sprintf("line %s: unknown key %q, ignored", m[1], m[2]))
+		r.add(Warning, RuleUnknownKey, "", fmt.Sprintf("line %s: unknown key %q, ignored", m[1], m[2]))
 	}
 	return true
 }
