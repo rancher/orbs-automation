@@ -97,7 +97,7 @@ Exactly one of `artifact` and `from`, matching `holds.kind`.
 | `file` | template | required | variables `line`, `stage`, `branch` |
 | `key` | template | required | rendered first, then read in the format's own style (below) |
 | `lines` | `{since, until}` | every line of the holding | a location only: the lines the file exists for. A location's lines and `holds.lines` overlap; where they do not, the location is not read. The two ranges work on different layers (`holds.lines` is the lines the tie covers; a location's `lines` is where a file exists), and validation warns where they leave a line with no location |
-| `format` | name | `yaml` | `yaml`, `dockerfile` or `gomod` now; others documented below. `gomod` needs a `release` holding of a `gomod` Artifact **(provisional)** |
+| `format` | name | `yaml` | `yaml`, `dockerfile`, `gomod` or `regex` now; others documented below. `gomod` needs a `release` holding of a `gomod` Artifact **(provisional)** |
 
 `spec.holds`: what it holds.
 
@@ -130,13 +130,13 @@ Commits are the engine's, not a field: shipping commits after the Holding writes
 
 | Format | `key` is | Listed |
 |---|---|---|
-| `yaml` | a path in `yq` syntax: keys, quoted keys for a dot inside one, `[n]` for a list item; a leading dot is optional | now |
+| `yaml` | a path in `yq` syntax: keys, quoted keys for a dot inside one, `[n]` for a list item; a leading dot is optional. A value that starts with `%` (a build's placeholder, `tag: %TAG%`) is read as the text it is, though it is not YAML | now |
 | `dockerfile` | an `ARG` or `ENV` name | now |
 | `json`, `toml` | the same path syntax as `yaml` | documented |
 | `env` | a variable name in a `KEY=value` file | documented |
 | `makefile` | a variable name in `VAR = value` or `VAR ?= value` | documented |
 | `gomod` | a module path: the version on its `require` line in `go.mod` | now |
-| `regex` | a pattern with one capture group | documented |
+| `regex` | a pattern with exactly one capture group, matching in exactly one place; `(?m)` is implied | now |
 
 ## Unchanged kinds
 

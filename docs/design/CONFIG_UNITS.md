@@ -40,7 +40,7 @@ Writing is the same path in reverse: render the form from a release and put it a
 * A Holding is one document with two blocks: `at` is where to look, and `holds` is what it holds of a producer and how the text is written. The fixture showed every location has exactly one such tie. Revisit and split the kind if a case needs one location tied to two producers. The reverse, one producer held at several locations, is a list: `at` is a location or a list of locations, each with its own `file`, `key`, `format` and optional `lines`, all tied to the same artifact and `holds` (Rancher's nested `go.mod` files)
 * The `form` is a template; the variables it may use are listed under Templates
 * A key is rendered from its template first, then read as a path in the file's own style: for `yaml` that is the path syntax `yq` uses (`.global.kubectl.tag`, `.chart-versions."2.16"`, `.additionalCharts[0].url`). The schema documents the subset it supports (keys, quoted keys, list items); a leading dot is optional. A key in a YAML flow mapping needs quoting when it contains `[`
-* The schema lists only the formats a project needs now (`yaml`, `dockerfile`, `gomod`) and documents the others, so adding one is a new row, not a new idea
+* The schema lists only the formats a project needs now (`yaml`, `dockerfile`, `gomod`, `regex`) and documents the others, so adding one is a new row, not a new idea
 * Templates take modifiers (`{line|trimprefix:v}`, `{stage|replace:stable=prod}`) from a small closed set, so a respelled value needs no map of its own
 
 ## Units (proposed)
@@ -117,7 +117,7 @@ The set is closed and small, and grows only when a case needs one. An unknown mo
 | `env` | a variable name in a `KEY=value` file | `VERSION` | documented |
 | `makefile` | a variable name in `VAR = value` or `VAR ?= value` | `IMAGE_TAG` | documented |
 | `gomod` | a module path; reads and replaces the version on that module's `require` line in `go.mod` | `github.com/acme/libfoo` | now |
-| `regex` | a pattern with one capture group; the escape hatch for any other file | `^version: (.*)$` | documented |
+| `regex` | a pattern with one capture group, read with `(?m)` so `^` and `$` are a line's start and end; it must match in exactly one place; the escape hatch for any other file, or one that is not valid in its format. Braces are written `{{` and `}}`, as in any template | `^version: (.*)$` | now |
 
 Every format must let a tool do two things: read the text at a key, and replace it leaving the rest of the file unchanged, comments included. A format the schema does not list is an error when the config loads. A documented format becomes listed when a project uses it.
 
