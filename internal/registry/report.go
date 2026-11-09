@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/goproxy"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
@@ -15,6 +16,34 @@ import (
 // Prober looks for one image in one registry. ociregistry.Checker is the real one.
 type Prober interface {
 	Exists(ctx context.Context, host, image, tag string) ociregistry.Result
+}
+
+// Modules looks for one version of a Go module. goproxy.Checker is the real one.
+type Modules interface {
+	Exists(ctx context.Context, module, version string) goproxy.Result
+}
+
+// ModuleProber is what a Prober also is when it can look for a Go module: a check
+// of a project looks for the modules it publishes only with one.
+type ModuleProber interface {
+	ModuleExists(ctx context.Context, module, version string) goproxy.Result
+}
+
+// Probers looks for images in registries and for modules on a Go module proxy. It
+// is the Prober, and the ModuleProber, a command builds a check with.
+type Probers struct {
+	Images  Prober
+	Modules Modules
+}
+
+// Exists looks for an image in a registry.
+func (p Probers) Exists(ctx context.Context, host, image, tag string) ociregistry.Result {
+	return p.Images.Exists(ctx, host, image, tag)
+}
+
+// ModuleExists looks for a version of a Go module on the proxy.
+func (p Probers) ModuleExists(ctx context.Context, module, version string) goproxy.Result {
+	return p.Modules.Exists(ctx, module, version)
 }
 
 // Skipped is the status of a registry a release of the tag does not go to.
