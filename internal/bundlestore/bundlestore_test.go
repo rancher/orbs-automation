@@ -392,3 +392,83 @@ func TestSourceDescribesTheReleaseAndHowOldTheCopyIs(t *testing.T) {
 	assert.Equal(t, "bundle v0.5.0, 3 days old", Source{Tag: "v0.5.0", Age: 72 * time.Hour, Stale: true}.Describe())
 	assert.Equal(t, "bundle v0.6.0, under a minute old", Source{Tag: "v0.6.0"}.Describe())
 }
+
+// verifying makes the rig refuse a release whose bundle and checksums are not signed.
+func (g *rig) verifying() {
+	g.r.Releases = assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL(), Verifier: fakehub.Verifier{}})
+}
+
+func TestLoadAPrereleaseGeroTakesTheNewestPrereleaseBundle(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.2", bundletest.Config("beta", "gamma"), fakehub.Prerelease())
+
+	got, err := g.load("v0.6.0-rc.1")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0-rc.2", got.Source.Tag)
+	assert.Equal(t, 2, projects(t, got))
+}
+
+func TestLoadAPrereleaseGeroWorksWhenNoStableReleaseExists(t *testing.T) {
+	g := newRig(t)
+	bundletest.Publish(t, g.hub, "v0.0.1-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+	bundletest.Publish(t, g.hub, "v0.0.1-rc.2", bundletest.Config("beta"), fakehub.Prerelease())
+
+	got, err := g.load("0.0.1-rc.2")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.0.1-rc.2", got.Source.Tag)
+}
+
+func TestLoadAStableGeroStillNeverTakesAPrereleaseWhenOnlyPrereleasesExist(t *testing.T) {
+	g := newRig(t)
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+
+	_, err := g.load("v0.5.0")
+
+	require.ErrorIs(t, err, ErrUnavailable)
+	require.ErrorIs(t, err, assetfetch.ErrNotFound)
+}
+
+func TestLoadVerifiesTheSignaturesOfTheBundleAndTheChecksums(t *testing.T) {
+	g := newRig(t)
+	g.verifying()
+	bundletest.Publish(t, g.hub, "v0.5.0", bundletest.Config("alpha"), fakehub.Signed("good"))
+
+	got, err := g.load("v0.5.0")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag)
+	assert.Equal(t, "v0.5.0", g.cachedTag())
+}
+
+func TestLoadARelaseWithNoSignaturesIsRefusedAndNothingIsCached(t *testing.T) {
+	g := newRig(t)
+	g.verifying()
+	g.publish("v0.5.0", "alpha")
+
+	_, err := g.load("v0.5.0")
+
+	require.ErrorIs(t, err, ErrUnavailable)
+	require.ErrorIs(t, err, assetfetch.ErrSignatureMissing)
+	_, ok, rerr := g.cache.Read()
+	require.NoError(t, rerr)
+	assert.False(t, ok, "nothing unauthenticated is cached")
+}
+
+func TestLoadABadSignatureIsRefusedAndTheCacheIsUsedAndSaysWhy(t *testing.T) {
+	g := newRig(t)
+	g.verifying()
+	g.cached("v0.4.0", t0.Add(-48*time.Hour), "old")
+	g.now = t0
+	bundletest.Publish(t, g.hub, "v0.5.0", bundletest.Config("alpha"), fakehub.Signed("good"), fakehub.Signature("checksums.txt", "forged"))
+
+	got, err := g.load("v0.5.0")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.4.0", got.Source.Tag)
+	assert.True(t, got.Source.Stale)
+	assert.Contains(t, got.Source.Note, "signature")
+}

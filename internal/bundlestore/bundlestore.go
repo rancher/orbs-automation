@@ -28,7 +28,7 @@ const DefaultRefresh = 24 * time.Hour
 // Releases is where releases come from. It is defined here, where it is consumed;
 // assetfetch.Fetcher is the real one.
 type Releases interface {
-	Latest(ctx context.Context) (assetfetch.Release, error)
+	Latest(ctx context.Context, prereleases bool) (assetfetch.Release, error)
 	Release(ctx context.Context, tag string) (assetfetch.Release, error)
 	Asset(ctx context.Context, tag, name string) ([]byte, error)
 }
@@ -140,7 +140,7 @@ func (r *Resolver) refresh() time.Duration {
 
 // fetch looks at the releases and takes the bundle that the rules choose.
 func (r *Resolver) fetch(ctx context.Context, own string, cached Entry, have bool, now time.Time) (Loaded, error) {
-	latest, err := r.Releases.Latest(ctx)
+	latest, err := r.Releases.Latest(ctx, false)
 	if err != nil {
 		return Loaded{}, err
 	}

@@ -26,6 +26,12 @@ var (
 	ErrChecksumMismatch = ghrelease.ErrChecksumMismatch
 	// ErrRateLimited is returned when the API rate limit is used up.
 	ErrRateLimited = ghrelease.ErrRateLimited
+	// ErrSignatureMissing is returned when a verifier is set and the release has
+	// no signature for what it checks.
+	ErrSignatureMissing = ghrelease.ErrSignatureMissing
+	// ErrSignatureInvalid is returned when a signature does not authenticate the
+	// content, or is not by the signer the verifier pins.
+	ErrSignatureInvalid = ghrelease.ErrSignatureInvalid
 	// ErrNoChecksum is returned when the release publishes no checksum for the
 	// asset: nothing is downloaded that cannot be verified.
 	ErrNoChecksum = errors.New("the release publishes no checksum for the asset")
@@ -50,11 +56,19 @@ func CompareVersions(a, b string) (cmp int, ok bool) {
 	return ghrelease.CompareVersions(a, b)
 }
 
+// SignatureVerifier authenticates content against a detached signature.
+type SignatureVerifier = ghrelease.SignatureVerifier
+
 // Options configure a Fetcher.
 type Options struct {
-	HTTP    *http.Client // nil for the default, which has timeouts
-	Token   string       // optional: a public repository needs none
-	BaseURL string       // "" for https://api.github.com; a test points it at a fake
+	// Verifier, when set, must authenticate both checksums.txt and the asset
+	// against their detached signatures, which the release has to carry. A release
+	// without them, or with ones that do not verify, is refused; nothing falls back
+	// to the checksum alone.
+	Verifier SignatureVerifier
+	HTTP     *http.Client // nil for the default, which has timeouts
+	Token    string       // optional: a public repository needs none
+	BaseURL  string       // "" for https://api.github.com; a test points it at a fake
 }
 
 // Fetcher reads the releases of one repository.
@@ -84,8 +98,9 @@ func release(r *ghrelease.Release) Release {
 }
 
 // Latest is the newest stable release: a prerelease or a draft is never the
-// latest.
-func (f *Fetcher) Latest(ctx context.Context) (Release, error) {
+// latest. With prereleases it is the newest by version of every release that is
+// not a draft, a prerelease or not.
+func (f *Fetcher) Latest(ctx context.Context, prereleases bool) (Release, error) {
 	r, err := f.client.LatestReleaseInfo(ctx, f.owner, f.repo)
 	if err != nil {
 		return Release{}, err

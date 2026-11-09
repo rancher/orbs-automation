@@ -7,10 +7,13 @@
 package fakehub
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -91,6 +94,8 @@ type spec struct {
 	files             []file
 	noChecksums       bool
 	checksumOverride  map[string]string
+	signatures        map[string]string // asset name -> signature content; "" leaves it off
+	signAll           *string
 }
 
 type file struct {
@@ -124,6 +129,42 @@ func ChecksumOf(name, hash string) Option {
 	}
 }
 
+// Signed publishes a detached signature with content sig, named as Verifier names
+// it, for every asset of the release and for checksums.txt.
+func Signed(sig string) Option { return func(s *spec) { s.signAll = &sig } }
+
+// Signature publishes, or with an empty sig leaves off, the detached signature of
+// one asset, in place of what Signed gives it.
+func Signature(name, sig string) Option {
+	return func(s *spec) {
+		if s.signatures == nil {
+			s.signatures = map[string]string{}
+		}
+		s.signatures[name] = sig
+	}
+}
+
+// SignatureSuffix is what Verifier adds to an asset's name to find its signature.
+const SignatureSuffix = ".sigstore.json"
+
+// Verifier is a stand-in for a Sigstore verifier: a signature authenticates content
+// when its bytes are "good". It names signatures as the real one does.
+type Verifier struct{}
+
+// SignatureName implements the verifier of ghreleases.
+func (Verifier) SignatureName(asset string) string { return asset + SignatureSuffix }
+
+// Verify implements the verifier of ghreleases.
+func (Verifier) Verify(_ context.Context, content io.Reader, sig []byte) error {
+	if _, err := io.Copy(io.Discard, content); err != nil {
+		return err
+	}
+	if string(sig) != "good" {
+		return errors.New("fakehub: the signature is not good")
+	}
+	return nil
+}
+
 // Publish adds a release, newest last, as GitHub orders by publish time, and
 // returns its tag.
 func (h *Hub) Publish(tag string, opts ...Option) string {
@@ -148,6 +189,15 @@ func (h *Hub) Publish(tag string, opts ...Option) string {
 	}
 	if !sp.noChecksums {
 		r.assets = append(r.assets, h.add(ChecksumsName, []byte(sums.String())))
+	}
+	for _, a := range append([]*asset(nil), r.assets...) {
+		sig, ok := sp.signatures[a.name]
+		if !ok && sp.signAll != nil {
+			sig, ok = *sp.signAll, true
+		}
+		if ok && sig != "" {
+			r.assets = append(r.assets, h.add(a.name+SignatureSuffix, []byte(sig)))
+		}
 	}
 	h.releases = append(h.releases, r)
 	return tag
