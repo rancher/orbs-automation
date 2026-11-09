@@ -118,6 +118,9 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 type Route struct {
 	Producer *chain.Project
 	Consumer *chain.Project
+	// Stream is the stream whose releases the route ships: the stream of the
+	// artifact of each of its holdings.
+	Stream   *chain.Stream
 	Holdings []*chain.Holding
 	engine   *Engine
 }

@@ -16,6 +16,9 @@ import (
 type ConsumerHoldings struct {
 	Consumer string `json:"consumer"` // the repository, owner/name
 	Name     string `json:"name"`     // its config name
+	// Stream is the stream of the producer whose releases this is: a consumer that
+	// holds artifacts of several streams has an entry for each.
+	Stream string `json:"stream,omitempty"`
 	// Error is why this consumer could not be traced at all: its branches could not
 	// be read, or no branch or release could be worked out. The other consumers are
 	// traced all the same.
@@ -253,6 +256,9 @@ func (m *memoTree) ReadFile(ctx context.Context, path string) ([]byte, error) {
 type SourceHoldings struct {
 	Producer string `json:"producer"` // the repository, owner/name
 	Name     string `json:"name"`     // its config name
+	// Stream is the stream of the source whose releases this is, as for
+	// ConsumerHoldings.
+	Stream string `json:"stream,omitempty"`
 	// Error is why the source could not be traced, as for ConsumerHoldings.
 	Error   string    `json:"error,omitempty"`
 	Targets []Holding `json:"targets,omitempty"`
