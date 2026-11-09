@@ -17,6 +17,7 @@ const (
 	RuleDefaultBranchPastDevelopment = "default-branch-past-development"
 	RuleAcknowledgementUnused        = "acknowledgement-unused"
 	RuleStreamDiffersFromDestination = "stream-differs-from-destination"
+	RuleLocationsDiffer              = "locations-differ"
 )
 
 // acknowledgeable are the rules whose warnings a document can acknowledge: the

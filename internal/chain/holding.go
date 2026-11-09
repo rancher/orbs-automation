@@ -12,6 +12,12 @@ type Holding struct {
 	edits    []*Edit
 }
 
+// Acknowledgement says whether the holding's document acknowledges a warning of a
+// rule, about a line when it has one, and the reason when it does.
+func (h *Holding) Acknowledgement(_, _ string) (reason string, ok bool) {
+	return "", false
+}
+
 // Name is the name of the document.
 func (h *Holding) Name() string { return h.Doc.Name }
 

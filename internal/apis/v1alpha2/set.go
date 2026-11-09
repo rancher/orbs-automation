@@ -551,6 +551,14 @@ func (s *set) acknowledge(label string, a Acknowledgement) bool {
 	return matched
 }
 
+// Acknowledges says whether acks acknowledge a warning of a rule, about a line when
+// it has one, and the reason when they do. An acknowledgement with no lines
+// covers every warning of the rule; one with lines covers only a warning about a
+// line in them.
+func Acknowledges(_ []Acknowledgement, _, _ string) (reason string, ok bool) {
+	return "", false
+}
+
 // validAcknowledgement reports an error at path for each thing wrong with an
 // acknowledgement, and whether it had none.
 func validAcknowledgement(r *config.Report, path string, a Acknowledgement) bool {

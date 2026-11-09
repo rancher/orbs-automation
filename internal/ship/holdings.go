@@ -70,6 +70,19 @@ type HeldValue struct {
 	// Error is why the holding could not be read: its file is not in the branch, or
 	// it holds no value at its place.
 	Error string `json:"error,omitempty"`
+	// Locations is each place the holding is read, for a holding with more than one.
+	Locations []HeldLocation `json:"locations,omitempty"`
+	// Differ says the locations hold different values, which the rule
+	// locations-differ names. DifferReason is why the holding's document says that
+	// is expected, when it acknowledges it.
+	Differ       bool   `json:"differ,omitempty"`
+	DifferReason string `json:"differReason,omitempty"`
+}
+
+// HeldLocation is what one location of a holding holds in a branch.
+type HeldLocation struct {
+	File    string `json:"file"`
+	Current string `json:"current"`
 }
 
 // Verdict is how what a branch holds stands against one release.
