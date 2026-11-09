@@ -16,7 +16,7 @@ import (
 // Workspace is what Run needs from the invocation's workspace. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Workspace interface {
-	CentralConfigDir() (workspace.CentralConfigDir, error)
+	ConfigSource() (workspace.ConfigSource, error)
 	Chain() (*chain.Graph, error)
 }
 
@@ -31,9 +31,14 @@ func Run(s clicfg.Settings, cwd string) (string, error) {
 }
 
 func run(ws Workspace, view *style.Renderer, verbose bool) (string, error) {
-	dir, err := ws.CentralConfigDir()
+	src, err := ws.ConfigSource()
 	if err != nil {
 		return "", err
+	}
+	// Where the config was read from: the directory, or the release of the bundle.
+	from := src.Dir.Dir
+	if src.Bundle != nil {
+		from = src.Bundle.Describe()
 	}
 	g, err := ws.Chain()
 	if err != nil {
@@ -46,7 +51,7 @@ func run(ws Workspace, view *style.Renderer, verbose bool) (string, error) {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s: %s (projects: %d, streams: %d, artifacts: %d, holdings: %d, lines: %d)\n",
-		view.Style(style.OK, "config OK"), dir.Dir, len(g.Projects()), streams, artifacts, len(g.Holdings()), len(g.Lines()))
+		view.Style(style.OK, "config OK"), from, len(g.Projects()), streams, artifacts, len(g.Holdings()), len(g.Lines()))
 	for _, w := range g.Warnings() {
 		fmt.Fprintf(&b, "%s %s\n", view.Style(style.Warn, "warning:"), w.Error())
 	}

@@ -9,6 +9,7 @@ import (
 	"testing/fstest"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -19,11 +20,17 @@ import (
 type fakeWorkspace struct {
 	dir      workspace.CentralConfigDir
 	dirErr   error
+	bundle   *bundlestore.Source // set: the config comes from the bundle, not dir
 	graph    *chain.Graph
 	chainErr error
 }
 
-func (f fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) { return f.dir, f.dirErr }
+func (f fakeWorkspace) ConfigSource() (workspace.ConfigSource, error) {
+	if f.bundle != nil {
+		return workspace.ConfigSource{Bundle: f.bundle}, nil
+	}
+	return workspace.ConfigSource{Dir: f.dir}, f.dirErr
+}
 func (f fakeWorkspace) Chain() (*chain.Graph, error)                          { return f.graph, f.chainErr }
 
 func TestRunSummarizesAValidConfig(t *testing.T) {
@@ -103,6 +110,20 @@ func TestRunShowsAnAcknowledgedWarningWithItsReasonWhenVerbose(t *testing.T) {
 	assert.Contains(t, out, "acknowledged: p.yaml: Project \"p\": spec.branches.lines[0].branch: omitted")
 	assert.Contains(t, out, "[default-branch-past-development]")
 	assert.Contains(t, out, "(reason: read from main by design)")
+}
+
+func TestRunValidatesTheBundleWhenNoDirectoryIsNamed(t *testing.T) {
+	ws := fakeWorkspace{
+		bundle: &bundlestore.Source{Tag: "v0.5.0"},
+		graph:  chaintest.Projects(t, "a", "acme/a"),
+	}
+
+	out, err := run(ws, nil, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "config OK")
+	assert.Contains(t, out, "bundle v0.5.0", "the summary says where the config came from")
+	assert.Contains(t, out, "projects: 1")
 }
 
 func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
