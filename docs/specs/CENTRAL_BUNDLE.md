@@ -6,7 +6,7 @@ How the central repo's shared content ships as one file with each `gero` release
 
 ## Why
 
-Today a command needs the central `config/` directory on disk, so every workstation and every job needs a clone or checkout of the central repo. The release of `gero` happens in a public repo, so the same release can carry a compiled copy of what the CLI needs from that repo, and the CLI can fetch it with no clone and no token.
+A command that reads only `config/` from disk would need every workstation and every job to have a clone or checkout of the central repo. The release of `gero` happens in a public repo, so the same release can carry a compiled copy of what the CLI needs from that repo, and the CLI can fetch it with no clone and no token.
 
 The bundle is the first layer: gero assumes the user has no clone of the central repo. A local directory is a development mode on top of it, and is read only when one is present (with `configSource: auto`) or asked for (`dir`). `configSource: bundle`, in the user file or as `--config-source=bundle`, reads the bundle whatever is set locally, and `--bundle-file` reads one downloaded bundle ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)).
 
@@ -45,7 +45,7 @@ The bundle ships with each `gero` release, as the asset `gero-config-bundle.yaml
 [release.yaml](../../.github/workflows/release.yaml) then does what GoReleaser cannot:
 
 * The provenance attestation covers the bundle, with the archives and `checksums.txt`.
-* A step signs `checksums.txt`, each archive and the config bundle with keyless Sigstore, uploads the signatures to the draft and fails the release if one is missing. `gero doctor self-update` verifies the first two ([SELF_UPDATE](SELF_UPDATE.md)). The bundle is also listed in `checksums.txt`, so that signature covers it too, and `gero-config-bundle.yaml.sigstore.json` lets it be verified on its own.
+* A step signs `checksums.txt`, each archive and the config bundle with keyless Sigstore, uploads the signatures to the draft and fails the release if one is missing. `gero doctor self-update` verifies the manifest and the archives ([SELF_UPDATE](SELF_UPDATE.md)), and the bundle fetch verifies the manifest and the bundle. The bundle is listed in `checksums.txt`, so the manifest's signature covers it too, and `gero-config-bundle.yaml.sigstore.json` lets it be verified on its own.
 * Before the draft is published, a step fails the release unless the bundle is on it, in `checksums.txt`, and the uploaded copy has the hash `checksums.txt` lists.
 
 [ci.yml](../../.github/workflows/ci.yml) runs `goreleaser check` and a snapshot release on every pull request, and checks that the bundle is in the snapshot's `checksums.txt`, so a change to the wiring fails before a tag does.
@@ -61,14 +61,13 @@ Every download of a release asset, the bundle or anything else, is verified befo
 * `bundleChannel` decides whether prereleases are candidates: `stable`, `prerelease`, or `auto`, the default, which follows the running `gero` as self-update does. A stable `gero` considers only stable releases, and a prerelease is never picked because it is the newest. A prerelease `gero` considers all of them. `stable` makes any `gero` take only stable releases, with no floor at its own release; `prerelease` makes any `gero` consider all of them, a pre-release one keeping its own as the floor and the fallback, a stable one falling back to the newest stable when the newest bundle is unreadable. A cached bundle is used without a request only if its release fits the channel, so changing it takes effect on the next run.
 * A stable `gero`, or a build that is not a release, uses the newest stable release's bundle.
 * A prerelease `gero` uses the bundle of the newest release by version, a prerelease or not, so `v0.6.0-rc.2` takes the bundle of `v0.6.0-rc.3` or of `v0.6.0`, and works when no stable release exists yet. Its own release is the floor, since the two were made together. If the loader cannot read the newer bundle (see Compatibility), it falls back to its own.
-* A flag naming a release tag overrides all of this, for reproducing an old run **(leaning)**.
 
 **Caching.**
 
 | Rule | Detail |
 |---|---|
 | Where | `$XDG_CACHE_HOME/gero/`, else `~/.cache/gero/`. A cache, not config: it can be deleted at any time |
-| Refresh | At most once a day, using a conditional request where the endpoint supports it, so an unchanged release is cheap |
+| Refresh | At most once a day, by the age of the cache. The bundle is downloaded only when the newest release is a different one |
 | Offline | When the fetch fails and a cached copy exists, the cached copy is used and the command says so, with its release tag and age |
 | Nothing available | No local source, no cache and no network fails with the same message that lists the places config is looked for |
 
@@ -93,24 +92,16 @@ With `configSource: auto`, the default, a local source that is present is read a
 1. A change to `config/` is a pull request to this repo. `go test ./...` compiles the real config, so one that does not validate fails there.
 2. It merges, and a release is tagged (`v0.5.0`). `release.yaml` runs GoReleaser, whose hook compiles the bundle with that tag and commit.
 3. The draft release holds the archives, `checksums.txt` and `gero-config-bundle.yaml`, which the checksums list. The bundle is attested with the archives, and the workflow refuses to publish a release where it is missing or does not match.
-4. The release is published. A workstation with no local config finds it on its next run: when its cached copy is over a day old it asks for the newest stable release, downloads the bundle only if the release is a different one, checks it against `checksums.txt`, and replaces the cache. Within a day of a release every such workstation is on it, and a failed refresh keeps the old copy and says so.
+4. The release is published. A workstation with no local config finds it on its next run: when its cached copy is over a day old it asks for the newest stable release, downloads the bundle only if the release is a different one, checks it against `checksums.txt` and its signatures, and replaces the cache. Within a day of a release every such workstation is on it, and a failed refresh keeps the old copy and says so.
 
 A change to config therefore reaches workstations with a release, not with a merge. A job that needs a change sooner uses a checkout and `GERO_CENTRAL_CONFIG_DIR`.
-
-## Built
-
-* `internal/bundle`: the format, `Compile` (for the release) and `Parse` (for the reader), which share one definition and check each other.
-* `internal/platform/assetfetch`: the one place a release asset is downloaded and verified, over `ghreleases`. An asset with no published checksum, one that does not match, or without the signatures when a verifier is set, is never returned. `Latest` takes whether prereleases count.
-* `internal/platform/releasesign`: the Sigstore verifier pinned to this repository's release workflow, which self-update and the bundle fetch share.
-* `internal/bundlestore`: the cache (`$XDG_CACHE_HOME/gero/`, else `~/.cache/gero/`, which replaces its bundle and record together and treats damage as empty) and the resolver, which applies the release rules above, refreshes at most daily, and falls back to the cache saying why.
-* `internal/workspace`: the fifth source, `ConfigSource`, and the rule that a local source wins unless `--config-source` says otherwise (`bundle` skips them, `dir` never reads the bundle). `gero config show` and `gero doctor` report the source. Doctor is offline unless `--online`, and then reads the cache only.
-* `bundletest` and `fakehub`: imagined releases for tests, with a tampered asset, a missing checksum, a rate limit and a bundle of a newer format, all without a network.
 
 ## Not built yet
 
 * The newer of a local copy and the bundle: in `auto` a local source wins, and `--config-source` picks one or the other.
 * Conditional requests (`ghreleases` has none), so the daily refresh is by the age of the cache alone.
-* The templates and generated chunks, a way to name a release to use, and a refresh interval setting.
+* A way to name a release tag to use, for reproducing an old run (`--bundle-file` names a file, not a release), and a refresh interval setting.
+* The templates and generated chunks.
 
 ## Open questions
 
