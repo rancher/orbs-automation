@@ -47,9 +47,16 @@ func ReleaseOf(h *chain.Holding, tag, commit string) (Release, error) {
 }
 
 // newRelease makes the variables that come from a tag, for a stream whose tags
-// match a pattern.
-func newRelease(tag, _, sourceRepo, commit string) Release {
-	return Release{Tag: tag, Version: strings.TrimPrefix(tag, "v"), SourceRepo: sourceRepo, Commit: commit}
+// match a pattern. The prefix is the pattern up to its last slash, when the tag
+// starts with it; the bare tag is the tag without it, and the version is that
+// without a leading v.
+func newRelease(tag, pattern, sourceRepo, commit string) Release {
+	var prefix string
+	if i := strings.LastIndex(pattern, "/"); i >= 0 && strings.HasPrefix(tag, pattern[:i+1]) {
+		prefix = pattern[:i+1]
+	}
+	bare := strings.TrimPrefix(tag, prefix)
+	return Release{Tag: tag, Prefix: prefix, BareTag: bare, Version: strings.TrimPrefix(bare, "v"), SourceRepo: sourceRepo, Commit: commit}
 }
 
 // tagPatternOf is the pattern of the tags of the stream a holding's artifact is
@@ -93,7 +100,7 @@ func PlaceOf(h *chain.Holding, line, branch string) (Place, error) {
 func FormOf(h *chain.Holding, rel Release) (string, error) {
 	form := h.Doc.Spec.Holds.Form
 	value, err := templates.Render(form, map[string]string{
-		"image": rel.Image, "tag": rel.Tag, "version": rel.Version, "url": rel.URL, "file": rel.File,
+		"image": rel.Image, "tag": rel.Tag, "prefix": rel.Prefix, "bareTag": rel.BareTag, "version": rel.Version, "url": rel.URL, "file": rel.File,
 		"sourceRepo": rel.SourceRepo, "commit": rel.Commit, "base": "", "upstream": "",
 	})
 	if err != nil {
