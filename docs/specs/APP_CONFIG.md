@@ -18,7 +18,7 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 
 | Kind | Holds |
 |---|---|
-| `Project` | A repo as a place: `repo` (who owns it, whether it is outside the organization), `pullRequests`, and `branches` (the layout, the stages, and the branch of each Rancher line) |
+| `Project` | A repo as a place: `repo` (who owns it, whether it is outside the organization), `aliases`, `pullRequests`, and `branches` (the layout, the stages, and the branch of each Rancher line) |
 | `Stream` | What a project releases: the scheme and tag pattern, the stages, the lines and the version series of each, and whether any release serves every line |
 | `Artifact` | One thing each release of a stream produces: an image (checked in its registries, [IMAGES_EXIST](IMAGES_EXIST.md)) or a file of the GitHub release |
 | `Holding` | Where a piece of a producer's release lives in a repo, and how it is written: a file, a key and a format, and a release, a commit or a branch |
@@ -27,6 +27,8 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |
 
 There is no `External` kind: a third-party repo is a Project with `repo.external: true`, which gero never ships into.
+
+A Project is named by its document name or its repo's `owner/name` slug, and also by each of its `aliases`: shorthands such as `rk` for `kuberlr-kubectl`, so `gero cd rk` works. An alias is a lowercase slug, so never a slug of a repo, listed once, and unique across the config: it may not be the name of any Project or the alias of another. Aliases are only a way to find a Project; output keeps the name.
 
 ### Holdings and edits
 
