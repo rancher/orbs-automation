@@ -68,7 +68,7 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 			continue
 		}
 		for _, at := range h.Doc.Spec.At {
-			if at.Format != formatYAML {
+			if _, built := formats[at.Format]; !built {
 				errs = append(errs, fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), at.Format))
 				e.unusable[h] = true
 				break

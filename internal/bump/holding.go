@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/gomodedit"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/platform/yamledit"
@@ -18,8 +19,18 @@ import (
 // yet.
 var ErrFormatNotBuilt = errors.New("format not built")
 
-// formatYAML is the format gero can read and write.
-const formatYAML = "yaml"
+// A format reads the value at a key in a file and replaces it, leaving the rest of
+// the file as it was. Only the formats here are built: a holding in another one,
+// such as dockerfile, is refused with ErrFormatNotBuilt.
+type format struct {
+	get func(src []byte, key string) (string, error)
+	set func(src []byte, key, value string) (out []byte, old string, err error)
+}
+
+var formats = map[string]format{
+	"yaml":  {get: yamledit.Get, set: yamledit.Set},
+	"gomod": {get: gomodedit.Get, set: gomodedit.Set},
+}
 
 // ReleaseOf makes the variables of a release of the producer for what a holding
 // holds of it: the tag, the artifact's image or file, and where the file is among
@@ -122,7 +133,7 @@ func resolveHolding(h *chain.Holding, line, branch string, rel Release) ([]Place
 		return nil, "", fmt.Errorf("Holding %q has no location for %s", h.Name(), line)
 	}
 	for _, place := range places {
-		if place.Format != formatYAML {
+		if _, built := formats[place.Format]; !built {
 			return nil, "", fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), place.Format)
 		}
 	}
@@ -147,7 +158,7 @@ func CheckHolding(ctx context.Context, src Tree, h *chain.Holding, line, branch 
 		if err != nil {
 			return Check{}, fmt.Errorf("read %s: %w", place.File, err)
 		}
-		current, err := yamledit.Get(data, place.Key)
+		current, err := formats[place.Format].get(data, place.Key)
 		if err != nil {
 			return Check{}, fmt.Errorf("read %s: %w", place.File, err)
 		}
@@ -187,7 +198,7 @@ func ApplyHolding(ctx context.Context, dst WritableTree, h *chain.Holding, line,
 				return Result{}, fmt.Errorf("read %s: %w", place.File, err)
 			}
 		}
-		out, old, err := yamledit.Set(data, place.Key, want)
+		out, old, err := formats[place.Format].set(data, place.Key, want)
 		if err != nil {
 			return Result{}, fmt.Errorf("set %s in %s: %w", place.Key, place.File, err)
 		}
