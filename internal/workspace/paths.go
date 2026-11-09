@@ -38,7 +38,7 @@ type RepoPath struct {
 
 // RepoPaths resolves the local clone of each slug, in the order given. The
 // rules, first match wins: the repository containing the working directory, a
-// repos.paths entry, a depth-2 scan of the repos.search directories and the clone root, matched by
+// repos.paths entry, a scan of the repos.search directories and the clone root, matched by
 // remote URL (never by directory name), then a sibling of the working
 // directory's repository named like the repo. The scan is built once, and only
 // when an earlier rule misses. A slug that no rule resolves, or that several
@@ -204,34 +204,37 @@ func clonePath(path string, r *repo.Repo) *clone {
 	return c
 }
 
-// scanClones finds the clones directly below each dir and one level further
-// down, without looking inside a clone. A directory that cannot be read is
-// skipped, and a clone found twice is listed once.
+// maxScanDepth is how many directory levels below a search directory the scan
+// goes, so a team directory, or a group inside one, can hold clones without being
+// listed itself. It bounds the walk, which stops at every clone and skips hidden
+// directories, when a search directory is much larger than a projects directory.
+const maxScanDepth = 5
+
+// scanClones finds the clones below each dir, to maxScanDepth levels, without
+// looking inside a clone. A directory that cannot be read is skipped, hidden
+// directories are not entered, and a clone found twice is listed once.
 func scanClones(dirs []string) []clone {
 	var out []clone
 	seen := map[string]bool{}
-	add := func(path string) bool {
-		r, err := repo.Open(path)
-		if err != nil {
-			return false
-		}
-		if !seen[path] {
-			seen[path] = true
-			if c := clonePath(path, r); c != nil {
-				out = append(out, *c)
-			}
-		}
-		return true
-	}
-	for _, dir := range dirs {
+	var walk func(dir string, depth int)
+	walk = func(dir string, depth int) {
 		for _, child := range subdirs(dir) {
-			if add(child) {
+			if r, err := repo.Open(child); err == nil {
+				if !seen[child] {
+					seen[child] = true
+					if c := clonePath(child, r); c != nil {
+						out = append(out, *c)
+					}
+				}
 				continue
 			}
-			for _, grandchild := range subdirs(child) {
-				add(grandchild)
+			if depth < maxScanDepth {
+				walk(child, depth+1)
 			}
 		}
+	}
+	for _, dir := range dirs {
+		walk(dir, 1)
 	}
 	return out
 }
@@ -245,7 +248,7 @@ func subdirs(dir string) []string {
 	}
 	var out []string
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
 			out = append(out, filepath.Join(dir, e.Name()))
 		}
 	}

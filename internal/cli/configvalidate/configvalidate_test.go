@@ -8,8 +8,8 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/bundlestore"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -31,7 +31,7 @@ func (f fakeWorkspace) ConfigSource() (workspace.ConfigSource, error) {
 	}
 	return workspace.ConfigSource{Dir: f.dir}, f.dirErr
 }
-func (f fakeWorkspace) Chain() (*chain.Graph, error)                          { return f.graph, f.chainErr }
+func (f fakeWorkspace) Chain() (*chain.Graph, error) { return f.graph, f.chainErr }
 
 func TestRunSummarizesAValidConfig(t *testing.T) {
 	ws := fakeWorkspace{
