@@ -59,10 +59,7 @@ func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 // status traces every consumer of a project with the same pieces that ship one
 // release to one.
 func resolveRoute(ctx context.Context, ws Reader, route bump.Route) (resolution, error) {
-	stream, err := streamOf(route)
-	if err != nil {
-		return resolution{}, err
-	}
+	stream := route.Stream
 	scheme, err := tagscheme.ForStream(stream)
 	if err != nil {
 		return resolution{}, err
@@ -78,22 +75,6 @@ func resolveRoute(ctx context.Context, ws Reader, route bump.Route) (resolution,
 		return resolution{}, fmt.Errorf("read the branches of %s: %w", consumerSlug, err)
 	}
 	return res, nil
-}
-
-// streamOf is the one stream whose releases a route ships: the stream of every
-// artifact its holdings hold. A route that holds artifacts of several streams has
-// no one release to ship.
-func streamOf(route bump.Route) (*chain.Stream, error) {
-	var stream *chain.Stream
-	for _, h := range route.Holdings {
-		s := h.Artifact().Stream()
-		if stream != nil && s != stream {
-			return nil, fmt.Errorf("%s holds artifacts of the streams %s and %s of %s: one release is of one stream",
-				route.Consumer.Slug(), stream.Name(), s.Name(), route.Producer.Slug())
-		}
-		stream = s
-	}
-	return stream, nil
 }
 
 // acceptsAll says whether every holding of the route takes every release, a
@@ -276,6 +257,9 @@ func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Ro
 		out := make([]string, len(rs))
 		for i, r := range rs {
 			out[i] = r.Consumer.Name()
+			if r.Stream != nil && slices.ContainsFunc(rs, func(o bump.Route) bool { return o.Consumer == r.Consumer && o.Stream != r.Stream }) {
+				out[i] += " (stream " + r.Stream.Name() + ")" // a consumer that takes several streams
+			}
 		}
 		return strings.Join(out, ", ")
 	}
@@ -288,7 +272,10 @@ func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Ro
 		}
 		return bump.Route{}, fmt.Errorf("%w: %s has no route to %q: it ships to %s", ErrNoConsumer, producer.Name(), to, describe(routes))
 	}
-	return bump.Route{}, fmt.Errorf("%w for %s: %s; choose with --to", ErrAmbiguousConsumer, producer.Name(), describe(matches))
+	if slices.ContainsFunc(matches, func(r bump.Route) bool { return r.Consumer != matches[0].Consumer }) {
+		return bump.Route{}, fmt.Errorf("%w for %s: %s; choose with --to", ErrAmbiguousConsumer, producer.Name(), describe(matches))
+	}
+	return bump.Route{}, fmt.Errorf("%w for %s: %s takes several of its streams, which ship cannot tell apart yet: %s", ErrAmbiguousConsumer, producer.Name(), matches[0].Consumer.Name(), describe(matches))
 }
 
 // notOwned says why gero does not ship from an unowned project, naming the team

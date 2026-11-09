@@ -751,15 +751,15 @@ func TestRenderTextNamesTheStreamWhenAProjectIsTakenFromForSeveralOfThem(t *test
 		{Producer: "rancher/wrangler", Name: "wrangler", Stream: "wrangler-v3-7", Targets: held},
 		{Producer: "rancher/wrangler", Name: "wrangler", Stream: "wrangler-v3-3", Targets: held},
 	}}, nil)
-	assert.Contains(t, several, "Sources: wrangler (rancher/wrangler), stream wrangler-v3-7\\n")
-	assert.Contains(t, several, "Sources: wrangler (rancher/wrangler), stream wrangler-v3-3\\n")
+	assert.Contains(t, several, "Sources: wrangler (rancher/wrangler), stream wrangler-v3-7\n")
+	assert.Contains(t, several, "Sources: wrangler (rancher/wrangler), stream wrangler-v3-3\n")
 
 	one := renderText(Status{Slug: "rancher/backup-restore-operator", Sources: []ship.SourceHoldings{
 		{Producer: "rancher/wrangler", Name: "wrangler", Stream: "wrangler-v3-7", Targets: held},
 		{Producer: "rancher/lasso", Name: "lasso", Stream: "lasso-v0-2", Targets: held},
 	}}, nil)
-	assert.Contains(t, one, "Sources: wrangler (rancher/wrangler)\\n", "one stream of each project needs no stream in the heading")
-	assert.Contains(t, one, "Sources: lasso (rancher/lasso)\\n")
+	assert.Contains(t, one, "Sources: wrangler (rancher/wrangler)\n", "one stream of each project needs no stream in the heading")
+	assert.Contains(t, one, "Sources: lasso (rancher/lasso)\n")
 	assert.NotContains(t, one, "stream ")
 }
 
@@ -772,7 +772,7 @@ func TestRenderTextNamesTheStreamOfAConsumerThatTakesSeveralOfThem(t *testing.T)
 		{Consumer: "rancher/rancher", Name: "rancher", Stream: "wrangler-v3-8", Targets: held},
 	}}, nil)
 
-	assert.Contains(t, out, "Consumers: backup-restore-operator (rancher/backup-restore-operator), stream wrangler-v3-7\\n")
-	assert.Contains(t, out, "Consumers: backup-restore-operator (rancher/backup-restore-operator), stream wrangler-v3-3\\n")
-	assert.Contains(t, out, "Consumers: rancher (rancher/rancher)\\n", "rancher takes one stream, so it needs none named")
+	assert.Contains(t, out, "Consumers: backup-restore-operator (rancher/backup-restore-operator), stream wrangler-v3-7\n")
+	assert.Contains(t, out, "Consumers: backup-restore-operator (rancher/backup-restore-operator), stream wrangler-v3-3\n")
+	assert.Contains(t, out, "Consumers: rancher (rancher/rancher)\n", "rancher takes one stream, so it needs none named")
 }

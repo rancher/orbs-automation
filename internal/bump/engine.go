@@ -125,17 +125,27 @@ type Route struct {
 	engine   *Engine
 }
 
-// routes groups release holdings by the project the key says, in the order they
-// come, leaving out a holding that cannot be used and so every route it is in.
+// routeKey is what a route is for: the project the key says, and the stream of
+// the artifacts it holds. A consumer that holds artifacts of two streams of one
+// producer has two routes, since a release is of one stream.
+type routeKey struct {
+	project *chain.Project
+	stream  *chain.Stream
+}
+
+// routes groups release holdings by the project the key says and the stream of
+// their artifact, in the order they come, leaving out a holding that cannot be
+// used and so the route it is in, and no other.
 func (e *Engine) routes(holdings []*chain.Holding, key func(*chain.Holding) *chain.Project) []Route {
 	var out []Route
-	bad := map[*chain.Project]bool{}
-	index := map[*chain.Project]int{}
+	bad := map[routeKey]bool{}
+	index := map[routeKey]int{}
+	keyOf := func(h *chain.Holding) routeKey { return routeKey{key(h), h.Artifact().Stream()} }
 	for _, h := range holdings {
 		if h.Kind() != chain.HoldsRelease || h.Artifact() == nil {
 			continue
 		}
-		k := key(h)
+		k := keyOf(h)
 		if e.unusable[h] {
 			bad[k] = true
 		}
@@ -143,27 +153,27 @@ func (e *Engine) routes(holdings []*chain.Holding, key func(*chain.Holding) *cha
 		if !ok {
 			i = len(out)
 			index[k] = i
-			out = append(out, Route{Producer: h.Producer(), Consumer: h.Holder(), engine: e})
+			out = append(out, Route{Producer: h.Producer(), Consumer: h.Holder(), Stream: k.stream, engine: e})
 		}
 		out[i].Holdings = append(out[i].Holdings, h)
 	}
 	var usable []Route
 	for _, r := range out {
-		if !bad[key(r.Holdings[0])] {
+		if !bad[keyOf(r.Holdings[0])] {
 			usable = append(usable, r)
 		}
 	}
 	return usable
 }
 
-// RoutesFrom returns the routes out of a producer, one for each consumer, in the
-// order of the holdings, leaving out a route whose holdings or edits are not
+// RoutesFrom returns the routes out of a producer, one for each consumer and
+// stream, in the order of the holdings, leaving out a route whose holdings or edits are not
 // usable.
 func (e *Engine) RoutesFrom(producer *chain.Project) []Route {
 	return e.routes(producer.Sourced(), func(h *chain.Holding) *chain.Project { return h.Holder() })
 }
 
-// RoutesInto returns the routes into a consumer, one for each producer, in the
+// RoutesInto returns the routes into a consumer, one for each producer and stream, in the
 // order of the holdings.
 func (e *Engine) RoutesInto(consumer *chain.Project) []Route {
 	return e.routes(consumer.Held(), func(h *chain.Holding) *chain.Project { return h.Producer() })

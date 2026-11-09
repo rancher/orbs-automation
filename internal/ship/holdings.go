@@ -122,7 +122,7 @@ func Holdings(ctx context.Context, ws Reader, producer *chain.Project) ([]Consum
 // holdRoute traces one route: what the consumer holds on each branch the
 // producer's releases go to.
 func holdRoute(ctx context.Context, ws Reader, route bump.Route) ConsumerHoldings {
-	out := ConsumerHoldings{Consumer: route.Consumer.Slug(), Name: route.Consumer.Name()}
+	out := ConsumerHoldings{Consumer: route.Consumer.Slug(), Name: route.Consumer.Name(), Stream: route.Stream.Name()}
 	res, err := resolveRoute(ctx, ws, route)
 	if err != nil {
 		out.Error = err.Error()
@@ -282,7 +282,7 @@ func Sources(ctx context.Context, ws Reader, consumer *chain.Project) ([]SourceH
 	out := make([]SourceHoldings, len(routes))
 	for i, route := range routes {
 		held := holdRoute(ctx, ws, route)
-		out[i] = SourceHoldings{Producer: route.Producer.Slug(), Name: route.Producer.Name(), Error: held.Error, Targets: held.Targets}
+		out[i] = SourceHoldings{Producer: route.Producer.Slug(), Name: route.Producer.Name(), Stream: held.Stream, Error: held.Error, Targets: held.Targets}
 	}
 	return out, nil
 }
