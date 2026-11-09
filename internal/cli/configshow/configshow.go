@@ -28,15 +28,15 @@ var scalarKeys = []string{"centralConfigDir", "output", "color", "repl.prompt", 
 
 // hints say what an unset key falls back to. Text output shows one in place of
 // "(unset)"; json and env never do, so scripts never read a hint as data. They
-// describe the rules in docs/specs/WORKSPACE.md and docs/specs/CLI_CONFIG.md, and each
-// goes away as internal/workspace infers a real value for its key.
+// describe the rules in docs/specs/WORKSPACE.md and docs/specs/CLI_CONFIG.md. Nothing
+// infers the upstream, the fork or githubUser, so each says none.
 var hints = map[string]string{
 	"userFile":         "none",
 	"centralConfigDir": "none; ./config in a central checkout",
 	"bundleFile":       "none",
-	"upstream":         "inferred from remotes",
-	"fork":             "inferred from remotes",
-	"githubUser":       "inferred from the fork remote",
+	"upstream":         "none",
+	"fork":             "none",
+	"githubUser":       "none",
 	"branchPrefix":     "none",
 	"pushTo":           "none: the fork when one is set, else the upstream",
 }
