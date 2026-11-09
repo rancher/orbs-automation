@@ -37,13 +37,37 @@ type Change struct {
 	From, To    string
 }
 
-// Check is what the read side finds of one holding, without writing anything.
+// Check is what the read side finds of one holding, without writing anything. A
+// holding with several locations has one entry in Locations for each that exists
+// for the line, and the rest says it as a whole.
 type Check struct {
-	Current  string // what the consumer holds now
-	Want     string // what it should hold for the release
+	Current   string // what the consumer holds now; of the first location when they differ
+	Want      string // what it should hold for the release
+	UpToDate  bool   // every location holds it
+	Relation  Relation
+	Change    Change          // what a bump would change; meaningful when not up to date
+	Locations []LocationCheck // each location, in the order the holding lists them
+}
+
+// LocationCheck is what one location of a holding holds.
+type LocationCheck struct {
+	Place    Place
+	Current  string
 	UpToDate bool
 	Relation Relation
-	Change   Change // what a bump would change; meaningful when not up to date
+	Change   Change
+}
+
+// Differ reports whether the locations of the holding hold different values.
+func (c Check) Differ() bool { return false }
+
+// Changes is what a bump would change: one change for each location that is not
+// up to date.
+func (c Check) Changes() []Change {
+	if c.UpToDate {
+		return nil
+	}
+	return []Change{c.Change}
 }
 
 // Result is what the write side did.

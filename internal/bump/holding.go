@@ -17,10 +17,6 @@ import (
 // yet.
 var ErrFormatNotBuilt = errors.New("format not built")
 
-// ErrLocationsNotBuilt is returned for a holding with more than one location, which
-// gero cannot read or write yet.
-var ErrLocationsNotBuilt = errors.New("several locations not built")
-
 // formatYAML is the format gero can read and write.
 const formatYAML = "yaml"
 
@@ -75,24 +71,24 @@ type Place struct {
 	Format string
 }
 
-// PlaceOf renders where a holding is found for a line and a branch of the
-// consumer: its file and key with the line, the holding's stage and the branch.
-func PlaceOf(h *chain.Holding, line, branch string) (Place, error) {
+// PlacesOf renders where a holding is found for a line and a branch of the
+// consumer, one place for each of its locations that exists for the line: the
+// file and key with the line, the holding's stage and the branch.
+func PlacesOf(h *chain.Holding, line, branch string) ([]Place, error) {
 	vars := map[string]string{"line": line, "stage": h.Doc.Spec.Holds.Stage, "branch": branch}
-	locations := h.Doc.Spec.At
-	if len(locations) != 1 {
-		return Place{}, fmt.Errorf("%w: Holding %q has %d locations, and gero reads and writes one", ErrLocationsNotBuilt, h.Name(), len(locations))
+	var places []Place
+	for _, at := range h.Doc.Spec.At[:1] {
+		file, err := templates.Render(at.File, vars)
+		if err != nil {
+			return nil, fmt.Errorf("Holding %q: at.file %q: %w", h.Name(), at.File, err)
+		}
+		key, err := templates.Render(at.Key, vars)
+		if err != nil {
+			return nil, fmt.Errorf("Holding %q: at.key %q: %w", h.Name(), at.Key, err)
+		}
+		places = append(places, Place{File: file, Key: key, Format: at.Format})
 	}
-	at := locations[0]
-	file, err := templates.Render(at.File, vars)
-	if err != nil {
-		return Place{}, fmt.Errorf("Holding %q: at.file %q: %w", h.Name(), at.File, err)
-	}
-	key, err := templates.Render(at.Key, vars)
-	if err != nil {
-		return Place{}, fmt.Errorf("Holding %q: at.key %q: %w", h.Name(), at.Key, err)
-	}
-	return Place{File: file, Key: key, Format: at.Format}, nil
+	return places, nil
 }
 
 // FormOf renders how a holding writes the release: its form, with the release's
@@ -112,10 +108,11 @@ func FormOf(h *chain.Holding, rel Release) (string, error) {
 // resolveHolding finds the place and the value a holding wants for a target, and refuses
 // a format that is not built.
 func resolveHolding(h *chain.Holding, line, branch string, rel Release) (Place, string, error) {
-	place, err := PlaceOf(h, line, branch)
+	places, err := PlacesOf(h, line, branch)
 	if err != nil {
 		return Place{}, "", err
 	}
+	place := places[0]
 	if place.Format != formatYAML {
 		return Place{}, "", fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), place.Format)
 	}

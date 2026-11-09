@@ -112,23 +112,24 @@ func TestNewReleaseSplitsTheTagByThePatternOfItsStream(t *testing.T) {
 func TestPlaceOfIsTheFileAndKeyRenderedForALineAndABranch(t *testing.T) {
 	h := holdings(t, chartHolding, imageHolding)
 
-	place, err := PlaceOf(h[0], "v2.16", "dev-v2.16")
+	places, err := PlacesOf(h[0], "v2.16", "dev-v2.16")
 
 	require.NoError(t, err)
-	assert.Equal(t, Place{File: "pkg/v2.16/package.yaml", Key: `.items[0]."dev-v2.16".url`, Format: "yaml"}, place)
+	assert.Equal(t, []Place{{File: "pkg/v2.16/package.yaml", Key: `.items[0]."dev-v2.16".url`, Format: "yaml"}}, places)
 
-	plain, err := PlaceOf(h[1], "v2.16", "main")
+	plain, err := PlacesOf(h[1], "v2.16", "main")
 	require.NoError(t, err)
-	assert.Equal(t, Place{File: "build.yaml", Key: "defaultImage", Format: "yaml"}, plain)
+	assert.Equal(t, []Place{{File: "build.yaml", Key: "defaultImage", Format: "yaml"}}, plain)
 }
 
 func TestPlaceOfRendersTheStageOfTheHolding(t *testing.T) {
 	h := holdings(t, "img\n  at: {file: lock.yaml, key: '.refs.{stage|replace:stable=prod}.image'}\n  holds: {kind: release, stage: stable}\n")[0]
 
-	place, err := PlaceOf(h, "v2.16", "rel-v2.16")
+	places, err := PlacesOf(h, "v2.16", "rel-v2.16")
 
 	require.NoError(t, err)
-	assert.Equal(t, ".refs.prod.image", place.Key)
+	require.Len(t, places, 1)
+	assert.Equal(t, ".refs.prod.image", places[0].Key)
 }
 
 func TestFormOfIsTheFormRenderedForTheRelease(t *testing.T) {
