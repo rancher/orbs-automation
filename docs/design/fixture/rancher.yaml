@@ -74,6 +74,10 @@ spec:
 apiVersion: gero/v1alpha2
 kind: Holding
 name: rancher-holds-wrangler-3-8
+acknowledge:
+  - rule: locations-differ
+    lines: {since: v2.16, until: v2.16}
+    reason: on main, pkg/client and pkg/plan are on rc.2 while the root and pkg/apis are on rc.3, and are synced by hand
 refs: {project: rancher, artifact: wrangler-v3-8-module}
 spec:
   at:
