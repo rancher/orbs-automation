@@ -28,7 +28,7 @@ func Build(cfg appconfig.Config) *Graph { return BuildWith(cfg, config.Report{})
 // BuildWith is Build for a caller that has the report the config was loaded with,
 // whose warnings the graph keeps, and the warnings its documents acknowledge.
 func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
-	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty(), warnings: rep.Warnings()}
+	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty(), warnings: rep.Warnings(), acknowledged: rep.Acknowledged()}
 	for _, doc := range cfg.Projects {
 		p := &Project{Doc: doc, graph: g}
 		g.projects = append(g.projects, p)
