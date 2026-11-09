@@ -135,6 +135,21 @@ func TestNewEngineReportsAReleaseHoldingInAFormatThatIsNotBuilt(t *testing.T) {
 	assert.Equal(t, []string{"prod > cons: cons-image, cons-chart"}, names(e.RoutesFrom(g.Project("prod"))), "the consumer whose holding cannot be written is left out")
 }
 
+func TestNewEngineAcceptsAHoldingWithSeveralLocationsInABuiltFormat(t *testing.T) {
+	e, g, err := buildEngine(t, d("Holding", "two", "{project: other, artifact: prod-chart}", "  at:\n    - {file: a.yaml, key: .url}\n    - {file: b/a.yaml, key: .url}\n  holds: {kind: release, form: \"{url}\"}\n"))
+
+	require.NoError(t, err)
+	assert.Contains(t, strings.Join(names(e.RoutesFrom(g.Project("prod"))), ";"), "two")
+}
+
+func TestNewEngineReportsALocationInAFormatNotBuiltAmongSeveral(t *testing.T) {
+	e, g, err := buildEngine(t, d("Holding", "two", "{project: other, artifact: prod-chart}", "  at:\n    - {file: a.yaml, key: .url}\n    - {file: Dockerfile, key: U, format: dockerfile}\n  holds: {kind: release, form: \"{url}\"}\n"))
+
+	require.ErrorIs(t, err, ErrFormatNotBuilt)
+	assert.Contains(t, err.Error(), `Holding "two"`)
+	assert.NotContains(t, strings.Join(names(e.RoutesFrom(g.Project("prod"))), ";"), "two")
+}
+
 func branches(ts []Target) []string {
 	var out []string
 	for _, t := range ts {

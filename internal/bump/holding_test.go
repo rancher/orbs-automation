@@ -191,11 +191,17 @@ func TestCheckHoldingSaysWhatIsHeldAndWhatIsWanted(t *testing.T) {
 	got, err := CheckHolding(bg, files{"build.yaml": buildYAML}, h, "v2.16", "main", rel)
 
 	require.NoError(t, err)
+	change := Change{Path: "build.yaml", From: "acme/prod:v0.5.2", To: "acme/prod:v0.5.3",
+		Description: "Updated `defaultImage` in `build.yaml` from `acme/prod:v0.5.2` to `acme/prod:v0.5.3`"}
 	assert.Equal(t, Check{
-		Current: "acme/prod:v0.5.2", Want: "acme/prod:v0.5.3", UpToDate: false, Relation: RelationNewer,
-		Change: Change{Path: "build.yaml", From: "acme/prod:v0.5.2", To: "acme/prod:v0.5.3",
-			Description: "Updated `defaultImage` in `build.yaml` from `acme/prod:v0.5.2` to `acme/prod:v0.5.3`"},
+		Current: "acme/prod:v0.5.2", Want: "acme/prod:v0.5.3", UpToDate: false, Relation: RelationNewer, Change: change,
+		Locations: []LocationCheck{{
+			Place: Place{File: "build.yaml", Key: "defaultImage", Format: "yaml"}, Current: "acme/prod:v0.5.2",
+			UpToDate: false, Relation: RelationNewer, Change: change,
+		}},
 	}, got)
+	assert.Equal(t, []Change{change}, got.Changes())
+	assert.False(t, got.Differ())
 }
 
 func TestCheckHoldingRelations(t *testing.T) {
@@ -256,4 +262,173 @@ func TestApplyHoldingOfAFormatThatIsNotBuilt(t *testing.T) {
 	assert.ErrorContains(t, err, "dockerfile")
 	_, err = CheckHolding(bg, tree, h, "v2.16", "main", rel)
 	require.ErrorIs(t, err, ErrFormatNotBuilt)
+}
+
+// twoLocations is a holding of the image at two places, in two files.
+const twoLocations = "img\n  at:\n    - {file: build.yaml, key: defaultImage}\n    - {file: pkg/build.yaml, key: .nested.image}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n"
+
+const nestedYAML = "nested:\n  image: acme/prod:v0.5.2  # keep this too\n"
+
+func TestPlacesOfEveryLocationInTheOrderTheyAreListed(t *testing.T) {
+	h := holdings(t, twoLocations)[0]
+
+	places, err := PlacesOf(h, "v2.16", "main")
+
+	require.NoError(t, err)
+	assert.Equal(t, []Place{
+		{File: "build.yaml", Key: "defaultImage", Format: "yaml"},
+		{File: "pkg/build.yaml", Key: ".nested.image", Format: "yaml"},
+	}, places)
+}
+
+func TestPlacesOfLeavesOutALocationThatDoesNotExistForTheLine(t *testing.T) {
+	h := holdings(t, "img\n  at:\n    - {file: 'a/{line}.yaml', key: .a}\n    - {file: 'b/{branch}.yaml', key: .b, lines: {since: v2.16}}\n  holds: {kind: release}\n")[0]
+
+	newer, err := PlacesOf(h, "v2.16", "main")
+	require.NoError(t, err)
+	assert.Equal(t, []Place{{File: "a/v2.16.yaml", Key: ".a", Format: "yaml"}, {File: "b/main.yaml", Key: ".b", Format: "yaml"}}, newer, "each is rendered with the line and the branch")
+
+	older, err := PlacesOf(h, "v2.15", "rel-v2.15")
+	require.NoError(t, err)
+	assert.Equal(t, []Place{{File: "a/v2.15.yaml", Key: ".a", Format: "yaml"}}, older)
+}
+
+func TestCheckHoldingOfSeveralLocationsAgreeing(t *testing.T) {
+	h := holdings(t, twoLocations)[0]
+	rel, _ := ReleaseOf(h, "v0.5.2", "c")
+
+	got, err := CheckHolding(bg, files{"build.yaml": buildYAML, "pkg/build.yaml": nestedYAML}, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.True(t, got.UpToDate)
+	assert.False(t, got.Differ())
+	assert.Len(t, got.Locations, 2)
+	assert.Empty(t, got.Changes())
+	assert.Equal(t, RelationSame, got.Relation)
+}
+
+func TestCheckHoldingOfSeveralLocationsThatDiffer(t *testing.T) {
+	h := holdings(t, twoLocations)[0]
+	tree := files{"build.yaml": buildYAML, "pkg/build.yaml": "nested:\n  image: acme/prod:v0.5.1\n"}
+
+	t.Run("one is up to date", func(t *testing.T) {
+		rel, _ := ReleaseOf(h, "v0.5.2", "c")
+
+		got, err := CheckHolding(bg, tree, h, "v2.16", "main", rel)
+
+		require.NoError(t, err)
+		assert.True(t, got.Differ())
+		assert.False(t, got.UpToDate, "it is not while one location is behind")
+		assert.Equal(t, RelationNewer, got.Relation, "the relation of the location that is behind")
+		require.Len(t, got.Locations, 2)
+		assert.True(t, got.Locations[0].UpToDate)
+		assert.False(t, got.Locations[1].UpToDate)
+		assert.Equal(t, "acme/prod:v0.5.1", got.Locations[1].Current)
+		require.Len(t, got.Changes(), 1)
+		assert.Equal(t, "pkg/build.yaml", got.Changes()[0].Path)
+		assert.Equal(t, got.Changes()[0], got.Change, "the change of a check is the first that a bump would make")
+	})
+	t.Run("both are behind", func(t *testing.T) {
+		rel, _ := ReleaseOf(h, "v0.5.3", "c")
+
+		got, err := CheckHolding(bg, tree, h, "v2.16", "main", rel)
+
+		require.NoError(t, err)
+		assert.True(t, got.Differ())
+		assert.Len(t, got.Changes(), 2)
+		assert.Equal(t, "acme/prod:v0.5.2", got.Current, "the value of the first location")
+	})
+}
+
+func TestCheckHoldingOfSeveralLocationsHoldingTheSameValueThatIsNotWanted(t *testing.T) {
+	h := holdings(t, twoLocations)[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+
+	got, err := CheckHolding(bg, files{"build.yaml": buildYAML, "pkg/build.yaml": nestedYAML}, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.False(t, got.Differ(), "they agree with each other, though not with the release")
+	assert.False(t, got.UpToDate)
+	assert.Len(t, got.Changes(), 2)
+}
+
+func TestApplyHoldingWritesEveryLocation(t *testing.T) {
+	h := holdings(t, twoLocations)[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"build.yaml": buildYAML, "pkg/build.yaml": nestedYAML}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.True(t, got.Changed)
+	assert.Equal(t, "# the build\ndefaultImage: acme/prod:v0.5.3   # keep this comment\nother: 1\n", tree["build.yaml"])
+	assert.Equal(t, "nested:\n  image: acme/prod:v0.5.3  # keep this too\n", tree["pkg/build.yaml"])
+	require.Len(t, got.Changes, 2)
+	assert.Equal(t, "build.yaml", got.Changes[0].Path)
+	assert.Equal(t, "pkg/build.yaml", got.Changes[1].Path)
+
+	again, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+	require.NoError(t, err)
+	assert.False(t, again.Changed)
+	assert.Empty(t, again.Changes)
+}
+
+func TestApplyHoldingChangesOnlyTheLocationsThatAreBehind(t *testing.T) {
+	h := holdings(t, twoLocations)[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"build.yaml": "defaultImage: acme/prod:v0.5.3\n", "pkg/build.yaml": nestedYAML}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	require.Len(t, got.Changes, 1)
+	assert.Equal(t, "pkg/build.yaml", got.Changes[0].Path)
+}
+
+func TestApplyHoldingTwoLocationsInOneFile(t *testing.T) {
+	h := holdings(t, "img\n  at:\n    - {file: build.yaml, key: defaultImage}\n    - {file: build.yaml, key: other.image}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"build.yaml": "defaultImage: acme/prod:v0.5.2\nother:\n  image: acme/prod:v0.5.2\n"}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.Equal(t, "defaultImage: acme/prod:v0.5.3\nother:\n  image: acme/prod:v0.5.3\n", tree["build.yaml"])
+	assert.Len(t, got.Changes, 2)
+}
+
+func TestApplyHoldingOnlyWritesTheLocationsThatExistForTheLine(t *testing.T) {
+	h := holdings(t, "img\n  at:\n    - {file: a.yaml, key: .v}\n    - {file: b.yaml, key: .v, lines: {since: v2.16}}\n  holds: {kind: release, form: \"{tag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"a.yaml": "v: v0.5.2\n", "b.yaml": "v: v0.5.2\n"}
+
+	_, err := ApplyHolding(bg, tree, h, "v2.15", "rel-v2.15", rel)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v: v0.5.3\n", tree["a.yaml"])
+	assert.Equal(t, "v: v0.5.2\n", tree["b.yaml"], "b.yaml does not exist for v2.15")
+}
+
+func TestAHoldingWithNoLocationForTheLineIsAnErrorNotANoOp(t *testing.T) {
+	h := holdings(t, "img\n  at: {file: a.yaml, key: .v, lines: {since: v2.16}}\n  holds: {kind: release, form: \"{tag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"a.yaml": "v: v0.5.2\n"}
+
+	_, err := ApplyHolding(bg, tree, h, "v2.15", "rel-v2.15", rel)
+	require.ErrorContains(t, err, "no location")
+	assert.ErrorContains(t, err, "v2.15")
+
+	_, err = CheckHolding(bg, tree, h, "v2.15", "rel-v2.15", rel)
+	assert.ErrorContains(t, err, "no location")
+}
+
+func TestAHoldingWithALocationInAFormatNotBuiltWritesNothing(t *testing.T) {
+	h := holdings(t, "img\n  at:\n    - {file: build.yaml, key: defaultImage}\n    - {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"build.yaml": buildYAML, "Dockerfile": "ARG IMAGE=x\n"}
+
+	_, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.ErrorIs(t, err, ErrFormatNotBuilt)
+	assert.Equal(t, buildYAML, tree["build.yaml"], "the first location is not written when the second cannot be")
 }
