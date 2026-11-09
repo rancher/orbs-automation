@@ -515,3 +515,44 @@ func TestAStepFromTheProducerNeedsAnOwnedProducer(t *testing.T) {
 		assert.True(t, hasSetError(rep, `Edit "e"`, "spec.postEdit[0].from", `Project "q" is not owned`), "%v", rep.Findings)
 	})
 }
+
+func TestAGoBumpEditNeedsAHoldingInTheGoModFormat(t *testing.T) {
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "s", "{project: p}", streamSpec),
+		doc("Artifact", "a", "{stream: s}", "  kind: gomod\n  name: github.com/acme/a\n"),
+	}
+	yamlHolding := doc("Holding", "yaml-holds", "{project: q, artifact: a}", holdingSpec)
+	goHolding := doc("Holding", "go-holds", "{project: q, artifact: a}", "  at: {file: go.mod, key: github.com/acme/a, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n")
+	mixedHolding := doc("Holding", "mixed-holds", "{project: q, artifact: a}", "  at:\n    - {file: other.yaml, key: .a}\n    - {file: go.mod, key: github.com/acme/a, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n")
+	edit := func(holdings, strategy string) string {
+		return doc("Edit", "e", "{holding: "+holdings+"}", "  strategy: "+strategy+"\n")
+	}
+
+	t.Run("over a holding in the yaml format", func(t *testing.T) {
+		rep := validateSet(t, append(base, yamlHolding, edit("yaml-holds", "goBump"))...)
+
+		assert.True(t, hasSetError(rep, `Edit "e"`, "refs.holding", "gomod"), "%v", rep.Findings)
+	})
+	t.Run("over a holding in the gomod format", func(t *testing.T) {
+		rep := validateSet(t, append(base, goHolding, edit("go-holds", "goBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("over a holding with one location of each", func(t *testing.T) {
+		rep := validateSet(t, append(base, mixedHolding, edit("mixed-holds", "goBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("over several, one of them in the gomod format", func(t *testing.T) {
+		rep := validateSet(t, append(base, yamlHolding, goHolding, edit("[yaml-holds, go-holds]", "goBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("another strategy has no such need", func(t *testing.T) {
+		rep := validateSet(t, append(base, yamlHolding, edit("yaml-holds", "chartsPackageBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+}
