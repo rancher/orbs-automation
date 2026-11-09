@@ -38,7 +38,7 @@ type RepoPath struct {
 
 // RepoPaths resolves the local clone of each slug, in the order given. The
 // rules, first match wins: the repository containing the working directory, a
-// repos.paths entry, a depth-2 scan of the repos.search directories matched by
+// repos.paths entry, a depth-2 scan of the repos.search directories and the clone root, matched by
 // remote URL (never by directory name), then a sibling of the working
 // directory's repository named like the repo. The scan is built once, and only
 // when an earlier rule misses. A slug that no rule resolves, or that several
@@ -52,7 +52,7 @@ func (w *Workspace) RepoPaths(slugs []string) []RepoPath {
 	var scanned []clone
 	scan := func() []clone {
 		if scanned == nil {
-			scanned = scanClones(w.settings.Repos.Search)
+			scanned = scanClones(w.scanDirs())
 		}
 		return scanned
 	}
@@ -86,13 +86,24 @@ func (w *Workspace) repoPath(slug string, here *clone, scan func() []clone) Repo
 	return RepoPath{Slug: slug, Err: ErrRepoNotFound}
 }
 
+// scanDirs are the directories scanned for clones: the repos.search entries and
+// the clone root, since a clone that gero repo clone made there is found again
+// without being listed twice.
+func (w *Workspace) scanDirs() []string {
+	dirs := slices.Clone(w.settings.Repos.Search)
+	if root := w.settings.Repos.CloneRoot; root != "" {
+		dirs = append(dirs, root)
+	}
+	return dirs
+}
+
 // ConfiguredRepoPath resolves one slug by the user's own config alone: a
-// repos.paths entry, else a clone found under a repos.search directory. The
+// repos.paths entry, else a clone found under a repos.search directory or the clone root. The
 // working directory plays no part, so the answer is the same wherever it is
 // asked. A slug that neither finds, or that several clones match equally, is
 // ErrRepoNotFound or ErrRepoAmbiguous.
 func (w *Workspace) ConfiguredRepoPath(slug string) (RepoPath, error) {
-	rp, ok := w.configuredPath(slug, func() []clone { return scanClones(w.settings.Repos.Search) })
+	rp, ok := w.configuredPath(slug, func() []clone { return scanClones(w.scanDirs()) })
 	if !ok {
 		rp = RepoPath{Slug: slug, Err: ErrRepoNotFound}
 	}

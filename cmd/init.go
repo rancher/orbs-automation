@@ -32,7 +32,7 @@ Two of the keys are alike and not the same. repos.search (--search) lists the
 directories gero scans for clones you already have: it only finds what is there.
 repos.cloneRoot (--clone-root) is the one directory gero repo clone will put new
 clones in, as <root>/<name>. A directory you search need not be where new clones
-go, and the clone root is not added to the search list for you.
+go. The clone root is scanned too, so it need not be listed in repos.search.
 
 An existing file is not touched unless --force replaces it. --dry-run shows the
 file and writes nothing. The file is at $GERO_CONFIG, else

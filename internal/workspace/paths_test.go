@@ -391,3 +391,31 @@ func TestConfiguredRepoPathIgnoresTheWorkingDirectory(t *testing.T) {
 		assert.Len(t, got.Candidates, 2)
 	})
 }
+
+func TestRepoPathsScansTheCloneRoot(t *testing.T) {
+	root := t.TempDir()
+	clones(t, root, map[string]map[string]string{"rancher": {"origin": upstreamURL}})
+	file := "repos:\n  cloneRoot: " + root + "\n"
+
+	t.Run("without a repos.search entry", func(t *testing.T) {
+		ws := Open(settings(t, file, nil, nil), t.TempDir())
+
+		got := ws.RepoPaths([]string{rancherSlug})[0]
+		configured, err := ws.ConfiguredRepoPath(rancherSlug)
+
+		require.NoError(t, got.Err)
+		assert.Equal(t, filepath.Join(root, "rancher"), got.Path)
+		assert.Equal(t, PathScan, got.Source)
+		require.NoError(t, err)
+		assert.Equal(t, got, configured)
+	})
+
+	t.Run("a clone in both is one clone, not an ambiguity", func(t *testing.T) {
+		ws := Open(settings(t, file+"  search:\n    - "+root+"\n", nil, nil), t.TempDir())
+
+		got := ws.RepoPaths([]string{rancherSlug})[0]
+
+		require.NoError(t, got.Err)
+		assert.Equal(t, filepath.Join(root, "rancher"), got.Path)
+	})
+}
