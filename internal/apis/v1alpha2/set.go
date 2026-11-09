@@ -380,9 +380,10 @@ func (s *set) rancherLines() {
 }
 
 // artifacts reports an Artifact of a kind and name that an earlier Artifact of
-// the same Project has.
+// the same Project has. A Go module is the exception: the same module is an
+// Artifact of each minor's Stream, so for it the name is unique within a Stream.
 func (s *set) artifacts() {
-	type key struct{ project, kind, name string }
+	type key struct{ scope, kind, name string }
 	seen := map[key]string{}
 	for _, o := range s.objs {
 		a, ok := o.(*Artifact)
@@ -393,10 +394,14 @@ func (s *set) artifacts() {
 		if st == nil || len(st.Refs["project"]) != 1 {
 			continue
 		}
-		k := key{st.Refs["project"][0], a.Spec.Kind, a.Spec.Name}
+		scope, scopeKind := st.Refs["project"][0], "Project"
+		if a.Spec.Kind == ArtifactGoMod {
+			scope, scopeKind = st.Name, "Stream"
+		}
+		k := key{scopeKind + " " + scope, a.Spec.Kind, a.Spec.Name}
 		if first, dup := seen[k]; dup {
 			r := s.at(o)
-			r.Errorf("spec.name", "%q is already an artifact of Project %q, in Artifact %q", a.Spec.Name, k.project, first)
+			r.Errorf("spec.name", "%q is already an artifact of %s %q, in Artifact %q", a.Spec.Name, scopeKind, scope, first)
 			s.add(r)
 			continue
 		}

@@ -24,7 +24,7 @@ type Locations []At
 type At struct {
 	File   string      `yaml:"file"`   // a template
 	Key    string      `yaml:"key"`    // a template, then a path in the format's own style
-	Format string      `yaml:"format"` // yaml or dockerfile
+	Format string      `yaml:"format"` // yaml, dockerfile or gomod
 	Lines  lines.Range `yaml:"lines"`  // the lines the file exists for
 }
 

@@ -57,9 +57,9 @@ func TestDecodeFixture(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 49, total)
+	assert.Equal(t, 74, total)
 	assert.Equal(t, map[string]int{
-		KindProject: 13, KindStream: 10, KindArtifact: 11, KindHolding: 12, KindEdit: 2, KindRancherLines: 1,
+		KindProject: 16, KindStream: 16, KindArtifact: 17, KindHolding: 21, KindEdit: 3, KindRancherLines: 1,
 	}, kinds)
 }
 

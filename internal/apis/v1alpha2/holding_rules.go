@@ -31,7 +31,7 @@ var atVars = []string{"line", "stage", "branch"}
 
 // formVars are the variables a form may use, filled from a release and its
 // artifact.
-var formVars = []string{"image", "tag", "version", "url", "file", "sourceRepo", "commit", "base", "upstream"}
+var formVars = []string{"image", "tag", "prefix", "bareTag", "version", "url", "file", "sourceRepo", "commit", "base", "upstream"}
 
 // SetDefaults fills the format, the accept and, for a release, the form.
 func (h *Holding) SetDefaults() {
@@ -60,6 +60,7 @@ func (h *Holding) Validate(_ config.Context, r *config.Report) {
 	for i, at := range h.Spec.At {
 		h.validateLocation(r, atPath(i, len(h.Spec.At)), at)
 	}
+	h.validateOverlap(r)
 
 	kindOK := oneOf(r, "spec.holds.kind", holds.Kind, HoldsRelease, HoldsCommit, HoldsBranch)
 	if kindOK {
@@ -101,7 +102,24 @@ func (h *Holding) validateLocation(r *config.Report, base string, at At) {
 			r.Errorf(path, "reads {stage}, so holds.stage or holds.stages must say which stage")
 		}
 	}
-	oneOf(r, base+".format", at.Format, FormatYAML, FormatDockerfile)
+	oneOf(r, base+".format", at.Format, FormatYAML, FormatDockerfile, FormatGoMod)
+	checkRange(r, base+".lines", at.Lines)
+}
+
+// validateOverlap reports a place written twice for lines that share a line: two
+// locations of one holding at the same file and key must be for different lines.
+func (h *Holding) validateOverlap(r *config.Report) {
+	locations := h.Spec.At
+	for i := 1; i < len(locations); i++ {
+		for j := range i {
+			a, b := locations[j], locations[i]
+			if a.File != b.File || a.Key != b.Key || !a.Lines.Overlaps(b.Lines) {
+				continue
+			}
+			r.Errorf(atPath(i, len(locations)), "is the same place as spec.at[%d] (%s, %s) for lines that overlap", j, b.File, b.Key)
+			break
+		}
+	}
 }
 
 func (h *Holding) validateForm(r *config.Report) {

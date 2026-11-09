@@ -1,6 +1,7 @@
 package v1alpha2
 
 import (
+	"bytes"
 	"errors"
 
 	"go.yaml.in/yaml/v3"
@@ -44,19 +45,48 @@ func (b *Branch) UnmarshalYAML(node *yaml.Node) error {
 	return errors.New("branch must be a string or a map of stage to branch")
 }
 
-// UnmarshalYAML reads a mapping as one location and a list as a list of them.
+// UnmarshalYAML reads a mapping as one location and a list as a list of them. A
+// location with a field it does not have is an error, as it is anywhere else.
 func (l *Locations) UnmarshalYAML(node *yaml.Node) error {
 	switch node.Kind {
 	case yaml.MappingNode:
-		var at At
-		if err := node.Decode(&at); err != nil {
+		at, err := decodeLocation(node)
+		if err != nil {
 			return err
 		}
 		*l = Locations{at}
 		return nil
 	case yaml.SequenceNode:
-		*l = Locations{}
+		locations := make(Locations, 0, len(node.Content))
+		for _, n := range node.Content {
+			at, err := decodeLocation(n)
+			if err != nil {
+				return err
+			}
+			locations = append(locations, at)
+		}
+		*l = locations
 		return nil
 	}
 	return errors.New("at must be a location or a list of locations")
+}
+
+// decodeLocation reads one location, refusing a field it does not have. A node
+// decodes without the decoder's strictness, so it is written out and read again
+// with it.
+func decodeLocation(node *yaml.Node) (At, error) {
+	if node.Kind != yaml.MappingNode {
+		return At{}, errors.New("a location must be a mapping of file, key, format and lines")
+	}
+	text, err := yaml.Marshal(node)
+	if err != nil {
+		return At{}, err
+	}
+	dec := yaml.NewDecoder(bytes.NewReader(text))
+	dec.KnownFields(true)
+	var at At
+	if err := dec.Decode(&at); err != nil {
+		return At{}, err
+	}
+	return at, nil
 }

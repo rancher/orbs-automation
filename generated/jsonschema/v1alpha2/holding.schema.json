@@ -16,9 +16,10 @@
           "type": "string",
           "enum": [
             "yaml",
-            "dockerfile"
+            "dockerfile",
+            "gomod"
           ],
-          "description": "yaml or dockerfile"
+          "description": "yaml, dockerfile or gomod"
         },
         "lines": {
           "$ref": "#/$defs/Range",

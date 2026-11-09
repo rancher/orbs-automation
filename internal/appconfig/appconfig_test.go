@@ -89,10 +89,10 @@ func TestLoadReadsTheDesignFixture(t *testing.T) {
 
 	require.NoError(t, rep.Err())
 	assert.Empty(t, rep.Warnings())
-	assert.Len(t, cfg.Projects, 7)
-	assert.Len(t, cfg.Streams, 7)
-	assert.Len(t, cfg.Artifacts, 8)
-	assert.Len(t, cfg.Holdings, 8)
+	assert.Len(t, cfg.Projects, 9)
+	assert.Len(t, cfg.Streams, 12)
+	assert.Len(t, cfg.Artifacts, 13)
+	assert.Len(t, cfg.Holdings, 16)
 	assert.Len(t, cfg.Edits, 2)
 	assert.NotNil(t, cfg.Lines)
 }

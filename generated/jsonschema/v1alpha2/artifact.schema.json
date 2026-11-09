@@ -54,13 +54,14 @@
           "type": "string",
           "enum": [
             "image",
-            "file"
+            "file",
+            "gomod"
           ],
-          "description": "image or file"
+          "description": "image, file or gomod"
         },
         "name": {
           "type": "string",
-          "description": "an image's repository path, or a file name template"
+          "description": "an image's repository path, a file name template or a Go module path"
         },
         "lines": {
           "$ref": "#/$defs/Range"

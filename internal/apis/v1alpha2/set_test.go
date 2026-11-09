@@ -385,6 +385,27 @@ func TestAnImageNameIsUniqueWithinAProject(t *testing.T) {
 	})
 }
 
+func TestAModuleNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
+	const module = "  kind: gomod\n  name: github.com/rancher/wrangler/v3\n"
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Stream", "s1", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec),
+		doc("Artifact", "m1", "{stream: s1}", module),
+	}
+
+	t.Run("one module in the streams of two minors is fine", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "m2", "{stream: s2}", module))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("twice in one stream is not", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "m2", "{stream: s1}", module))...)
+
+		assert.True(t, hasSetError(rep, `Artifact "m2"`, "spec.name", `already an artifact of Stream "s1"`), "%v", rep.Findings)
+	})
+}
+
 func TestAProjectDoesNotHoldSomethingOfItself(t *testing.T) {
 	p := doc("Project", "p", "", projectSpec)
 	s := doc("Stream", "s", "{project: p}", streamSpec)
