@@ -2,6 +2,7 @@ package v1alpha2
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
@@ -103,7 +104,10 @@ func (h *Holding) validateLocation(r *config.Report, base string, at At) {
 			r.Errorf(path, "reads {stage}, so holds.stage or holds.stages must say which stage")
 		}
 	}
-	oneOf(r, base+".format", at.Format, FormatYAML, FormatDockerfile, FormatGoMod)
+	oneOf(r, base+".format", at.Format, FormatYAML, FormatDockerfile, FormatGoMod, FormatRegex)
+	if at.Format == FormatRegex {
+		checkPattern(r, base+".key", at.Key)
+	}
 	checkRange(r, base+".lines", at.Lines)
 }
 
@@ -120,6 +124,26 @@ func (h *Holding) validateOverlap(r *config.Report) {
 			r.Errorf(atPath(i, len(locations)), "is the same place as spec.at[%d] (%s, %s) for lines that overlap", j, b.File, b.Key)
 			break
 		}
+	}
+}
+
+// checkPattern reports a key in the regex format that is not a pattern with exactly
+// one capture group. The key is a template, so it is rendered with sample values
+// first, as the engine renders it with the real ones.
+func checkPattern(r *config.Report, path, key string) {
+	if key == "" || templates.Validate(key, atVars) != nil {
+		return // said already
+	}
+	rendered, err := templates.Render(key, map[string]string{"line": "v0.0", "stage": "stage", "branch": "branch"})
+	if err != nil {
+		return
+	}
+	re, err := regexp.Compile("(?m)" + rendered)
+	switch {
+	case err != nil:
+		r.Errorf(path, "is not a pattern: %v", err)
+	case re.NumSubexp() != 1:
+		r.Errorf(path, "must have exactly one capture group, the value to read and replace, and has %d", re.NumSubexp())
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/gomodedit"
+	"github.com/rancher/orbs-automation/internal/platform/regexedit"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/platform/yamledit"
@@ -30,6 +31,7 @@ type format struct {
 var formats = map[string]format{
 	"yaml":  {get: yamledit.Get, set: yamledit.Set},
 	"gomod": {get: gomodedit.Get, set: gomodedit.Set},
+	"regex": {get: regexedit.Get, set: regexedit.Set},
 }
 
 // ReleaseOf makes the variables of a release of the producer for what a holding

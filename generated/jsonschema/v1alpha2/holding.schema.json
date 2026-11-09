@@ -36,7 +36,8 @@
           "enum": [
             "yaml",
             "dockerfile",
-            "gomod"
+            "gomod",
+            "regex"
           ],
           "description": "yaml, dockerfile or gomod"
         },
