@@ -31,12 +31,10 @@ jobs:
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      # The archives and checksums.txt are signed after goreleaser, here and not in
+      # cosign and gh come with the container image. The archives, checksums.txt and
+      # the config bundle are signed after goreleaser, here and not in
       # .goreleaser.yaml, so a snapshot run (locally, or in CI) never asks for a
       # Sigstore login (docs/specs/SELF_UPDATE.md).
-      - name: Install cosign
-        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
-
       - name: Run GoReleaser
         run: goreleaser release --clean
         env:
@@ -52,20 +50,22 @@ jobs:
             .bundle/gero-config-bundle.yaml
 
       # Keyless: the certificate names this workflow on this tag, which is the one
-      # identity gero doctor self-update accepts. Each bundle is <file>.sigstore.json,
-      # and a release without all of them is not published, since self-update
-      # refuses it.
-      - name: Sign the archives and checksums.txt
+      # identity gero doctor self-update accepts. Each Sigstore bundle is
+      # <file>.sigstore.json, written to dist/ so one glob uploads them all, and a
+      # release without all of them is not published, since self-update refuses it.
+      # The config bundle is signed itself, not only through its line in checksums.txt.
+      - name: Sign the archives, checksums.txt and the config bundle
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          for f in dist/gero_*.tar.gz dist/checksums.txt; do
-            cosign sign-blob --yes --bundle "$f.sigstore.json" "$f"
+          files="$(ls dist/gero_*.tar.gz) dist/checksums.txt .bundle/gero-config-bundle.yaml"
+          for f in $files; do
+            cosign sign-blob --yes --bundle "dist/$(basename "$f").sigstore.json" "$f"
           done
           gh release upload "${{ github.ref_name }}" dist/*.sigstore.json --clobber
           assets="$(gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name')"
-          for f in dist/gero_*.tar.gz dist/checksums.txt; do
+          for f in $files; do
             printf '%s\n' "$assets" | grep -Fx "$(basename "$f").sigstore.json"
           done
 

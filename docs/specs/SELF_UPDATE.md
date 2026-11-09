@@ -27,7 +27,7 @@ The same GitHub build-provenance attestation the release workflow already makes 
 
 ## What the release must publish
 
-The release workflow installs `cosign`, and after GoReleaser has built the draft it signs each archive and `checksums.txt` with `cosign sign-blob --yes --bundle=<file>.sigstore.json`, uploads the bundles to the draft, and fails the release before it is published if one is missing. The signing is in the workflow and not in `.goreleaser.yaml` because GoReleaser has no way to skip it on a snapshot, and a snapshot run (locally, or the dry run in CI) would then ask for a Sigstore login. The assets are `gero_<os>_<arch>.tar.gz`, `checksums.txt` and a `.sigstore.json` beside each. `id-token: write`, which keyless signing needs, was already granted. The archive name has no version in it (`{name}_{os}_{arch}.{ext}`), so `selfupdate.AssetTemplate` says that; a change to `name_template` has to change both.
+The release workflow uses the `cosign` and `gh` that the container image provides, and after GoReleaser has built the draft it signs each archive, `checksums.txt` and the config bundle with `cosign sign-blob --yes --bundle=<file>.sigstore.json`, uploads the bundles to the draft, and fails the release before it is published if one is missing. The signing is in the workflow and not in `.goreleaser.yaml` because GoReleaser has no way to skip it on a snapshot, and a snapshot run (locally, or the dry run in CI) would then ask for a Sigstore login. The assets are `gero_<os>_<arch>.tar.gz`, `checksums.txt` and `gero-config-bundle.yaml`, and a `.sigstore.json` beside each. `id-token: write`, which keyless signing needs, was already granted. The archive name has no version in it (`{name}_{os}_{arch}.{ext}`), so `selfupdate.AssetTemplate` says that; a change to `name_template` has to change both.
 
 ## Cost
 
@@ -35,7 +35,7 @@ Sigstore verification is the largest dependency gero has: **+17.6 MB stripped (1
 
 ## Not built yet
 
-* A run against a real signed release: none has been published, so every release so far is refused, and the first signed tag is the first real test. Whether `cosign` runs inside the release workflow's container image, and whether `gh release upload` finds the draft by tag, are part of that test. The tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature itself, in memory and with no network.
+* A run against a real signed release: none has been published, so every release so far is refused, and the first signed tag is the first real test. Whether the container image has `cosign`, and whether `gh release upload` finds the draft by tag, are part of that test. The tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature itself, in memory and with no network.
 * `--version`, to install a named release or roll back.
 * An offline path (a `trusted_root.json` supplied by file), though `selfupdate.Config.TrustedRoot` takes one.
 * Windows: gero is released for macOS and Linux only.
