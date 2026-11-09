@@ -31,11 +31,11 @@ The release workflow uses the `cosign` and `gh` that the container image provide
 
 ## Cost
 
-Sigstore verification is the largest dependency gero has: **+17.6 MB stripped (13.1 MB to 30.6 MB)**. It is accepted for this command alone, because a wrong answer here installs attacker code on an engineer's machine.
+Sigstore verification is the largest dependency gero has: **roughly 17 MB** of stripped binary when it was measured. It is accepted for this command alone, because a wrong answer here installs attacker code on an engineer's machine.
 
 ## Not built yet
 
-* A run against a real signed release: none has been published, so every release so far is refused, and the first signed tag is the first real test. Whether the container image has `cosign`, and whether `gh release upload` finds the draft by tag, are part of that test. The tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature itself, in memory and with no network.
+* Tests of the signature itself against a real release: the tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature, in memory and with no network.
 * `--version`, to install a named release or roll back.
 * An offline path (a `trusted_root.json` supplied by file), though `selfupdate.Config.TrustedRoot` takes one.
 * Windows: gero is released for macOS and Linux only.
@@ -43,4 +43,3 @@ Sigstore verification is the largest dependency gero has: **+17.6 MB stripped (1
 ## Open questions
 
 * Whether `gero doctor` should report that a newer release exists, as a warning on `--online`.
-* Whether the first signed release should be cut as a pre-release to try the whole path before anyone depends on it.
