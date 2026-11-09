@@ -27,4 +27,4 @@ From a checkout of this repo `gero` finds `./config` itself. Elsewhere, see [CLI
 
 - [VISION](docs/VISION.md): why this exists and where it is going
 - [Docs](docs/README.md): the architecture, phases and specs
-- [Contributing workflow](docs/ai/red-green-commits.md): how we write code and tests here
+- [Contributing workflow](docs/contributing/red-green-commits.md): how we write code and tests here

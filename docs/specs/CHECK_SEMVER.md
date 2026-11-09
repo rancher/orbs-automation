@@ -70,7 +70,7 @@ func Classify(tag string) Info
 
 ## 4. Test plan
 
-Test first, per [TESTING](TESTING.md) and [`ai/red-green-commits.md`](../ai/red-green-commits.md).
+Test first, per [TESTING](TESTING.md) and [`contributing/red-green-commits.md`](../contributing/red-green-commits.md).
 
 **`internal/platform/semver`, table test of `Classify`.** The first two result columns are the default (the script's results). The last three are the result with `WithGrammar()`. Rows where the two differ are the improvements from section 6:
 

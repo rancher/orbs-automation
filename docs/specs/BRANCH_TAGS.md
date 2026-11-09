@@ -96,7 +96,7 @@ func ResolveBranchTags(ref, commit string, tags Tags) (BranchTags, error)
 
 ## 4. Test plan
 
-Test first, per [TESTING](TESTING.md) and [`ai/red-green-commits.md`](../ai/red-green-commits.md).
+Test first, per [TESTING](TESTING.md) and [`contributing/red-green-commits.md`](../contributing/red-green-commits.md).
 
 **`ResolveBranchTags`, table test with a fake `Tags`:**
 
