@@ -43,5 +43,4 @@ Sigstore verification is the largest dependency gero has: **+17.6 MB stripped (1
 ## Open questions
 
 * Whether `gero doctor` should report that a newer release exists, as a warning on `--online`.
-* Whether a pre-release channel is wanted, which `binup` has as an option and gero leaves off.
 * Whether the first signed release should be cut as a pre-release to try the whole path before anyone depends on it.
