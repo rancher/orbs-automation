@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/releasesign"
 )
 
 // BundleSource is where the central config comes from when no local source is
@@ -108,8 +109,14 @@ func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
 	home, _ := os.UserHomeDir()
 	res := bundlestore.Resolver{Cache: bundlestore.Cache{Dir: clicfg.CacheDir(os.Getenv, home)}}
 	if !r.offline {
+		// The signatures are checked against this repository's release workflow, so
+		// a bundle another repository, or a stolen token, published is refused.
+		verifier, err := releasesign.New(nil)
+		if err != nil {
+			return bundlestore.Loaded{}, err
+		}
 		_, token := defaultCredentials()
-		res.Releases = assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token})
+		res.Releases = assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token, Verifier: verifier})
 	}
 	return res.Load(ctx, bundlestore.Request{GeroVersion: r.version, Offline: r.offline})
 }

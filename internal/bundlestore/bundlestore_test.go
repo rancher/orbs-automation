@@ -444,7 +444,7 @@ func TestLoadVerifiesTheSignaturesOfTheBundleAndTheChecksums(t *testing.T) {
 	assert.Equal(t, "v0.5.0", g.cachedTag())
 }
 
-func TestLoadARelaseWithNoSignaturesIsRefusedAndNothingIsCached(t *testing.T) {
+func TestLoadAReleaseWithNoSignaturesIsRefusedAndNothingIsCached(t *testing.T) {
 	g := newRig(t)
 	g.verifying()
 	g.publish("v0.5.0", "alpha")

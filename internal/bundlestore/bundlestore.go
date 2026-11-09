@@ -74,13 +74,15 @@ type Loaded struct {
 // Load finds the bundle for the request. The rules are the spec's:
 //
 //   - A stable gero uses the newest stable release's bundle, and a build that is
-//     not a release the same. A prerelease gero uses the bundle of its own
-//     release, made with it, unless a newer stable one exists and is readable.
+//     not a release the same. A prerelease gero uses the newest release's bundle,
+//     a prerelease or not, and its own when that is the newest or the newest is
+//     not readable.
 //   - A cached bundle under a day old is used with no request, unless it is older
 //     than the gero's own release. An older one is checked against the newest
 //     release, and downloaded only when that is a different one.
-//   - A download is used only after it matches the published checksum and parses,
-//     and only then replaces the cache.
+//   - A download is used only after it matches the published checksum, the
+//     fetcher has verified the signatures, and it parses, and only then replaces
+//     the cache.
 //   - When the release cannot be reached or verified, the cache is used and the
 //     source says so, with its release and age. With no cache that is an error.
 //   - Offline reads the cache only.
@@ -140,12 +142,13 @@ func (r *Resolver) refresh() time.Duration {
 
 // fetch looks at the releases and takes the bundle that the rules choose.
 func (r *Resolver) fetch(ctx context.Context, own string, cached Entry, have bool, now time.Time) (Loaded, error) {
-	latest, err := r.Releases.Latest(ctx, false)
+	prerelease := own != "" && isPrerelease(own)
+	latest, err := r.Releases.Latest(ctx, prerelease)
 	if err != nil {
 		return Loaded{}, err
 	}
 	target, fallback := latest.Tag, ""
-	if own != "" && isPrerelease(own) {
+	if prerelease {
 		if cmp, ok := assetfetch.CompareVersions(latest.Tag, own); !ok || cmp <= 0 {
 			target = own
 		} else {
@@ -230,6 +233,10 @@ func reason(err error) string {
 		return "the GitHub rate limit is used up"
 	case errors.Is(err, assetfetch.ErrChecksumMismatch):
 		return "the download did not match its published checksum"
+	case errors.Is(err, assetfetch.ErrSignatureMissing):
+		return "the release carries no signature for the bundle: " + err.Error()
+	case errors.Is(err, assetfetch.ErrSignatureInvalid):
+		return "the signature of the bundle or of the checksums was refused: " + err.Error()
 	case errors.Is(err, assetfetch.ErrNoChecksum):
 		return "the release publishes no checksum for the bundle"
 	case errors.Is(err, bundle.ErrUnsupported):
