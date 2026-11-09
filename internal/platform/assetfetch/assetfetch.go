@@ -26,6 +26,12 @@ var (
 	ErrChecksumMismatch = ghrelease.ErrChecksumMismatch
 	// ErrRateLimited is returned when the API rate limit is used up.
 	ErrRateLimited = ghrelease.ErrRateLimited
+	// ErrSignatureMissing is returned when a verifier is set and the release has
+	// no signature for what it checks.
+	ErrSignatureMissing = ghrelease.ErrSignatureMissing
+	// ErrSignatureInvalid is returned when a signature does not authenticate the
+	// content, or is not by the signer the verifier pins.
+	ErrSignatureInvalid = ghrelease.ErrSignatureInvalid
 	// ErrNoChecksum is returned when the release publishes no checksum for the
 	// asset: nothing is downloaded that cannot be verified.
 	ErrNoChecksum = errors.New("the release publishes no checksum for the asset")
@@ -50,17 +56,26 @@ func CompareVersions(a, b string) (cmp int, ok bool) {
 	return ghrelease.CompareVersions(a, b)
 }
 
+// SignatureVerifier authenticates content against a detached signature.
+type SignatureVerifier = ghrelease.SignatureVerifier
+
 // Options configure a Fetcher.
 type Options struct {
-	HTTP    *http.Client // nil for the default, which has timeouts
-	Token   string       // optional: a public repository needs none
-	BaseURL string       // "" for https://api.github.com; a test points it at a fake
+	// Verifier, when set, must authenticate both checksums.txt and the asset
+	// against their detached signatures, which the release has to carry. A release
+	// without them, or with ones that do not verify, is refused; nothing falls back
+	// to the checksum alone.
+	Verifier SignatureVerifier
+	HTTP     *http.Client // nil for the default, which has timeouts
+	Token    string       // optional: a public repository needs none
+	BaseURL  string       // "" for https://api.github.com; a test points it at a fake
 }
 
 // Fetcher reads the releases of one repository.
 type Fetcher struct {
 	client      *ghrelease.Client
 	owner, repo string
+	verifier    SignatureVerifier
 }
 
 // New returns a Fetcher for owner/repo. Requests, and redirects, go only to
@@ -70,13 +85,17 @@ func New(owner, repo string, o Options) *Fetcher {
 	if o.BaseURL != "" {
 		opts = append(opts, ghrelease.WithBaseURL(o.BaseURL))
 	}
+	if o.Verifier != nil {
+		// Both, so the checksums are authentic and so is the asset itself.
+		opts = append(opts, ghrelease.WithManifestVerifier(o.Verifier), ghrelease.WithArtifactVerifier(o.Verifier))
+	}
 	var c *ghrelease.Client
 	if o.HTTP != nil {
 		c = ghrelease.NewClientWithHTTP(o.HTTP, o.Token, opts...)
 	} else {
 		c = ghrelease.NewClient(o.Token, opts...)
 	}
-	return &Fetcher{client: c, owner: owner, repo: repo}
+	return &Fetcher{client: c, owner: owner, repo: repo, verifier: o.Verifier}
 }
 
 func release(r *ghrelease.Release) Release {
@@ -84,8 +103,12 @@ func release(r *ghrelease.Release) Release {
 }
 
 // Latest is the newest stable release: a prerelease or a draft is never the
-// latest.
-func (f *Fetcher) Latest(ctx context.Context) (Release, error) {
+// latest. With prereleases it is the newest by version of every release that is
+// not a draft, a prerelease or not.
+func (f *Fetcher) Latest(ctx context.Context, prereleases bool) (Release, error) {
+	if prereleases {
+		ctx = ghrelease.WithPrereleases(ctx, true)
+	}
 	r, err := f.client.LatestReleaseInfo(ctx, f.owner, f.repo)
 	if err != nil {
 		return Release{}, err
@@ -124,6 +147,18 @@ func (f *Fetcher) Asset(ctx context.Context, tag, name string) ([]byte, error) {
 	if sums == nil {
 		return nil, fmt.Errorf("%w: release %s has no %s", ErrNoChecksum, tag, ChecksumsName)
 	}
+	var assetSig, sumsSig string
+	if f.verifier != nil {
+		// The asset URLs are the API's, whose last segment is an opaque id, so the
+		// signatures are found in the release and not beside the files.
+		if assetSig, err = f.signatureURL(r, tag, name); err != nil {
+			return nil, err
+		}
+		if sumsSig, err = f.signatureURL(r, tag, ChecksumsName); err != nil {
+			return nil, err
+		}
+		ctx = ghrelease.WithSignatureURL(ctx, sumsSig)
+	}
 	hashes, err := f.client.FetchChecksums(ctx, sums.URL)
 	if err != nil {
 		return nil, fmt.Errorf("read %s of release %s: %w", ChecksumsName, tag, err)
@@ -132,9 +167,21 @@ func (f *Fetcher) Asset(ctx context.Context, tag, name string) ([]byte, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: %s of release %s does not list %s", ErrNoChecksum, ChecksumsName, tag, name)
 	}
-	data, _, err := f.client.DownloadToBytes(asset.URL, ghrelease.DownloadOptions{ExpectedHash: want, Context: ctx})
+	data, _, err := f.client.DownloadToBytes(asset.URL, ghrelease.DownloadOptions{ExpectedHash: want, Context: ctx, SignatureURL: assetSig})
 	if err != nil {
 		return nil, fmt.Errorf("download %s of release %s: %w", name, tag, err)
 	}
 	return data, nil
+}
+
+// signatureURL is where the release has the detached signature of the asset, or
+// an error that is ErrSignatureMissing when it has none.
+func (f *Fetcher) signatureURL(r *ghrelease.Release, tag, asset string) (string, error) {
+	want := f.verifier.SignatureName(asset)
+	for _, a := range r.Assets {
+		if a.Name == want {
+			return a.URL, nil
+		}
+	}
+	return "", fmt.Errorf("%w: release %s has no %s for %s", ErrSignatureMissing, tag, want, asset)
 }

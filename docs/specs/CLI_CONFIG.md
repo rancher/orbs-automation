@@ -71,7 +71,10 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 
 | File key | Env var | Flag | Meaning |
 |---|---|---|---|
-| `centralConfigDir` | `GERO_CENTRAL_CONFIG_DIR` | `--central-config-dir` | The local clone of the central repo's `config/` directory, where the central application config is. Named for that, since gero's own config directory is the user's, where the user file is. Needed only until gero can fetch the config from a release bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), when it becomes an override |
+| `centralConfigDir` | `GERO_CENTRAL_CONFIG_DIR` | `--central-config-dir` | The local clone of the central repo's `config/` directory, where the central application config is. Named for that, since gero's own config directory is the user's, where the user file is. Takes precedence over the release bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) unless `--config-source=bundle` is given |
+| `configSource` | `GERO_CONFIG_SOURCE` | `--config-source` | `auto` (default), `bundle` or `dir`: where the central config comes from ([below](#locating-the-central-application-config)). It is a per-user preference and overlaps no other key, so it may live in the file; a developer sets `bundle` there and flips to `dir` for one run |
+| `bundleChannel` | `GERO_BUNDLE_CHANNEL` | `--bundle-channel` | `auto` (default), `stable` or `prerelease`: which releases the central bundle may come from ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#releases-fetching-and-verifying)). `auto` follows the running gero: a pre-release gero reads pre-release bundles, a stable one only stable ones |
+| n/a | `GERO_BUNDLE_FILE` | `--bundle-file` | Path of one bundle file, downloaded by hand, to run against the config of an exact release. **Not a user-file key**: it is the explicit one-off, and a file that pinned it would fix every command to one release |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
 | `color` | `GERO_COLOR` | `--color`, `--no-color` | `auto` (default), `always` or `never`. `auto` defers to `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and TTY detection ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) |
@@ -104,7 +107,9 @@ File-only keys, all **(leaning)**:
 ```yaml
 # All keys optional. Unknown keys are warned about and ignored. No secrets.
 # "~" and $ENV are expanded in paths; relative paths are an error.
-centralConfigDir: ~/GitProjects/SUSE/orbs-automation/config
+centralConfigDir: ~/GitProjects/SUSE/orbs-automation/config   # a local clone, only for developing the config
+configSource: bundle   # auto (default), bundle or dir
+bundleChannel: auto    # auto (default), stable or prerelease
 output: text
 color: auto            # auto (default), always or never
 upstream: upstream
@@ -130,15 +135,21 @@ The keys and their allowed values are also published as a JSON Schema, `generate
 
 ## Locating the central application config
 
-Commands that read the central `config/` find it in this order:
+gero assumes the user has no clone of the central repo. The released **bundle** of the central config ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) is the first layer, and a local directory is a **local development mode** on top of it, for someone changing the config itself.
 
-1. `--central-config-dir`
-2. `GERO_CENTRAL_CONFIG_DIR`
-3. `centralConfigDir` in the user file
-4. `./config`, when the working directory is a checkout of the central repo (reported as source `cwd`)
-5. The central config bundle of the `gero` release, from the user's cache or fetched ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), only when none of 1 to 4 is named, and never in CI
+`--config-source` (`GERO_CONFIG_SOURCE`, or `configSource` in the user file) says which:
 
-A local source always wins. One that is named but broken (a missing directory, invalid or empty config) is an error and never falls back to the bundle, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow, to the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
+* `auto`, the default: a local source if one is present, else the bundle. The local sources, in order: `--central-config-dir`, `GERO_CENTRAL_CONFIG_DIR`, `centralConfigDir` in the user file, then `./config` when the working directory is a checkout of the central repo (reported as source `cwd`). Having one set is what turns local development mode on.
+* `bundle`: the bundle, always. A `centralConfigDir` that is set stays set and is ignored, so a developer can keep it and still read what everyone else reads.
+* `dir`: the local sources only, never the bundle, so it never reaches the cache or the network. With none present it fails.
+
+The flag beats the environment, which beats the file, so `configSource: bundle` in the file and `--config-source=dir` on one command reads the local directory for that run.
+
+`--bundle-file <path>` (`GERO_BUNDLE_FILE`; never the user file) names one bundle file the user downloaded, to run against an exact release. It is the config source, whatever else is set: no fetch, no cache, no network. Its format and versions are checked as for any bundle; its signature and checksum are not, since the user chose the file, as with a local directory. Together with `--config-source=dir` it is an error.
+
+Which releases the bundle may come from is `bundleChannel` ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#releases-fetching-and-verifying)).
+
+A source that is named but broken (a missing directory or file, invalid or empty config) is an error and never falls back to another, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). CI never reads the bundle in `auto`, and ignores the user file unless `GERO_CONFIG` names it, so a stray file cannot move a runner: the central repo is checked out and the workflow gives `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir`, or a generated user file, pointing at the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
 
 ## Not built yet
 

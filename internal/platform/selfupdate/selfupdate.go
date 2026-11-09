@@ -17,7 +17,8 @@ import (
 
 	"github.com/mallardduck/binup"
 	binupgithub "github.com/mallardduck/binup/github"
-	"github.com/mallardduck/ghreleases/sigstore"
+	"github.com/rancher/orbs-automation/internal/platform/releasesign"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 const (
@@ -29,17 +30,20 @@ const (
 	AssetTemplate = "{name}_{os}_{arch}.{ext}"
 	// ChecksumAsset is the manifest of the archives' hashes.
 	ChecksumAsset = "checksums.txt"
-	// SignerPattern matches the one identity that may sign a release: this
-	// repository's release workflow, run for a version tag.
-	SignerPattern = `^https://github\.com/rancher/orbs-automation/\.github/workflows/release\.yaml@refs/tags/v[0-9][0-9A-Za-z.+-]*$`
+	// SignerPattern matches the one identity that may sign a release.
+	SignerPattern = releasesign.SignerPattern
 	// SignerIssuer is the OIDC issuer of GitHub Actions.
-	SignerIssuer = "https://token.actions.githubusercontent.com"
+	SignerIssuer = releasesign.SignerIssuer
 )
 
 // Config is what New needs.
 type Config struct {
 	// Current is the version of the running binary.
 	Current string
+	// Prereleases says whether a pre-release may be the newest release. Nil
+	// leaves it to the running binary: a pre-release sees them, a stable
+	// release does not.
+	Prereleases *bool
 	// Token authenticates the GitHub API, and may be empty.
 	Token string
 	// HTTPClient carries every request; nil means the default client.
@@ -84,11 +88,7 @@ type signatureVerifier = binupgithub.SignatureVerifier
 // one, and an empty target is the running binary.
 func newUpdater(cfg Config, verifier signatureVerifier, target string) (*Updater, error) {
 	if verifier == nil {
-		var opts []sigstore.Option
-		if cfg.TrustedRoot != nil {
-			opts = append(opts, sigstore.WithTrustedRoot(cfg.TrustedRoot))
-		}
-		v, err := sigstore.NewVerifier(sigstore.Identity{SubjectRegexp: SignerPattern, Issuer: SignerIssuer}, opts...)
+		v, err := releasesign.New(cfg.TrustedRoot)
 		if err != nil {
 			return nil, fmt.Errorf("self-update: %w", err)
 		}
@@ -103,6 +103,15 @@ func newUpdater(cfg Config, verifier signatureVerifier, target string) (*Updater
 		// hash the signed manifest holds for it.
 		binupgithub.WithManifestVerifier(verifier),
 		binupgithub.WithArtifactVerifier(verifier),
+	}
+	// Left to the binary, a pre-release is only offered to one: GitHub's
+	// "latest" is always stable, and so has none for it to move to.
+	prereleases := isPrerelease(cfg.Current)
+	if cfg.Prereleases != nil {
+		prereleases = *cfg.Prereleases
+	}
+	if prereleases {
+		opts = append(opts, binupgithub.WithPrereleases())
 	}
 	if cfg.Token != "" {
 		opts = append(opts, binupgithub.WithToken(cfg.Token))
@@ -119,6 +128,12 @@ func newUpdater(cfg Config, verifier signatureVerifier, target string) (*Updater
 		return nil, fmt.Errorf("self-update: %w", err)
 	}
 	return &Updater{u: u}, nil
+}
+
+// isPrerelease reports whether version is a pre-release, with or without the
+// leading "v".
+func isPrerelease(version string) bool {
+	return semver.Classify(version).HasPrerelease
 }
 
 // Check says whether a newer release exists. It changes nothing.

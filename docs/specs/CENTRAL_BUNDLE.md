@@ -8,7 +8,7 @@ How the central repo's shared content ships as one file with each `gero` release
 
 Today a command needs the central `config/` directory on disk, so every workstation and every job needs a clone or checkout of the central repo. The release of `gero` happens in a public repo, so the same release can carry a compiled copy of what the CLI needs from that repo, and the CLI can fetch it with no clone and no token.
 
-A local source always wins. The bundle is the fallback for when none is configured, never an override.
+The bundle is the first layer: gero assumes the user has no clone of the central repo. A local directory is a development mode on top of it, and is read only when one is present (with `configSource: auto`) or asked for (`dir`). `configSource: bundle`, in the user file or as `--config-source=bundle`, reads the bundle whatever is set locally, and `--bundle-file` reads one downloaded bundle ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)).
 
 ## The bundle
 
@@ -50,17 +50,17 @@ The bundle ships with each `gero` release, as the asset `gero-config-bundle.yaml
 
 [ci.yml](../../.github/workflows/ci.yml) runs `goreleaser check` and a snapshot release on every pull request, and checks that the bundle is in the snapshot's `checksums.txt`, so a change to the wiring fails before a tag does.
 
-What this does not do: the checksums come from the same release as the bundle, so a reader that verifies them knows the download is intact, not who made it. Fetching the bundle does not verify either signature or the attestation yet; self-update's verifier (`internal/platform/selfupdate`) is the model, and `ghreleases` takes it as `WithManifestVerifier`.
+The checksums come from the same release as the bundle, so on their own they prove the download is intact, not who made it. The signatures close that gap, and fetching the bundle verifies them (below). The provenance attestation is still not checked by `gero`; it is for people who verify by hand with `gh attestation verify`.
 
 ## Releases, fetching and verifying
 
-Every download of a release asset, the bundle or anything else, is verified against its published checksum before it is used or written to a cache. A mismatch is an error and the previous cached copy stays. The one implementation of "download a release asset and verify it" lives in one package and every caller uses it; it is built on [`ghreleases`](https://github.com/mallardduck/ghreleases), approved in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md).
+Every download of a release asset, the bundle or anything else, is verified before it is used or written to a cache, in two ways. It must match its published checksum, and the signatures must verify: `checksums.txt.sigstore.json` over the manifest and `<asset>.sigstore.json` over the asset itself, keyless Sigstore bundles by the pinned identity, the release workflow of this repository on a version tag, the same proof self-update asks for ([SELF_UPDATE](SELF_UPDATE.md#what-proves-the-release-is-ours)). A mismatch, a missing signature or a signature by anyone else is an error and fails closed: nothing falls back to the checksum alone, and the previous cached copy stays. A release made before it was signed is therefore refused, and the cache is used instead. The Sigstore trust root is fetched over TUF when the first signature is checked, so a download needs more than GitHub; a bundle already cached is used without it. The one implementation of "download a release asset and verify it" lives in one package and every caller uses it; it is built on [`ghreleases`](https://github.com/mallardduck/ghreleases), approved in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md).
 
 **Which release.**
 
-* Only **stable** releases are candidates for "latest". A prerelease is never picked because it is the newest.
-* A stable `gero` uses the newest stable release's bundle.
-* A prerelease `gero` defaults to the bundle of its own release, since the two were made together, but prefers the newest stable bundle when that is newer than itself. If the loader cannot read that newer bundle (see Compatibility), it falls back to its own.
+* `bundleChannel` decides whether prereleases are candidates: `stable`, `prerelease`, or `auto`, the default, which follows the running `gero` as self-update does. A stable `gero` considers only stable releases, and a prerelease is never picked because it is the newest. A prerelease `gero` considers all of them. `stable` makes any `gero` take only stable releases, with no floor at its own release; `prerelease` makes any `gero` consider all of them, a pre-release one keeping its own as the floor and the fallback, a stable one falling back to the newest stable when the newest bundle is unreadable. A cached bundle is used without a request only if its release fits the channel, so changing it takes effect on the next run.
+* A stable `gero`, or a build that is not a release, uses the newest stable release's bundle.
+* A prerelease `gero` uses the bundle of the newest release by version, a prerelease or not, so `v0.6.0-rc.2` takes the bundle of `v0.6.0-rc.3` or of `v0.6.0`, and works when no stable release exists yet. Its own release is the floor, since the two were made together. If the loader cannot read the newer bundle (see Compatibility), it falls back to its own.
 * A flag naming a release tag overrides all of this, for reproducing an old run **(leaning)**.
 
 **Caching.**
@@ -74,8 +74,9 @@ Every download of a release asset, the bundle or anything else, is verified agai
 
 ## Source precedence
 
-The bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config):
+With `configSource: auto`, the default, a local source that is present is read and the bundle is the fallback. In order ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)):
 
+0. `--bundle-file`, a bundle file given by hand, which ends the search
 1. `--central-config-dir`
 2. `GERO_CENTRAL_CONFIG_DIR`
 3. `centralConfigDir` in the user file
@@ -99,15 +100,15 @@ A change to config therefore reaches workstations with a release, not with a mer
 ## Built
 
 * `internal/bundle`: the format, `Compile` (for the release) and `Parse` (for the reader), which share one definition and check each other.
-* `internal/platform/assetfetch`: the one place a release asset is downloaded and verified, over `ghreleases`. An asset with no published checksum, or one that does not match, is never returned.
+* `internal/platform/assetfetch`: the one place a release asset is downloaded and verified, over `ghreleases`. An asset with no published checksum, one that does not match, or without the signatures when a verifier is set, is never returned. `Latest` takes whether prereleases count.
+* `internal/platform/releasesign`: the Sigstore verifier pinned to this repository's release workflow, which self-update and the bundle fetch share.
 * `internal/bundlestore`: the cache (`$XDG_CACHE_HOME/gero/`, else `~/.cache/gero/`, which replaces its bundle and record together and treats damage as empty) and the resolver, which applies the release rules above, refreshes at most daily, and falls back to the cache saying why.
-* `internal/workspace`: the fifth source, `ConfigSource`, and the rule that a local source always wins. `gero config show` and `gero doctor` report the source. Doctor is offline unless `--online`, and then reads the cache only.
+* `internal/workspace`: the fifth source, `ConfigSource`, and the rule that a local source wins unless `--config-source` says otherwise (`bundle` skips them, `dir` never reads the bundle). `gero config show` and `gero doctor` report the source. Doctor is offline unless `--online`, and then reads the cache only.
 * `bundletest` and `fakehub`: imagined releases for tests, with a tampered asset, a missing checksum, a rate limit and a bundle of a newer format, all without a network.
 
 ## Not built yet
 
-* Verifying the release's signature when the bundle is fetched, with the pinned release-workflow identity self-update uses. The checksums come from the same release as the bundle, so a download is known to be intact, not to be the maintainers'.
-* The newer of a local copy and the bundle: a local source always wins.
+* The newer of a local copy and the bundle: in `auto` a local source wins, and `--config-source` picks one or the other.
 * Conditional requests (`ghreleases` has none), so the daily refresh is by the age of the cache alone.
 * The templates and generated chunks, a way to name a release to use, and a refresh interval setting.
 

@@ -243,3 +243,53 @@ func TestBlockedSaysWhenTheBinaryCannotBeReplaced(t *testing.T) {
 
 	assert.NotEmpty(t, u.Blocked())
 }
+
+func TestIsPrerelease(t *testing.T) {
+	for version, want := range map[string]bool{
+		"0.0.1-rc.2":  true,
+		"v1.2.0-rc1":  true,
+		"v1.0.0":      false,
+		"1.0.0":       false,
+		"1.0.0+build": false,
+		"dev":         false,
+		"":            false,
+	} {
+		if got := isPrerelease(version); got != want {
+			t.Errorf("isPrerelease(%q) = %v, want %v", version, got, want)
+		}
+	}
+}
+
+func TestPrereleasesFollowTheRunningVersionUnlessSaid(t *testing.T) {
+	yes, no := true, false
+	tests := []struct {
+		name        string
+		current     string
+		prereleases *bool
+		want        bool
+	}{
+		{"a pre-release looks at pre-releases", "1.0.0-rc.2", nil, true},
+		{"a stable release does not", "1.0.0", nil, false},
+		{"a stable release can opt in", "1.0.0", &yes, true},
+		{"a pre-release can opt out", "1.0.0-rc.2", &no, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fr := newRelease(t, []byte("new"), true, "good")
+			var listed bool
+			client := &http.Client{Transport: serve(func(r *http.Request) (*http.Response, error) {
+				// Only a search among pre-releases lists the releases.
+				if strings.HasSuffix(r.URL.Path, "/releases") {
+					listed = true
+				}
+				return fr.client().Transport.RoundTrip(r)
+			})}
+			u, err := newUpdater(Config{Current: tt.current, Prereleases: tt.prereleases, HTTPClient: client}, &fakeVerifier{}, installed(t))
+			require.NoError(t, err)
+
+			_, _ = u.Check(context.Background())
+
+			assert.Equal(t, tt.want, listed)
+		})
+	}
+}

@@ -392,3 +392,169 @@ func TestSourceDescribesTheReleaseAndHowOldTheCopyIs(t *testing.T) {
 	assert.Equal(t, "bundle v0.5.0, 3 days old", Source{Tag: "v0.5.0", Age: 72 * time.Hour, Stale: true}.Describe())
 	assert.Equal(t, "bundle v0.6.0, under a minute old", Source{Tag: "v0.6.0"}.Describe())
 }
+
+// verifying makes the rig refuse a release whose bundle and checksums are not signed.
+func (g *rig) verifying() {
+	g.r.Releases = assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL(), Verifier: fakehub.Verifier{}})
+}
+
+func TestLoadAPrereleaseGeroTakesTheNewestPrereleaseBundle(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.2", bundletest.Config("beta", "gamma"), fakehub.Prerelease())
+
+	got, err := g.load("v0.6.0-rc.1")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0-rc.2", got.Source.Tag)
+	assert.Equal(t, 2, projects(t, got))
+}
+
+func TestLoadAPrereleaseGeroWorksWhenNoStableReleaseExists(t *testing.T) {
+	g := newRig(t)
+	bundletest.Publish(t, g.hub, "v0.0.1-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+	bundletest.Publish(t, g.hub, "v0.0.1-rc.2", bundletest.Config("beta"), fakehub.Prerelease())
+
+	got, err := g.load("0.0.1-rc.2")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.0.1-rc.2", got.Source.Tag)
+}
+
+func TestLoadAStableGeroStillNeverTakesAPrereleaseWhenOnlyPrereleasesExist(t *testing.T) {
+	g := newRig(t)
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+
+	_, err := g.load("v0.5.0")
+
+	require.ErrorIs(t, err, ErrUnavailable)
+	require.ErrorIs(t, err, assetfetch.ErrNotFound)
+}
+
+func TestLoadVerifiesTheSignaturesOfTheBundleAndTheChecksums(t *testing.T) {
+	g := newRig(t)
+	g.verifying()
+	bundletest.Publish(t, g.hub, "v0.5.0", bundletest.Config("alpha"), fakehub.Signed("good"))
+
+	got, err := g.load("v0.5.0")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag)
+	assert.Equal(t, "v0.5.0", g.cachedTag())
+}
+
+func TestLoadAReleaseWithNoSignaturesIsRefusedAndNothingIsCached(t *testing.T) {
+	g := newRig(t)
+	g.verifying()
+	g.publish("v0.5.0", "alpha")
+
+	_, err := g.load("v0.5.0")
+
+	require.ErrorIs(t, err, ErrUnavailable)
+	require.ErrorIs(t, err, assetfetch.ErrSignatureMissing)
+	_, ok, rerr := g.cache.Read()
+	require.NoError(t, rerr)
+	assert.False(t, ok, "nothing unauthenticated is cached")
+}
+
+func TestLoadABadSignatureIsRefusedAndTheCacheIsUsedAndSaysWhy(t *testing.T) {
+	g := newRig(t)
+	g.verifying()
+	g.cached("v0.4.0", t0.Add(-48*time.Hour), "old")
+	g.now = t0
+	bundletest.Publish(t, g.hub, "v0.5.0", bundletest.Config("alpha"), fakehub.Signed("good"), fakehub.Signature("checksums.txt", "forged"))
+
+	got, err := g.load("v0.5.0")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.4.0", got.Source.Tag)
+	assert.True(t, got.Source.Stale)
+	assert.Contains(t, got.Source.Note, "signature")
+}
+
+func (g *rig) loadOn(version, channel string) (Loaded, error) {
+	g.t.Helper()
+	return g.r.Load(bg, Request{GeroVersion: version, Channel: channel})
+}
+
+func TestChannelStableMakesAPrereleaseGeroTakeTheNewestStableBundle(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.2", bundletest.Config("beta"), fakehub.Prerelease())
+
+	got, err := g.loadOn("v0.6.0-rc.2", ChannelStable)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag, "older than the gero itself, and still what was asked for")
+}
+
+func TestChannelPrereleaseMakesAStableGeroTakeTheNewestPrereleaseBundle(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+
+	got, err := g.loadOn("v0.5.0", ChannelPrerelease)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0-rc.1", got.Source.Tag)
+}
+
+func TestChannelPrereleaseFallsBackToTheNewestStableForAStableGeroWhenTheNewestIsUnreadable(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	newer := strings.Replace(string(bundletest.Compile(t, "v0.7.0-rc.1", bundletest.Config("beta"))), "formatVersion: 1", "formatVersion: 2", 1)
+	bundletest.PublishRaw(g.hub, "v0.7.0-rc.1", []byte(newer), fakehub.Prerelease())
+
+	got, err := g.loadOn("v0.5.0", ChannelPrerelease)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag)
+	assert.Contains(t, got.Source.Note, "v0.7.0-rc.1")
+}
+
+func TestChannelAutoIsWhatTheGeroIs(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+
+	stable, err := g.loadOn("v0.5.0", ChannelAuto)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", stable.Source.Tag)
+
+	g2 := newRig(t)
+	g2.publish("v0.5.0", "alpha")
+	bundletest.Publish(t, g2.hub, "v0.6.0-rc.1", bundletest.Config("beta"), fakehub.Prerelease())
+	pre, err := g2.loadOn("v0.6.0-rc.1", "")
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0-rc.1", pre.Source.Tag)
+}
+
+func TestAFreshCacheOfAPrereleaseIsNotReusedUnderTheStableChannel(t *testing.T) {
+	g := newRig(t)
+	g.publish("v0.5.0", "alpha")
+	g.cached("v0.6.0-rc.1", t0.Add(-time.Hour), "beta")
+
+	got, err := g.loadOn("v0.5.0", ChannelStable)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag)
+	assert.Equal(t, "v0.5.0", g.cachedTag())
+}
+
+func TestAFreshCacheOfAStableReleaseIsStillReusedUnderThePrereleaseChannel(t *testing.T) {
+	g := newRig(t)
+	g.cached("v0.5.0", t0.Add(-time.Hour), "alpha")
+
+	got, err := g.loadOn("v0.5.0", ChannelPrerelease)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.5.0", got.Source.Tag)
+	assert.Zero(t, g.hub.Requests(""), "within a day, no request")
+}
+
+func TestASourceFromAFileDescribesTheFileAndTheRelease(t *testing.T) {
+	s := Source{File: "/tmp/gero-config-bundle.yaml", Tag: "v0.3.0"}
+
+	assert.Equal(t, "bundle file /tmp/gero-config-bundle.yaml (v0.3.0)", s.Describe())
+}

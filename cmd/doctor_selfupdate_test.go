@@ -96,7 +96,7 @@ func fakeUpdater(t *testing.T, available bool) *stubUpdater {
 	t.Helper()
 	u := &stubUpdater{available: available}
 	old := buildUpdater
-	buildUpdater = func(string) (selfupdate.Updater, error) { return u, nil }
+	buildUpdater = func(string, *bool) (selfupdate.Updater, error) { return u, nil }
 	t.Cleanup(func() { buildUpdater = old })
 	return u
 }

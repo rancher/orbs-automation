@@ -39,6 +39,8 @@ var (
 	userHints = []hint{
 		{def: "fileConfig", key: "output", enum: []string{clicfg.OutputText, clicfg.OutputJSON, clicfg.OutputEnv}},
 		{def: "fileConfig", key: "color", enum: []string{clicfg.ColorAuto, clicfg.ColorAlways, clicfg.ColorNever}},
+		{def: "fileConfig", key: "configSource", enum: []string{clicfg.ConfigSourceAuto, clicfg.ConfigSourceBundle, clicfg.ConfigSourceDir}},
+		{def: "fileConfig", key: "bundleChannel", enum: []string{clicfg.BundleChannelAuto, clicfg.BundleChannelStable, clicfg.BundleChannelPrerelease}},
 		{def: "fileConfig", key: "pushTo", enum: pushTo},
 		{def: "fileRepoOverride", key: "pushTo", enum: pushTo},
 	}

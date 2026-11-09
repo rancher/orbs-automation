@@ -24,6 +24,9 @@ type settingsKey struct{}
 func addGlobalFlags(cmd *cobra.Command) {
 	f := cmd.PersistentFlags()
 	f.String("central-config-dir", "", "directory of the central application config (env GERO_CENTRAL_CONFIG_DIR)")
+	f.String("config-source", "", "where the central config comes from: auto, bundle or dir (env GERO_CONFIG_SOURCE; default auto)")
+	f.String("bundle-channel", "", "which releases the central config bundle may come from: auto, stable or prerelease (env GERO_BUNDLE_CHANNEL; default auto)")
+	f.String("bundle-file", "", "use this bundle file, downloaded by hand, as the central config (env GERO_BUNDLE_FILE)")
 	f.String("upstream", "", "remote that points at the real source repository (env GERO_UPSTREAM)")
 	f.String("output", "", "output format: text, json or env (env GERO_OUTPUT; default text)")
 	f.String("color", "", "color: auto, always or never (env GERO_COLOR; default auto: as much as the terminal supports)")

@@ -120,14 +120,15 @@ func ask(in io.Reader, out io.Writer, question string) (bool, error) {
 // Auth is where Build looks for a token. Tests replace it.
 var Auth github.Auth = github.GoGh{}
 
-// Build returns the Updater for the running gero, whose version is current. It
-// uses the engineer's GitHub token when there is one, and goes without when
+// Build returns the Updater for the running gero, whose version is current. A
+// non-nil prereleases says whether a pre-release may be offered; nil follows
+// current. It uses the engineer's GitHub token when there is one, and goes without when
 // there is none: the releases are fetched the same way either way, and a token
 // only lifts the rate limit and reaches a private repository.
-func Build(current string) (Updater, error) {
+func Build(current string, prereleases *bool) (Updater, error) {
 	var token string
 	if creds, err := github.Resolve(Auth, ""); err == nil {
 		token = creds.Token
 	}
-	return platform.New(platform.Config{Current: current, Token: token})
+	return platform.New(platform.Config{Current: current, Prereleases: prereleases, Token: token})
 }

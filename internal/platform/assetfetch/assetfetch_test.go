@@ -24,7 +24,7 @@ func TestLatestIsTheNewestStableReleaseNotAPrereleaseOrADraft(t *testing.T) {
 	h.Publish("v0.6.0-rc.1", fakehub.Prerelease())
 	h.Publish("v0.6.0", fakehub.Draft())
 
-	got, err := fetcher(h).Latest(bg)
+	got, err := fetcher(h).Latest(bg, false)
 
 	require.NoError(t, err)
 	assert.Equal(t, "v0.5.0", got.Tag)
@@ -36,7 +36,7 @@ func TestLatestWithNoStableReleaseIsNotFound(t *testing.T) {
 	h := fakehub.New(t)
 	h.Publish("v0.1.0-rc.1", fakehub.Prerelease())
 
-	_, err := fetcher(h).Latest(bg)
+	_, err := fetcher(h).Latest(bg, false)
 
 	require.ErrorIs(t, err, ErrNotFound)
 }
@@ -46,7 +46,7 @@ func TestLatestRateLimitedSaysSo(t *testing.T) {
 	h.Publish("v0.5.0")
 	h.Fail("/releases/latest", 403, "X-RateLimit-Remaining", "0")
 
-	_, err := fetcher(h).Latest(bg)
+	_, err := fetcher(h).Latest(bg, false)
 
 	require.ErrorIs(t, err, ErrRateLimited)
 }
@@ -150,4 +150,103 @@ func TestCompareVersionsOrdersTagsAndSaysWhenOneIsNotAVersion(t *testing.T) {
 
 	_, ok = CompareVersions("dev", "v0.5.0")
 	assert.False(t, ok)
+}
+
+func TestLatestWithPrereleasesIsTheNewestByVersionStableOrNot(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0")
+	h.Publish("v0.6.0-rc.1", fakehub.Prerelease())
+	h.Publish("v0.6.0-rc.2", fakehub.Prerelease())
+	h.Publish("v0.7.0", fakehub.Draft())
+
+	got, err := fetcher(h).Latest(bg, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0-rc.2", got.Tag)
+	assert.True(t, got.Prerelease)
+}
+
+func TestLatestWithPrereleasesPrefersTheStableReleaseOfTheSameVersion(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.6.0-rc.1", fakehub.Prerelease())
+	h.Publish("v0.6.0")
+
+	got, err := fetcher(h).Latest(bg, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.6.0", got.Tag)
+}
+
+func TestLatestWithPrereleasesWorksWhenOnlyPrereleasesExist(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.0.1-rc.1", fakehub.Prerelease())
+	h.Publish("v0.0.1-rc.2", fakehub.Prerelease())
+
+	got, err := fetcher(h).Latest(bg, true)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v0.0.1-rc.2", got.Tag)
+}
+
+func signedFetcher(h *fakehub.Hub) *Fetcher {
+	return New("rancher", "orbs-automation", Options{HTTP: h.Client(), BaseURL: h.URL(), Verifier: fakehub.Verifier{}})
+}
+
+func TestAssetWithAVerifierIsReturnedWhenTheChecksumAndTheSignaturesHold(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0", fakehub.Asset("gero-config-bundle.yaml", []byte("the bundle\n")), fakehub.Signed("good"))
+
+	got, err := signedFetcher(h).Asset(bg, "v0.5.0", "gero-config-bundle.yaml")
+
+	require.NoError(t, err)
+	assert.Equal(t, "the bundle\n", string(got))
+}
+
+func TestAssetWithAVerifierRefusesAReleaseThatIsNotSigned(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0", fakehub.Asset("gero-config-bundle.yaml", []byte("the bundle\n")))
+
+	_, err := signedFetcher(h).Asset(bg, "v0.5.0", "gero-config-bundle.yaml")
+
+	require.ErrorIs(t, err, ErrSignatureMissing)
+}
+
+func TestAssetWithAVerifierRefusesAMissingSignatureOfTheAssetAlone(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0", fakehub.Asset("gero-config-bundle.yaml", []byte("the bundle\n")),
+		fakehub.Signed("good"), fakehub.Signature("gero-config-bundle.yaml", ""))
+
+	_, err := signedFetcher(h).Asset(bg, "v0.5.0", "gero-config-bundle.yaml")
+
+	require.ErrorIs(t, err, ErrSignatureMissing)
+}
+
+func TestAssetWithAVerifierRefusesABadSignatureOnTheAsset(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0", fakehub.Asset("gero-config-bundle.yaml", []byte("the bundle\n")),
+		fakehub.Signed("good"), fakehub.Signature("gero-config-bundle.yaml", "forged"))
+
+	_, err := signedFetcher(h).Asset(bg, "v0.5.0", "gero-config-bundle.yaml")
+
+	require.ErrorIs(t, err, ErrSignatureInvalid)
+}
+
+func TestAssetWithAVerifierRefusesABadSignatureOnTheChecksums(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0", fakehub.Asset("gero-config-bundle.yaml", []byte("the bundle\n")),
+		fakehub.Signed("good"), fakehub.Signature("checksums.txt", "forged"))
+
+	_, err := signedFetcher(h).Asset(bg, "v0.5.0", "gero-config-bundle.yaml")
+
+	require.ErrorIs(t, err, ErrSignatureInvalid)
+}
+
+func TestAssetWithNoVerifierDoesNotLookForSignatures(t *testing.T) {
+	h := fakehub.New(t)
+	h.Publish("v0.5.0", fakehub.Asset("gero-config-bundle.yaml", []byte("the bundle\n")))
+
+	_, err := fetcher(h).Asset(bg, "v0.5.0", "gero-config-bundle.yaml")
+
+	require.NoError(t, err)
+	assert.Zero(t, h.Requests(".sigstore.json"))
 }
