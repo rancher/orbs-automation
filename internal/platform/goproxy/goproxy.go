@@ -6,7 +6,12 @@ package goproxy
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
+	"time"
 )
 
 // DefaultBaseURL is the public Go module proxy.
@@ -38,8 +43,68 @@ type Checker struct {
 	BaseURL string       // "" means DefaultBaseURL; another proxy, or a test server
 }
 
-// Exists reports whether the proxy has version of module. It never fails: a
+// Exists reports whether the proxy has version of module. It asks for the info of
+// the version with GET: a 200 whose JSON is for that version is Found, a 404 or a
+// 410 is NotFound, and anything else, including a 200 that is not the version,
+// is Unreachable with the reason. The proxy fetches a tag it has not seen when it
+// is first asked, so asking is also what makes it available. It never fails: a
 // problem reaching the proxy is an Unreachable result with the reason.
-func (c Checker) Exists(_ context.Context, _, _ string) Result {
-	return Result{}
+func (c Checker) Exists(ctx context.Context, module, version string) Result {
+	client := c.Client
+	if client == nil {
+		client = &http.Client{Timeout: 20 * time.Second}
+	}
+	base := strings.TrimRight(c.BaseURL, "/")
+	if base == "" {
+		base = DefaultBaseURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/"+escape(module)+"/@v/"+escape(version)+".info", nil)
+	if err != nil {
+		return Result{Status: Unreachable, Detail: err.Error()}
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "gero")
+	resp, err := client.Do(req)
+	if err != nil {
+		return Result{Status: Unreachable, Detail: err.Error()}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return foundVersion(resp.Body, version)
+	case http.StatusNotFound, http.StatusGone:
+		return Result{Status: NotFound}
+	}
+	return Result{Status: Unreachable, Detail: fmt.Sprintf("the proxy answered %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))}
+}
+
+// foundVersion reads the info the proxy sent, and says Found only when it is for
+// the version that was asked for.
+func foundVersion(body io.Reader, version string) Result {
+	var info struct{ Version string }
+	if err := json.NewDecoder(io.LimitReader(body, 1<<20)).Decode(&info); err != nil {
+		return Result{Status: Unreachable, Detail: "the proxy's answer is not the info of a version: " + err.Error()}
+	}
+	switch info.Version {
+	case version:
+		return Result{Status: Found}
+	case "":
+		return Result{Status: Unreachable, Detail: "the proxy's answer names no version"}
+	}
+	return Result{Status: Unreachable, Detail: fmt.Sprintf("the proxy answered for %s, not %s", info.Version, version)}
+}
+
+// escape writes a module path or a version as the proxy protocol wants it: each
+// capital letter is a ! and the lowercase letter, so the path is the same on a
+// file system that ignores case.
+func escape(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			b.WriteByte('!')
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }

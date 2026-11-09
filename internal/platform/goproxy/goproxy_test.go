@@ -116,12 +116,12 @@ func TestAnAnswerThatIsNotTheInfoOfTheVersionIsUnreachable(t *testing.T) {
 }
 
 func TestACapitalInAModulePathOrVersionIsEscapedAsTheProxyWantsIt(t *testing.T) {
-	f := answers("/github.com/!burnt!sushi/toml/@v/v1.4.0-!rc.1.info", 200, `{"Version":"v1.4.0-RC.1"}`)
+	f := answers("/github.com/!burnt!sushi/toml/@v/v1.4.0-!r!c.1.info", 200, `{"Version":"v1.4.0-RC.1"}`)
 
 	got := checker(f).Exists(context.Background(), "github.com/BurntSushi/toml", "v1.4.0-RC.1")
 
 	assert.Equal(t, Found, got.Status)
-	assert.Equal(t, []string{"/github.com/!burnt!sushi/toml/@v/v1.4.0-!rc.1.info"}, f.paths)
+	assert.Equal(t, []string{"/github.com/!burnt!sushi/toml/@v/v1.4.0-!r!c.1.info"}, f.paths)
 }
 
 func TestAnIncompatibleVersionAndAPseudoVersionAreAsked(t *testing.T) {
