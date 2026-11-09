@@ -755,3 +755,47 @@ func TestLoadNoWarningsForAGoodFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, s.Warnings)
 }
+
+func TestLoadConfigSource(t *testing.T) {
+	tests := []struct {
+		name       string
+		env        map[string]string
+		flags      map[string]string
+		want       string
+		wantSource Source
+	}{
+		{"default is auto", nil, nil, ConfigSourceAuto, SourceDefault},
+		{"env", map[string]string{"GERO_CONFIG_SOURCE": "bundle"}, nil, ConfigSourceBundle, SourceEnv},
+		{"flag", nil, map[string]string{"config-source": "dir"}, ConfigSourceDir, SourceFlag},
+		{"flag beats env", map[string]string{"GERO_CONFIG_SOURCE": "bundle"}, map[string]string{"config-source": "dir"}, ConfigSourceDir, SourceFlag},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{Getenv: env(tt.env), Flags: flags(tt.flags)})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.ConfigSource)
+			assert.Equal(t, tt.wantSource, s.Source("configSource"))
+		})
+	}
+}
+
+func TestLoadRejectsAConfigSourceThatIsNotOne(t *testing.T) {
+	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_CONFIG_SOURCE": "cloud"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "configSource")
+	assert.Contains(t, err.Error(), "cloud")
+
+	_, err = Load(Inputs{Flags: flags(map[string]string{"config-source": "cloud"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "flag")
+}
+
+func TestLoadConfigSourceIsNotAUserFileKey(t *testing.T) {
+	s, err := Load(Inputs{UserFile: file("configSource: bundle\n"), UserFileName: "gero.yaml"})
+
+	require.NoError(t, err)
+	assert.Equal(t, ConfigSourceAuto, s.ConfigSource)
+	require.Len(t, s.Warnings, 1)
+	assert.Contains(t, s.Warnings[0], "configSource")
+}

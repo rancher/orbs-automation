@@ -31,6 +31,13 @@ const (
 	OutputEnv  = "env" // KEY=value lines for $GITHUB_OUTPUT and $GITHUB_ENV
 )
 
+// Where the central config comes from (docs/specs/CLI_CONFIG.md).
+const (
+	ConfigSourceAuto   = "auto"   // a local source if one is named, else the bundle
+	ConfigSourceDir    = "dir"    // a local source only
+	ConfigSourceBundle = "bundle" // the bundle of the release, whatever is local
+)
+
 // Log levels, lowest verbosity last.
 const (
 	LogDebug = "debug"
@@ -89,6 +96,10 @@ type Settings struct {
 	// cmd/ and never by a file or the environment. Empty means no release context:
 	// the central config bundle is not looked for (docs/specs/CENTRAL_BUNDLE.md).
 	GeroVersion string
+	// ConfigSource is --config-source or GERO_CONFIG_SOURCE: ConfigSourceAuto,
+	// ConfigSourceDir or ConfigSourceBundle. There is no user-file key, so a file
+	// cannot hide where the config of every command comes from.
+	ConfigSource string
 	// Offline is GERO_OFFLINE: a command makes no request to the network where it
 	// has a local way, and the central config bundle is read from the cache only.
 	// There is no user-file key, so it is never on without being asked for.
