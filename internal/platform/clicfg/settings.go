@@ -103,9 +103,8 @@ type Settings struct {
 	// cmd/ and never by a file or the environment. Empty means no release context:
 	// the central config bundle is not looked for (docs/specs/CENTRAL_BUNDLE.md).
 	GeroVersion string
-	// ConfigSource is --config-source or GERO_CONFIG_SOURCE: ConfigSourceAuto,
-	// ConfigSourceDir or ConfigSourceBundle. There is no user-file key, so a file
-	// cannot hide where the config of every command comes from.
+	// ConfigSource is configSource, GERO_CONFIG_SOURCE or --config-source:
+	// ConfigSourceAuto, ConfigSourceDir or ConfigSourceBundle.
 	ConfigSource string
 	// BundleChannel is bundleChannel, GERO_BUNDLE_CHANNEL or --bundle-channel:
 	// BundleChannelAuto, BundleChannelStable or BundleChannelPrerelease.
