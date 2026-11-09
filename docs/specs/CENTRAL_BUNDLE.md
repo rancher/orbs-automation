@@ -8,7 +8,7 @@ How the central repo's shared content ships as one file with each `gero` release
 
 Today a command needs the central `config/` directory on disk, so every workstation and every job needs a clone or checkout of the central repo. The release of `gero` happens in a public repo, so the same release can carry a compiled copy of what the CLI needs from that repo, and the CLI can fetch it with no clone and no token.
 
-A local source almost always wins. By default the bundle is the fallback for when none is configured; the one override is `--config-source=bundle` (or `GERO_CONFIG_SOURCE=bundle`), which skips every local source on purpose, and `--config-source=dir` is its opposite: local only, never the bundle ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)).
+The bundle is the first layer: gero assumes the user has no clone of the central repo. A local directory is a development mode on top of it, and is read only when one is present (with `configSource: auto`) or asked for (`dir`). `configSource: bundle`, in the user file or as `--config-source=bundle`, reads the bundle whatever is set locally, and `--bundle-file` reads one downloaded bundle ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)).
 
 ## The bundle
 
@@ -58,7 +58,7 @@ Every download of a release asset, the bundle or anything else, is verified befo
 
 **Which release.**
 
-* The running `gero` decides whether prereleases are candidates, as it does for self-update: a stable `gero` considers only stable releases, and a prerelease is never picked because it is the newest. A prerelease `gero` considers all of them.
+* `bundleChannel` decides whether prereleases are candidates: `stable`, `prerelease`, or `auto`, the default, which follows the running `gero` as self-update does. A stable `gero` considers only stable releases, and a prerelease is never picked because it is the newest. A prerelease `gero` considers all of them. `stable` makes any `gero` take only stable releases, with no floor at its own release; `prerelease` makes any `gero` consider all of them, a pre-release one keeping its own as the floor and the fallback, a stable one falling back to the newest stable when the newest bundle is unreadable. A cached bundle is used without a request only if its release fits the channel, so changing it takes effect on the next run.
 * A stable `gero`, or a build that is not a release, uses the newest stable release's bundle.
 * A prerelease `gero` uses the bundle of the newest release by version, a prerelease or not, so `v0.6.0-rc.2` takes the bundle of `v0.6.0-rc.3` or of `v0.6.0`, and works when no stable release exists yet. Its own release is the floor, since the two were made together. If the loader cannot read the newer bundle (see Compatibility), it falls back to its own.
 * A flag naming a release tag overrides all of this, for reproducing an old run **(leaning)**.
@@ -74,8 +74,9 @@ Every download of a release asset, the bundle or anything else, is verified befo
 
 ## Source precedence
 
-With `--config-source=auto`, the default, the bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config):
+With `configSource: auto`, the default, a local source that is present is read and the bundle is the fallback. In order ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)):
 
+0. `--bundle-file`, a bundle file given by hand, which ends the search
 1. `--central-config-dir`
 2. `GERO_CENTRAL_CONFIG_DIR`
 3. `centralConfigDir` in the user file
