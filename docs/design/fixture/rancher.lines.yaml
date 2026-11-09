@@ -1,4 +1,5 @@
-# The Rancher lines: the real config's document in the new apiVersion (RancherLines is unchanged by the redesign).
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# The Rancher lines.
 # One document holding the whole set of Rancher lines, newest first.
 # Facts about the lines themselves only; no branches (each project maps its own).
 # Kubernetes ranges come from the table in the rancher-shell README (April 2026).

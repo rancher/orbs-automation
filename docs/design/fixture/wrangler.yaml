@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # wrangler: a Go library of the frameworks team (CODEOWNERS: rancher-squad-frameworks), held by Rancher
 # and others in their go.mod files. Unowned, so gero only observes what is held of it.
 # Its branches follow its own minors (main is v3.8; release/v3.7, release/v3.6, release/v3.3), not Rancher

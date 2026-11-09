@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # rancher-assets: unowned (release team), one branch, lines and stages in the tags.
 # It holds a charts commit for each line and stage in its lock file.
 apiVersion: gero/v1alpha2
