@@ -1,6 +1,6 @@
 # Application Config
 
-**Status:** implemented, except what [Not built yet](#not-built-yet) lists. The kind and field names are not final until the POC review at the end of v0.x ([PHASES](../PHASES.md)). The files in `config/` are the real configs.
+**Status:** implemented, except what [Not built yet](#not-built-yet) lists. The kind and field names are not final until the team's review before v1.0.0 ([PHASES](../PHASES.md)). The files in `config/` are the real configs.
 
 The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The field reference is [CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md), the reasons for the kinds are in [CONFIG_UNITS](../design/CONFIG_UNITS.md), and the real files and defaults are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`mock-repos/`](../../mock-repos/). The types and their rules are `internal/apis/v1alpha2`, the provider that reads a directory is `internal/appconfig`, the graph commands read is `internal/chain` ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), and the engine that ships into the holdings is `internal/bump` ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)). Config is reachable only through `internal/workspace`.
 
