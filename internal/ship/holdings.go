@@ -148,6 +148,13 @@ func (r resolution) holding(ctx context.Context, ws Reader, sp spec, newest Rele
 
 // heldValue reads one holding of a branch and says how it stands against the
 // release that goes to the branch and the newest.
+//
+// TODO(locations): a holding with several locations shows only the first one's
+// value and file (File, Current), and Verdict reads the relation of the first
+// location that is behind. bump.Check already says when its locations hold
+// different values (Check.Differ) and has each one in Check.Locations; show that
+// on the row, so a branch whose nested modules are out of step is visible. See
+// docs/specs/REPO_STATUS.md under Not built yet.
 func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held *chain.Holding, newest Release) HeldValue {
 	v := HeldValue{Name: held.Name()}
 	one := bump.Target{Branch: sp.branch(), Line: sp.target.Line, Holdings: []*chain.Holding{held}}
