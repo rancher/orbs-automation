@@ -131,6 +131,13 @@
         "repo": {
           "$ref": "#/$defs/Repo"
         },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "shorthand names, as good as the name to find the Project"
+        },
         "finalDestination": {
           "type": "boolean"
         },

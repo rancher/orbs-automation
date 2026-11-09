@@ -11,7 +11,7 @@ type Project struct {
 // ProjectSpec is the fields of a Project.
 type ProjectSpec struct {
 	Repo             Repo         `yaml:"repo"`
-	Aliases          []string     `yaml:"-"` // shorthand names, as good as the name to find the Project
+	Aliases          []string     `yaml:"aliases"` // shorthand names, as good as the name to find the Project
 	FinalDestination bool         `yaml:"finalDestination"`
 	PullRequests     PullRequests `yaml:"pullRequests"`
 	Branches         Branches     `yaml:"branches"`

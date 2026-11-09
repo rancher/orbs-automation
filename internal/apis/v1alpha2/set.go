@@ -164,10 +164,18 @@ func sortedRefKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// projects reports a Project whose repo an earlier Project already has, and a
-// Project that is a final destination when an earlier one already is.
+// projects reports a Project whose repo an earlier Project already has, a
+// Project that is a final destination when an earlier one already is, and an
+// alias that is the name of a Project or the alias of an earlier one.
 func (s *set) projects() {
-	repos := map[string]string{} // repo name to the Project that has it
+	repos := map[string]string{}   // repo name to the Project that has it
+	aliased := map[string]string{} // alias to the Project that has it
+	names := map[string]bool{}
+	for _, o := range s.objs {
+		if p, ok := o.(*Project); ok {
+			names[p.Name] = true
+		}
+	}
 	final := ""
 	for _, o := range s.objs {
 		p, ok := o.(*Project)
@@ -180,6 +188,16 @@ func (s *set) projects() {
 			r.Errorf("spec.repo.name", "%q is already the repo of Project %q", p.Spec.Repo.Name, first)
 		} else {
 			repos[key] = p.Name
+		}
+		for i, alias := range p.Spec.Aliases {
+			at := fmt.Sprintf("spec.aliases[%d]", i)
+			if names[alias] && alias != p.Name {
+				r.Errorf(at, "%q is already the name of Project %q", alias, alias)
+			} else if first, dup := aliased[alias]; dup && first != p.Name {
+				r.Errorf(at, "%q is already an alias of Project %q", alias, first)
+			} else {
+				aliased[alias] = p.Name
+			}
 		}
 		if p.Spec.FinalDestination {
 			if final != "" {
