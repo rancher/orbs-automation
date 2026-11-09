@@ -1,6 +1,6 @@
 # Config Schema
 
-**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions: the loader reads the `gomod` Artifact kind and format, `at` as a location or a list with `lines`, and `{prefix}` and `{bareTag}` in a form, and a release gives `{version}` without a tag's prefix; not yet built: reading and writing `go.mod`, shipping to several locations, `goBump`, the `gomod` rules across documents, `{version}` in a PR text and in a step's environment, and the consistency warnings. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
+**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions: the loader reads the `gomod` Artifact kind and format, `at` as a location or a list with `lines`, and `{prefix}` and `{bareTag}` in a form, and a release gives `{version}` without a tag's prefix; `gero ship` and the checks read and write every location of a Holding that exists for the line, in the `yaml` format; not yet built: reading and writing `go.mod`, `goBump`, the `gomod` rules across documents, `{version}` in a PR text and in a step's environment, and `locations-differ`. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
 
 ## Every document
 
@@ -172,7 +172,7 @@ A warning never makes a document invalid. It names its rule by a stable id, show
 | `circular-holding` | a project holds something of another, which holds something of it | yes |
 | `default-branch-past-development` | a line with no `branch` is past development, so it is read from the default branch | yes |
 | `unknown-key` | a user file has a key it does not know (the user file is not a document, so it cannot be acknowledged) | yes |
-| `locations-differ` | the locations of one Holding hold different versions for a line: it reads the files of a repo at a ref, so the commands that read repos raise it, not `config validate` | no |
+| `locations-differ` | the locations of one Holding hold different versions for a line: it reads the files of a repo at a ref, only when a command asks (not when the graph is built), so the commands that read repos raise it, not `config validate`; the read of every location is built, the finding is not | no |
 | `stream-differs-from-destination` | a project with `layout: perLine` holds another stream of an artifact (matched by its kind and name) than the `finalDestination` for a line; on the holder's Holding, naming the line | yes |
 | `acknowledgement-unused` | an acknowledgement matches no warning of its document | yes |
 | `lifecycle-date` | a release is shipped to a line past a lifecycle date | no |
