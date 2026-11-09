@@ -177,3 +177,21 @@ func TestAStreamSaysWhetherItIsUniversalAndRequiresAPrerelease(t *testing.T) {
 	assert.False(t, l.Universal())
 	assert.False(t, l.RequiresPrerelease())
 }
+
+func TestTagPrefixIsThePatternUpToItsLastSlashWhenTheTagStartsWithIt(t *testing.T) {
+	tests := []struct {
+		name, pattern, tag, want string
+	}{
+		{"no slash", "v*", "v1.2.3", ""},
+		{"a prefix", "helmtools/v*", "helmtools/v0.1.2", "helmtools/"},
+		{"a deeper prefix", "a/b/v*", "a/b/v1.0.0", "a/b/"},
+		{"a tag that does not start with it", "pkg/v*", "other/v1.0.0", ""},
+		{"no pattern", "", "v1.0.0", ""},
+		{"a pattern with a minor and no slash", "v3.8.*", "v3.8.0", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, chain.TagPrefix(tt.pattern, tt.tag))
+		})
+	}
+}

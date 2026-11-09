@@ -46,6 +46,9 @@ func (p Probers) ModuleExists(ctx context.Context, module, version string) gopro
 	return p.Modules.Exists(ctx, module, version)
 }
 
+// ModuleProxy is the Registry of a row for a Go module: the proxy it is looked for on.
+const ModuleProxy = "goproxy"
+
 // Skipped is the status of a registry a release of the tag does not go to.
 const Skipped = "skipped"
 
@@ -82,23 +85,29 @@ func (r Report) Failed() bool {
 	return false
 }
 
-// CheckProject looks for the images the Project publishes (the image artifacts
-// of its streams) for a release of tag, in each registry the release goes to. An
-// image that applies only from a line on is left out, not checked and not listed,
-// when the tag's line is older; a tag in none of the Project's lines gets a plain
-// check and a warning. Prime production is skipped for a prerelease. The checks
-// run in parallel and the rows keep config order.
+// CheckProject looks for what the Project publishes for a release of tag: the
+// images (the image artifacts of its streams) in each registry the release goes
+// to, and then the Go modules (the gomod artifacts of the streams the tag is a
+// release of) on the Go module proxy, when c can look for one. An artifact that
+// applies only from a line on is left out, not checked and not listed, when the
+// tag's line is older; a tag in none of the Project's lines gets a plain check and
+// a warning. Prime production is skipped for a prerelease; the proxy has every
+// version, so a module is looked for whatever the tag. The checks run in parallel
+// and the rows keep config order, the images first.
 func CheckProject(ctx context.Context, p *chain.Project, c Prober, tag string) Report {
 	report := Report{Project: p.Slug(), Tag: tag, Stable: !semver.Classify(tag).HasPrerelease}
 	type job struct {
-		row  int
-		host string
+		row   int
+		probe func() (status, detail string)
 	}
 	var jobs []job
-	var images []*chain.Artifact
+	var images, modules []*chain.Artifact
 	for _, a := range p.Artifacts() {
-		if a.IsImage() {
+		switch {
+		case a.IsImage():
 			images = append(images, a)
+		case a.IsGoMod() && a.Stream().TagMatches(tag):
+			modules = append(modules, a)
 		}
 	}
 	line, _ := p.LineOf(tag)
@@ -117,12 +126,33 @@ func CheckProject(ctx context.Context, p *chain.Project, c Prober, tag string) R
 			reg, _ := Lookup(role) // validation has rejected an unknown role
 			row := Row{Image: img.Ref(), Registry: role, Label: reg.Label, Reference: reg.Reference(img.Ref(), tag)}
 			if Applies(role, tag) {
-				jobs = append(jobs, job{row: len(report.Rows), host: reg.Host})
+				host, image := reg.Host, img.Ref()
+				jobs = append(jobs, job{row: len(report.Rows), probe: func() (string, string) {
+					res := c.Exists(ctx, host, image, tag)
+					return string(res.Status), res.Detail
+				}})
 			} else {
 				row.Status, row.Detail = Skipped, "prerelease"
 			}
 			report.Rows = append(report.Rows, row)
 		}
+	}
+	mp, canAsk := c.(ModuleProber)
+	for _, mod := range modules {
+		if !mod.AppliesTo(line) {
+			continue
+		}
+		module, version := mod.Ref(), mod.Stream().BareTag(tag)
+		row := Row{Image: module, Registry: ModuleProxy, Label: "Go module proxy", Reference: module + "@" + version}
+		if canAsk {
+			jobs = append(jobs, job{row: len(report.Rows), probe: func() (string, string) {
+				res := mp.ModuleExists(ctx, module, version)
+				return string(res.Status), res.Detail
+			}})
+		} else {
+			row.Status, row.Detail = Skipped, "no Go module proxy to ask"
+		}
+		report.Rows = append(report.Rows, row)
 	}
 	// The rows are all in place before any goroutine starts, and each writes
 	// only its own, so the report keeps config order whatever finishes first.
@@ -132,8 +162,7 @@ func CheckProject(ctx context.Context, p *chain.Project, c Prober, tag string) R
 		go func() {
 			defer wg.Done()
 			row := &report.Rows[j.row]
-			res := c.Exists(ctx, j.host, row.Image, tag)
-			row.Status, row.Detail = string(res.Status), res.Detail
+			row.Status, row.Detail = j.probe()
 		}()
 	}
 	wg.Wait()

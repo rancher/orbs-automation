@@ -59,10 +59,7 @@ func ReleaseOf(h *chain.Holding, tag, commit string) (Release, error) {
 // starts with it; the bare tag is the tag without it, and the version is that
 // without a leading v.
 func newRelease(tag, pattern, sourceRepo, commit string) Release {
-	var prefix string
-	if i := strings.LastIndex(pattern, "/"); i >= 0 && strings.HasPrefix(tag, pattern[:i+1]) {
-		prefix = pattern[:i+1]
-	}
+	prefix := chain.TagPrefix(pattern, tag)
 	bare := strings.TrimPrefix(tag, prefix)
 	return Release{Tag: tag, Prefix: prefix, BareTag: bare, Version: strings.TrimPrefix(bare, "v"), SourceRepo: sourceRepo, Commit: commit}
 }

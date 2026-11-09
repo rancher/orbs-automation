@@ -2,6 +2,7 @@ package chain
 
 import (
 	"path"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
@@ -29,6 +30,22 @@ func (s *Stream) Scheme() string { return s.Doc.Spec.Scheme }
 
 // TagPattern is the glob a release's tag matches.
 func (s *Stream) TagPattern() string { return s.Doc.Spec.TagPattern }
+
+// TagPrefix is the prefix of a tag that its stream's pattern puts before the
+// version: the pattern up to its last slash, when the tag starts with it (a module
+// in a subdirectory is tagged helmtools/v0.1.2), and none otherwise.
+func TagPrefix(pattern, tag string) string {
+	if i := strings.LastIndex(pattern, "/"); i >= 0 && strings.HasPrefix(tag, pattern[:i+1]) {
+		return pattern[:i+1]
+	}
+	return ""
+}
+
+// BareTag is a tag without the prefix of the stream: what a Go module is
+// required at.
+func (s *Stream) BareTag(tag string) string {
+	return strings.TrimPrefix(tag, TagPrefix(s.Doc.Spec.TagPattern, tag))
+}
 
 // TagMatches reports whether a tag is a release of the stream: it matches the
 // pattern and none of the excludes.
