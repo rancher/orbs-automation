@@ -135,6 +135,13 @@ func TestNewEngineReportsAReleaseHoldingInAFormatThatIsNotBuilt(t *testing.T) {
 	assert.Equal(t, []string{"prod > cons: cons-image, cons-chart"}, names(e.RoutesFrom(g.Project("prod"))), "the consumer whose holding cannot be written is left out")
 }
 
+func TestNewEngineAcceptsAGoModHolding(t *testing.T) {
+	e, g, err := buildEngine(t, d("Holding", "gomod", "{project: other, artifact: prod-chart}", "  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n"))
+
+	require.NoError(t, err)
+	assert.Contains(t, strings.Join(names(e.RoutesFrom(g.Project("prod"))), ";"), "gomod")
+}
+
 func TestNewEngineAcceptsAHoldingWithSeveralLocationsInABuiltFormat(t *testing.T) {
 	e, g, err := buildEngine(t, d("Holding", "two", "{project: other, artifact: prod-chart}", "  at:\n    - {file: a.yaml, key: .url}\n    - {file: b/a.yaml, key: .url}\n  holds: {kind: release, form: \"{url}\"}\n"))
 

@@ -2,6 +2,7 @@ package bump
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -431,4 +432,67 @@ func TestAHoldingWithALocationInAFormatNotBuiltWritesNothing(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrFormatNotBuilt)
 	assert.Equal(t, buildYAML, tree["build.yaml"], "the first location is not written when the second cannot be")
+}
+
+// libMod is a go.mod that requires the library at two versions of a family.
+const libMod = "module acme.test/svc\n\ngo 1.26\n\nrequire (\n\tgithub.com/acme/lib v1.0.0 // indirect\n\tgithub.com/acme/other v0.3.0\n)\n"
+
+const goModHolding = "img\n  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n"
+
+func TestCheckHoldingOfAGoModule(t *testing.T) {
+	h := holdings(t, goModHolding)[0]
+	rel, _ := ReleaseOf(h, "v1.2.3", "c")
+
+	got, err := CheckHolding(bg, files{"go.mod": libMod}, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.Equal(t, "v1.0.0", got.Current)
+	assert.Equal(t, "v1.2.3", got.Want)
+	assert.False(t, got.UpToDate)
+	assert.Equal(t, RelationNewer, got.Relation)
+	assert.Equal(t, "Updated `github.com/acme/lib` in `go.mod` from `v1.0.0` to `v1.2.3`", got.Change.Description)
+}
+
+func TestApplyHoldingChangesOnlyTheVersionOfAGoModule(t *testing.T) {
+	h := holdings(t, goModHolding)[0]
+	rel, _ := ReleaseOf(h, "v1.2.3", "c")
+	tree := files{"go.mod": libMod}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.True(t, got.Changed)
+	assert.Equal(t, strings.Replace(libMod, "v1.0.0", "v1.2.3", 1), tree["go.mod"], "the indirect comment and the other module stay")
+	require.Len(t, got.Changes, 1)
+
+	again, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+	require.NoError(t, err)
+	assert.False(t, again.Changed)
+}
+
+func TestApplyHoldingOfAGoModuleInEachOfSeveralGoMods(t *testing.T) {
+	h := holdings(t, "img\n  at:\n    - {file: go.mod, key: github.com/acme/lib, format: gomod}\n    - {file: pkg/apis/go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v1.2.3", "c")
+	tree := files{"go.mod": libMod, "pkg/apis/go.mod": "module acme.test/svc/pkg/apis\n\nrequire github.com/acme/lib v1.1.0\n"}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	require.Len(t, got.Changes, 2)
+	assert.Contains(t, tree["go.mod"], "github.com/acme/lib v1.2.3 // indirect")
+	assert.Contains(t, tree["pkg/apis/go.mod"], "github.com/acme/lib v1.2.3")
+}
+
+func TestAGoModuleThatIsNotRequiredIsAnErrorNamingIt(t *testing.T) {
+	h := holdings(t, "img\n  at: {file: go.mod, key: github.com/acme/missing, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v1.2.3", "c")
+
+	_, err := CheckHolding(bg, files{"go.mod": libMod}, h, "v2.16", "main", rel)
+	require.ErrorContains(t, err, "github.com/acme/missing")
+	assert.ErrorContains(t, err, "go.mod")
+
+	tree := files{"go.mod": libMod}
+	_, err = ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+	require.ErrorContains(t, err, "github.com/acme/missing")
+	assert.Equal(t, libMod, tree["go.mod"])
 }
