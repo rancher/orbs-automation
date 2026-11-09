@@ -1,6 +1,6 @@
 # Task commands
 
-**Status:** draft. `gero repo branch` and `gero repo tag` are built; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+**Status:** implemented for `gero repo branch` and `gero repo tag`; `gero repo push`, `gero pr create` and `gero ship bump` are drafts, not built. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 
 The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an engineer who wants one part of the process and not the whole. Each runs one task and `ship` chains the same tasks, so a step behaves the same alone and inside `ship`. They are workstation commands: they act as the engineer, in the engineer's own clone, and read the same settings as `ship`.
 
@@ -107,7 +107,7 @@ What it needs is not decided: which branch it commits onto (the checked-out one,
 
 ## Where the code goes
 
-Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds the dependencies, calls the task and renders its output, as for every command ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#2-layout)); none imports another command's package. The name is the command's: `repobranch`, `repopush`, `prcreate`, `shipbump`.
+Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds the dependencies, calls the task and renders its output, as for every command ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#2-layout)); none imports another command's package. The name is the command's: `repobranch`, `repotag`, `repopush`, `prcreate`, `shipbump`.
 
 ## Not built yet
 

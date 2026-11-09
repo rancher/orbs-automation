@@ -1,6 +1,6 @@
 # CI_SHIP
 
-**Status:** draft. The command, what it shares with `gero ship` and what differs are decided in outline; the shape of its setup is open on purpose ([Open questions](#open-questions)). `gero ship` runs as the bot when `Settings.CI` is set, over the same backend; the `ci:ship` command and its setup are not built (see [Not built yet](#not-built-yet)).
+**Status:** draft, not built. The command, what it shares with `gero ship` and what differs are decided in outline; the shape of its setup is open on purpose ([Open questions](#open-questions)). The backend already acts as the bot when `Settings.CI` is set.
 
 `gero ci:ship` is the same bump as [`gero ship`](PUSH_TO_REPO.md), run by a workflow as the bot. It replaces the bash that the producer's workflow runs today (`push-to-rancher.yml` calling `run-gha.sh`: check the image, set the bot identity in a fresh checkout of the consumer, open a PR for each branch). The context rules it follows are in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md), and this spec only adds what is specific to shipping.
 
@@ -33,7 +33,7 @@
 ## Not built yet
 
 * The command, its `cmd/` registration (CI-only, [CLI_FRAMEWORK](CLI_FRAMEWORK.md)) and its loop.
-* Resolving the bot's identity in a real workflow: the domain passes it to the commits (tested with a fake), and `GERO_BOT_USER` with the id lookup is exercised only by tests of `identity`.
+* Resolving the bot's identity in a workflow: the domain passes it to the commits, and `GERO_BOT_USER` with the id lookup is tested without a real bot.
 * The temporary clone as a `Workspace`, and the token as a one-shot credential for the push (`gitcli.Push` and `gitcli.PushTag` take the engineer's own today).
 * The markdown step summary, and the workflow run URL in the PR body.
 * `from: producer` and `from: central` for steps.

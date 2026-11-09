@@ -1,6 +1,6 @@
 # Metadata: labels and hidden markers
 
-**Status:** draft
+**Status:** draft, except the configured labels of a PR, which `gero ship` applies as described below. The `gero/` labels and the control labels are not built.
 
 How `gero` tags the PRs and issues it writes, so people and tools can find and read them. Two layers carry the metadata, with different roles. The **hidden marker** is the record. **Labels** are a projection of it for search, the GitHub web UI and other teams' tooling. Labels are tags, not state.
 
@@ -79,7 +79,9 @@ Configured labels are the existing Rancher labels, named in config where a consu
 
 ## Not built yet
 
-* All of it. `gero ship` today applies the configured labels only, and warns for a missing one.
+* The gero-owned labels (`gero/stale`, `gero/superseded`), their creation on demand and their reconciliation.
+* The control labels (`gero/hold`) and the check of one before work.
+* Labels on tracking issues, which wait for the reconciler.
 
 ## Open questions
 
