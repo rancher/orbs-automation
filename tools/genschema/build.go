@@ -90,6 +90,9 @@ func mapper(t reflect.Type) *jsonschema.Schema {
 			text(),
 			{Type: "object", AdditionalProperties: text()},
 		}}
+	case reflect.TypeFor[v1alpha2.Locations]():
+		at := func() *jsonschema.Schema { return &jsonschema.Schema{Ref: defsPrefix + "At"} }
+		return &jsonschema.Schema{OneOf: []*jsonschema.Schema{at(), {Type: "array", Items: at()}}}
 	case reflect.TypeFor[v1alpha2.Command]():
 		return &jsonschema.Schema{OneOf: []*jsonschema.Schema{text(), listOfText()}}
 	case reflect.TypeFor[meta.Refs]():
@@ -117,6 +120,10 @@ func kindSchemas(r *jsonschema.Reflector) (kinds, error) {
 		for name, def := range r.ReflectFromType(reflect.TypeOf(obj)).Definitions {
 			defs[name] = def
 		}
+	}
+	// Locations is described by the mapper, so its item is reflected here.
+	for name, def := range r.ReflectFromType(reflect.TypeFor[v1alpha2.At]()).Definitions {
+		defs[name] = def
 	}
 	if err := applyHints(defs, appHints); err != nil {
 		return kinds{}, err

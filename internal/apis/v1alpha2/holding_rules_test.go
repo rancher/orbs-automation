@@ -27,7 +27,7 @@ func TestHoldingDefaultsForARelease(t *testing.T) {
 
 	require.NoError(t, rep.Err())
 	require.NotNil(t, h)
-	assert.Equal(t, "yaml", h.Spec.At.Format)
+	assert.Equal(t, "yaml", h.Spec.At[0].Format)
 	assert.Equal(t, "{tag}", h.Spec.Holds.Form)
 	assert.Equal(t, "stable", h.Spec.Holds.Accept)
 }
@@ -46,7 +46,7 @@ func TestHoldingDefaultsDoNotOverwriteWhatWasWritten(t *testing.T) {
 
 	require.NoError(t, rep.Err())
 	require.NotNil(t, h)
-	assert.Equal(t, "dockerfile", h.Spec.At.Format)
+	assert.Equal(t, "dockerfile", h.Spec.At[0].Format)
 	assert.Equal(t, "{image}:{tag}", h.Spec.Holds.Form)
 	assert.Equal(t, "all", h.Spec.Holds.Accept)
 }

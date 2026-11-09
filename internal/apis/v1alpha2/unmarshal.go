@@ -43,3 +43,20 @@ func (b *Branch) UnmarshalYAML(node *yaml.Node) error {
 	}
 	return errors.New("branch must be a string or a map of stage to branch")
 }
+
+// UnmarshalYAML reads a mapping as one location and a list as a list of them.
+func (l *Locations) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.MappingNode:
+		var at At
+		if err := node.Decode(&at); err != nil {
+			return err
+		}
+		*l = Locations{at}
+		return nil
+	case yaml.SequenceNode:
+		*l = Locations{}
+		return nil
+	}
+	return errors.New("at must be a location or a list of locations")
+}

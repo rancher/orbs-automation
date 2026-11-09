@@ -97,11 +97,15 @@
             "dockerfile"
           ],
           "description": "yaml or dockerfile"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range",
+          "description": "the lines the file exists for"
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "At is where to look."
+      "description": "At is one place to look."
     },
     "BranchLine": {
       "properties": {
@@ -297,7 +301,17 @@
     "HoldingSpec": {
       "properties": {
         "at": {
-          "$ref": "#/$defs/At"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/At"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/At"
+              },
+              "type": "array"
+            }
+          ]
         },
         "holds": {
           "$ref": "#/$defs/Holds"

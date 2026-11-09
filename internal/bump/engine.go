@@ -67,7 +67,10 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 		if h.Kind() != chain.HoldsRelease {
 			continue
 		}
-		if format := h.Doc.Spec.At.Format; format != formatYAML {
+		if n := len(h.Doc.Spec.At); n != 1 {
+			errs = append(errs, fmt.Errorf("%w: Holding %q has %d locations, and gero reads and writes one", ErrLocationsNotBuilt, h.Name(), n))
+			e.unusable[h] = true
+		} else if format := h.Doc.Spec.At[0].Format; format != formatYAML {
 			errs = append(errs, fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), format))
 			e.unusable[h] = true
 		}

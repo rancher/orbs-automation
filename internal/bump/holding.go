@@ -17,6 +17,10 @@ import (
 // yet.
 var ErrFormatNotBuilt = errors.New("format not built")
 
+// ErrLocationsNotBuilt is returned for a holding with more than one location, which
+// gero cannot read or write yet.
+var ErrLocationsNotBuilt = errors.New("several locations not built")
+
 // formatYAML is the format gero can read and write.
 const formatYAML = "yaml"
 
@@ -53,7 +57,11 @@ type Place struct {
 // consumer: its file and key with the line, the holding's stage and the branch.
 func PlaceOf(h *chain.Holding, line, branch string) (Place, error) {
 	vars := map[string]string{"line": line, "stage": h.Doc.Spec.Holds.Stage, "branch": branch}
-	at := h.Doc.Spec.At
+	locations := h.Doc.Spec.At
+	if len(locations) != 1 {
+		return Place{}, fmt.Errorf("%w: Holding %q has %d locations, and gero reads and writes one", ErrLocationsNotBuilt, h.Name(), len(locations))
+	}
+	at := locations[0]
 	file, err := templates.Render(at.File, vars)
 	if err != nil {
 		return Place{}, fmt.Errorf("Holding %q: at.file %q: %w", h.Name(), at.File, err)

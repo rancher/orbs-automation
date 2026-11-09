@@ -17,6 +17,7 @@ const (
 
 	FormatYAML       = "yaml"
 	FormatDockerfile = "dockerfile"
+	FormatGoMod      = "gomod"
 
 	AcceptStable = "stable"
 	AcceptAll    = "all"
@@ -34,8 +35,10 @@ var formVars = []string{"image", "tag", "version", "url", "file", "sourceRepo", 
 
 // SetDefaults fills the format, the accept and, for a release, the form.
 func (h *Holding) SetDefaults() {
-	if h.Spec.At.Format == "" {
-		h.Spec.At.Format = FormatYAML
+	for i := range h.Spec.At {
+		if h.Spec.At[i].Format == "" {
+			h.Spec.At[i].Format = FormatYAML
+		}
 	}
 	if h.Spec.Holds.Accept == "" {
 		h.Spec.Holds.Accept = AcceptStable
@@ -49,22 +52,14 @@ func (h *Holding) SetDefaults() {
 // the text is written. That its references name the right documents is checked
 // across documents.
 func (h *Holding) Validate(_ config.Context, r *config.Report) {
-	at, holds := h.Spec.At, h.Spec.Holds
+	holds := h.Spec.Holds
 
-	for path, text := range map[string]string{"spec.at.file": at.File, "spec.at.key": at.Key} {
-		if text == "" {
-			r.Errorf(path, "is required")
-			continue
-		}
-		if err := templates.Validate(text, atVars); err != nil {
-			r.Errorf(path, "%v", err)
-			continue
-		}
-		if uses, _ := templates.Placeholders(text); slices.Contains(uses, "stage") && holds.Stage == "" && len(holds.Stages) == 0 {
-			r.Errorf(path, "reads {stage}, so holds.stage or holds.stages must say which stage")
-		}
+	if len(h.Spec.At) == 0 {
+		r.Errorf("spec.at", "is required")
 	}
-	oneOf(r, "spec.at.format", at.Format, FormatYAML, FormatDockerfile)
+	for i, at := range h.Spec.At {
+		h.validateLocation(r, atPath(i, len(h.Spec.At)), at)
+	}
 
 	kindOK := oneOf(r, "spec.holds.kind", holds.Kind, HoldsRelease, HoldsCommit, HoldsBranch)
 	if kindOK {
@@ -80,6 +75,33 @@ func (h *Holding) Validate(_ config.Context, r *config.Report) {
 	}
 	oneOf(r, "spec.holds.accept", holds.Accept, AcceptStable, AcceptAll)
 	checkRange(r, "spec.holds.lines", holds.Lines)
+}
+
+// atPath is where a location is written: spec.at for the only one, and
+// spec.at[i] for one of several.
+func atPath(i, n int) string {
+	if n == 1 {
+		return "spec.at"
+	}
+	return fmt.Sprintf("spec.at[%d]", i)
+}
+
+func (h *Holding) validateLocation(r *config.Report, base string, at At) {
+	holds := h.Spec.Holds
+	for path, text := range map[string]string{base + ".file": at.File, base + ".key": at.Key} {
+		if text == "" {
+			r.Errorf(path, "is required")
+			continue
+		}
+		if err := templates.Validate(text, atVars); err != nil {
+			r.Errorf(path, "%v", err)
+			continue
+		}
+		if uses, _ := templates.Placeholders(text); slices.Contains(uses, "stage") && holds.Stage == "" && len(holds.Stages) == 0 {
+			r.Errorf(path, "reads {stage}, so holds.stage or holds.stages must say which stage")
+		}
+	}
+	oneOf(r, base+".format", at.Format, FormatYAML, FormatDockerfile)
 }
 
 func (h *Holding) validateForm(r *config.Report) {

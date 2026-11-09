@@ -207,10 +207,10 @@ spec:
 `)
 
 	assert.Equal(t, Refs{"project": {"rancher-assets"}, "from": {"rancher-charts"}}, h.GetRefs())
-	assert.Equal(t, At{
+	assert.Equal(t, Locations{{
 		File: "lock.yaml", Format: "yaml",
 		Key: `.chart-versions."{line|trimprefix:v}".upstream-refs.{stage|replace:stable=prod}.charts.commit`,
-	}, h.Spec.At)
+	}}, h.Spec.At)
 	assert.Equal(t, Holds{
 		Kind: "commit", Stages: []string{"dev", "stable"}, Lines: lines.Range{Until: "v2.15"}, Accept: "all",
 	}, h.Spec.Holds)

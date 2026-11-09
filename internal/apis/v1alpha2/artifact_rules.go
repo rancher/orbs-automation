@@ -12,6 +12,7 @@ import (
 const (
 	ArtifactImage = "image"
 	ArtifactFile  = "file"
+	ArtifactGoMod = "gomod"
 
 	RegistryDockerHub       = "dockerhub"
 	RegistryPrimeStaging    = "prime-staging"
