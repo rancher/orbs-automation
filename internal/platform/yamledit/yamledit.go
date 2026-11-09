@@ -20,6 +20,9 @@ import (
 var (
 	// ErrKeyNotFound is returned when the path names no key in the document.
 	ErrKeyNotFound = errors.New("key not found")
+	// ErrInvalidYAML is returned when the file is not YAML, and the message says
+	// where and shows the line.
+	ErrInvalidYAML = errors.New("not valid YAML")
 	// ErrInvalidPath is returned for a path that is not written in the path syntax:
 	// an empty step, a quote left open, or an index that is not a number.
 	ErrInvalidPath = errors.New("invalid path")
