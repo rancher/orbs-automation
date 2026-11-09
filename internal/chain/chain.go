@@ -16,17 +16,19 @@ type Graph struct {
 	bySlug   map[string]*Project // lowercase owner/name
 	lines    []lines.Line
 	warnings []config.Finding
-	empty    bool
+	// acknowledged are the warnings the documents say are expected.
+	acknowledged []config.Finding
+	empty        bool
 }
 
 // Build joins the documents of a config that has passed every rule. A document
 // whose refs do not lead anywhere is not possible in such a config.
-func Build(cfg appconfig.Config) *Graph { return BuildWith(cfg, nil) }
+func Build(cfg appconfig.Config) *Graph { return BuildWith(cfg, config.Report{}) }
 
-// BuildWith is Build for a caller that has the warnings the config was loaded
-// with, which the graph keeps.
-func BuildWith(cfg appconfig.Config, warnings []config.Finding) *Graph {
-	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty(), warnings: warnings}
+// BuildWith is Build for a caller that has the report the config was loaded with,
+// whose warnings the graph keeps, and the warnings its documents acknowledge.
+func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
+	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, empty: cfg.Empty(), warnings: rep.Warnings()}
 	for _, doc := range cfg.Projects {
 		p := &Project{Doc: doc, graph: g}
 		g.projects = append(g.projects, p)
@@ -103,6 +105,10 @@ func (g *Graph) Lines() []lines.Line { return g.lines }
 // Warnings returns the warnings found when the config was loaded, in the order
 // reported.
 func (g *Graph) Warnings() []config.Finding { return g.warnings }
+
+// Acknowledged returns the warnings the config's documents say are expected, in
+// the order reported. They are not in Warnings.
+func (g *Graph) Acknowledged() []config.Finding { return g.acknowledged }
 
 // Empty reports whether the config has no project and no lines.
 func (g *Graph) Empty() bool { return g.empty }

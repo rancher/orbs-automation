@@ -25,10 +25,11 @@ type Workspace interface {
 // the error naming every problem, or workspace.ErrNotFound when there is no
 // config directory.
 func Run(s clicfg.Settings, cwd string) (string, error) {
-	return run(workspace.Open(s, cwd), style.New(s.Terminal))
+	verbose := s.LogLevel == clicfg.LogInfo || s.LogLevel == clicfg.LogDebug
+	return run(workspace.Open(s, cwd), style.New(s.Terminal), verbose)
 }
 
-func run(ws Workspace, view *style.Renderer) (string, error) {
+func run(ws Workspace, view *style.Renderer, _ bool) (string, error) {
 	dir, err := ws.CentralConfigDir()
 	if err != nil {
 		return "", err

@@ -39,7 +39,7 @@ func TestRunSummarizesAValidConfig(t *testing.T) {
 		),
 	}
 
-	out, err := run(ws, nil)
+	out, err := run(ws, nil, false)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "/work/config")
@@ -54,7 +54,7 @@ func TestRunSummarizesAValidConfig(t *testing.T) {
 func TestRunSummarizesAConfigWithoutLines(t *testing.T) {
 	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, graph: chaintest.Projects(t, "a", "acme/a")}
 
-	out, err := run(ws, nil)
+	out, err := run(ws, nil, false)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "lines: 0")
@@ -67,7 +67,7 @@ func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
 	}))
 	require.NoError(t, rep.Err())
 
-	out, err := run(fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, graph: g}, nil)
+	out, err := run(fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, graph: g}, nil, false)
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "config OK")
@@ -76,7 +76,7 @@ func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
 }
 
 func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
-	_, err := run(fakeWorkspace{dirErr: workspace.ErrNotFound}, nil)
+	_, err := run(fakeWorkspace{dirErr: workspace.ErrNotFound}, nil, false)
 
 	assert.ErrorIs(t, err, workspace.ErrNotFound)
 }
@@ -85,7 +85,7 @@ func TestRunReturnsConfigProblems(t *testing.T) {
 	problem := errors.New(`Project "a": spec.repo.name "x" must be owner/name`)
 	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, chainErr: problem}
 
-	out, err := run(ws, nil)
+	out, err := run(ws, nil, false)
 
 	assert.ErrorIs(t, err, problem)
 	assert.Empty(t, out)
