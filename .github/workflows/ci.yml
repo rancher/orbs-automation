@@ -15,6 +15,11 @@ permissions:
 
 env:
   CI: true
+  # The central config is this repo's own config/ directory, so every job reads it
+  # from the checkout. Not a shell expansion: gero expands $GITHUB_WORKSPACE itself
+  # (inside the job container that is /__w/..., where ${{ github.workspace }} would
+  # give the host path). Nothing is read until a step runs gero, after checkout.
+  GERO_CENTRAL_CONFIG_DIR: "$GITHUB_WORKSPACE/config"
 
 jobs:
   build:
@@ -41,3 +46,30 @@ jobs:
         run: |
           go generate ./...
           git diff --exit-code
+
+  release-snapshot:
+    name: Release dry run (config bundle)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.27
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Check the GoReleaser config
+        run: goreleaser check
+      - name: Build a snapshot release
+        run: goreleaser release --snapshot --clean --skip=publish
+        env:
+          GORELEASER_CURRENT_TAG: v0.0.0
+      - name: Check the config bundle is in the checksums
+        run: |
+          set -eu
+          want="$(grep -E '  gero-config-bundle\.yaml$' dist/checksums.txt | cut -d' ' -f1)"
+          got="$(sha256sum .bundle/gero-config-bundle.yaml | cut -d' ' -f1)"
+          test -n "$want"
+          test "$want" = "$got"
+          head -n 4 .bundle/gero-config-bundle.yaml

@@ -19,6 +19,10 @@ Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before 
 
 The script's rule, kept as it is: Docker Hub and Prime staging always, and Prime production only for a stable tag. A stable tag has no prerelease suffix, decided by `internal/platform/semver.Classify`, which is the script's own check ([CHECK_SEMVER](CHECK_SEMVER.md)).
 
+### Go modules
+
+A release is also checked for the Go modules it publishes: the `gomod` artifacts of the streams the tag is a release of (a stream whose `tagPattern` matches it, and an artifact whose `lines` include the tag's line). A module has a row after the images, with the registry `goproxy`, the label `Go module proxy` and the reference `module@version`, where the version is the tag without the prefix of its stream (`helmtools/v0.1.2` is looked for as `v0.1.2`). It is a plain HTTP request to the public Go module proxy for the version's `.info` (`internal/platform/goproxy`): `found` when the proxy has that version, `not found` for a 404 or a 410, and `unreachable` for anything else, an answer that is not that version included. The proxy fetches a tag it has not seen the first time it is asked, so asking is also what makes a new tag available. A prerelease is looked for too, since the proxy has them. A project whose check has no way to ask about modules shows the row as `skipped`. `gero ship` runs the same check, so a release the proxy cannot serve blocks a bump that `go mod tidy` would fail on. The proxy is not configurable yet: `Checker.BaseURL` is the place for another.
+
 ## Config
 
 A Project may list the images it publishes:

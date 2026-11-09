@@ -178,3 +178,104 @@ func TestADuplicateKeyIsAmbiguous(t *testing.T) {
 	_, err = Get([]byte(src), "a")
 	assert.ErrorIs(t, err, ErrAmbiguous, "reading is as strict as writing, so they agree")
 }
+
+func TestAFileThatIsNotYAMLSaysWhereAndShowsTheLine(t *testing.T) {
+	_, err := Get([]byte("a: 1\nb: @bad\nc: 3\n"), "a")
+
+	require.ErrorIs(t, err, ErrInvalidYAML)
+	assert.Contains(t, err.Error(), "not valid YAML")
+	assert.Contains(t, err.Error(), "line 2")
+	assert.Contains(t, err.Error(), `"b: @bad"`, "the line itself, so it needs no counting")
+	assert.Contains(t, err.Error(), "cannot start any token", "and what the parser said")
+	assert.NotContains(t, err.Error(), "read YAML")
+}
+
+func TestAFileThatIsNotYAMLAndHasNoLineStillSaysSo(t *testing.T) {
+	_, err := Get([]byte("a: [unclosed\n"), "a")
+
+	require.ErrorIs(t, err, ErrInvalidYAML)
+	assert.Contains(t, err.Error(), "not valid YAML")
+	assert.NotErrorIs(t, err, ErrKeyNotFound)
+}
+
+func TestSetOfAFileThatIsNotYAMLSaysTheSame(t *testing.T) {
+	_, _, err := Set([]byte("a: 1\nb: @bad\n"), "a", "2")
+
+	require.ErrorIs(t, err, ErrInvalidYAML)
+	assert.Contains(t, err.Error(), "line 2")
+}
+
+// chartValues is the shape of BRO's chart values.yaml: a placeholder that the chart
+// build fills in, which is not YAML, and the value to read below it.
+const chartValues = `image:
+  repository: rancher/backup-restore-operator
+  tag: %TAG%
+
+global:
+  kubectl:
+    repository: rancher/kuberlr-kubectl
+    tag: v8.2.0  # the one gero reads
+`
+
+func TestGetReadsAValueOfAFileWithATemplatePlaceholder(t *testing.T) {
+	got, err := Get([]byte(chartValues), "global.kubectl.tag")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v8.2.0", got)
+}
+
+func TestGetOfThePlaceholderItselfIsItsText(t *testing.T) {
+	got, err := Get([]byte(chartValues), "image.tag")
+
+	require.NoError(t, err)
+	assert.Equal(t, "%TAG%", got, "not the text the parser was given in its place")
+}
+
+func TestGetReadsEachPlaceholderThatIsAValueOrAListItem(t *testing.T) {
+	src := "a: %ONE%\nlist:\n  - %TWO%\n  - plain\nb: %THREE%\nc: kept\n"
+
+	for path, want := range map[string]string{"a": "%ONE%", "list[0]": "%TWO%", "list[1]": "plain", "b": "%THREE%", "c": "kept"} {
+		got, err := Get([]byte(src), path)
+
+		require.NoError(t, err, path)
+		assert.Equal(t, want, got, path)
+	}
+}
+
+func TestSetChangesAValueOfAFileWithATemplatePlaceholderAndNothingElse(t *testing.T) {
+	out, old, err := Set([]byte(chartValues), "global.kubectl.tag", "v9.0.0")
+
+	require.NoError(t, err)
+	assert.Equal(t, "v8.2.0", old)
+	assert.Equal(t, strings.Replace(chartValues, "v8.2.0", "v9.0.0", 1), string(out), "the placeholder stays as it was written")
+}
+
+func TestSetOfThePlaceholderReplacesIt(t *testing.T) {
+	out, old, err := Set([]byte(chartValues), "image.tag", "v1.2.3")
+
+	require.NoError(t, err)
+	assert.Equal(t, "%TAG%", old)
+	assert.Equal(t, strings.Replace(chartValues, "%TAG%", "v1.2.3", 1), string(out))
+}
+
+func TestADirectiveAtTheStartIsStillADirective(t *testing.T) {
+	got, err := Get([]byte("%YAML 1.1\n---\na: b\n"), "a")
+
+	require.NoError(t, err)
+	assert.Equal(t, "b", got)
+}
+
+func TestAPercentThatIsNotTheStartOfAValueIsNotAPlaceholder(t *testing.T) {
+	_, err := Get([]byte("a: 1\n%b: 2\n"), "a")
+
+	require.ErrorIs(t, err, ErrInvalidYAML, "only a value that starts with it is read as a placeholder")
+	assert.Contains(t, err.Error(), "line 2")
+}
+
+func TestAFileWithAPlaceholderAndAnotherProblemSaysTheProblem(t *testing.T) {
+	_, err := Get([]byte("a: %X%\nb: @bad\nc: 3\n"), "c")
+
+	require.ErrorIs(t, err, ErrInvalidYAML)
+	assert.Contains(t, err.Error(), "line 2", "the placeholder is not what is wrong")
+	assert.Contains(t, err.Error(), "@bad")
+}

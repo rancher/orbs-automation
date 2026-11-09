@@ -12,6 +12,7 @@ import (
 const (
 	ArtifactImage = "image"
 	ArtifactFile  = "file"
+	ArtifactGoMod = "gomod"
 
 	RegistryDockerHub       = "dockerhub"
 	RegistryPrimeStaging    = "prime-staging"
@@ -29,7 +30,7 @@ func (a *Artifact) SetDefaults() {}
 // of an image and the range of lines that produce it.
 func (a *Artifact) Validate(_ config.Context, r *config.Report) {
 	spec := a.Spec
-	kindOK := oneOf(r, "spec.kind", spec.Kind, ArtifactImage, ArtifactFile)
+	kindOK := oneOf(r, "spec.kind", spec.Kind, ArtifactImage, ArtifactFile, ArtifactGoMod)
 	switch {
 	case spec.Name == "":
 		r.Errorf("spec.name", "is required")
@@ -37,6 +38,8 @@ func (a *Artifact) Validate(_ config.Context, r *config.Report) {
 		r.Errorf("spec.name", "%q is a repository path and has no variables", spec.Name)
 	case kindOK && spec.Kind == ArtifactImage && strings.ContainsAny(spec.Name, " \t"):
 		r.Errorf("spec.name", "%q is a repository path and has no space", spec.Name)
+	case kindOK && spec.Kind == ArtifactGoMod && strings.ContainsAny(spec.Name, "{} \t"):
+		r.Errorf("spec.name", "%q is a module path and has no variables or space", spec.Name)
 	case kindOK && spec.Kind == ArtifactFile:
 		if err := templates.Validate(spec.Name, fileNameVars); err != nil {
 			r.Errorf("spec.name", "%v", err)

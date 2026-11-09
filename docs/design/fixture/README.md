@@ -1,19 +1,22 @@
 # Fixture: the proposed units, written out
 
-**Status:** working fixture, 2026-11-07. The seven projects in the shape [CONFIG_UNITS](../CONFIG_UNITS.md) proposes, plus two invented non-Rancher examples in [`examples/`](examples/). It tests the shape; nothing loads it. All `refs` resolve to a document of the right kind (checked by a throwaway program, 0 dangling). A Holding is one document with an `at` block and a `holds` block.
+**Status:** working fixture, 2026-11-08. The projects in the shape [CONFIG_UNITS](../CONFIG_UNITS.md) proposes: the seven of the baseline, the frameworks team's wrangler and lasso, and examples in [`examples/`](examples/). The Go tests load it (`internal/apis/v1alpha2`, `internal/appconfig`, `internal/chain`), so it is the contract the loader meets, and it loads whole. What the fixture describes and nothing reads yet is in the status of [CONFIG_UNITS](../CONFIG_UNITS.md). A Holding is one document with an `at` block (a location or a list) and a `holds` block. The files at the root are the same as the real config in [`config/`](../../../config/), headers included, as of the Go module work; `examples/` is only here. A shape is written here first and synced into `config/` once it is built.
 
 | File | Documents |
 |---|---|
 | `kuberlr-kubectl.yaml` | Project, Stream, Artifact |
 | `shell.yaml` | Project, Stream, Artifact |
 | `scc-operator.yaml` | Project, Stream, Artifact |
-| `backup-restore-operator.yaml` | Project, Stream, 3 Artifacts, Holding |
+| `backup-restore-operator.yaml` | Project, Stream, 3 Artifacts, 4 Holdings (kuberlr, wrangler 3.7 and 3.3, lasso) |
 | `rancher-assets.yaml` | Project, Stream, Artifact, Holding |
 | `rancher-charts.yaml` | Project, one chart Stream, 2 Holdings, Edit |
-| `rancher.yaml` | Project, Stream, Artifact, 4 Holdings, Edit |
+| `rancher.yaml` | Project, Stream, Artifact, 9 Holdings (build.yaml, charts branch, wrangler for each minor, lasso), Edit |
+| `wrangler.yaml` | Project (unowned), a Stream and `gomod` Artifact for each tracked minor (v3.8, v3.7, v3.6, v3.3) |
+| `lasso.yaml` | Project (unowned), one Stream and `gomod` Artifact for v0.2 |
 | `rancher.lines.yaml` | RancherLines, as in the real config |
 | `examples/library.yaml` | a library, two services holding it in their Dockerfiles |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |
+| `examples/gomod.yaml` | a prefix-tagged Go module held by Assets' `go.mod` with a `goBump` Edit |
 | `examples/external.yaml` | a third-party SDK as an external Project, tracked by a Holding in BRO's chart values |
 
 ## The questions the tools must answer

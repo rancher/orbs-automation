@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
 )
 
 // Wiring only: the logic is tested in internal/cli/branchtags.
@@ -93,5 +96,99 @@ func TestRepoBranchWiring(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, stdout, "--switch")
 		assert.Contains(t, stdout, "release line")
+	})
+}
+
+// Wiring only: the logic is tested in internal/cli/repoclone.
+func TestRepoCloneWiring(t *testing.T) {
+	t.Run("needs project names or --all", func(t *testing.T) {
+		_, _, err := execRoot(t, "repo", "clone")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Contains(t, err.Error(), "--all")
+	})
+
+	t.Run("--all and names are not both taken", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "clone", "--all", "rancher")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Empty(t, stdout)
+	})
+
+	t.Run("without a central config it says where it reads one and clones nothing", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		stdout, _, err := execRoot(t, "repo", "clone", "--into", t.TempDir(), "rancher")
+
+		require.Error(t, err)
+		assert.NotContains(t, err.Error(), "unknown command")
+		assert.Contains(t, err.Error(), "central config")
+		assert.Empty(t, stdout)
+	})
+
+	// Last: cobra keeps the help flag set on the command between runs.
+	t.Run("the help has --all and --into", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "clone", "--help")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "--all")
+		assert.Contains(t, stdout, "--into")
+		assert.Contains(t, stdout, "GERO_REPOS_CLONE_ROOT")
+	})
+}
+
+// Wiring only: the logic is tested in internal/cli/repolist.
+func TestRepoListWiring(t *testing.T) {
+	config := t.TempDir()
+	for name, f := range bundletest.Config("alpha", "bravo") {
+		require.NoError(t, writeFile(filepath.Join(config, name), f.Data))
+	}
+
+	t.Run("lists the projects of the config that have no clone, and succeeds", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		stdout, _, err := execRoot(t, "repo", "list", "--central-config-dir", config)
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "Not cloned (2)\n  rancher/alpha\n  rancher/bravo\n")
+		assert.Contains(t, stdout, "0 of 2 projects cloned")
+	})
+
+	t.Run("--json has the three lists", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		stdout, _, err := execRoot(t, "repo", "list", "--json", "--central-config-dir", config)
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, `"notCloned"`)
+		assert.Contains(t, stdout, `"cloned": []`)
+	})
+
+	t.Run("takes no arguments", func(t *testing.T) {
+		_, _, err := execRoot(t, "repo", "list", "alpha")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `for "gero repo list"`, "the command is there, and refuses the argument")
+	})
+
+	t.Run("without any config it says where config is looked for", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+
+		stdout, _, err := execRoot(t, "repo", "list")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "central config")
+		assert.Empty(t, stdout)
+	})
+
+	// Last: cobra keeps the help flag set on the command between runs.
+	t.Run("the help says it reads the disk and not the network", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "list", "--help")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "clone")
+		assert.Contains(t, stdout, "config resolve repos")
 	})
 }

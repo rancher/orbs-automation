@@ -29,10 +29,10 @@ func valid(t *testing.T) fakeWorkspace {
 }
 
 func TestStyledSummaryIsThePlainSummaryWithEscapesAdded(t *testing.T) {
-	plain, err := run(valid(t), nil)
+	plain, err := run(valid(t), nil, false)
 	require.NoError(t, err)
 
-	styled, err := run(valid(t), colored())
+	styled, err := run(valid(t), colored(), false)
 
 	require.NoError(t, err)
 	assert.Equal(t, plain, strip(styled))
@@ -41,11 +41,11 @@ func TestStyledSummaryIsThePlainSummaryWithEscapesAdded(t *testing.T) {
 }
 
 func TestNoColorIsThePlainSummary(t *testing.T) {
-	plain, err := run(valid(t), nil)
+	plain, err := run(valid(t), nil, false)
 	require.NoError(t, err)
 
 	for who, v := range map[string]*style.Renderer{"plain": style.Plain(), "none": style.New(clicfg.Terminal{})} {
-		got, err := run(valid(t), v)
+		got, err := run(valid(t), v, false)
 
 		require.NoError(t, err, who)
 		assert.Equal(t, plain, got, who)

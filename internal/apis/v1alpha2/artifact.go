@@ -11,8 +11,8 @@ type Artifact struct {
 
 // ArtifactSpec is the fields of an Artifact.
 type ArtifactSpec struct {
-	Kind       string      `yaml:"kind"` // image or file
-	Name       string      `yaml:"name"` // an image's repository path, or a file name template
+	Kind       string      `yaml:"kind"` // image, file or gomod
+	Name       string      `yaml:"name"` // an image's repository path, a file name template or a Go module path
 	Lines      lines.Range `yaml:"lines"`
 	Registries []string    `yaml:"registries"`
 }

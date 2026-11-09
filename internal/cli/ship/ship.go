@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"slices"
 
+	"github.com/rancher/orbs-automation/internal/platform/goproxy"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
 	"github.com/rancher/orbs-automation/internal/cli/identity"
@@ -117,7 +118,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
 		}
 	}
-	return runToStyled(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, ociregistry.Checker{}, ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
+	return runToStyled(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Probers{Images: ociregistry.Checker{}, Modules: goproxy.Checker{}}, ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
 }
 
 // inputFrom is what the user asked for, from the flags and the settings. The

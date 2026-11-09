@@ -230,6 +230,30 @@ func TestLoadCloneRootIsEmptyWhenNotSet(t *testing.T) {
 	assert.Empty(t, s.Repos.CloneRoot, "never inferred from the search directories")
 }
 
+func TestLoadCloneRootEnvBeatsTheFile(t *testing.T) {
+	s, err := Load(Inputs{
+		Home:     "/home/alice",
+		Getenv:   env(map[string]string{"GERO_REPOS_CLONE_ROOT": "~/elsewhere"}),
+		UserFile: file("repos:\n  cloneRoot: ~/src\n"),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/home/alice/elsewhere", s.Repos.CloneRoot)
+	assert.Equal(t, SourceEnv, s.Source("repos.cloneRoot"))
+}
+
+func TestLoadCloneRootEnvAloneSetsItAndARelativeOneIsRefused(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(map[string]string{"GERO_REPOS_CLONE_ROOT": "/c"})})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/c", s.Repos.CloneRoot)
+
+	_, err = Load(Inputs{Getenv: env(map[string]string{"GERO_REPOS_CLONE_ROOT": "rel/dir"})})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GERO_REPOS_CLONE_ROOT")
+}
+
 func TestLoadTildeWithoutHome(t *testing.T) {
 	_, err := Load(Inputs{UserFile: file("centralConfigDir: ~/cfg\n")})
 
@@ -593,6 +617,45 @@ func TestStatePath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, StatePath(env(tt.env), tt.home, "repl_history"))
+		})
+	}
+}
+
+func TestLoadOfflineIsTheEnvironmentVariableAndNeverTheFile(t *testing.T) {
+	s, err := Load(Inputs{})
+	require.NoError(t, err)
+	assert.False(t, s.Offline)
+
+	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_OFFLINE": "true"})})
+	require.NoError(t, err)
+	assert.True(t, s.Offline)
+
+	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_OFFLINE": "false"}), UserFile: file("offline: true\n")})
+	require.NoError(t, err)
+	assert.False(t, s.Offline, "a user file cannot turn the network off for every command")
+
+	_, err = Load(Inputs{Getenv: env(map[string]string{"GERO_OFFLINE": "sometimes"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "offline")
+	assert.Contains(t, err.Error(), "sometimes")
+}
+
+func TestCacheDir(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		home string
+		want string
+	}{
+		{"home default", nil, "/home/dan", "/home/dan/.cache/gero"},
+		{"xdg", map[string]string{"XDG_CACHE_HOME": "/xdg"}, "/home/dan", "/xdg/gero"},
+		{"xdg without a home", map[string]string{"XDG_CACHE_HOME": "/xdg"}, "", "/xdg/gero"},
+		{"the state home is not the cache home", map[string]string{"XDG_STATE_HOME": "/st"}, "/home/dan", "/home/dan/.cache/gero"},
+		{"nowhere to put it", nil, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, CacheDir(env(tt.env), tt.home))
 		})
 	}
 }

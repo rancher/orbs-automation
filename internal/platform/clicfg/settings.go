@@ -85,6 +85,14 @@ type Settings struct {
 	// write command goes on without asking its one question. There is no
 	// user-file key, so it is never on without being asked for in the invocation.
 	NonInteractive bool
+	// GeroVersion is the running gero's release, such as v0.5.0 or "dev", set by
+	// cmd/ and never by a file or the environment. Empty means no release context:
+	// the central config bundle is not looked for (docs/specs/CENTRAL_BUNDLE.md).
+	GeroVersion string
+	// Offline is GERO_OFFLINE: a command makes no request to the network where it
+	// has a local way, and the central config bundle is read from the cache only.
+	// There is no user-file key, so it is never on without being asked for.
+	Offline bool
 	// SignCommits is signCommits in the user file or GERO_SIGN_COMMITS: the
 	// commits a command makes are signed by git, with the engineer's own key.
 	SignCommits bool

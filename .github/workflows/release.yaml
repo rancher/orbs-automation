@@ -12,6 +12,11 @@ permissions:
 
 env:
   CI: true
+  # The central config is this repo's own config/ directory, so every job reads it
+  # from the checkout. Not a shell expansion: gero expands $GITHUB_WORKSPACE itself
+  # (inside the job container that is /__w/..., where ${{ github.workspace }} would
+  # give the host path). Nothing is read until a step runs gero, after checkout.
+  GERO_CENTRAL_CONFIG_DIR: "$GITHUB_WORKSPACE/config"
 
 jobs:
   goreleaser:
@@ -26,6 +31,10 @@ jobs:
       - name: Mark workspace as safe for git
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      # cosign and gh come with the container image. The archives, checksums.txt and
+      # the config bundle are signed after goreleaser, here and not in
+      # .goreleaser.yaml, so a snapshot run (locally, or in CI) never asks for a
+      # Sigstore login (docs/specs/SELF_UPDATE.md).
       - name: Run GoReleaser
         run: goreleaser release --clean
         env:
@@ -38,6 +47,43 @@ jobs:
           subject-path: |
             dist/gero_*.tar.gz
             dist/checksums.txt
+            .bundle/gero-config-bundle.yaml
+
+      # Keyless: the certificate names this workflow on this tag, which is the one
+      # identity gero doctor self-update accepts. Each Sigstore bundle is
+      # <file>.sigstore.json, written to dist/ so one glob uploads them all, and a
+      # release without all of them is not published, since self-update refuses it.
+      # The config bundle is signed itself, not only through its line in checksums.txt.
+      - name: Sign the archives, checksums.txt and the config bundle
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          files="$(ls dist/gero_*.tar.gz) dist/checksums.txt .bundle/gero-config-bundle.yaml"
+          for f in $files; do
+            cosign sign-blob --yes --bundle "dist/$(basename "$f").sigstore.json" "$f"
+          done
+          gh release upload "${{ github.ref_name }}" dist/*.sigstore.json --clobber
+          assets="$(gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name')"
+          for f in $files; do
+            printf '%s\n' "$assets" | grep -Fx "$(basename "$f").sigstore.json"
+          done
+
+      # The bundle is what `gero` fetches when it has no local config, so a release
+      # without it, or with a copy that is not the one in checksums.txt, is not
+      # published (docs/specs/CENTRAL_BUNDLE.md).
+      - name: Check the config bundle is on the release and in the checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          grep -E '^[0-9a-f]{64}  gero-config-bundle\.yaml$' dist/checksums.txt
+          gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name' | grep -Fx gero-config-bundle.yaml
+          mkdir -p "$RUNNER_TEMP/released"
+          gh release download "${{ github.ref_name }}" --pattern gero-config-bundle.yaml --dir "$RUNNER_TEMP/released"
+          want="$(grep -E '  gero-config-bundle\.yaml$' dist/checksums.txt | cut -d' ' -f1)"
+          got="$(sha256sum "$RUNNER_TEMP/released/gero-config-bundle.yaml" | cut -d' ' -f1)"
+          test "$want" = "$got"
 
       - name: Publish release
         env:

@@ -59,3 +59,18 @@ func StatePath(getenv func(string) string, home, name string) string {
 	}
 	return filepath.Join(home, ".local", "state", "gero", name)
 }
+
+// CacheDir returns where gero keeps what it can fetch again, such as the central
+// config bundle: $XDG_CACHE_HOME/gero, else ~/.cache/gero. It is empty when
+// neither is known. A cache, not config: it can be deleted at any time. Like
+// UserFilePath it does not use the platform's directory, which on macOS is
+// ~/Library/Caches.
+func CacheDir(getenv func(string) string, home string) string {
+	if x := getenv("XDG_CACHE_HOME"); x != "" {
+		return filepath.Join(x, "gero")
+	}
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".cache", "gero")
+}

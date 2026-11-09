@@ -28,6 +28,14 @@ type StrategyInput struct {
 	Release  Release
 	Line     string
 	Branch   string
+	// Dir is the directory the tree is, for a strategy that runs a program in it.
+	Dir string
+	// Runner runs a program in a directory, as a step does, so a strategy runs
+	// programs the way the steps of an edit do and no other way.
+	Runner StepRunner
+	// Changes is what the holdings of the edit wrote for this target, before the
+	// strategy runs.
+	Changes []Change
 }
 
 // Applier is a strategy configured for one edit: the extra change a named rule
@@ -67,9 +75,12 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 		if h.Kind() != chain.HoldsRelease {
 			continue
 		}
-		if format := h.Doc.Spec.At.Format; format != formatYAML {
-			errs = append(errs, fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), format))
-			e.unusable[h] = true
+		for _, at := range h.Doc.Spec.At {
+			if _, built := formats[at.Format]; !built {
+				errs = append(errs, fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), at.Format))
+				e.unusable[h] = true
+				break
+			}
 		}
 		for _, ed := range h.Edits() {
 			if !seen[ed] {
@@ -107,21 +118,34 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 type Route struct {
 	Producer *chain.Project
 	Consumer *chain.Project
+	// Stream is the stream whose releases the route ships: the stream of the
+	// artifact of each of its holdings.
+	Stream   *chain.Stream
 	Holdings []*chain.Holding
 	engine   *Engine
 }
 
-// routes groups release holdings by the project the key says, in the order they
-// come, leaving out a holding that cannot be used and so every route it is in.
+// routeKey is what a route is for: the project the key says, and the stream of
+// the artifacts it holds. A consumer that holds artifacts of two streams of one
+// producer has two routes, since a release is of one stream.
+type routeKey struct {
+	project *chain.Project
+	stream  *chain.Stream
+}
+
+// routes groups release holdings by the project the key says and the stream of
+// their artifact, in the order they come, leaving out a holding that cannot be
+// used and so the route it is in, and no other.
 func (e *Engine) routes(holdings []*chain.Holding, key func(*chain.Holding) *chain.Project) []Route {
 	var out []Route
-	bad := map[*chain.Project]bool{}
-	index := map[*chain.Project]int{}
+	bad := map[routeKey]bool{}
+	index := map[routeKey]int{}
+	keyOf := func(h *chain.Holding) routeKey { return routeKey{key(h), h.Artifact().Stream()} }
 	for _, h := range holdings {
 		if h.Kind() != chain.HoldsRelease || h.Artifact() == nil {
 			continue
 		}
-		k := key(h)
+		k := keyOf(h)
 		if e.unusable[h] {
 			bad[k] = true
 		}
@@ -129,27 +153,27 @@ func (e *Engine) routes(holdings []*chain.Holding, key func(*chain.Holding) *cha
 		if !ok {
 			i = len(out)
 			index[k] = i
-			out = append(out, Route{Producer: h.Producer(), Consumer: h.Holder(), engine: e})
+			out = append(out, Route{Producer: h.Producer(), Consumer: h.Holder(), Stream: k.stream, engine: e})
 		}
 		out[i].Holdings = append(out[i].Holdings, h)
 	}
 	var usable []Route
 	for _, r := range out {
-		if !bad[key(r.Holdings[0])] {
+		if !bad[keyOf(r.Holdings[0])] {
 			usable = append(usable, r)
 		}
 	}
 	return usable
 }
 
-// RoutesFrom returns the routes out of a producer, one for each consumer, in the
-// order of the holdings, leaving out a route whose holdings or edits are not
+// RoutesFrom returns the routes out of a producer, one for each consumer and
+// stream, in the order of the holdings, leaving out a route whose holdings or edits are not
 // usable.
 func (e *Engine) RoutesFrom(producer *chain.Project) []Route {
 	return e.routes(producer.Sourced(), func(h *chain.Holding) *chain.Project { return h.Holder() })
 }
 
-// RoutesInto returns the routes into a consumer, one for each producer, in the
+// RoutesInto returns the routes into a consumer, one for each producer and stream, in the
 // order of the holdings.
 func (e *Engine) RoutesInto(consumer *chain.Project) []Route {
 	return e.routes(consumer.Held(), func(h *chain.Holding) *chain.Project { return h.Producer() })
@@ -165,6 +189,15 @@ func (r Route) holdingsOf(t Target) []*chain.Holding {
 }
 
 // editsOf returns the edits that follow the holdings, each once, in order.
+// changesOf is what the holdings of an edit wrote, in the order the edit lists them.
+func changesOf(ed *chain.Edit, written map[*chain.Holding][]Change) []Change {
+	var out []Change
+	for _, h := range ed.Holdings() {
+		out = append(out, written[h]...)
+	}
+	return out
+}
+
 func editsOf(holdings []*chain.Holding) []*chain.Edit {
 	var out []*chain.Edit
 	for _, h := range holdings {
@@ -316,12 +349,13 @@ const (
 
 // Unit is one piece of the lifecycle that may leave changes behind.
 type Unit struct {
-	Kind    UnitKind
-	Phase   Phase    // for a step: where it runs
-	Edit    string   // for a step or a strategy: the edit it is of
-	Index   int      // for a step: its position in that edit's list
-	Run     []string // for a step: its command
-	Changes []Change // for the write and a strategy: what it changed
+	Kind     UnitKind
+	Phase    Phase    // for a step: where it runs
+	Edit     string   // for a step or a strategy: the edit it is of
+	Strategy string   // for a strategy: its name
+	Index    int      // for a step: its position in that edit's list
+	Run      []string // for a step: its command
+	Changes  []Change // for the write and a strategy: what it changed
 }
 
 // Checkpoint is called after each unit has finished, so the caller can act on
@@ -377,8 +411,12 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		return Result{}, err
 	}
 	pre, post := r.Steps(t)
+	var pattern string // the tag pattern of the stream the holdings' artifacts come from
+	if len(holdings) > 0 {
+		pattern = tagPatternOf(holdings[0])
+	}
 	env := StepEnv{Dir: dir, Env: map[string]string{
-		"GERO_TAG": tag, "GERO_VERSION": strings.TrimPrefix(tag, "v"), "GERO_TARGET_BRANCH": t.Branch,
+		"GERO_TAG": tag, "GERO_VERSION": newRelease(tag, pattern, "", "").Version, "GERO_TARGET_BRANCH": t.Branch,
 		"GERO_SOURCE_REPO": r.Producer.Slug(),
 	}}
 	checkpoint := func(u Unit) error {
@@ -399,6 +437,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 	}
 	var res Result
+	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
 		rel, err := ReleaseOf(h, tag, commit)
 		if err != nil {
@@ -410,6 +449,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		res.Changed = res.Changed || got.Changed
 		res.Changes = append(res.Changes, got.Changes...)
+		written[h] = got.Changes
 	}
 	if err := checkpoint(Unit{Kind: UnitEdit, Changes: res.Changes}); err != nil {
 		return res, err
@@ -421,15 +461,16 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		got, err := applier.Apply(ctx, tree, StrategyInput{
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
-			Release: Release{Tag: tag, Version: strings.TrimPrefix(tag, "v"), SourceRepo: r.Producer.Slug(), Commit: commit},
+			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
 			Line:    t.Line, Branch: t.Branch,
+			Dir: dir, Runner: runner, Changes: changesOf(ed, written),
 		})
 		if err != nil {
 			return res, fmt.Errorf("Edit %q: %w", ed.Name(), err)
 		}
 		res.Changed = res.Changed || got.Changed
 		res.Changes = append(res.Changes, got.Changes...)
-		if err := checkpoint(Unit{Kind: UnitStrategy, Edit: ed.Name(), Changes: got.Changes}); err != nil {
+		if err := checkpoint(Unit{Kind: UnitStrategy, Edit: ed.Name(), Strategy: ed.Strategy(), Changes: got.Changes}); err != nil {
 			return res, err
 		}
 	}

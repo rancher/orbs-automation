@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
@@ -14,11 +16,14 @@ import (
 )
 
 type fakeWorkspace struct {
-	dir workspace.CentralConfigDir
-	err error
+	dir    workspace.CentralConfigDir
+	bundle *bundlestore.Source // when set, the config came from the bundle
+	err    error
 }
 
-func (f fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) { return f.dir, f.err }
+func (f fakeWorkspace) ConfigSource() (workspace.ConfigSource, error) {
+	return workspace.ConfigSource{Dir: f.dir, Bundle: f.bundle}, f.err
+}
 
 func TestRunShowsResolvedConfigDir(t *testing.T) {
 	ws := fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config", Source: workspace.SourceCwd}}
@@ -79,4 +84,22 @@ func TestRunWithoutCentralCheckout(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^centralConfigDir\s+\(none; \./config in a central checkout\)\s+default$`, out)
+}
+
+func TestRunShowsTheBundleWhenThatIsWhatTheConfigWasReadFrom(t *testing.T) {
+	ws := fakeWorkspace{bundle: &bundlestore.Source{Tag: "v0.5.0", Age: 3 * time.Hour, FromCache: true}}
+
+	out, err := run(load(t, "", nil, nil), ws)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^centralConfigDir\s+bundle v0\.5\.0, 3 hours old\s+bundle$`, out)
+}
+
+func TestRunShowsTheBundleInJSONToo(t *testing.T) {
+	ws := fakeWorkspace{bundle: &bundlestore.Source{Tag: "v0.5.0", Age: 3 * time.Hour}}
+
+	out, err := run(load(t, "", nil, map[string]string{"output": "json"}), ws)
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "bundle v0.5.0, 3 hours old")
 }

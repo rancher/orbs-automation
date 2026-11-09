@@ -99,7 +99,14 @@ func TestTheFixtureIsAValidSet(t *testing.T) {
 
 			rep := validateSet(t, docs...)
 
-			assert.Empty(t, rep.Findings)
+			// BRO holds wrangler 3.7 on v2.16, where Rancher holds 3.8: BRO is out of
+			// step, which the fixture leaves visible. Nothing else is found.
+			require.Len(t, rep.Findings, 1, "%v", rep.Findings)
+			f := rep.Findings[0]
+			assert.Equal(t, config.Warning, f.Severity)
+			assert.Equal(t, RuleStreamDiffersFromDestination, f.Rule)
+			assert.Equal(t, `Holding "bro-holds-wrangler-3-7"`, f.Label)
+			assert.Equal(t, "v2.16", f.Line)
 		})
 	}
 }
@@ -164,6 +171,30 @@ func TestRepoSlugsAreUnique(t *testing.T) {
 	)
 
 	assert.True(t, hasSetError(rep, `Project "q"`, "spec.repo.name", `already the repo of Project "p"`), "%v", rep.Findings)
+}
+
+func TestAnAliasIsNotTheNameOrAnAliasOfAnotherProject(t *testing.T) {
+	tests := []struct {
+		name, want string
+		other      string
+	}{
+		{"the name of another project", `already the name of Project "q"`, "  repo: {name: acme/b}\n"},
+		{"the alias of another project", `already an alias of Project "q"`, "  repo: {name: acme/b}\n  aliases: [rk]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alias := "rk"
+			if strings.Contains(tt.want, "name") {
+				alias = "q"
+			}
+			rep := validateSet(t,
+				doc("Project", "q", "", tt.other),
+				doc("Project", "p", "", projectSpec+"  aliases: ["+alias+"]\n"),
+			)
+
+			assert.True(t, hasSetError(rep, `Project "p"`, "spec.aliases[0]", tt.want), "%v", rep.Findings)
+		})
+	}
 }
 
 func TestAtMostOneProjectIsTheFinalDestination(t *testing.T) {
@@ -292,6 +323,7 @@ func TestProjectsThatHoldSomethingOfEachOtherAreAWarning(t *testing.T) {
 		assert.NoError(t, rep.Err(), "a circular dependency is not an error")
 		assert.True(t, hasSetWarning(rep, `Holding "q-holds-p"`, "refs", "circular"), "%v", rep.Findings)
 		assert.Len(t, rep.Warnings(), 1)
+		assert.Equal(t, RuleCircularHolding, rep.Warnings()[0].Rule)
 	})
 	t.Run("through a commit it is too", func(t *testing.T) {
 		rep := validateSet(t, append(set, doc("Holding", "q-tracks-p", "{project: q, from: p}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"))...)
@@ -336,6 +368,7 @@ func TestALineWithNoBranchAfterDevelopmentIsAWarning(t *testing.T) {
 				return
 			}
 			assert.True(t, hasSetWarning(rep, `Project "p"`, "spec.branches.lines[0].branch", tt.want), "%v", rep.Findings)
+			assert.Equal(t, RuleDefaultBranchPastDevelopment, rep.Warnings()[0].Rule)
 		})
 	}
 }
@@ -382,6 +415,27 @@ func TestAnImageNameIsUniqueWithinAProject(t *testing.T) {
 		rep := validateSet(t, append(base, doc("Artifact", "a2", "{stream: s2}", "  kind: file\n  name: acme/a\n"))...)
 
 		assert.Empty(t, rep.Findings)
+	})
+}
+
+func TestAModuleNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
+	const module = "  kind: gomod\n  name: github.com/rancher/wrangler/v3\n"
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Stream", "s1", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec),
+		doc("Artifact", "m1", "{stream: s1}", module),
+	}
+
+	t.Run("one module in the streams of two minors is fine", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "m2", "{stream: s2}", module))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("twice in one stream is not", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "m2", "{stream: s1}", module))...)
+
+		assert.True(t, hasSetError(rep, `Artifact "m2"`, "spec.name", `already an artifact of Stream "s1"`), "%v", rep.Findings)
 	})
 }
 
@@ -483,5 +537,46 @@ func TestAStepFromTheProducerNeedsAnOwnedProducer(t *testing.T) {
 		rep := validateSet(t, build("  repo: {name: acme/b}\n")...)
 
 		assert.True(t, hasSetError(rep, `Edit "e"`, "spec.postEdit[0].from", `Project "q" is not owned`), "%v", rep.Findings)
+	})
+}
+
+func TestAGoBumpEditNeedsAHoldingInTheGoModFormat(t *testing.T) {
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "s", "{project: p}", streamSpec),
+		doc("Artifact", "a", "{stream: s}", "  kind: gomod\n  name: github.com/acme/a\n"),
+	}
+	yamlHolding := doc("Holding", "yaml-holds", "{project: q, artifact: a}", holdingSpec)
+	goHolding := doc("Holding", "go-holds", "{project: q, artifact: a}", "  at: {file: go.mod, key: github.com/acme/a, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n")
+	mixedHolding := doc("Holding", "mixed-holds", "{project: q, artifact: a}", "  at:\n    - {file: other.yaml, key: .a}\n    - {file: go.mod, key: github.com/acme/a, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n")
+	edit := func(holdings, strategy string) string {
+		return doc("Edit", "e", "{holding: "+holdings+"}", "  strategy: "+strategy+"\n")
+	}
+
+	t.Run("over a holding in the yaml format", func(t *testing.T) {
+		rep := validateSet(t, append(base, yamlHolding, edit("yaml-holds", "goBump"))...)
+
+		assert.True(t, hasSetError(rep, `Edit "e"`, "refs.holding", "gomod"), "%v", rep.Findings)
+	})
+	t.Run("over a holding in the gomod format", func(t *testing.T) {
+		rep := validateSet(t, append(base, goHolding, edit("go-holds", "goBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("over a holding with one location of each", func(t *testing.T) {
+		rep := validateSet(t, append(base, mixedHolding, edit("mixed-holds", "goBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("over several, one of them in the gomod format", func(t *testing.T) {
+		rep := validateSet(t, append(base, yamlHolding, goHolding, edit("[yaml-holds, go-holds]", "goBump"))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("another strategy has no such need", func(t *testing.T) {
+		rep := validateSet(t, append(base, yamlHolding, edit("yaml-holds", "chartsPackageBump"))...)
+
+		assert.Empty(t, rep.Findings)
 	})
 }

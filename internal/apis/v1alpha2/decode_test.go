@@ -57,9 +57,9 @@ func TestDecodeFixture(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 49, total)
+	assert.Equal(t, 76, total)
 	assert.Equal(t, map[string]int{
-		KindProject: 13, KindStream: 10, KindArtifact: 11, KindHolding: 12, KindEdit: 2, KindRancherLines: 1,
+		KindProject: 16, KindStream: 16, KindArtifact: 19, KindHolding: 21, KindEdit: 3, KindRancherLines: 1,
 	}, kinds)
 }
 
@@ -207,13 +207,32 @@ spec:
 `)
 
 	assert.Equal(t, Refs{"project": {"rancher-assets"}, "from": {"rancher-charts"}}, h.GetRefs())
-	assert.Equal(t, At{
+	assert.Equal(t, Locations{{
 		File: "lock.yaml", Format: "yaml",
 		Key: `.chart-versions."{line|trimprefix:v}".upstream-refs.{stage|replace:stable=prod}.charts.commit`,
-	}, h.Spec.At)
+	}}, h.Spec.At)
 	assert.Equal(t, Holds{
 		Kind: "commit", Stages: []string{"dev", "stable"}, Lines: lines.Range{Until: "v2.15"}, Accept: "all",
 	}, h.Spec.Holds)
+}
+
+func TestDecodeHoldingWithLocations(t *testing.T) {
+	h := decodeOne[*Holding](t, `
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-lasso
+refs: {project: rancher, artifact: lasso-v0-2-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/lasso, format: gomod}
+    - {file: pkg/plan/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.15}}
+  holds: {kind: release, form: "{bareTag}", accept: all}
+`)
+
+	assert.Equal(t, Locations{
+		{File: "go.mod", Key: "github.com/rancher/lasso", Format: "gomod"},
+		{File: "pkg/plan/go.mod", Key: "github.com/rancher/lasso", Format: "gomod", Lines: lines.Range{Since: "v2.15"}},
+	}, h.Spec.At)
 }
 
 func TestDecodeEdit(t *testing.T) {
@@ -314,6 +333,9 @@ func TestDecodeErrors(t *testing.T) {
 		{"no name", "apiVersion: gero/v1alpha2\nkind: Project\n", []string{"name is required"}},
 		{"an unknown top level field", "apiVersion: gero/v1alpha2\nkind: Project\nname: a\nmetadata: {}\n", []string{"metadata"}},
 		{"an unknown spec field", "apiVersion: gero/v1alpha2\nkind: Stream\nname: a\nspec:\n  bogus: 1\n", []string{"bogus"}},
+		{"an unknown field in a location", "apiVersion: gero/v1alpha2\nkind: Holding\nname: a\nspec:\n  at: {file: f, key: k, bogus: 1}\n", []string{"bogus"}},
+		{"an unknown field in a location of a list", "apiVersion: gero/v1alpha2\nkind: Holding\nname: a\nspec:\n  at:\n    - {file: f, key: k}\n    - {file: g, key: k, bogus: 1}\n", []string{"bogus"}},
+		{"at that is a word", "apiVersion: gero/v1alpha2\nkind: Holding\nname: a\nspec:\n  at: go.mod\n", []string{"at"}},
 		{"a ref that is not a name or a list", "apiVersion: gero/v1alpha2\nkind: Stream\nname: a\nrefs:\n  project: {x: y}\n", []string{"project", "name"}},
 		{"a branch that is a list", "apiVersion: gero/v1alpha2\nkind: Project\nname: a\nspec:\n  branches:\n    lines:\n      - {line: v2.16, branch: [a, b]}\n", []string{"branch"}},
 	}

@@ -1,4 +1,9 @@
-package main
+// Package bundle is the format of the central config bundle: the config/ directory
+// of the central repository as one multi-document YAML file, which a gero release
+// carries beside its binaries (docs/specs/CENTRAL_BUNDLE.md). Compile makes it,
+// for tools/compilebundle, and the reader of the CLI takes it apart again here,
+// so the two cannot drift.
+package bundle
 
 import (
 	"errors"
@@ -6,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 	"testing/fstest"
 	"time"
@@ -20,10 +26,14 @@ type Header struct {
 	GeroVersion  string    // the gero release the bundle is made for, such as v0.5.0
 	SourceCommit string    // the commit of the central repo that config was read from
 	CompiledAt   time.Time // when, as the release job says: never the clock, so a build repeats
+	// FormatVersion is the version of the bundle format, set by Parse and ignored by
+	// Compile, which writes the one it knows.
+	FormatVersion int
 }
 
-// bundleName is the file name of the bundle, in the output directory.
-const bundleName = "gero-config-bundle.yaml"
+// Name is the file name of the bundle, in the output directory and as a release
+// asset.
+const Name = "gero-config-bundle.yaml"
 
 const (
 	// bundleAPIVersion is not a config kind: the header is read by the reader of
@@ -79,7 +89,11 @@ func Compile(fsys fs.FS, h Header) ([]byte, error) {
 
 	// What a reader does with the body is checked here: it has to load to the
 	// config that went in.
-	back, rep := chainload.Load(fstest.MapFS{bundleName: {Data: []byte(body.String())}}, ctx)
+	_, bodyFS, err := Parse([]byte(head + body.String()))
+	if err != nil {
+		return nil, fmt.Errorf("the bundle does not parse back: %w", err)
+	}
+	back, rep := chainload.Load(bodyFS, ctx)
 	if err := rep.Err(); err != nil {
 		return nil, fmt.Errorf("the bundle does not load back: %w", err)
 	}
@@ -121,4 +135,59 @@ func trimTop(s string) string {
 		s += "\n"
 	}
 	return s
+}
+
+var (
+	// ErrMalformed is returned by Parse for data that is not a bundle: no header,
+	// or a header that is missing a field or has a bad one.
+	ErrMalformed = errors.New("not a config bundle")
+	// ErrUnsupported is returned by Parse for a bundle of a format this gero cannot
+	// read. A gero older than its newest bundle is expected, so this is a normal
+	// outcome and the message names both versions.
+	ErrUnsupported = errors.New("the config bundle is in a format this gero cannot read")
+)
+
+// Parse reads a bundle: it checks the header, which is the first document, and
+// returns it with the rest, the config chunk, as a file system that holds one file,
+// Name, for the config loader. It is what Compile makes the bundle for.
+func Parse(data []byte) (Header, fs.FS, error) {
+	text := string(data)
+	head, body := text, ""
+	if i := strings.Index(text, "\n---\n"); i >= 0 {
+		head, body = text[:i+1], text[i+1:]
+	}
+	fields := map[string]string{}
+	for _, line := range strings.Split(head, "\n") {
+		if key, value, ok := strings.Cut(line, ": "); ok && !strings.HasPrefix(line, "#") {
+			fields[key] = strings.TrimSpace(value)
+		}
+	}
+
+	api := fields["apiVersion"]
+	if !strings.HasPrefix(api, "gero-bundle/") {
+		return Header{}, nil, fmt.Errorf("%w: the first document has no apiVersion of %s", ErrMalformed, "gero-bundle/...")
+	}
+	if api != bundleAPIVersion {
+		return Header{}, nil, fmt.Errorf("%w: the bundle is %s, and this gero reads %s", ErrUnsupported, api, bundleAPIVersion)
+	}
+	if fields["kind"] != "Bundle" {
+		return Header{}, nil, fmt.Errorf("%w: the kind of the first document is %q, not Bundle", ErrMalformed, fields["kind"])
+	}
+	format, err := strconv.Atoi(fields["formatVersion"])
+	if err != nil {
+		return Header{}, nil, fmt.Errorf("%w: formatVersion is %q, not a number", ErrMalformed, fields["formatVersion"])
+	}
+	if format != formatVersion {
+		return Header{}, nil, fmt.Errorf("%w: the bundle is format version %d, and this gero reads %d", ErrUnsupported, format, formatVersion)
+	}
+	h := Header{GeroVersion: fields["geroVersion"], SourceCommit: fields["sourceCommit"], FormatVersion: format}
+	for name, value := range map[string]string{"geroVersion": h.GeroVersion, "sourceCommit": h.SourceCommit} {
+		if value == "" {
+			return Header{}, nil, fmt.Errorf("%w: the header has no %s", ErrMalformed, name)
+		}
+	}
+	if h.CompiledAt, err = time.Parse(time.RFC3339, fields["compiledAt"]); err != nil {
+		return Header{}, nil, fmt.Errorf("%w: compiledAt is %q, not a time", ErrMalformed, fields["compiledAt"])
+	}
+	return h, fstest.MapFS{Name: {Data: []byte(body)}}, nil
 }

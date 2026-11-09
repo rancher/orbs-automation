@@ -109,6 +109,22 @@ func (r Range) Contains(line string) bool {
 	return true
 }
 
+// Overlaps reports whether two ranges share a line. An end that is left out, or
+// does not read as a Rancher line, is open.
+func (r Range) Overlaps(o Range) bool {
+	if since, ok := Parse(r.Since); ok {
+		if until, ok := Parse(o.Until); ok && until.Before(since) {
+			return false
+		}
+	}
+	if since, ok := Parse(o.Since); ok {
+		if until, ok := Parse(r.Until); ok && until.Before(since) {
+			return false
+		}
+	}
+	return true
+}
+
 // Line is one Rancher line.
 type Line struct {
 	ID         string          `yaml:"id"`

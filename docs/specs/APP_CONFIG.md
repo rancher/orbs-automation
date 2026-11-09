@@ -8,7 +8,7 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 
 ## Shape
 
-* Every document has `apiVersion` (`gero/v1alpha2`), `kind`, `name` and `spec`, and may have `refs`. It is **inspired by Kubernetes resources but not compatible with them**: there is no `metadata`, no `status` and no controller semantics. State lives in tracking issues, not in config.
+* Every document has `apiVersion` (`gero/v1alpha2`), `kind`, `name` and `spec`, and may have `refs` and `acknowledge` (the warnings of the document that are expected, each with its reason). It is **inspired by Kubernetes resources but not compatible with them**: there is no `metadata`, no `status` and no controller semantics. State lives in tracking issues, not in config.
 * `name` is a lowercase slug, unique within its kind, and is how logs, errors and `refs` name the document. `refs` holds names only, and the key says which kind each name is of.
 * Files may hold several YAML documents, and **nothing depends on which file a document is in** or its place in it.
 * **Defaults are conservative.** Only no-surprise values are defaulted, and anything that changes release behavior is written out. Stricter release verification (`requiresPrerelease`) is **off by default and opt-in**. A change to a default is a breaking change and bumps `apiVersion`.
@@ -18,7 +18,7 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 
 | Kind | Holds |
 |---|---|
-| `Project` | A repo as a place: `repo` (who owns it, whether it is outside the organization), `pullRequests`, and `branches` (the layout, the stages, and the branch of each Rancher line) |
+| `Project` | A repo as a place: `repo` (who owns it, whether it is outside the organization), `aliases`, `pullRequests`, and `branches` (the layout, the stages, and the branch of each Rancher line) |
 | `Stream` | What a project releases: the scheme and tag pattern, the stages, the lines and the version series of each, and whether any release serves every line |
 | `Artifact` | One thing each release of a stream produces: an image (checked in its registries, [IMAGES_EXIST](IMAGES_EXIST.md)) or a file of the GitHub release |
 | `Holding` | Where a piece of a producer's release lives in a repo, and how it is written: a file, a key and a format, and a release, a commit or a branch |
@@ -27,6 +27,8 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |
 
 There is no `External` kind: a third-party repo is a Project with `repo.external: true`, which gero never ships into.
+
+A Project is named by its document name or its repo's `owner/name` slug, and also by each of its `aliases`: shorthands such as `rk` for `kuberlr-kubectl`, so `gero cd rk` works. An alias is a lowercase slug, so never a slug of a repo, listed once, and unique across the config: it may not be the name of any Project or the alias of another. Aliases are only a way to find a Project; output keeps the name.
 
 ### Holdings and edits
 

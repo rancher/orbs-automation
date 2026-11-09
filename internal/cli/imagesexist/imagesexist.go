@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/platform/goproxy"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -56,7 +57,7 @@ func Run(ctx context.Context, s clicfg.Settings, cwd, project, tag string) (stri
 	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
 		return "", fmt.Errorf("output format %q is not supported by repo images exist: use text or json", s.Output)
 	}
-	report, err := check(ctx, workspace.Open(s, cwd), ociregistry.Checker{}, project, tag)
+	report, err := check(ctx, workspace.Open(s, cwd), registry.Probers{Images: ociregistry.Checker{}, Modules: goproxy.Checker{}}, project, tag)
 	if err != nil {
 		return "", err
 	}

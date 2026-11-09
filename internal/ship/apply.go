@@ -23,10 +23,12 @@ type Apply struct {
 	OnCommit func(CommitInfo)
 	// StepMessage is the commit message for a step that changed files.
 	StepMessage func(bump.Unit) (string, error)
-	Runner      bump.StepRunner // runs the steps
-	Name        string          // the commit's author and committer, or empty for the clone's git config
-	Email       string
-	Sign        bool
+	// StrategyMessage is the commit message for a strategy that changed files.
+	StrategyMessage func(bump.Unit) (string, error)
+	Runner          bump.StepRunner // runs the steps
+	Name            string          // the commit's author and committer, or empty for the clone's git config
+	Email           string
+	Sign            bool
 }
 
 // CommitInfo is a commit a run made.
@@ -50,6 +52,6 @@ func tip(commits []CommitInfo) string {
 func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
 	return bumpcommit.Run(ctx, a.Runner, bumpcommit.Input{
 		Work: w, Route: a.Route, Target: a.Target, Tag: a.Release.Tag, Commit: a.Release.Commit, Message: a.Message,
-		StepMessage: a.StepMessage, OnCommit: a.OnCommit, Name: a.Name, Email: a.Email, Sign: a.Sign,
+		StepMessage: a.StepMessage, StrategyMessage: a.StrategyMessage, OnCommit: a.OnCommit, Name: a.Name, Email: a.Email, Sign: a.Sign,
 	})
 }

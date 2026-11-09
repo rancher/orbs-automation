@@ -3,6 +3,10 @@ version: 2 # the goreleaser config version
 before:
   hooks:
     - go mod tidy
+    # The central config bundle (docs/specs/CENTRAL_BUNDLE.md). It is written
+    # outside dist/, which --clean empties, and is picked up by the two
+    # extra_files below. The tool runs from the repository root.
+    - go run ./tools/compilebundle --out .bundle --version {{ .Tag }} --commit {{ .FullCommit }} --date {{ .CommitDate }}
 builds:
     - id: gero
       main: ./main.go
@@ -34,9 +38,13 @@ archives:
 release:
   prerelease: auto
   draft: true
+  extra_files:
+    - glob: .bundle/gero-config-bundle.yaml
 
 checksum:
   name_template: 'checksums.txt'
+  extra_files:
+    - glob: .bundle/gero-config-bundle.yaml
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"

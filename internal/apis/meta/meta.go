@@ -1,6 +1,9 @@
 package meta
 
-import "github.com/rancher/orbs-automation/internal/platform/config"
+import (
+	"github.com/rancher/orbs-automation/internal/apis/lines"
+	"github.com/rancher/orbs-automation/internal/platform/config"
+)
 
 // TypeMeta says which shape a document is.
 type TypeMeta struct {
@@ -21,6 +24,17 @@ type ObjectMeta struct {
 	// Refs holds every reference to another document: names only, and the key
 	// says which kind the name is of.
 	Refs Refs `yaml:"refs"`
+	// Acknowledge says which warnings of this document are expected, and why.
+	Acknowledge []Acknowledgement `yaml:"acknowledge"`
+}
+
+// Acknowledgement says a warning of a rule on this document is expected, so it is
+// not shown as one. The reason is required: it is what a reader of the config is
+// told, and what the next person to touch it weighs.
+type Acknowledgement struct {
+	Rule   string      `yaml:"rule"`   // the id of the rule of the warning
+	Reason string      `yaml:"reason"` // why the warning is expected
+	Lines  lines.Range `yaml:"lines"`  // only for a warning about these lines; every line when not given
 }
 
 // GetName returns the document's name.
@@ -28,6 +42,9 @@ func (o ObjectMeta) GetName() string { return o.Name }
 
 // GetRefs returns the document's references.
 func (o ObjectMeta) GetRefs() Refs { return o.Refs }
+
+// GetAcknowledge returns the warnings the document says are expected.
+func (o ObjectMeta) GetAcknowledge() []Acknowledgement { return o.Acknowledge }
 
 // SetDefaults is the default for a kind that has no defaults of its own: it does
 // nothing. A kind defines SetDefaults on itself to fill what it defaults.
@@ -48,5 +65,6 @@ type Object interface {
 	GetKind() string
 	GetName() string
 	GetRefs() Refs
+	GetAcknowledge() []Acknowledgement
 	config.Schema
 }

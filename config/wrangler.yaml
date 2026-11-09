@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# wrangler: a Go library of the frameworks team (CODEOWNERS: rancher-squad-frameworks), held by Rancher
+# and others in their go.mod files. Unowned, so gero only observes what is held of it.
+# Its branches follow its own minors (main is v3.8; release/v3.7, release/v3.6, release/v3.3), not Rancher
+# lines, so `branches` stays `single`. A consumer's line stays on one minor and takes only its patches, so each
+# minor is its own Stream. Which lines hold which minor differs by consumer (BRO and Rancher disagree), so it is
+# written on the consumer's Holdings with `lines`, not here.
+apiVersion: gero/v1alpha2
+kind: Project
+name: wrangler
+spec:
+  repo: {name: rancher/wrangler, owned: false, managedBy: frameworks-team}
+  branches: {layout: single}
+---
+# A major version is a different module path (/v3), not a tag prefix: the tags are plain (v3.8.0).
+# Both minors below are the same module, so their Artifacts have the same name; a consumer's Holding picks one
+# by `lines`. v2 (release/v2) is not tracked. Each minor has a release branch (v3.8 is main).
+# Release candidates are v3.8.0-rc.3 (older tags: v3.0.0-rc1) and are published as GitHub prereleases.
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-8
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.8.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-8-module
+refs: {stream: wrangler-v3-8}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-7
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.7.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-7-module
+refs: {stream: wrangler-v3-7}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-6
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.6.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-6-module
+refs: {stream: wrangler-v3-6}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-3
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.3.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-3-module
+refs: {stream: wrangler-v3-3}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}

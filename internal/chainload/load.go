@@ -15,11 +15,11 @@ import (
 // Load reads the config under the root of fsys with the application config
 // provider and joins it. The Report has every finding, errors and warnings; the
 // Graph is nil when it has an error, so a caller never sees a config that failed
-// a rule. The warnings are also kept on the Graph.
+// a rule. The warnings, and the warnings that documents acknowledge, are also kept on the Graph.
 func Load(fsys fs.FS, ctx config.Context) (*chain.Graph, config.Report) {
 	cfg, rep := appconfig.Load(fsys, ctx)
 	if rep.Err() != nil {
 		return nil, rep
 	}
-	return chain.BuildWith(cfg, rep.Warnings()), rep
+	return chain.BuildWith(cfg, rep), rep
 }

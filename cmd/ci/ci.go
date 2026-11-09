@@ -16,6 +16,9 @@ const (
 	ContextAnnotation = "gero/context"
 	// ContextCIOnly marks a command that requires the CI context and a token.
 	ContextCIOnly = "ci-only"
+	// ContextWorkstationOnly marks a command that runs only on an engineer's
+	// workstation: not in CI, and not inside gero repl.
+	ContextWorkstationOnly = "workstation-only"
 )
 
 func subCommandList() []*cobra.Command {

@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -117,15 +118,27 @@ func textVars(in previewInput) map[string]string {
 		"source":           in.producer.Name(),
 		"sourceRepo":       in.producer.Slug(),
 		"tag":              in.release.Tag,
-		"version":          strings.TrimPrefix(in.release.Tag, "v"),
+		"version":          releaseVersion(in.producer, in.release.Tag),
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
 		"sourceReleaseURL": "https://github.com/" + in.producer.Slug() + "/releases/tag/" + in.release.Tag,
-		"file":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Change.Path }),
+		"file":             changedFiles(in.checks),
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
 		"to":               joined(in.checks, func(c bump.HoldingCheck) string { return c.Want }),
 	}
+}
+
+// releaseVersion is the version of a release of the producer: its tag without the
+// prefix of the stream it is a release of (helmtools/v0.1.2 has helmtools/) and
+// without a leading v. A tag no stream matches loses only its v.
+func releaseVersion(producer *chain.Project, tag string) string {
+	for _, s := range producer.Streams() {
+		if s.TagMatches(tag) {
+			return strings.TrimPrefix(s.BareTag(tag), "v")
+		}
+	}
+	return strings.TrimPrefix(tag, "v")
 }
 
 // stepMessage returns the function that makes the commit message of a step that
@@ -142,6 +155,36 @@ func stepMessage(in previewInput) func(bump.Unit) (string, error) {
 	}
 }
 
+// blankLines is two or more blank lines in a row.
+var blankLines = regexp.MustCompile(`\n{3,}`)
+
+// bullets lists changes, one bullet each.
+func bullets(changes []bump.Change) string {
+	lines := make([]string, len(changes))
+	for i, c := range changes {
+		lines[i] = "- " + c.Description
+	}
+	return strings.Join(lines, "\n")
+}
+
+// strategyMessage returns the function that makes the commit message of a
+// strategy that changed files: which strategy ran and what it changed, from the
+// embedded template.
+func strategyMessage(in previewInput) func(bump.Unit) (string, error) {
+	return func(u bump.Unit) (string, error) {
+		vars := textVars(in)
+		vars["strategy"] = u.Strategy
+		vars["edit"] = u.Edit
+		vars["changes"] = bullets(u.Changes)
+		msg, err := templates.Render(templates.StrategyCommitMessage(), vars)
+		if err != nil {
+			return "", err
+		}
+		// A strategy that names no change leaves two blank lines where the list was.
+		return blankLines.ReplaceAllString(msg, "\n\n"), nil
+	}
+}
+
 // joined is a value of each check, in order, with the repeats left out and the
 // rest joined by a comma: one value when the holdings share it.
 func joined(checks []bump.HoldingCheck, of func(bump.HoldingCheck) string) string {
@@ -154,12 +197,28 @@ func joined(checks []bump.HoldingCheck, of func(bump.HoldingCheck) string) strin
 	return strings.Join(seen, ", ")
 }
 
+// changedFiles is the files that a bump changes, in order and without repeats,
+// joined by a comma: every location of a holding that is not up to date.
+func changedFiles(checks []bump.HoldingCheck) string {
+	var files []string
+	for _, c := range checks {
+		for _, change := range c.Changes() {
+			if !slices.Contains(files, change.Path) {
+				files = append(files, change.Path)
+			}
+		}
+	}
+	return strings.Join(files, ", ")
+}
+
 // changes lists what a bump changes, from what each holding changes and the
 // commands that run around the write, one bullet each.
 func changes(in previewInput) string {
 	var lines []string
 	for _, c := range in.checks {
-		lines = append(lines, "- "+c.Change.Description)
+		for _, change := range c.Changes() {
+			lines = append(lines, "- "+change.Description)
+		}
 	}
 	for _, ref := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")

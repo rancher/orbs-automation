@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # backup-restore-operator: owned, one stream for each line, an image and two chart packages.
 # It holds the kuberlr image in its chart values, and its chart packages are held by rancher-charts.
 apiVersion: gero/v1alpha2
@@ -54,3 +55,38 @@ refs: {project: backup-restore-operator, artifact: kuberlr-kubectl-image}
 spec:
   at: {file: charts/rancher-backup/values.yaml, key: global.kubectl.tag, format: yaml}
   holds: {kind: release, form: "{tag}"}
+---
+# What BRO holds of wrangler, in go.mod. The module is the same for every minor; each line stays on one minor,
+# so a Holding for each minor and the lines that hold it. Observed only: wrangler is unowned, so there is no Edit.
+# v2.14 holds 3.4.0 and v2.12 holds 3.2.4: minors with no Stream, because BRO is out of step with Rancher there
+# (Rancher holds 3.6 and 3.3). Those lines stay unresolved until BRO moves or a Stream is added.
+# cmd/tool is a nested module (v2.14 and later) that requires wrangler and lasso indirectly; `replace` directives
+# (cmd/tool replaces BRO with ../../) are not modelled.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-7
+refs: {project: backup-restore-operator, artifact: wrangler-v3-7-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.15, until: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-3
+refs: {project: backup-restore-operator, artifact: wrangler-v3-3-module}
+spec:
+  at: {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.13, until: v2.13}}
+---
+# lasso is held in go.mod by every line (v2.16 holds v0.2.10, v2.12 holds v0.2.3). Observed only.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-lasso
+refs: {project: backup-restore-operator, artifact: lasso-v0-2-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/lasso, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all}

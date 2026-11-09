@@ -92,6 +92,31 @@ func TestARangeContainsALine(t *testing.T) {
 	}
 }
 
+func TestRangesOverlap(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b Range
+		want bool
+	}{
+		{"two zero ranges", Range{}, Range{}, true},
+		{"a range and the zero range", Range{Since: "v2.15"}, Range{}, true},
+		{"the same range", Range{Since: "v2.14", Until: "v2.15"}, Range{Since: "v2.14", Until: "v2.15"}, true},
+		{"sharing one line", Range{Until: "v2.14"}, Range{Since: "v2.14"}, true},
+		{"one after the other", Range{Until: "v2.14"}, Range{Since: "v2.15"}, false},
+		{"the other order", Range{Since: "v2.15"}, Range{Until: "v2.14"}, false},
+		{"one inside the other", Range{Since: "v2.12", Until: "v2.16"}, Range{Since: "v2.14", Until: "v2.15"}, true},
+		{"both open at the top", Range{Since: "v2.14"}, Range{Since: "v2.15"}, true},
+		{"the minor is a number, not text", Range{Until: "v2.9"}, Range{Since: "v2.10"}, false},
+		{"an end that is not a line is open", Range{Until: "soon"}, Range{Since: "v2.15"}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.a.Overlaps(tt.b))
+			assert.Equal(t, tt.want, tt.b.Overlaps(tt.a), "it does not depend on the order")
+		})
+	}
+}
+
 func TestALinePhaseFollowsItsDatesAndTheTime(t *testing.T) {
 	d := func(day string) time.Time {
 		v, err := time.Parse("2006-01-02", day)

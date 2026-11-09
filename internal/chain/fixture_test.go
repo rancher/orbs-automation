@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fixtureGraph joins the design fixture, the seven projects of the release chain.
+// fixtureGraph joins the design fixture, the seven projects of the release chain and the Go modules of the frameworks team.
 func fixtureGraph(t *testing.T) *chain.Graph {
 	t.Helper()
 	dir := "../../docs/design/fixture"
@@ -37,7 +37,7 @@ func fixtureGraph(t *testing.T) *chain.Graph {
 func TestTheFixtureJoinsIntoTheReleaseChain(t *testing.T) {
 	g := fixtureGraph(t)
 
-	require.Len(t, g.Projects(), 7)
+	require.Len(t, g.Projects(), 9)
 	rancher := g.Project("rancher")
 	require.NotNil(t, rancher)
 	assert.Equal(t, "shared", rancher.Steward())
@@ -51,6 +51,8 @@ func TestTheFixtureJoinsIntoTheReleaseChain(t *testing.T) {
 	}
 	assert.Contains(t, held, "rancher-holds-shell")
 	assert.Contains(t, held, "rancher-follows-charts-branch")
+	assert.Contains(t, held, "rancher-holds-wrangler-3-8")
+	assert.Contains(t, held, "rancher-holds-lasso")
 	assert.NotEmpty(t, g.Project("shell").Sourced())
 	assert.NotEmpty(t, g.Project("backup-restore-operator").Sourced(), "charts holds its chart files")
 }

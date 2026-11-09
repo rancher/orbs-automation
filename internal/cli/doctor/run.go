@@ -39,7 +39,15 @@ type Environment struct {
 // The report is returned along with ErrChecksFailed, so the caller prints it and
 // then exits non-zero.
 func Main(ctx context.Context, env Environment, f Flags, b Build) (string, error) {
+	env.Settings = forDoctor(env.Settings, f.Online)
 	return run(ctx, env.Settings, f, b, defaultChecks(b, env))
+}
+
+// forDoctor is the settings for gero doctor's own workspace. Doctor is offline
+// unless asked to be online, so the central bundle is read from the cache only.
+func forDoctor(s clicfg.Settings, online bool) clicfg.Settings {
+	s.Offline = s.Offline || !online
+	return s
 }
 
 // defaultChecks is every check gero doctor knows, in the order they run. A

@@ -134,7 +134,7 @@ func (w *rulesWidget) Validate(_ config.Context, r *config.Report) {
 		r.Errorf("spec.size", "must not be negative, got %d", w.Spec.Size)
 	}
 	if w.Spec.Size > 100 {
-		r.Warnf("spec.size", "is large, %d", w.Spec.Size)
+		r.Warnf("large", "spec.size", "is large, %d", w.Spec.Size)
 	}
 }
 
@@ -160,7 +160,7 @@ func TestDecodeReportCarriesWarningsAndKeepsTheObject(t *testing.T) {
 	require.NoError(t, rep.Err())
 	require.Len(t, objs, 1, "a warning does not drop the object")
 	require.Len(t, rep.Warnings(), 1)
-	assert.Equal(t, `w.yaml: document 1: Widget "w": spec.size: is large, 500`, rep.Warnings()[0].Error())
+	assert.Equal(t, `w.yaml: document 1: Widget "w": spec.size: is large, 500 [large]`, rep.Warnings()[0].Error())
 }
 
 func TestDecodeReportAnInvalidObjectIsDroppedAndTheRestKept(t *testing.T) {

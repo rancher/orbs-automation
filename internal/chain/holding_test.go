@@ -139,3 +139,34 @@ func TestAnEditFollowsHoldingsAndHasStepsForALine(t *testing.T) {
 	require.Len(t, post, 2)
 	assert.Equal(t, []string{"old"}, []string(post[1].Run))
 }
+
+func TestAHoldingSaysWhetherItsDocumentAcknowledgesAWarning(t *testing.T) {
+	holdingDoc := "apiVersion: gero/v1alpha2\nkind: Holding\nname: h\nrefs: {project: cons, artifact: a}\n" +
+		"acknowledge:\n" +
+		"  - {rule: locations-differ, reason: nested modules lag, lines: {since: v2.15, until: v2.16}}\n" +
+		"  - {rule: circular-holding, reason: they build each other}\n" +
+		"spec:\n  at: {file: f.yaml, key: .a}\n  holds: {kind: release}\n"
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14"),
+		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod}\n"),
+		chaintest.Doc("Stream", "prod", "{project: prod}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "a", "{stream: prod}", "  kind: image\n  name: acme/prod\n"),
+		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n"),
+		holdingDoc,
+	)
+	h := g.Holdings()[0]
+
+	reason, ok := h.Acknowledgement("locations-differ", "v2.16")
+	assert.True(t, ok)
+	assert.Equal(t, "nested modules lag", reason)
+
+	_, ok = h.Acknowledgement("locations-differ", "v2.14")
+	assert.False(t, ok, "v2.14 is outside the lines of the acknowledgement")
+
+	reason, ok = h.Acknowledgement("circular-holding", "")
+	assert.True(t, ok)
+	assert.Equal(t, "they build each other", reason)
+
+	_, ok = h.Acknowledgement("stream-differs-from-destination", "v2.16")
+	assert.False(t, ok)
+}

@@ -27,7 +27,7 @@ func TestHoldingDefaultsForARelease(t *testing.T) {
 
 	require.NoError(t, rep.Err())
 	require.NotNil(t, h)
-	assert.Equal(t, "yaml", h.Spec.At.Format)
+	assert.Equal(t, "yaml", h.Spec.At[0].Format)
 	assert.Equal(t, "{tag}", h.Spec.Holds.Form)
 	assert.Equal(t, "stable", h.Spec.Holds.Accept)
 }
@@ -46,19 +46,27 @@ func TestHoldingDefaultsDoNotOverwriteWhatWasWritten(t *testing.T) {
 
 	require.NoError(t, rep.Err())
 	require.NotNil(t, h)
-	assert.Equal(t, "dockerfile", h.Spec.At.Format)
+	assert.Equal(t, "dockerfile", h.Spec.At[0].Format)
 	assert.Equal(t, "{image}:{tag}", h.Spec.Holds.Form)
 	assert.Equal(t, "all", h.Spec.Holds.Accept)
 }
 
 func TestAValidHoldingHasNoFindings(t *testing.T) {
 	for name, spec := range map[string]string{
-		"an image tag":                         "  at: {file: build.yaml, key: defaultAssetsImage}\n  holds: {kind: release, form: \"{image}:{tag}\", accept: all, lines: {since: v2.16}}\n",
-		"a chart URL":                          "  at: {file: packages/rancher-backup/package.yaml, key: '.additionalCharts[0].upstreamOptions.url'}\n  holds: {kind: release, form: \"{url}\", stage: dev, accept: all}\n",
-		"a respelled stage":                    "  at: {file: lock.yaml, key: '.chart-versions.\"{line|trimprefix:v}\".upstream-refs.{stage|replace:stable=prod}.charts.commit'}\n  holds: {kind: commit, stages: [dev, stable]}\n",
-		"a branch":                             "  at: {file: package/Dockerfile, key: CHART_DEFAULT_BRANCH, format: dockerfile}\n  holds: {kind: branch, lines: {until: v2.15}}\n",
-		"a version with a reversible modifier": "  at: {file: Dockerfile, key: PKG_A_VERSION, format: dockerfile}\n  holds: {kind: release, form: \"{tag|trimprefix:v}\"}\n",
-		"a file named by the line":             "  at: {file: 'docs/{line}.yaml', key: .a}\n  holds: {kind: release}\n",
+		"an image tag":                          "  at: {file: build.yaml, key: defaultAssetsImage}\n  holds: {kind: release, form: \"{image}:{tag}\", accept: all, lines: {since: v2.16}}\n",
+		"a chart URL":                           "  at: {file: packages/rancher-backup/package.yaml, key: '.additionalCharts[0].upstreamOptions.url'}\n  holds: {kind: release, form: \"{url}\", stage: dev, accept: all}\n",
+		"a respelled stage":                     "  at: {file: lock.yaml, key: '.chart-versions.\"{line|trimprefix:v}\".upstream-refs.{stage|replace:stable=prod}.charts.commit'}\n  holds: {kind: commit, stages: [dev, stable]}\n",
+		"a branch":                              "  at: {file: package/Dockerfile, key: CHART_DEFAULT_BRANCH, format: dockerfile}\n  holds: {kind: branch, lines: {until: v2.15}}\n",
+		"a version with a reversible modifier":  "  at: {file: Dockerfile, key: PKG_A_VERSION, format: dockerfile}\n  holds: {kind: release, form: \"{tag|trimprefix:v}\"}\n",
+		"a file named by the line":              "  at: {file: 'docs/{line}.yaml', key: .a}\n  holds: {kind: release}\n",
+		"a pattern for a file that is not YAML": "  at: {file: charts/values.yaml, key: 'kubectl:\\n(?:[ \\t]+.*\\n)*?[ \\t]+tag: (\\S+)', format: regex}\n  holds: {kind: release}\n",
+		"a pattern read for a line":             "  at: {file: Makefile, key: '^TOOL_{line|trimprefix:v}_VERSION = (.*)$', format: regex}\n  holds: {kind: release}\n",
+		"a pattern with a quantifier":           "  at: {file: v.txt, key: '^v(\\d{{3}})$', format: regex}\n  holds: {kind: release}\n",
+		"a Go module":                           "  at: {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all}\n",
+		"a form with the prefix":                "  at: {file: Dockerfile, key: TOOL, format: dockerfile}\n  holds: {kind: release, form: \"{prefix}{bareTag}\"}\n",
+		"a list of locations":                   "  at:\n    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}\n    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n",
+		"a location for some lines":             "  at:\n    - {file: go.mod, key: github.com/rancher/lasso, format: gomod}\n    - {file: pkg/plan/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.15}}\n  holds: {kind: release, form: \"{bareTag}\"}\n",
+		"the same place for different lines":    "  at:\n    - {file: go.mod, key: a, format: gomod, lines: {until: v2.14}}\n    - {file: go.mod, key: a, format: gomod, lines: {since: v2.15}}\n  holds: {kind: release, form: \"{bareTag}\"}\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			h, rep := loadHolding(t, spec)
@@ -78,8 +86,8 @@ func TestHoldingRules(t *testing.T) {
 		{"a file with an unknown variable", "  at: {file: 'x/{nope}.yaml', key: .a}\n  holds: {kind: release}\n", "spec.at.file", "unknown placeholder {nope}"},
 		{"a key with an unknown variable", "  at: {file: f.yaml, key: '.{tag}'}\n  holds: {kind: release}\n", "spec.at.key", "unknown placeholder {tag}"},
 		{"a key with an unknown modifier", "  at: {file: f.yaml, key: '.{line|reverse}'}\n  holds: {kind: release}\n", "spec.at.key", "unknown modifier"},
-		{"a format that is documented and not listed", "  at: {file: f.yaml, key: .a, format: toml}\n  holds: {kind: release}\n", "spec.at.format", "yaml or dockerfile"},
-		{"a format that does not exist", "  at: {file: f.yaml, key: .a, format: ini}\n  holds: {kind: release}\n", "spec.at.format", "yaml or dockerfile"},
+		{"a format that is documented and not listed", "  at: {file: f.yaml, key: .a, format: toml}\n  holds: {kind: release}\n", "spec.at.format", "yaml, dockerfile, gomod or regex"},
+		{"a format that does not exist", "  at: {file: f.yaml, key: .a, format: ini}\n  holds: {kind: release}\n", "spec.at.format", "yaml, dockerfile, gomod or regex"},
 		{"no kind", "  at: {file: f.yaml, key: .a}\n  holds: {}\n", "spec.holds.kind", "release, commit or branch"},
 		{"a kind that is none of them", "  at: {file: f.yaml, key: .a}\n  holds: {kind: tag}\n", "spec.holds.kind", "release, commit or branch"},
 		{"a form with an unknown variable", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release, form: \"{nope}\"}\n", "spec.holds.form", "unknown placeholder {nope}"},
@@ -90,6 +98,17 @@ func TestHoldingRules(t *testing.T) {
 		{"an accept that is neither", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release, accept: some}\n", "spec.holds.accept", "stable or all"},
 		{"a since that is not a line", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release, lines: {since: 2.16}}\n", "spec.holds.lines.since", "v2.16"},
 		{"a since after the until", "  at: {file: f.yaml, key: .a}\n  holds: {kind: release, lines: {since: v2.16, until: v2.15}}\n", "spec.holds.lines", "after"},
+		{"a pattern that does not compile", "  at: {file: f.txt, key: 'tag: (\\S+', format: regex}\n  holds: {kind: release}\n", "spec.at.key", "pattern"},
+		{"a pattern with no capture group", "  at: {file: f.txt, key: 'tag: \\S+', format: regex}\n  holds: {kind: release}\n", "spec.at.key", "exactly one"},
+		{"a pattern with two capture groups", "  at: {file: f.txt, key: '(tag): (\\S+)', format: regex}\n  holds: {kind: release}\n", "spec.at.key", "exactly one"},
+		{"a pattern with a bad pattern in one of several locations", "  at:\n    - {file: a.yaml, key: .a}\n    - {file: b.txt, key: 'x: (', format: regex}\n  holds: {kind: release}\n", "spec.at[1].key", "pattern"},
+		{"no location", "  at: []\n  holds: {kind: release}\n", "spec.at", "required"},
+		{"a location with no key in a list", "  at:\n    - {file: a.yaml, key: .a}\n    - {file: b.yaml}\n  holds: {kind: release}\n", "spec.at[1].key", "required"},
+		{"a location with a bad format in a list", "  at:\n    - {file: a.yaml, key: .a}\n    - {file: b.yaml, key: .a, format: ini}\n  holds: {kind: release}\n", "spec.at[1].format", "yaml, dockerfile, gomod or regex"},
+		{"a location with a since that is not a line", "  at:\n    - {file: a.yaml, key: .a}\n    - {file: b.yaml, key: .a, lines: {since: 2.16}}\n  holds: {kind: release}\n", "spec.at[1].lines.since", "v2.16"},
+		{"a location with a since after the until", "  at:\n    - {file: a.yaml, key: .a}\n    - {file: b.yaml, key: .a, lines: {since: v2.16, until: v2.14}}\n  holds: {kind: release}\n", "spec.at[1].lines", "after"},
+		{"the same place twice for overlapping lines", "  at:\n    - {file: go.mod, key: a, format: gomod, lines: {since: v2.14}}\n    - {file: go.mod, key: a, format: gomod, lines: {since: v2.15}}\n  holds: {kind: release, form: \"{bareTag}\"}\n", "spec.at[1]", "overlap"},
+		{"the same place twice for every line", "  at:\n    - {file: go.mod, key: a, format: gomod}\n    - {file: go.mod, key: a, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n", "spec.at[1]", "overlap"},
 		{"a key that reads the stage with none given", "  at: {file: f.yaml, key: '.a.{stage}'}\n  holds: {kind: release}\n", "spec.at.key", "stage"},
 	}
 	require.NotEmpty(t, tests)
@@ -101,4 +120,14 @@ func TestHoldingRules(t *testing.T) {
 			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
 		})
 	}
+}
+
+func TestHoldingDefaultsTheFormatOfEveryLocation(t *testing.T) {
+	h, rep := loadHolding(t, "  at:\n    - {file: a.yaml, key: .a}\n    - {file: b/go.mod, key: m, format: gomod}\n  holds: {kind: release}\n")
+
+	require.NoError(t, rep.Err())
+	require.NotNil(t, h)
+	require.Len(t, h.Spec.At, 2)
+	assert.Equal(t, "yaml", h.Spec.At[0].Format)
+	assert.Equal(t, "gomod", h.Spec.At[1].Format)
 }

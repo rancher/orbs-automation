@@ -66,6 +66,7 @@ failed or, with --strict, warned.`,
 			return err
 		},
 	}
+	doctorCmd.AddCommand(newDoctorSelfUpdate(hideWorkstationOnly(os.Getenv)))
 	f := doctorCmd.Flags()
 	f.Bool("online", false, "also run the checks that need the network")
 	f.Duration("timeout", 10*time.Second, "bound for each check that needs the network")

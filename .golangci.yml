@@ -30,13 +30,16 @@ linters:
             - github.com/spf13/cobra
             - github.com/cli/go-gh
             - github.com/google/go-github
+            - github.com/mallardduck/ghreleases
             - github.com/go-git/go-git
             - go.yaml.in/yaml/v3
+            - golang.org/x/mod/modfile
             - golang.org/x/net/html
             - golang.org/x/term
             - charm.land/lipgloss
             - github.com/ergochat/readline
             - github.com/invopop/jsonschema
+            - github.com/mallardduck/binup
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
         # internal/platform/errs for exit-code errors and its own subpackages.
@@ -75,6 +78,19 @@ linters:
           deny:
             - pkg: github.com/go-git/go-git
               desc: go-git is only allowed in internal/platform/git/repo (docs/specs/PROJECT_LAYOUT.md)
+        # binup and the Sigstore verifier stay in
+        # internal/platform/selfupdate, the one place that downloads and verifies a
+        # release (docs/specs/DEPENDENCY_POLICY.md).
+        noselfupdate:
+          list-mode: lax
+          files:
+            - "!**/internal/platform/selfupdate/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/mallardduck/binup
+              desc: binup is only allowed in internal/platform/selfupdate (docs/specs/DEPENDENCY_POLICY.md)
+            - pkg: github.com/mallardduck/ghreleases/sigstore
+              desc: the Sigstore verifier is only allowed in internal/platform/selfupdate (docs/specs/DEPENDENCY_POLICY.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/platform/git/gitcli (each use records why go-git
         # cannot do it) and internal/platform/ghcli (gero doctor) go through it
@@ -100,6 +116,16 @@ linters:
           deny:
             - pkg: go.yaml.in/yaml
               desc: YAML is only allowed in internal/platform/config, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
+        # The go.mod parser reads and edits the version of a module in one place
+        # (docs/specs/DEPENDENCY_POLICY.md).
+        nomodfile:
+          list-mode: lax
+          files:
+            - "!**/internal/platform/gomodedit/**"
+            - "!$test"
+          deny:
+            - pkg: golang.org/x/mod
+              desc: the go.mod parser is only allowed in internal/platform/gomodedit (docs/specs/DEPENDENCY_POLICY.md)
         # The HTML parser reads the SUSE lifecycle page and nothing else
         # (docs/specs/DEPENDENCY_POLICY.md).
         nohtml:
@@ -110,6 +136,20 @@ linters:
           deny:
             - pkg: golang.org/x/net/html
               desc: the HTML parser is only allowed in internal/lifecycle (docs/specs/DEPENDENCY_POLICY.md)
+        # Downloading a release asset and verifying it against the published checksum
+        # is done in one place (docs/specs/CENTRAL_BUNDLE.md,
+        # docs/specs/DEPENDENCY_POLICY.md). internal/platform/selfupdate is the one
+        # other importer, and only of the Sigstore verifier: depguard matches a
+        # package by prefix, and noselfupdate keeps that verifier out of the rest.
+        noghreleases:
+          list-mode: lax
+          files:
+            - "!**/internal/platform/assetfetch/**"
+            - "!**/internal/platform/selfupdate/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/mallardduck/ghreleases
+              desc: ghreleases is only allowed in internal/platform/assetfetch, the one place a release asset is downloaded and verified (docs/specs/DEPENDENCY_POLICY.md)
         # The terminal checks (is this a TTY, how wide) stay in one package, so
         # the rest of gero asks it and never the library
         # (docs/specs/DEPENDENCY_POLICY.md).
@@ -152,11 +192,11 @@ linters:
             - "!**/internal/appconfig/**"
             - "!**/internal/chain/**"
             - "!**/internal/chainload/**"
-            - "!**/tools/compilebundle/**"
+            - "!**/internal/bundle/**"
             - "!$test"
           deny:
             - pkg: github.com/rancher/orbs-automation/internal/chainload
-              desc: the config loader is only allowed in internal/workspace, and in tools/compilebundle, which checks a bundle loads back; get config from a Workspace (docs/specs/WORKSPACE.md)
+              desc: the config loader is only allowed in internal/workspace, and in internal/bundle, which checks a bundle loads back; get config from a Workspace (docs/specs/WORKSPACE.md)
             - pkg: github.com/rancher/orbs-automation/internal/appconfig
               desc: the application config provider is only allowed in internal/workspace, internal/chain and internal/chainload; get config from a Workspace (docs/specs/WORKSPACE.md)
         # A version of the config API is spelled in config and nowhere else. The domain
@@ -313,11 +353,13 @@ linters:
             - github.com/rancher/orbs-automation/internal/cli/buildinfo
             - github.com/rancher/orbs-automation/internal/cli/authstatus
             - github.com/rancher/orbs-automation/internal/cli/configresolve
-        # main.go only calls cmd.Execute().
+        # main.go only calls cmd.Execute(). The tools under tools/ are developer
+        # commands that import the packages they work on.
         entrypoint:
           list-mode: strict
           files:
             - "**/main.go"
+            - "!**/tools/**"
           allow:
             - $gostd
             - github.com/rancher/orbs-automation/cmd

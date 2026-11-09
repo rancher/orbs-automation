@@ -107,6 +107,11 @@ func TestProjectRules(t *testing.T) {
 		{"a line listed twice", "  repo: {name: a/b}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16, branch: x}, {line: v2.16, branch: y}]\n", "spec.branches.lines[1].line", "twice"},
 		{"a branch map with no stages declared", "  repo: {name: a/b}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16, branch: {dev: d}}]\n", "spec.branches.lines[0].branch", "stages"},
 		{"a branch map with a stage that is not declared", "  repo: {name: a/b}\n  branches:\n    layout: perLine\n    stages: [dev, stable]\n    lines: [{line: v2.16, branch: {dev: d, prod: p}}]\n", "spec.branches.lines[0].branch.prod", "stage"},
+		{"an alias that is not a slug", "  repo: {name: a/b}\n  aliases: [Rk]\n", "spec.aliases[0]", "lowercase slug"},
+		{"an alias with a slash", "  repo: {name: a/b}\n  aliases: [a/b]\n", "spec.aliases[0]", "lowercase slug"},
+		{"an alias that is empty", "  repo: {name: a/b}\n  aliases: [\"\"]\n", "spec.aliases[0]", "lowercase slug"},
+		{"an alias listed twice", "  repo: {name: a/b}\n  aliases: [rk, rk]\n", "spec.aliases[1]", "twice"},
+		{"an alias that is the name of the project itself", "  repo: {name: a/b}\n  aliases: [p]\n", "spec.aliases[0]", "name"},
 		{"two lines on the default branch", "  repo: {name: a/b}\n  branches:\n    layout: perLine\n    lines: [{line: v2.17}, {line: v2.16}]\n", "spec.branches.lines", "default branch"},
 	}
 	require.NotEmpty(t, tests)
@@ -118,6 +123,14 @@ func TestProjectRules(t *testing.T) {
 			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
 		})
 	}
+}
+
+func TestProjectAliasesAreRead(t *testing.T) {
+	p, rep := loadProject(t, "  repo: {name: a/b}\n  aliases: [rk, kubectl]\n")
+
+	require.Empty(t, rep.Findings)
+	require.NotNil(t, p)
+	assert.Equal(t, []string{"rk", "kubectl"}, p.Spec.Aliases)
 }
 
 func TestProjectsReportEveryProblemTogether(t *testing.T) {

@@ -24,9 +24,9 @@ var (
 	pushTo = []string{v1alpha2.PushToFork, v1alpha2.PushToUpstream}
 
 	appHints = []hint{
-		{def: "ArtifactSpec", key: "kind", enum: []string{v1alpha2.ArtifactImage, v1alpha2.ArtifactFile}},
+		{def: "ArtifactSpec", key: "kind", enum: []string{v1alpha2.ArtifactImage, v1alpha2.ArtifactFile, v1alpha2.ArtifactGoMod}},
 		{def: "ArtifactSpec", key: "registries", enum: []string{v1alpha2.RegistryDockerHub, v1alpha2.RegistryPrimeStaging, v1alpha2.RegistryPrimeProduction}},
-		{def: "At", key: "format", enum: []string{v1alpha2.FormatYAML, v1alpha2.FormatDockerfile}},
+		{def: "At", key: "format", enum: []string{v1alpha2.FormatYAML, v1alpha2.FormatDockerfile, v1alpha2.FormatGoMod, v1alpha2.FormatRegex}},
 		{def: "Holds", key: "kind", enum: []string{v1alpha2.HoldsRelease, v1alpha2.HoldsCommit, v1alpha2.HoldsBranch}},
 		{def: "Holds", key: "accept", enum: []string{v1alpha2.AcceptStable, v1alpha2.AcceptAll}},
 		{def: "Step", key: "from", enum: []string{v1alpha2.FromConsumer, v1alpha2.FromProducer, v1alpha2.FromCentral}},

@@ -39,7 +39,7 @@ func (w *widget) Validate(ctx Context, r *Report) {
 		r.Errorf("spec.layout", "must be single or perLine, got %q", w.Layout)
 	}
 	if !w.Expires.IsZero() && ctx.Now.After(w.Expires) {
-		r.Warnf("spec.expires", "passed on %s", w.Expires.Format("2006-01-02"))
+		r.Warnf("expired", "spec.expires", "passed on %s", w.Expires.Format("2006-01-02"))
 	}
 }
 
@@ -141,6 +141,21 @@ func TestAWarningIsNotAnError(t *testing.T) {
 	assert.Equal(t, Warning, r.Warnings()[0].Severity)
 	assert.Equal(t, "spec.expires", r.Warnings()[0].Path)
 	assert.Contains(t, r.Warnings()[0].Msg, "2026-01-01")
+}
+
+func TestAWarningNamesItsRuleAndAnErrorDoesNot(t *testing.T) {
+	r := Load("w.yaml", []byte("size: -1\nexpires: 2026-01-01\n"), &widget{}, ctx)
+
+	require.Len(t, r.Findings, 2)
+	assert.Empty(t, r.Findings[0].Rule, "an error has no rule")
+	require.Len(t, r.Warnings(), 1)
+	assert.Equal(t, "expired", r.Warnings()[0].Rule)
+}
+
+func TestAFindingShowsItsRuleAtTheEnd(t *testing.T) {
+	assert.Equal(t, "bad [expired]", Finding{Msg: "bad", Rule: "expired"}.Error())
+	assert.Equal(t, "a.yaml: document 2: Widget \"w\": spec.expires: passed [expired]",
+		Finding{Source: "a.yaml", Doc: 2, Label: `Widget "w"`, Path: "spec.expires", Msg: "passed", Rule: "expired"}.Error())
 }
 
 func TestTheClockIsInjected(t *testing.T) {

@@ -38,9 +38,9 @@ func Push(ctx context.Context, dir, remote, branch string) error {
 	return push(ctx, dir, remote, branch, "push", "--set-upstream", remote, branch)
 }
 
-// push runs git push with the arguments and the engineer's credentials, and turns
-// what git says into an error: ErrPushRejected when the remote refused the branch.
-func push(ctx context.Context, dir, remote, branch string, args ...string) error {
+// runAuthenticated runs git with the engineer's credentials (authEnv) and with
+// prompting on a terminal off.
+func runAuthenticated(ctx context.Context, args ...string) (execx.Result, error) {
 	env := execx.DefaultEnv()
 	for _, k := range authEnv {
 		if v, ok := os.LookupEnv(k); ok {
@@ -48,9 +48,13 @@ func push(ctx context.Context, dir, remote, branch string, args ...string) error
 		}
 	}
 	env = append(env, "GIT_TERMINAL_PROMPT=0")
-	res, err := execx.New("git").Run(ctx, execx.Cmd{
-		Name: "git", Args: append([]string{"-C", dir}, args...), Env: env,
-	})
+	return execx.New("git").Run(ctx, execx.Cmd{Name: "git", Args: args, Env: env})
+}
+
+// push runs git push with the arguments and the engineer's credentials, and turns
+// what git says into an error: ErrPushRejected when the remote refused the branch.
+func push(ctx context.Context, dir, remote, branch string, args ...string) error {
+	res, err := runAuthenticated(ctx, append([]string{"-C", dir}, args...)...)
 	if err == nil {
 		return nil
 	}

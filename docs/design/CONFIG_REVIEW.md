@@ -273,5 +273,5 @@ Each has the problem, the options with an example, and where I lean. Q1, Q7, Q8 
 ## Housekeeping
 
 * **A term:** `RELEASE_PROCESS` says "chain of a line"; VISION says "release train". Pick one.
-* **`gero init` and `gero repo clone`:** the open items (SSH or HTTPS, which remote is `origin`, how `--all` reads `owned`) are user-config questions, not part of these.
+* **`gero init` and `gero repo clone`:** settled for clone in [CLI_FRAMEWORK](../specs/CLI_FRAMEWORK.md): SSH, the remote names from the user's `fork` and `upstream` keys (the upstream alone when the fork does not exist), and `--all` as `owned` and not `external`.
 * **Real files:** the Assets method `read-lock-yaml` describes its key as in `build.yaml`, but it reads `lock.yaml`.

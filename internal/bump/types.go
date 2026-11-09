@@ -5,8 +5,10 @@ import "context"
 // Release is what a form may be made from: the tag being shipped, and where it
 // comes from. Which of them a holding's form uses is the holding's.
 type Release struct {
-	Tag        string // as published, such as v0.5.3
-	Version    string // the tag without a leading v
+	Tag        string // as published, such as v0.5.3 or helmtools/v0.1.2
+	Prefix     string // the stream's tag prefix, such as helmtools/, or none
+	BareTag    string // the tag without the prefix
+	Version    string // the tag without the prefix and without a leading v
 	Image      string // the artifact's repository path, for an image
 	File       string // the artifact's file name, for a file
 	URL        string // where the file is among the release's files, for a file
@@ -35,13 +37,47 @@ type Change struct {
 	From, To    string
 }
 
-// Check is what the read side finds of one holding, without writing anything.
+// Check is what the read side finds of one holding, without writing anything. A
+// holding with several locations has one entry in Locations for each that exists
+// for the line, and the rest says it as a whole.
 type Check struct {
-	Current  string // what the consumer holds now
-	Want     string // what it should hold for the release
+	Current   string // what the consumer holds now; of the first location when they differ
+	Want      string // what it should hold for the release
+	UpToDate  bool   // every location holds it
+	Relation  Relation
+	Change    Change          // what a bump would change; meaningful when not up to date
+	Locations []LocationCheck // each location, in the order the holding lists them
+}
+
+// LocationCheck is what one location of a holding holds.
+type LocationCheck struct {
+	Place    Place
+	Current  string
 	UpToDate bool
 	Relation Relation
-	Change   Change // what a bump would change; meaningful when not up to date
+	Change   Change
+}
+
+// Differ reports whether the locations of the holding hold different values.
+func (c Check) Differ() bool {
+	for _, loc := range c.Locations {
+		if loc.Current != c.Locations[0].Current {
+			return true
+		}
+	}
+	return false
+}
+
+// Changes is what a bump would change: one change for each location that is not
+// up to date, in the order the holding lists them.
+func (c Check) Changes() []Change {
+	var out []Change
+	for _, loc := range c.Locations {
+		if !loc.UpToDate {
+			out = append(out, loc.Change)
+		}
+	}
+	return out
 }
 
 // Result is what the write side did.

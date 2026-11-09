@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"testing"
 	"testing/fstest"
+	"time"
 
+	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,6 +21,7 @@ import (
 // the slugs it was asked to resolve.
 type fakeWorkspace struct {
 	dir      workspace.CentralConfigDir
+	bundle   *bundlestore.Source // when set, the config is from the bundle
 	dirErr   error
 	graph    *chain.Graph
 	chainErr error
@@ -25,8 +29,8 @@ type fakeWorkspace struct {
 	asked    []string
 }
 
-func (f *fakeWorkspace) CentralConfigDir() (workspace.CentralConfigDir, error) {
-	return f.dir, f.dirErr
+func (f *fakeWorkspace) ConfigSource() (workspace.ConfigSource, error) {
+	return workspace.ConfigSource{Dir: f.dir, Bundle: f.bundle}, f.dirErr
 }
 func (f *fakeWorkspace) Chain() (*chain.Graph, error) { return f.graph, f.chainErr }
 
@@ -72,14 +76,53 @@ func TestConfigDirCheckFound(t *testing.T) {
 	}
 }
 
-func TestConfigDirCheckMissingFailsWithTheAdvice(t *testing.T) {
+func TestConfigDirCheckMissingFailsWithTheAdviceAndTheBundle(t *testing.T) {
 	got := NewConfigDirCheck(&fakeWorkspace{dirErr: workspace.ErrNotFound}).Run(context.Background())
 
 	assert.Equal(t, Result{
 		Status:      StatusFail,
 		Message:     "no central config directory found",
-		Remediation: workspace.NotFoundHint,
+		Remediation: workspace.NotFoundHint + "; or run gero doctor --online to fetch the central config bundle",
 	}, got)
+}
+
+func TestConfigDirCheckSaysWhenTheConfigIsTheBundle(t *testing.T) {
+	ws := &fakeWorkspace{bundle: &bundlestore.Source{Tag: "v0.5.0", Age: 3 * time.Hour, FromCache: true}}
+
+	got := NewConfigDirCheck(ws).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: "bundle v0.5.0, 3 hours old"}, got)
+}
+
+func TestConfigDirCheckWarnsWhenTheBundleIsAStaleCacheAndSaysWhy(t *testing.T) {
+	ws := &fakeWorkspace{bundle: &bundlestore.Source{
+		Tag: "v0.3.0", Age: 72 * time.Hour, FromCache: true, Stale: true,
+		Note: "using the cached bundle of v0.3.0, 3 days old: the GitHub rate limit is used up",
+	}}
+
+	got := NewConfigDirCheck(ws).Run(context.Background())
+
+	assert.Equal(t, Result{
+		Status: StatusWarn, Message: "bundle v0.3.0, 3 days old",
+		Remediation: "using the cached bundle of v0.3.0, 3 days old: the GitHub rate limit is used up",
+	}, got)
+}
+
+func TestConfigDirCheckWhenTheBundleFailedSaysWhyToo(t *testing.T) {
+	err := fmt.Errorf("%w; the central config bundle is not available either: no config bundle is available: none is cached, and this run is offline", workspace.ErrNotFound)
+
+	got := NewConfigDirCheck(&fakeWorkspace{dirErr: err}).Run(context.Background())
+
+	assert.Equal(t, StatusFail, got.Status)
+	assert.Equal(t, "no central config directory found", got.Message)
+	assert.Contains(t, got.Remediation, "none is cached, and this run is offline")
+	assert.Contains(t, got.Remediation, workspace.NotFoundHint)
+}
+
+func TestDoctorIsOfflineUnlessAskedToBeOnline(t *testing.T) {
+	assert.True(t, forDoctor(clicfg.Settings{}, false).Offline, "the central bundle is read from the cache only")
+	assert.False(t, forDoctor(clicfg.Settings{}, true).Offline, "--online may fetch it")
+	assert.True(t, forDoctor(clicfg.Settings{Offline: true}, true).Offline, "GERO_OFFLINE still holds")
 }
 
 func TestConfigDirCheckOtherErrorFails(t *testing.T) {
@@ -138,6 +181,18 @@ func TestConfigCheckWarnsOfTheConfigsWarnings(t *testing.T) {
 		Message:     "1 project, 0 streams, 0 artifacts, 0 holdings, 1 line, 1 warning",
 		Remediation: "run `gero config validate` for the details",
 	}, got)
+}
+
+func TestConfigCheckDoesNotCountAnAcknowledgedWarning(t *testing.T) {
+	g, rep := chaintest.LoadFS(fstest.MapFS{
+		"lines.yaml": {Data: []byte("apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n")},
+		"p.yaml":     {Data: []byte("apiVersion: gero/v1alpha2\nkind: Project\nname: p\nacknowledge:\n  - {rule: default-branch-past-development, reason: read from main by design}\nspec:\n  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n")},
+	})
+	require.NoError(t, rep.Err())
+
+	got := NewConfigCheck(&fakeWorkspace{graph: g}).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: "1 project, 0 streams, 0 artifacts, 0 holdings, 1 line"}, got)
 }
 
 func TestConfigCheckProblemsFail(t *testing.T) {

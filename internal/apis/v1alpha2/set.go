@@ -86,8 +86,11 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.holdingRefs()
 	s.holdingStages()
 	s.editSteps()
+	s.goBumpHoldings()
 	s.circular()
 	s.omittedBranches()
+	s.streamsDifferFromDestination()
+	s.acknowledgements()
 }
 
 // uniqueNames reports each document whose name an earlier document of its kind
@@ -161,10 +164,18 @@ func sortedRefKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// projects reports a Project whose repo an earlier Project already has, and a
-// Project that is a final destination when an earlier one already is.
+// projects reports a Project whose repo an earlier Project already has, a
+// Project that is a final destination when an earlier one already is, and an
+// alias that is the name of a Project or the alias of an earlier one.
 func (s *set) projects() {
-	repos := map[string]string{} // repo name to the Project that has it
+	repos := map[string]string{}   // repo name to the Project that has it
+	aliased := map[string]string{} // alias to the Project that has it
+	names := map[string]bool{}
+	for _, o := range s.objs {
+		if p, ok := o.(*Project); ok {
+			names[p.Name] = true
+		}
+	}
 	final := ""
 	for _, o := range s.objs {
 		p, ok := o.(*Project)
@@ -177,6 +188,16 @@ func (s *set) projects() {
 			r.Errorf("spec.repo.name", "%q is already the repo of Project %q", p.Spec.Repo.Name, first)
 		} else {
 			repos[key] = p.Name
+		}
+		for i, alias := range p.Spec.Aliases {
+			at := fmt.Sprintf("spec.aliases[%d]", i)
+			if names[alias] && alias != p.Name {
+				r.Errorf(at, "%q is already the name of Project %q", alias, alias)
+			} else if first, dup := aliased[alias]; dup && first != p.Name {
+				r.Errorf(at, "%q is already an alias of Project %q", alias, first)
+			} else {
+				aliased[alias] = p.Name
+			}
 		}
 		if p.Spec.FinalDestination {
 			if final != "" {
@@ -321,7 +342,7 @@ func (s *set) circular() {
 		if first, ok := seen[back]; ok && !warned[back] && !warned[pair] {
 			warned[pair] = true
 			r := s.at(o)
-			r.Warnf("refs", "Project %q holds something of Project %q, which holds something of it (Holding %q): the dependency is circular", holder, producer, first)
+			r.Warnf(RuleCircularHolding, "refs", "Project %q holds something of Project %q, which holds something of it (Holding %q): the dependency is circular", holder, producer, first)
 			s.add(r)
 		}
 		if _, ok := seen[pair]; !ok {
@@ -354,7 +375,7 @@ func (s *set) omittedBranches() {
 				continue
 			}
 			if phase := ln.PhaseAt(s.ctx.Now); phase != lines.PhaseDevelopment {
-				r.Warnf(fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
+				r.WarnLinef(RuleDefaultBranchPastDevelopment, bl.Line, fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
 			}
 		}
 		s.add(r)
@@ -380,9 +401,10 @@ func (s *set) rancherLines() {
 }
 
 // artifacts reports an Artifact of a kind and name that an earlier Artifact of
-// the same Project has.
+// the same Project has. A Go module is the exception: the same module is an
+// Artifact of each minor's Stream, so for it the name is unique within a Stream.
 func (s *set) artifacts() {
-	type key struct{ project, kind, name string }
+	type key struct{ scope, kind, name string }
 	seen := map[key]string{}
 	for _, o := range s.objs {
 		a, ok := o.(*Artifact)
@@ -393,10 +415,14 @@ func (s *set) artifacts() {
 		if st == nil || len(st.Refs["project"]) != 1 {
 			continue
 		}
-		k := key{st.Refs["project"][0], a.Spec.Kind, a.Spec.Name}
+		scope, scopeKind := st.Refs["project"][0], "Project"
+		if a.Spec.Kind == ArtifactGoMod {
+			scope, scopeKind = st.Name, "Stream"
+		}
+		k := key{scopeKind + " " + scope, a.Spec.Kind, a.Spec.Name}
 		if first, dup := seen[k]; dup {
 			r := s.at(o)
-			r.Errorf("spec.name", "%q is already an artifact of Project %q, in Artifact %q", a.Spec.Name, k.project, first)
+			r.Errorf("spec.name", "%q is already an artifact of %s %q, in Artifact %q", a.Spec.Name, scopeKind, scope, first)
 			s.add(r)
 			continue
 		}
@@ -497,5 +523,206 @@ func (s *set) editSteps() {
 			}
 		}
 		s.add(r)
+	}
+}
+
+// acknowledgements checks what each document says is expected, and marks the
+// warnings it matches as acknowledged. An acknowledgement that matches no warning
+// is a warning itself. It runs last, so every other warning exists.
+func (s *set) acknowledgements() {
+	for _, o := range s.objs {
+		acks := o.GetAcknowledge()
+		if len(acks) == 0 {
+			continue
+		}
+		r := s.at(o)
+		label := fmt.Sprintf("%s %q", o.GetKind(), o.GetName())
+		for i, a := range acks {
+			path := fmt.Sprintf("acknowledge[%d]", i)
+			if !validAcknowledgement(r, path, a) {
+				continue
+			}
+			if slices.Contains(observed, a.Rule) {
+				continue // raised by reading a repo, which validation does not do: it cannot say none matched
+			}
+			if !s.acknowledge(label, a) {
+				r.Warnf(RuleAcknowledgementUnused, path, "acknowledges %s, which this document does not raise%s", a.Rule, forLines(a.Lines))
+			}
+		}
+		s.add(r)
+	}
+}
+
+// acknowledge marks the warnings of a document that an acknowledgement matches:
+// the same rule and, when it is limited to lines, a warning about one of them. It
+// reports whether it matched any.
+func (s *set) acknowledge(label string, a Acknowledgement) bool {
+	matched := false
+	for i := range s.rep.Findings {
+		f := &s.rep.Findings[i]
+		if f.Severity != config.Warning || f.Acknowledged || f.Label != label || !covers(a, f.Rule, f.Line) {
+			continue
+		}
+		f.Acknowledged, f.Reason = true, a.Reason
+		matched = true
+	}
+	return matched
+}
+
+// Acknowledges says whether acks acknowledge a warning of a rule, about a line when
+// it has one, and the reason when they do. An acknowledgement with no lines
+// covers every warning of the rule; one with lines covers only a warning about a
+// line in them.
+func Acknowledges(acks []Acknowledgement, rule, line string) (reason string, ok bool) {
+	for _, a := range acks {
+		if covers(a, rule, line) {
+			return a.Reason, true
+		}
+	}
+	return "", false
+}
+
+// covers says whether an acknowledgement covers a warning of a rule about a line:
+// the same rule and, when it is limited to lines, a warning about one of them.
+func covers(a Acknowledgement, rule, line string) bool {
+	if a.Rule != rule {
+		return false
+	}
+	return a.Lines == (lines.Range{}) || (line != "" && a.Lines.Contains(line))
+}
+
+// validAcknowledgement reports an error at path for each thing wrong with an
+// acknowledgement, and whether it had none.
+func validAcknowledgement(r *config.Report, path string, a Acknowledgement) bool {
+	before := len(r.Findings)
+	switch {
+	case a.Rule == "":
+		r.Errorf(path+".rule", "is required")
+	case !slices.Contains(acknowledgeable, a.Rule):
+		r.Errorf(path+".rule", "%q is not a rule a document can acknowledge: use %s", a.Rule, orList(acknowledgeable))
+	}
+	if strings.TrimSpace(a.Reason) == "" {
+		r.Errorf(path+".reason", "is required: say why the warning is expected")
+	}
+	checkRange(r, path+".lines", a.Lines)
+	return len(r.Findings) == before
+}
+
+// forLines writes " for lines from v2.15 to v2.16", or nothing for every line.
+func forLines(r lines.Range) string {
+	switch {
+	case r.Since != "" && r.Until != "":
+		return " for lines " + r.Since + " to " + r.Until
+	case r.Since != "":
+		return " for lines from " + r.Since
+	case r.Until != "":
+		return " for lines up to " + r.Until
+	}
+	return ""
+}
+
+// streamsDifferFromDestination warns, on a holding of a project with a branch for
+// each line, of a line for which the final destination holds another stream of
+// the same artifact: the same kind and name, in another Stream. A line is
+// compared when the holder lists it and its holding covers it, and the
+// destination lists it and a holding of the same artifact covers it. The
+// destination is not compared with itself, and without one nothing is compared.
+func (s *set) streamsDifferFromDestination() {
+	dest := s.finalDestination()
+	if dest == nil {
+		return
+	}
+	type identity struct{ kind, name string } // an artifact, by its kind and name
+	type held struct {
+		o       Object
+		holding *Holding
+		id      identity
+		stream  string
+	}
+	destHeld := map[identity][]held{} // what the destination holds of each artifact
+	var holders []held
+	for _, o := range s.objs {
+		h, ok := o.(*Holding)
+		if !ok || h.Spec.Holds.Kind != HoldsRelease || len(h.Refs["artifact"]) != 1 {
+			continue
+		}
+		a, _ := s.index[KindArtifact][h.Refs["artifact"][0]].(*Artifact)
+		if a == nil || len(a.Refs["stream"]) != 1 {
+			continue
+		}
+		x := held{o, h, identity{a.Spec.Kind, a.Spec.Name}, a.Refs["stream"][0]}
+		if s.holder(h) == dest {
+			destHeld[x.id] = append(destHeld[x.id], x)
+		} else {
+			holders = append(holders, x)
+		}
+	}
+	for _, x := range holders {
+		holder := s.holder(x.holding)
+		if holder == nil || holder.Spec.Branches.Layout != LayoutPerLine {
+			continue
+		}
+		r := s.at(x.o)
+		for _, ln := range holder.Spec.Branches.Lines {
+			if !x.holding.Spec.Holds.Lines.Contains(ln.Line) || !listsLine(dest, ln.Line) {
+				continue
+			}
+			for _, d := range destHeld[x.id] {
+				if !d.holding.Spec.Holds.Lines.Contains(ln.Line) || d.stream == x.stream {
+					continue
+				}
+				r.WarnLinef(RuleStreamDiffersFromDestination, ln.Line, "refs.artifact",
+					"holds Stream %q for %s, where Project %q, the final destination, holds Stream %q", x.stream, ln.Line, dest.Name, d.stream)
+				break
+			}
+		}
+		s.add(r)
+	}
+}
+
+// finalDestination returns the Project that is the final destination, or nil.
+func (s *set) finalDestination() *Project {
+	for _, o := range s.objs {
+		if p, ok := o.(*Project); ok && p.Spec.FinalDestination {
+			return p
+		}
+	}
+	return nil
+}
+
+// listsLine reports whether a project has a branch entry for a line.
+func listsLine(p *Project, line string) bool {
+	for _, bl := range p.Spec.Branches.Lines {
+		if bl.Line == line {
+			return true
+		}
+	}
+	return false
+}
+
+// goBumpHoldings reports an Edit with the strategy goBump, which tidies go.mod
+// files, none of whose holdings has a location in the gomod format.
+func (s *set) goBumpHoldings() {
+	for _, o := range s.objs {
+		e, ok := o.(*Edit)
+		if !ok || e.Spec.Strategy != StrategyGoBump {
+			continue
+		}
+		found, refd := false, 0
+		for _, name := range e.Refs["holding"] {
+			h, _ := s.index[KindHolding][name].(*Holding)
+			if h == nil {
+				continue
+			}
+			refd++
+			for _, at := range h.Spec.At {
+				found = found || at.Format == FormatGoMod
+			}
+		}
+		if refd > 0 && !found {
+			r := s.at(o)
+			r.Errorf("refs.holding", "%s tidies go.mod files, and none of these holdings is in the gomod format", StrategyGoBump)
+			s.add(r)
+		}
 	}
 }

@@ -28,6 +28,20 @@ func TestTheGraphFindsAProjectByNameOrSlugWhateverTheCase(t *testing.T) {
 	assert.Nil(t, g.Project(""))
 }
 
+func TestTheGraphFindsAProjectByAnAliasWhateverTheCase(t *testing.T) {
+	g := chaintest.Load(t,
+		project("kuberlr-kubectl", "  repo: {name: rancher/kuberlr-kubectl}\n  aliases: [rk, kubectl]\n"),
+		project("rancher", "  repo: {name: rancher/rancher}\n"),
+	)
+
+	assert.Equal(t, []string{"rk", "kubectl"}, g.Project("kuberlr-kubectl").Aliases())
+	assert.Empty(t, g.Project("rancher").Aliases())
+	assert.Equal(t, "kuberlr-kubectl", g.Project("rk").Name())
+	assert.Equal(t, "kuberlr-kubectl", g.Project("KubeCtl").Name())
+	assert.Equal(t, "rancher", g.Project("rancher").Name(), "a name still finds its own project")
+	assert.Nil(t, g.Project("rk/rk"), "an alias is never a slug")
+}
+
 func TestTheGraphHasTheLines(t *testing.T) {
 	g := chaintest.Load(t, chaintest.Lines("v2.16", "v2.15"))
 

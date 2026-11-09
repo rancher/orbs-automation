@@ -12,15 +12,20 @@ type Holding struct {
 
 // HoldingSpec is the fields of a Holding.
 type HoldingSpec struct {
-	At    At    `yaml:"at"`
-	Holds Holds `yaml:"holds"`
+	At    Locations `yaml:"at"`
+	Holds Holds     `yaml:"holds"`
 }
 
-// At is where to look.
+// Locations is where a piece of a producer is held: one location, or a list for a
+// piece held in several places. A mapping reads as one location.
+type Locations []At
+
+// At is one place to look.
 type At struct {
-	File   string `yaml:"file"`   // a template
-	Key    string `yaml:"key"`    // a template, then a path in the format's own style
-	Format string `yaml:"format"` // yaml or dockerfile
+	File   string      `yaml:"file"`   // a template
+	Key    string      `yaml:"key"`    // a template, then a path in the format's own style
+	Format string      `yaml:"format"` // yaml, dockerfile or gomod
+	Lines  lines.Range `yaml:"lines"`  // the lines the file exists for
 }
 
 // Holds is what the place holds of a producer.

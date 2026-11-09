@@ -25,6 +25,9 @@ func (p *Project) Name() string { return p.Doc.Name }
 // Slug is the repo's owner/name.
 func (p *Project) Slug() string { return p.Doc.Spec.Repo.Name }
 
+// Aliases returns the shorthand names the Project is also found by.
+func (p *Project) Aliases() []string { return p.Doc.Spec.Aliases }
+
 // Steward is the team responsible for the project: managedBy if given, else orbs
 // if the repo is owned, else none. A repo outside the organization has none.
 func (p *Project) Steward() string {

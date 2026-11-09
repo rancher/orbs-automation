@@ -31,6 +31,9 @@ type Input struct {
 	// StepMessage is the commit message for a step that changed files. Without it
 	// the message is just what ran.
 	StepMessage func(bump.Unit) (string, error)
+	// StrategyMessage is the commit message for a strategy that changed files.
+	// Without it the message says which strategy ran and what it changed.
+	StrategyMessage func(bump.Unit) (string, error)
 	// OnCommit, when set, is called with each commit as it is made.
 	OnCommit func(workdir.CommitInfo)
 	Name     string // the commit's author and committer, or empty for the clone's git config
@@ -55,7 +58,7 @@ func (o Output) Tip() string {
 // Run runs the engine's lifecycle in the work directory (the pre-edit steps, the
 // write of the holdings, the strategies and the post-edit steps) and commits after
 // each of them that changed files: the write and a strategy with Message, a step
-// with StepMessage. A unit that changes nothing makes no commit. A step that fails
+// with StepMessage, and a strategy with StrategyMessage. A unit that changes nothing makes no commit. A step that fails
 // is the engine's *StepError, and the caller aborts the work, which removes the
 // commits made so far. A run in which nothing changed is ErrNothingChanged.
 func Run(ctx context.Context, runner bump.StepRunner, in Input) (Output, error) {
@@ -63,10 +66,16 @@ func Run(ctx context.Context, runner bump.StepRunner, in Input) (Output, error) 
 	var commits []workdir.CommitInfo
 	after := func(ctx context.Context, u bump.Unit) error {
 		message := in.Message
-		if u.Kind == bump.UnitStep {
+		switch u.Kind {
+		case bump.UnitStep:
 			var err error
 			if message, err = messageFor(in, u); err != nil {
 				return fmt.Errorf("the commit message for %s: %w", strings.Join(u.Run, " "), err)
+			}
+		case bump.UnitStrategy:
+			var err error
+			if message, err = strategyMessageFor(in, u); err != nil {
+				return fmt.Errorf("the commit message for the %s strategy: %w", u.Strategy, err)
 			}
 		}
 		hash, err := w.Commit(ctx, workdir.GitCommit{Message: message, Name: in.Name, Email: in.Email, Sign: in.Sign})
@@ -106,4 +115,21 @@ func messageFor(in Input, u bump.Unit) (string, error) {
 		return "Run `" + strings.Join(u.Run, " ") + "`", nil
 	}
 	return in.StepMessage(u)
+}
+
+// strategyMessageFor is the commit message of a strategy, from StrategyMessage or,
+// when there is none, which strategy ran and what it changed.
+func strategyMessageFor(in Input, u bump.Unit) (string, error) {
+	if in.StrategyMessage != nil {
+		return in.StrategyMessage(u)
+	}
+	message := "Run " + u.Strategy
+	if len(u.Changes) > 0 {
+		lines := make([]string, len(u.Changes))
+		for i, c := range u.Changes {
+			lines[i] = "- " + c.Description
+		}
+		message += "\n\n" + strings.Join(lines, "\n")
+	}
+	return message, nil
 }

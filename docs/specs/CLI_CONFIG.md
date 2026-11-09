@@ -97,7 +97,7 @@ File-only keys, all **(leaning)**:
 | `signCommits` | `true` makes git sign the commits `gero ship` makes, with the engineer's own key; env `GERO_SIGN_COMMITS` beats the file. A commit that cannot be signed fails the target, never falls back to unsigned ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing)) |
 | `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
 | `repos.search` | Directories scanned to depth 2 for clones, matched to slugs by remote URL. No directory layout is assumed |
-| `repos.cloneRoot` | The one directory `gero repo clone` puts new clones in, as `<root>/<name>`. Precedence: `--into`, then env `GERO_REPOS_CLONE_ROOT`, then this key; with none set the command fails naming the three. It is scanned like a `repos.search` entry, so a clone is found again without another step. A `repos.paths` entry for the slug beats the root. Never inferred from `repos.search` |
+| `repos.cloneRoot` | The one directory `gero repo clone` puts new clones in, as `<root>/<name>`, the repository's name. Precedence: `--into`, then env `GERO_REPOS_CLONE_ROOT`, then this key; with none set the command fails naming the three. It is scanned like a `repos.search` entry, so a clone is found again without another step. A `repos.paths` entry for the slug beats the root. Never inferred from `repos.search` |
 | `repos.overrides.<slug>.upstream` | Per-repo upstream remote name |
 | `repos.overrides.<slug>.pushTo` | Per-repo `pushTo`, which beats the project's and the user's own |
 
@@ -136,8 +136,9 @@ Commands that read the central `config/` find it in this order:
 2. `GERO_CENTRAL_CONFIG_DIR`
 3. `centralConfigDir` in the user file
 4. `./config`, when the working directory is a checkout of the central repo (reported as source `cwd`)
+5. The central config bundle of the `gero` release, from the user's cache or fetched ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), only when none of 1 to 4 is named, and never in CI
 
-If none resolves, the command fails with a message listing these four places. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow.
+A local source always wins. One that is named but broken (a missing directory, invalid or empty config) is an error and never falls back to the bundle, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow, to the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
 
 ## Not built yet
 

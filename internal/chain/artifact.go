@@ -17,6 +17,9 @@ func (a *Artifact) Stream() *Stream { return a.stream }
 // IsImage reports whether the artifact is a container image, and not a file.
 func (a *Artifact) IsImage() bool { return a.Doc.Spec.Kind == v1alpha2.ArtifactImage }
 
+// IsGoMod reports whether the artifact is a Go module.
+func (a *Artifact) IsGoMod() bool { return a.Doc.Spec.Kind == v1alpha2.ArtifactGoMod }
+
 // Ref is the artifact's name: an image's repository path, or a file's name
 // template.
 func (a *Artifact) Ref() string { return a.Doc.Spec.Name }

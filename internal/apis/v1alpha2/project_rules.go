@@ -61,6 +61,8 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 		r.Errorf("spec.repo.external", "a repo outside the organization cannot be owned: set owned to false")
 	}
 
+	p.validateAliases(r)
+
 	pr := p.Spec.PullRequests
 	if pr.PushTo != "" {
 		oneOf(r, "spec.pullRequests.pushTo", pr.PushTo, PushToFork, PushToUpstream)
@@ -75,6 +77,25 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 	}
 
 	p.validateBranches(r)
+}
+
+// validateAliases checks that each alias is a lowercase slug, listed once, and
+// not the Project's own name, which already finds it. Whether another Project has
+// the alias or the name is checked across documents.
+func (p *Project) validateAliases(r *config.Report) {
+	seen := map[string]bool{}
+	for i, alias := range p.Spec.Aliases {
+		at := fmt.Sprintf("spec.aliases[%d]", i)
+		switch {
+		case !slug.MatchString(alias):
+			r.Errorf(at, "%q must be a lowercase slug such as rk", alias)
+		case seen[alias]:
+			r.Errorf(at, "%q is listed twice", alias)
+		case alias == p.Name:
+			r.Errorf(at, "%q is the name of the Project, which finds it already", alias)
+		}
+		seen[alias] = true
+	}
 }
 
 func (p *Project) validateBranches(r *config.Report) {

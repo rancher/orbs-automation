@@ -227,6 +227,21 @@ func trace(ctx context.Context, ws ship.Reader, p *chain.Project, opts Options, 
 // exists the newest. A Relation of newer means the release is newer than what the
 // branch holds, so the branch is behind.
 func holdStatus(h ship.HeldValue) string {
+	status := compareStatus(h)
+	if h.Differ && h.DifferReason == "" && h.Error == "" {
+		// The locations of the holding hold different values. A document that says
+		// that is expected is not contradicted here, and the values are still shown.
+		if status == "-" {
+			return "locations differ"
+		}
+		return status + "; locations differ"
+	}
+	return status
+}
+
+// compareStatus is the part of the status that compares what is held with the
+// releases.
+func compareStatus(h ship.HeldValue) string {
 	if h.Error != "" {
 		return "unreadable: " + h.Error
 	}
@@ -474,15 +489,37 @@ func renderText(st Status, view *style.Renderer) string {
 		b.WriteString(ui.Align(table, view.Width))
 	}
 	for _, src := range st.Sources {
-		renderHoldings(&b, view, fmt.Sprintf("Sources: %s (%s)", src.Name, src.Producer), src.Error, src.Targets)
+		renderHoldings(&b, view, heading("Sources", src.Name, src.Producer, src.Stream, several(st.Sources, src.Producer, func(h ship.SourceHoldings) string { return h.Producer })), src.Error, src.Targets)
 	}
 	for _, c := range st.Consumers {
-		renderHoldings(&b, view, fmt.Sprintf("Consumers: %s (%s)", c.Name, c.Consumer), c.Error, c.Targets)
+		renderHoldings(&b, view, heading("Consumers", c.Name, c.Consumer, c.Stream, several(st.Consumers, c.Consumer, func(h ship.ConsumerHoldings) string { return h.Consumer })), c.Error, c.Targets)
 	}
 	if st.TraceError != "" {
 		b.WriteString("\n" + view.Style(style.Warn, "could not trace: "+st.TraceError) + "\n")
 	}
 	return b.String()
+}
+
+// several says whether a project is in the list more than once: it is taken from
+// or ships for more than one stream.
+func several[T any](list []T, slug string, slugOf func(T) string) bool {
+	n := 0
+	for _, e := range list {
+		if slugOf(e) == slug {
+			n++
+		}
+	}
+	return n > 1
+}
+
+// heading is the title of a section: the kind, the project and its repository, and
+// the stream when the project is there for several of them.
+func heading(kind, name, slug, stream string, withStream bool) string {
+	h := fmt.Sprintf("%s: %s (%s)", kind, name, slug)
+	if withStream && stream != "" {
+		h += ", stream " + stream
+	}
+	return h
 }
 
 // renderHoldings is one consumer's or one source's section: what each branch holds
@@ -511,7 +548,7 @@ func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText s
 			if v.Stable != nil {
 				latest = v.Stable.Tag
 			}
-			holds := v.Current
+			holds := heldCell(v)
 			if holds == "" {
 				holds = "-"
 			}
@@ -521,6 +558,22 @@ func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText s
 		}
 	}
 	b.WriteString(ui.Align(table, view.Width))
+}
+
+// heldCell is what a holding holds, as the HOLDS column shows it: the value, or
+// each distinct value of its locations, in the order they are listed, when they
+// differ.
+func heldCell(v ship.HeldValue) string {
+	if !v.Differ {
+		return v.Current
+	}
+	var values []string
+	for _, loc := range v.Locations {
+		if !slices.Contains(values, loc.Current) {
+			values = append(values, loc.Current)
+		}
+	}
+	return strings.Join(values, ", ")
 }
 
 // heads is a row of column heads, as secondary text, indented under its

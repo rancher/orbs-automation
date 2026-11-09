@@ -27,14 +27,18 @@ type lineSpec struct{ Line, Branch string }
 type projectSpec struct {
 	Name, Repo, ManagedBy string
 	Owned                 bool
-	Title                 string     // pullRequests.title
-	PushTo                string     // pullRequests.pushTo
-	Labels, BotLabels     []string   // pullRequests.labels and botLabels
-	Lines                 []lineSpec // the lines it lists, on a branch each; none is a single branch
-	Stream                string     // a producer's stream, as the lines of its spec
-	Scheme                string     // a producer's stream scheme; semver when empty
-	Images                []string   // a producer's image artifacts
+	Title                 string        // pullRequests.title
+	PushTo                string        // pullRequests.pushTo
+	Labels, BotLabels     []string      // pullRequests.labels and botLabels
+	Lines                 []lineSpec    // the lines it lists, on a branch each; none is a single branch
+	Stream                string        // a producer's stream, as the lines of its spec
+	Scheme                string        // a producer's stream scheme; semver when empty
+	Images                []string      // a producer's image artifacts
+	Streams               []extraStream // more streams of a producer, each with an image
 }
+
+// extraStream is another stream of a producer, with the pattern of its tags and one image.
+type extraStream struct{ Name, Pattern, Image string }
 
 // stepSpec is a step of an edit.
 type stepSpec struct{ Run, Since, Until, From string }
@@ -49,6 +53,9 @@ type link struct {
 	Strategy          string // the strategy of an edit that follows the holding
 	Pre, Post         []stepSpec
 	PackageForTheEdit string
+	Artifact          string // the artifact the holding holds, when not the producer's first image
+	Locations         string // the at block as YAML, for a holding with several locations; File and Key otherwise
+	Acknowledge       string // the lines of an acknowledge list on the holding
 }
 
 // fakeWorkspace is a workspace served from the specs: the documents are built
@@ -103,6 +110,10 @@ func (f *fakeWorkspace) docs() []string {
 		stream = "  scheme: " + f.producer.Scheme + "\n" + stream
 	}
 	docs = append(docs, chaintest.Doc("Stream", f.producer.Name, "{project: "+f.producer.Name+"}", stream))
+	for _, x := range f.producer.Streams {
+		docs = append(docs, chaintest.Doc("Stream", f.producer.Name+"-"+x.Name, "{project: "+f.producer.Name+"}", "  tagPattern: \""+x.Pattern+"\"\n  universal: true\n"))
+		docs = append(docs, chaintest.Doc("Artifact", f.producer.Name+"-"+x.Name+"-image", "{stream: "+f.producer.Name+"-"+x.Name+"}", "  kind: image\n  name: "+x.Image+"\n"))
+	}
 	for i, image := range f.producer.Images {
 		docs = append(docs, chaintest.Doc("Artifact", fmt.Sprintf("%s-image-%d", f.producer.Name, i), "{stream: "+f.producer.Name+"}", "  kind: image\n  name: "+image+"\n"))
 	}
@@ -121,8 +132,19 @@ func (f *fakeWorkspace) docs() []string {
 			holds += ", lines: " + l.HoldsLines
 		}
 		holds += "}\n"
-		docs = append(docs, chaintest.Doc("Holding", name, "{project: "+c.Name+", artifact: "+f.producer.Name+"-image-0}",
-			fmt.Sprintf("  at: {file: %s, key: %s}\n", file, key)+holds))
+		at := fmt.Sprintf("  at: {file: %s, key: %s}\n", file, key)
+		if l.Locations != "" {
+			at = l.Locations
+		}
+		artifact := f.producer.Name + "-image-0"
+		if l.Artifact != "" {
+			artifact = l.Artifact
+		}
+		holding := chaintest.Doc("Holding", name, "{project: "+c.Name+", artifact: "+artifact+"}", at+holds)
+		if l.Acknowledge != "" {
+			holding = strings.Replace(holding, "name: "+name+"\n", "name: "+name+"\nacknowledge:\n"+l.Acknowledge, 1)
+		}
+		docs = append(docs, holding)
 		if l.Strategy != "" || len(l.Pre)+len(l.Post) > 0 {
 			spec := ""
 			if l.Strategy != "" {

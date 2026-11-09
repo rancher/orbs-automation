@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// RuleUnknownKey is the rule of the warning for a key a user file does not have.
+const RuleUnknownKey = "unknown-key"
+
 // Severity says whether a finding makes the object invalid.
 type Severity int
 
@@ -22,11 +25,18 @@ type Finding struct {
 	Doc      int    // the document's place in the source, from 1; 0 when there is one
 	Label    string // what the document is, such as Project "rancher"
 	Path     string // where in the document, such as spec.layout
-	Msg      string
+	Line     string // the Rancher line a warning is about, when it is about one
+	Reason   string // why a warning is expected, when the document acknowledges it
+	// Acknowledged is set on a warning that its document says is expected; it is not
+	// shown as a warning, and Reason says why.
+	Acknowledged bool
+	Rule         string // the stable id of the rule a warning is of, such as circular-holding; none for an error
+	Msg          string
 }
 
 // Error returns the finding as one line naming the source, the document, the path
-// and the message, leaving out what is not set.
+// and the message, leaving out what is not set, and the rule of a warning at the
+// end in brackets.
 func (f Finding) Error() string {
 	parts := make([]string, 0, 5)
 	if f.Source != "" {
@@ -42,7 +52,11 @@ func (f Finding) Error() string {
 		parts = append(parts, f.Path)
 	}
 	parts = append(parts, f.Msg)
-	return strings.Join(parts, ": ")
+	text := strings.Join(parts, ": ")
+	if f.Rule != "" {
+		text += " [" + f.Rule + "]"
+	}
+	return text
 }
 
 // Report collects the findings of one document.
@@ -61,20 +75,40 @@ func NewReport(source string, doc int, label string) Report {
 	return Report{source: source, doc: doc, label: label}
 }
 
-func (r *Report) add(sev Severity, path, msg string) {
+func (r *Report) add(sev Severity, rule, path, msg string) {
 	r.Findings = append(r.Findings, Finding{
-		Severity: sev, Source: r.source, Doc: r.doc, Label: r.label, Path: path, Msg: msg,
+		Severity: sev, Source: r.source, Doc: r.doc, Label: r.label, Path: path, Rule: rule, Msg: msg,
 	})
 }
 
 // Errorf reports an error at path.
 func (r *Report) Errorf(path, format string, args ...any) {
-	r.add(Error, path, fmt.Sprintf(format, args...))
+	r.add(Error, "", path, fmt.Sprintf(format, args...))
 }
 
-// Warnf reports a warning at path.
-func (r *Report) Warnf(path, format string, args ...any) {
-	r.add(Warning, path, fmt.Sprintf(format, args...))
+// Warnf reports a warning of a rule at path. The rule is the stable id that
+// names the warning, which a document can acknowledge.
+func (r *Report) Warnf(rule, path, format string, args ...any) {
+	r.add(Warning, rule, path, fmt.Sprintf(format, args...))
+}
+
+// WarnLinef is Warnf for a warning about one Rancher line, which an
+// acknowledgement may then be limited to.
+func (r *Report) WarnLinef(rule, line, path, format string, args ...any) {
+	r.Warnf(rule, path, format, args...)
+	r.Findings[len(r.Findings)-1].Line = line
+}
+
+// Acknowledged returns the warnings that a document says are expected, in the
+// order reported. They are not in Warnings.
+func (r Report) Acknowledged() []Finding {
+	var out []Finding
+	for _, f := range r.Findings {
+		if f.Severity == Warning && f.Acknowledged {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // Err returns the errors as one error that joins them, or nil when there are
@@ -90,11 +124,12 @@ func (r Report) Err() error {
 	return errors.Join(errs...)
 }
 
-// Warnings returns the findings that are warnings, in the order reported.
+// Warnings returns the findings that are warnings and not acknowledged, in the
+// order reported.
 func (r Report) Warnings() []Finding {
 	var out []Finding
 	for _, f := range r.Findings {
-		if f.Severity == Warning {
+		if f.Severity == Warning && !f.Acknowledged {
 			out = append(out, f)
 		}
 	}

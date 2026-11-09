@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -20,6 +21,9 @@ import (
 var (
 	// ErrKeyNotFound is returned when the path names no key in the document.
 	ErrKeyNotFound = errors.New("key not found")
+	// ErrInvalidYAML is returned when the file is not YAML, and the message says
+	// where and shows the line.
+	ErrInvalidYAML = errors.New("not valid YAML")
 	// ErrInvalidPath is returned for a path that is not written in the path syntax:
 	// an empty step, a quote left open, or an index that is not a number.
 	ErrInvalidPath = errors.New("invalid path")
@@ -50,9 +54,9 @@ func Get(src []byte, path string) (string, error) {
 
 // find returns the scalar node at path in the first document of src.
 func find(src []byte, path string) (*yaml.Node, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(src, &doc); err != nil {
-		return nil, fmt.Errorf("read YAML: %w", err)
+	doc, masks, err := parse(src)
+	if err != nil {
+		return nil, err
 	}
 	if path == "" || len(doc.Content) == 0 {
 		return nil, fmt.Errorf("%w: %q", ErrKeyNotFound, path)
@@ -75,7 +79,97 @@ func find(src []byte, path string) (*yaml.Node, error) {
 	if node.Kind != yaml.ScalarNode {
 		return nil, fmt.Errorf("%w: %q", ErrNotScalar, path)
 	}
+	if col, masked := masks[node.Line]; masked && col == node.Column && strings.HasPrefix(node.Value, "_") {
+		node.Value = "%" + node.Value[1:] // the value is a placeholder: its text is what the file has
+	}
 	return node, nil
+}
+
+// placeholder is the start of a value that begins with a percent sign: after a key
+// and its colon, or after the dash of a list item.
+var placeholder = regexp.MustCompile(`(:|-)[ \t]+%`)
+
+// maxPlaceholders bounds how many placeholders a file may have before it is
+// read as the YAML it is not.
+const maxPlaceholders = 200
+
+// parse reads src as YAML. A value that starts with a percent sign is a template
+// placeholder that a build fills in (tag: %TAG% in a chart's values), and a
+// percent sign cannot start a plain YAML value, so the file as it stands is not
+// YAML. Each such value is read with its percent sign as a letter, which changes
+// no length and so no position, and masks says where (line to column), so a value
+// that is one reads as the text it has. Any other problem is ErrInvalidYAML, with
+// the line.
+func parse(src []byte) (doc yaml.Node, masks map[int]int, err error) {
+	work := bytes.Clone(src)
+	masks = map[int]int{}
+	for range maxPlaceholders {
+		doc = yaml.Node{}
+		err = yaml.Unmarshal(work, &doc)
+		if err == nil {
+			return doc, masks, nil
+		}
+		line, ok := errorLine(err)
+		if !ok {
+			line = 1 // the library leaves the line out of an error on the first one
+		}
+		at, col, found := placeholderOn(work, line)
+		if !found {
+			break
+		}
+		work[at] = '_'
+		masks[line] = col
+	}
+	return yaml.Node{}, nil, invalidYAML(src, err)
+}
+
+// lineRef is the "line 3" a YAML error names.
+var lineRef = regexp.MustCompile(`line (\d+)`)
+
+// errorLine is the line a YAML error names.
+func errorLine(err error) (int, bool) {
+	m := lineRef.FindStringSubmatch(err.Error())
+	if m == nil {
+		return 0, false
+	}
+	n, convErr := strconv.Atoi(m[1])
+	return n, convErr == nil && n > 0
+}
+
+// placeholderOn finds the percent sign that starts a value on a line: its byte
+// offset in src and its column, counted in characters as the parser does.
+func placeholderOn(src []byte, line int) (at, col int, ok bool) {
+	start := offset(src, line, 1)
+	end := len(src)
+	if i := bytes.IndexByte(src[start:], '\n'); i >= 0 {
+		end = start + i
+	}
+	loc := placeholder.FindIndex(src[start:end])
+	if loc == nil {
+		return 0, 0, false
+	}
+	at = start + loc[1] - 1
+	return at, utf8.RuneCount(src[start:at]) + 1, true
+}
+
+// yamlPrefix is what the YAML library puts in front of its messages.
+var yamlPrefix = regexp.MustCompile(`^yaml: (?:line \d+: )?`)
+
+// invalidYAML is ErrInvalidYAML with where the file is wrong and the line itself,
+// so the cause is in the message and needs no counting.
+func invalidYAML(src []byte, cause error) error {
+	what := yamlPrefix.ReplaceAllString(cause.Error(), "")
+	line, ok := errorLine(cause)
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrInvalidYAML, what)
+	}
+	start := offset(src, line, 1)
+	end := len(src)
+	if i := bytes.IndexByte(src[start:], '\n'); i >= 0 {
+		end = start + i
+	}
+	text := strings.TrimRight(string(src[start:end]), "\r")
+	return fmt.Errorf("%w at line %d (%q): %s", ErrInvalidYAML, line, text, what)
 }
 
 // step is one move down a path: a key of a mapping, or an item of a list.

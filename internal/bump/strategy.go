@@ -23,6 +23,7 @@ func NewStrategyRegistry() *StrategyRegistry {
 func Builtin() *StrategyRegistry {
 	r := NewStrategyRegistry()
 	r.Register(chartsPackageBump{})
+	r.Register(goBump{})
 	return r
 }
 

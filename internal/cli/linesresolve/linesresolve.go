@@ -293,6 +293,19 @@ func universal(r bump.Route) bool {
 	return false
 }
 
+// holdingsOn are the names of the holdings of a route that cover a line: a route
+// that holds several streams of a producer has a holding for each, and each is for
+// some lines only.
+func holdingsOn(r bump.Route, line string) []string {
+	var names []string
+	for _, h := range r.Holdings {
+		if h.Doc.Spec.Holds.Lines.Contains(line) {
+			names = append(names, h.Name())
+		}
+	}
+	return names
+}
+
 // holdingNames are the names of the holdings of a route.
 func holdingNames(r bump.Route) []string {
 	names := make([]string, len(r.Holdings))
@@ -373,25 +386,33 @@ func (m mapper) feedsHub(p *chain.Project, r bump.Route, line string, hubNode No
 // that follows lines and has none.
 func producerLink(r bump.Route, line string) (Link, bool) {
 	p := r.Producer
+	held := holdingsOn(r, line)
+	if len(held) == 0 {
+		return Link{}, false // none of its holdings is for this line
+	}
 	if universal(r) {
-		return Link{Project: p.Slug(), Name: p.Name(), Holdings: holdingNames(r), Universal: true}, true
+		return Link{Project: p.Slug(), Name: p.Name(), Holdings: held, Universal: true}, true
 	}
 	pl, ok := nodeOf(p, line)
 	if !ok {
 		return Link{}, false
 	}
-	return Link{Project: p.Slug(), Name: p.Name(), Holdings: holdingNames(r), Series: pl.Series, Branch: pl.Branch}, true
+	return Link{Project: p.Slug(), Name: p.Name(), Holdings: held, Series: pl.Series, Branch: pl.Branch}, true
 }
 
 // shipsTo is the link to the consumer of route r that a release of its producer for
 // the line goes to, with the consumer's branches. It is false when none can be worked
 // out, such as a consumer that does not have the line.
 func shipsTo(r bump.Route, line string) (Link, bool) {
+	held := holdingsOn(r, line)
+	if len(held) == 0 {
+		return Link{}, false
+	}
 	branches, err := branchesOn(r, line)
 	if err != nil {
 		return Link{}, false
 	}
-	return Link{Project: r.Consumer.Slug(), Name: r.Consumer.Name(), Holdings: holdingNames(r), Branches: branches}, true
+	return Link{Project: r.Consumer.Slug(), Name: r.Consumer.Name(), Holdings: held, Branches: branches}, true
 }
 
 // nodeOf is the project's own place on a line: false when it has no such line. The

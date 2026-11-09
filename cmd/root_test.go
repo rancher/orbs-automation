@@ -179,6 +179,12 @@ func resetFlags() {
 		_ = f.Value.Set(f.DefValue)
 		f.Changed = false
 	}
+	if c, _, err := rootCmd.Find([]string{"repo", "clone"}); err == nil {
+		c.Flags().VisitAll(func(f *pflag.Flag) {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		})
+	}
 	if c, _, err := rootCmd.Find([]string{"init"}); err == nil {
 		c.Flags().VisitAll(func(f *pflag.Flag) {
 			if f.Name == "upstream" || f.Name == "central-config-dir" { // the global ones are reset above

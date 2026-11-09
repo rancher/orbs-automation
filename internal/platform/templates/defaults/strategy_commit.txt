@@ -1,0 +1,7 @@
+Run {strategy}
+
+{changes}
+
+Part of updating {source} to {tag}: the {strategy} strategy of edit {edit}.
+
+Automation: gero ship

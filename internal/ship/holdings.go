@@ -16,6 +16,9 @@ import (
 type ConsumerHoldings struct {
 	Consumer string `json:"consumer"` // the repository, owner/name
 	Name     string `json:"name"`     // its config name
+	// Stream is the stream of the producer whose releases this is: a consumer that
+	// holds artifacts of several streams has an entry for each.
+	Stream string `json:"stream,omitempty"`
 	// Error is why this consumer could not be traced at all: its branches could not
 	// be read, or no branch or release could be worked out. The other consumers are
 	// traced all the same.
@@ -70,6 +73,19 @@ type HeldValue struct {
 	// Error is why the holding could not be read: its file is not in the branch, or
 	// it holds no value at its place.
 	Error string `json:"error,omitempty"`
+	// Locations is each place the holding is read, for a holding with more than one.
+	Locations []HeldLocation `json:"locations,omitempty"`
+	// Differ says the locations hold different values, which the rule
+	// locations-differ names. DifferReason is why the holding's document says that
+	// is expected, when it acknowledges it.
+	Differ       bool   `json:"differ,omitempty"`
+	DifferReason string `json:"differReason,omitempty"`
+}
+
+// HeldLocation is what one location of a holding holds in a branch.
+type HeldLocation struct {
+	File    string `json:"file"`
+	Current string `json:"current"`
 }
 
 // Verdict is how what a branch holds stands against one release.
@@ -106,7 +122,7 @@ func Holdings(ctx context.Context, ws Reader, producer *chain.Project) ([]Consum
 // holdRoute traces one route: what the consumer holds on each branch the
 // producer's releases go to.
 func holdRoute(ctx context.Context, ws Reader, route bump.Route) ConsumerHoldings {
-	out := ConsumerHoldings{Consumer: route.Consumer.Slug(), Name: route.Consumer.Name()}
+	out := ConsumerHoldings{Consumer: route.Consumer.Slug(), Name: route.Consumer.Name(), Stream: route.Stream.Name()}
 	res, err := resolveRoute(ctx, ws, route)
 	if err != nil {
 		out.Error = err.Error()
@@ -157,7 +173,15 @@ func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held
 		return v
 	}
 	c := chk[0]
-	v.File, v.Current = c.Change.Path, c.Current
+	v.File, v.Current = c.Locations[0].Place.File, c.Current
+	if len(c.Locations) > 1 {
+		for _, loc := range c.Locations {
+			v.Locations = append(v.Locations, HeldLocation{File: loc.Place.File, Current: loc.Current})
+		}
+		if v.Differ = c.Differ(); v.Differ {
+			v.DifferReason, _ = held.Acknowledgement(chain.RuleLocationsDiffer, sp.target.Line)
+		}
+	}
 	v.Stage = r.scheme.Stage(heldTag(c.Current))
 	v.Stable = verdict(r.scheme, sp.release, c.Check)
 	switch {
@@ -232,6 +256,9 @@ func (m *memoTree) ReadFile(ctx context.Context, path string) ([]byte, error) {
 type SourceHoldings struct {
 	Producer string `json:"producer"` // the repository, owner/name
 	Name     string `json:"name"`     // its config name
+	// Stream is the stream of the source whose releases this is, as for
+	// ConsumerHoldings.
+	Stream string `json:"stream,omitempty"`
 	// Error is why the source could not be traced, as for ConsumerHoldings.
 	Error   string    `json:"error,omitempty"`
 	Targets []Holding `json:"targets,omitempty"`
@@ -255,7 +282,7 @@ func Sources(ctx context.Context, ws Reader, consumer *chain.Project) ([]SourceH
 	out := make([]SourceHoldings, len(routes))
 	for i, route := range routes {
 		held := holdRoute(ctx, ws, route)
-		out[i] = SourceHoldings{Producer: route.Producer.Slug(), Name: route.Producer.Name(), Error: held.Error, Targets: held.Targets}
+		out[i] = SourceHoldings{Producer: route.Producer.Slug(), Name: route.Producer.Name(), Stream: held.Stream, Error: held.Error, Targets: held.Targets}
 	}
 	return out, nil
 }

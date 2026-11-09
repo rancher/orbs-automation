@@ -1,6 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
+    "Acknowledgement": {
+      "properties": {
+        "rule": {
+          "type": "string",
+          "description": "the id of the rule of the warning"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the warning is expected"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range",
+          "description": "only for a warning about these lines; every line when not given"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Acknowledgement says a warning of a rule on this document is expected, so it is not shown as one."
+    },
     "Artifact": {
       "properties": {
         "apiVersion": {
@@ -33,6 +52,13 @@
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
         },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
         "spec": {
           "$ref": "#/$defs/ArtifactSpec"
         }
@@ -53,13 +79,14 @@
           "type": "string",
           "enum": [
             "image",
-            "file"
+            "file",
+            "gomod"
           ],
-          "description": "image or file"
+          "description": "image, file or gomod"
         },
         "name": {
           "type": "string",
-          "description": "an image's repository path, or a file name template"
+          "description": "an image's repository path, a file name template or a Go module path"
         },
         "lines": {
           "$ref": "#/$defs/Range"
@@ -94,14 +121,20 @@
           "type": "string",
           "enum": [
             "yaml",
-            "dockerfile"
+            "dockerfile",
+            "gomod",
+            "regex"
           ],
-          "description": "yaml or dockerfile"
+          "description": "yaml, dockerfile or gomod"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range",
+          "description": "the lines the file exists for"
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "At is where to look."
+      "description": "At is one place to look."
     },
     "BranchLine": {
       "properties": {
@@ -206,6 +239,13 @@
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
         },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
         "spec": {
           "$ref": "#/$defs/EditSpec"
         }
@@ -280,6 +320,13 @@
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
         },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
         "spec": {
           "$ref": "#/$defs/HoldingSpec"
         }
@@ -297,7 +344,17 @@
     "HoldingSpec": {
       "properties": {
         "at": {
-          "$ref": "#/$defs/At"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/At"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/At"
+              },
+              "type": "array"
+            }
+          ]
         },
         "holds": {
           "$ref": "#/$defs/Holds"
@@ -418,6 +475,13 @@
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
         },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
         "spec": {
           "$ref": "#/$defs/ProjectSpec"
         }
@@ -436,6 +500,13 @@
       "properties": {
         "repo": {
           "$ref": "#/$defs/Repo"
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "shorthand names, as good as the name to find the Project"
         },
         "finalDestination": {
           "type": "boolean"
@@ -514,6 +585,13 @@
           },
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
         },
         "spec": {
           "$ref": "#/$defs/RancherLinesSpec"
@@ -660,6 +738,13 @@
           },
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
         },
         "spec": {
           "$ref": "#/$defs/StreamSpec"
