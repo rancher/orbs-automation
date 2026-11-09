@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -142,13 +143,33 @@ func stepMessage(in previewInput) func(bump.Unit) (string, error) {
 	}
 }
 
+// blankLines is two or more blank lines in a row.
+var blankLines = regexp.MustCompile(`\n{3,}`)
+
+// bullets lists changes, one bullet each.
+func bullets(changes []bump.Change) string {
+	lines := make([]string, len(changes))
+	for i, c := range changes {
+		lines[i] = "- " + c.Description
+	}
+	return strings.Join(lines, "\n")
+}
+
 // strategyMessage returns the function that makes the commit message of a
 // strategy that changed files: which strategy ran and what it changed, from the
 // embedded template.
 func strategyMessage(in previewInput) func(bump.Unit) (string, error) {
-	return func(bump.Unit) (string, error) {
+	return func(u bump.Unit) (string, error) {
 		vars := textVars(in)
-		return templates.Render(templates.StrategyCommitMessage(), vars)
+		vars["strategy"] = u.Strategy
+		vars["edit"] = u.Edit
+		vars["changes"] = bullets(u.Changes)
+		msg, err := templates.Render(templates.StrategyCommitMessage(), vars)
+		if err != nil {
+			return "", err
+		}
+		// A strategy that names no change leaves two blank lines where the list was.
+		return blankLines.ReplaceAllString(msg, "\n\n"), nil
 	}
 }
 

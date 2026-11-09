@@ -39,7 +39,7 @@ func Body() string { return text("body.md") + "\n" }
 // StrategyCommitMessage is the commit message of a strategy that changed files:
 // which strategy ran, what it changed, where it fits in the bump, and the
 // trailers. It may use StrategyCommitVars.
-func StrategyCommitMessage() string { return "" }
+func StrategyCommitMessage() string { return text("strategy_commit.txt") + "\n" }
 
 // StepCommitMessage is the commit message of a step that changed files: what
 // ran, where it fits in the bump, and the trailers. It may use StepCommitVars.
