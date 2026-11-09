@@ -162,6 +162,21 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A step run `from: producer` needs a producer that is owned
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
 
+## Warnings
+
+A warning never makes a document invalid. It names its rule by a stable id, shown at the end of the finding in brackets (`... is circular [circular-holding]`); an id is never renamed, because a document will name it to acknowledge the warning ([O13](CONFIG_UNITS.md#o13-how-is-a-warning-acknowledged)).
+
+| Rule | Raised when | Built |
+|---|---|---|
+| `circular-holding` | a project holds something of another, which holds something of it | yes |
+| `default-branch-past-development` | a line with no `branch` is past development, so it is read from the default branch | yes |
+| `unknown-key` | a user file has a key it does not know (the user file is not a document, so it cannot be acknowledged) | yes |
+| `locations-differ` | the locations of one Holding hold different versions for a line | no |
+| `stream-differs-from-destination` | a project with `layout: perLine` holds another stream of an artifact than the `finalDestination` for a line | no |
+| `lifecycle-date` | a release is shipped to a line past a lifecycle date | no |
+
+The names of the rules not built are provisional until they are.
+
 ## Where today's fields went
 
 [CONFIG_UNITS](CONFIG_UNITS.md#where-todays-fields-go) has the mapping. `release.branching: perLineTag` is no longer a layout: a project whose lines are only in its tags is `branches.layout: single` with a Stream whose scheme gives the line.

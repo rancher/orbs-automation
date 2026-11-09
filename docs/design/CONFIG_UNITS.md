@@ -273,7 +273,7 @@ Provisional: none of these is forced by the shell and SCC to Rancher baseline, w
 * **Context:** warnings are only ever shown. Today's are a lifecycle date, a line on the default branch after it is past development, a circular holding and an unknown key; this work adds two more (a Holding's locations disagree, and a perLine project holds a different stream than Rancher for a line). The two new ones will fire on real data from the first run (BRO v2.14 and v2.12), so a deliberate difference needs a way to be said.
 * **Evidence:** a finding has a severity and the path of the document it names (`internal/platform/config/report.go`) but no stable id for its rule, so nothing can say "this one is expected".
 * **Option A, none:** warnings stay and are counted by `gero doctor`. **Option B, an acknowledgement on the document the finding names:** `acknowledge: [{rule, reason}]`, with the reason required, and an acknowledgement that no longer matches a finding is itself a warning. **Option C, a separate `Acknowledgement` kind,** in one place. **Option D, a user file:** rejected, as it would differ by machine.
-* **Lean B**, applied first to the warnings that exist, then to the two new ones. The first step is a stable rule id on every finding, which is also what a table of the warnings in the docs needs.
+* **Lean B**, applied first to the warnings that exist, then to the two new ones. The first step, a stable rule id on every warning, is built, and the warnings are tabled in [CONFIG_SCHEMA](CONFIG_SCHEMA.md#warnings); errors have no id. The acknowledgement itself is not built.
 
 ## How to settle it
 
