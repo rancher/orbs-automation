@@ -22,7 +22,7 @@ const (
 // acknowledgeable are the rules whose warnings a document can acknowledge: the
 // ones of a document. The unknown key of a user file is not, and neither is an
 // acknowledgement that matches nothing.
-var acknowledgeable = []string{RuleCircularHolding, RuleDefaultBranchPastDevelopment}
+var acknowledgeable = []string{RuleCircularHolding, RuleDefaultBranchPastDevelopment, RuleStreamDiffersFromDestination}
 
 // slug is what a lowercase slug looks like, as in a team name.
 var slug = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)

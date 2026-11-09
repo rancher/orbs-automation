@@ -99,7 +99,14 @@ func TestTheFixtureIsAValidSet(t *testing.T) {
 
 			rep := validateSet(t, docs...)
 
-			assert.Empty(t, rep.Findings)
+			// BRO holds wrangler 3.7 on v2.16, where Rancher holds 3.8: BRO is out of
+			// step, which the fixture leaves visible. Nothing else is found.
+			require.Len(t, rep.Findings, 1, "%v", rep.Findings)
+			f := rep.Findings[0]
+			assert.Equal(t, config.Warning, f.Severity)
+			assert.Equal(t, RuleStreamDiffersFromDestination, f.Rule)
+			assert.Equal(t, `Holding "bro-holds-wrangler-3-7"`, f.Label)
+			assert.Equal(t, "v2.16", f.Line)
 		})
 	}
 }

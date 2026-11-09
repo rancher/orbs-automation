@@ -88,7 +88,9 @@ func TestLoadReadsTheDesignFixture(t *testing.T) {
 	cfg, rep := Load(files(m), ctx)
 
 	require.NoError(t, rep.Err())
-	assert.Empty(t, rep.Warnings())
+	// BRO holds an older wrangler minor than Rancher on v2.16, and the fixture leaves it visible.
+	require.Len(t, rep.Warnings(), 1)
+	assert.Equal(t, "stream-differs-from-destination", rep.Warnings()[0].Rule)
 	assert.Len(t, cfg.Projects, 9)
 	assert.Len(t, cfg.Streams, 12)
 	assert.Len(t, cfg.Artifacts, 13)

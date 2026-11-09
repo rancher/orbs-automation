@@ -582,5 +582,79 @@ func forLines(r lines.Range) string {
 
 // streamsDifferFromDestination warns, on a holding of a project with a branch for
 // each line, of a line for which the final destination holds another stream of
-// the same artifact.
-func (s *set) streamsDifferFromDestination() {}
+// the same artifact: the same kind and name, in another Stream. A line is
+// compared when the holder lists it and its holding covers it, and the
+// destination lists it and a holding of the same artifact covers it. The
+// destination is not compared with itself, and without one nothing is compared.
+func (s *set) streamsDifferFromDestination() {
+	dest := s.finalDestination()
+	if dest == nil {
+		return
+	}
+	type identity struct{ kind, name string } // an artifact, by its kind and name
+	type held struct {
+		o       Object
+		holding *Holding
+		id      identity
+		stream  string
+	}
+	destHeld := map[identity][]held{} // what the destination holds of each artifact
+	var holders []held
+	for _, o := range s.objs {
+		h, ok := o.(*Holding)
+		if !ok || h.Spec.Holds.Kind != HoldsRelease || len(h.Refs["artifact"]) != 1 {
+			continue
+		}
+		a, _ := s.index[KindArtifact][h.Refs["artifact"][0]].(*Artifact)
+		if a == nil || len(a.Refs["stream"]) != 1 {
+			continue
+		}
+		x := held{o, h, identity{a.Spec.Kind, a.Spec.Name}, a.Refs["stream"][0]}
+		if s.holder(h) == dest {
+			destHeld[x.id] = append(destHeld[x.id], x)
+		} else {
+			holders = append(holders, x)
+		}
+	}
+	for _, x := range holders {
+		holder := s.holder(x.holding)
+		if holder == nil || holder.Spec.Branches.Layout != LayoutPerLine {
+			continue
+		}
+		r := s.at(x.o)
+		for _, ln := range holder.Spec.Branches.Lines {
+			if !x.holding.Spec.Holds.Lines.Contains(ln.Line) || !listsLine(dest, ln.Line) {
+				continue
+			}
+			for _, d := range destHeld[x.id] {
+				if !d.holding.Spec.Holds.Lines.Contains(ln.Line) || d.stream == x.stream {
+					continue
+				}
+				r.WarnLinef(RuleStreamDiffersFromDestination, ln.Line, "refs.artifact",
+					"holds Stream %q for %s, where Project %q, the final destination, holds Stream %q", x.stream, ln.Line, dest.Name, d.stream)
+				break
+			}
+		}
+		s.add(r)
+	}
+}
+
+// finalDestination returns the Project that is the final destination, or nil.
+func (s *set) finalDestination() *Project {
+	for _, o := range s.objs {
+		if p, ok := o.(*Project); ok && p.Spec.FinalDestination {
+			return p
+		}
+	}
+	return nil
+}
+
+// listsLine reports whether a project has a branch entry for a line.
+func listsLine(p *Project, line string) bool {
+	for _, bl := range p.Spec.Branches.Lines {
+		if bl.Line == line {
+			return true
+		}
+	}
+	return false
+}
