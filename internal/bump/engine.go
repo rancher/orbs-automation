@@ -398,8 +398,12 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		return Result{}, err
 	}
 	pre, post := r.Steps(t)
+	var pattern string // the tag pattern of the stream the holdings' artifacts come from
+	if len(holdings) > 0 {
+		pattern = tagPatternOf(holdings[0])
+	}
 	env := StepEnv{Dir: dir, Env: map[string]string{
-		"GERO_TAG": tag, "GERO_VERSION": strings.TrimPrefix(tag, "v"), "GERO_TARGET_BRANCH": t.Branch,
+		"GERO_TAG": tag, "GERO_VERSION": newRelease(tag, pattern, "", "").Version, "GERO_TARGET_BRANCH": t.Branch,
 		"GERO_SOURCE_REPO": r.Producer.Slug(),
 	}}
 	checkpoint := func(u Unit) error {
