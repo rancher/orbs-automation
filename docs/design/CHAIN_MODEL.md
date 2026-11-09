@@ -1,6 +1,6 @@
 # Chain Model
 
-**Status:** implemented, 2026-11-08. The resolved model that commands and `ship` read, in `internal/chain`, built from the documents of [CONFIG_SCHEMA](CONFIG_SCHEMA.md). Where it sits is in [LAYERS](LAYERS.md); the order of the move to it is in [CUTOVER](CUTOVER.md).
+**Status:** implemented. The resolved model that commands and `ship` read, in `internal/chain`, built from the documents of [CONFIG_SCHEMA](CONFIG_SCHEMA.md). Where it sits is in [LAYERS](LAYERS.md).
 
 ## Why a package of its own
 

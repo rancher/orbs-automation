@@ -1,6 +1,6 @@
 # Layers
 
-**Status:** implemented, 2026-11-08. The horizontal layers `internal/` is built in, the rule each layer follows, and what lint enforces. [CONFIG_ENGINE](CONFIG_ENGINE.md) is the config engine that sits in the lowest layer. The package-by-package layout is [PROJECT_LAYOUT](../specs/PROJECT_LAYOUT.md).
+**Status:** implemented. The horizontal layers `internal/` is built in, the rule each layer follows, and what lint enforces. [CONFIG_ENGINE](CONFIG_ENGINE.md) is the config engine that sits in the lowest layer. The package-by-package layout is [PROJECT_LAYOUT](../specs/PROJECT_LAYOUT.md).
 
 ## The layers
 
