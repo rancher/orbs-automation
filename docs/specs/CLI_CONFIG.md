@@ -99,7 +99,7 @@ File-only keys, all **(leaning)**:
 | `branchPrefix` | Prefix for branches `gero` creates (for example `dan/`) |
 | `signCommits` | `true` makes git sign the commits `gero ship` makes, with the engineer's own key; env `GERO_SIGN_COMMITS` beats the file. A commit that cannot be signed fails the target, never falls back to unsigned ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing)) |
 | `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
-| `repos.search` | Directories scanned to depth 2 for clones, matched to slugs by remote URL. No directory layout is assumed |
+| `repos.search` | Directories scanned for clones through any directories that group them, to a depth limit, matched to slugs by remote URL. No directory layout is assumed |
 | `repos.cloneRoot` | The one directory `gero repo clone` puts new clones in, as `<root>/<name>`, the repository's name. Precedence: `--into`, then env `GERO_REPOS_CLONE_ROOT`, then this key; with none set the command fails naming the three. It is scanned like a `repos.search` entry, so a clone is found again without another step. A `repos.paths` entry for the slug beats the root. Never inferred from `repos.search` |
 | `repos.overrides.<slug>.upstream` | Per-repo upstream remote name |
 | `repos.overrides.<slug>.pushTo` | Per-repo `pushTo`, which beats the project's and the user's own |

@@ -149,10 +149,14 @@ func TestRepoPathsScan(t *testing.T) {
 			map[string]map[string]string{"rancher-src": strong}, "rancher-src", nil, nil},
 		{"upstream remote url",
 			map[string]map[string]string{"x": {"origin": upstreamURL}}, "x", nil, nil},
-		{"found at depth 2",
+		{"found one directory down",
 			map[string]map[string]string{"suse/rancher": strong}, "suse/rancher", nil, nil},
-		{"not found at depth 3",
-			map[string]map[string]string{"a/b/c": strong}, "", nil, ErrRepoNotFound},
+		{"found below team and group directories",
+			map[string]map[string]string{"a/b/c": strong}, "a/b/c", nil, nil},
+		{"not found below the depth limit",
+			map[string]map[string]string{"a/b/c/d": strong}, "", nil, ErrRepoNotFound},
+		{"not found in a hidden directory",
+			map[string]map[string]string{".cache/r": strong}, "", nil, ErrRepoNotFound},
 		{"does not look inside a clone",
 			map[string]map[string]string{"outer": {"origin": "https://github.com/x/y.git"}, "outer/vendor": strong},
 			"", nil, ErrRepoNotFound},
@@ -389,5 +393,33 @@ func TestConfiguredRepoPathIgnoresTheWorkingDirectory(t *testing.T) {
 
 		require.ErrorIs(t, err, ErrRepoAmbiguous)
 		assert.Len(t, got.Candidates, 2)
+	})
+}
+
+func TestRepoPathsScansTheCloneRoot(t *testing.T) {
+	root := t.TempDir()
+	clones(t, root, map[string]map[string]string{"rancher": {"origin": upstreamURL}})
+	file := "repos:\n  cloneRoot: " + root + "\n"
+
+	t.Run("without a repos.search entry", func(t *testing.T) {
+		ws := Open(settings(t, file, nil, nil), t.TempDir())
+
+		got := ws.RepoPaths([]string{rancherSlug})[0]
+		configured, err := ws.ConfiguredRepoPath(rancherSlug)
+
+		require.NoError(t, got.Err)
+		assert.Equal(t, filepath.Join(root, "rancher"), got.Path)
+		assert.Equal(t, PathScan, got.Source)
+		require.NoError(t, err)
+		assert.Equal(t, got, configured)
+	})
+
+	t.Run("a clone in both is one clone, not an ambiguity", func(t *testing.T) {
+		ws := Open(settings(t, file+"  search:\n    - "+root+"\n", nil, nil), t.TempDir())
+
+		got := ws.RepoPaths([]string{rancherSlug})[0]
+
+		require.NoError(t, got.Err)
+		assert.Equal(t, filepath.Join(root, "rancher"), got.Path)
 	})
 }

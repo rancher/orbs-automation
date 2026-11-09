@@ -126,7 +126,7 @@ const searchVersusCloneRoot = `repos.search and repos.cloneRoot are not the same
                    finds what is there; it never puts anything there.
   repos.cloneRoot  the one directory gero repo clone puts new clones in, as
                    <root>/<name>. It is for clones that do not exist yet.
-The clone root is not added to the search list for you.`
+The clone root is scanned as well, so it need not be listed in repos.search.`
 
 // ask puts a question to each value still empty, on o.Out, and reads the answer
 // from o.In. An empty answer, or the end of the input, skips the question: its

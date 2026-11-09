@@ -278,7 +278,7 @@ func TestRunExplainsHowSearchDiffersFromTheCloneRoot(t *testing.T) {
 	assert.Contains(t, out, "repos.cloneRoot")
 	assert.Contains(t, out, "already have")
 	assert.Contains(t, out, "new clones")
-	assert.Contains(t, out, "not added")
+	assert.Contains(t, out, "scanned as well")
 	assert.Less(t, strings.Index(out, "already have"), strings.Index(out, "Directories to scan"), "the note comes before the first of the two questions")
 }
 
