@@ -1,6 +1,6 @@
 # Config Schema
 
-**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, with the Go module additions: the `gomod` Artifact kind and format, `at` as a list with `lines`, `{prefix}` and `{bareTag}`, `goBump`, and the warnings below. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
+**Status:** field reference, built in `internal/apis/v1alpha2`. Each kind of [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of a choice in CONFIG_UNITS and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md).
 
 ## Every document
 
@@ -124,8 +124,26 @@ Commits are the engine's, not a field: shipping commits after the Holding writes
 
 ## Templates, formats and paths
 
-* A template is text with `{variable}` parts and optional modifiers after `|`: `upper`, `lower`, `title`, `trimprefix:P`, `trimsuffix:S`, `replace:FROM=TO` (whole value). An unknown variable or modifier is an error.
-* Variables in `at`: `line` (`v2.16`), `stage`, `branch`. Variables in `form` and an artifact's `name` are listed in the tables above and in [CONFIG_UNITS](CONFIG_UNITS.md#templates).
+* A template is text with `{variable}` parts and optional modifiers after `|`. An unknown variable or modifier is an error when the config loads. Variables come from release and layout facts, never from free text.
+* **Variables in `at`** (`file` and `key`), filled for each line and stage the holding is read for: `line` (`v2.16`), `stage` (`dev`, `stable`) and `branch` (the holder's branch for that line and stage, `release/v2.15`).
+* **Variables in `holds.form`**, filled from the release and its artifact:
+
+  | Variable | Is | Example |
+  |---|---|---|
+  | `{image}` | an image artifact's repository path | `rancher/shell` |
+  | `{tag}` | the release tag as published | `v0.9.1-rc.2`, `helmtools/v0.1.2` |
+  | `{prefix}` | the stream's tag prefix: its `tagPattern` up to and including the last `/`; empty when there is none | `helmtools/` |
+  | `{bareTag}` | the tag without the prefix | `v0.1.2` |
+  | `{version}` | the tag without the prefix and without a leading `v`, the same as `{bareTag\|trimprefix:v}` | `0.9.1-rc.2`, `0.1.2` |
+  | `{url}` | a file artifact's download URL | `https://github.com/…/rancher-backup-12.0.0.tgz` |
+  | `{file}` | a file artifact's name | `rancher-backup-12.0.0.tgz` |
+  | `{sourceRepo}` | the producer's owner/name | `rancher/shell` |
+  | `{commit}` | the release's commit | a sha |
+  | `{base}`, `{upstream}` | a chart version split at `+up` | `111.0.0`, `0.12.1-rc.16` |
+
+  More are added as a case needs them; each is a release or layout fact.
+* **Modifiers** respell a value where it is used, apply left to right, and come from a small closed set: `upper`, `lower`, `title` (change case), `trimprefix:P`, `trimsuffix:S` (remove a prefix or suffix) and `replace:FROM=TO` (replace the whole value when it equals FROM, not a substring). `{line|trimprefix:v}` turns `v2.16` into `2.16`, and `{stage|replace:stable=prod}` turns `stable` into `prod` and leaves `dev` alone. The template says how pieces are put together, and a modifier how one piece is spelled.
+* **Reading as well as writing.** A `form` is rendered to write a value and matched against the text to read one, so it may use only modifiers that can be undone: `trimprefix`, `trimsuffix` and `replace`. `upper`, `lower` and `title` lose information and are for `at`, which is only ever rendered.
 * A format reads the text at a key and replaces it, leaving the rest of the file unchanged, comments included.
 
 | Format | `key` is | Listed |
@@ -202,7 +220,3 @@ acknowledge:
 * An acknowledged warning is not a warning: it is not counted by `gero doctor` and not shown by `gero config validate`, which shows it with its reason under `-v`
 * An acknowledgement that matches no warning is itself a warning, `acknowledgement-unused`
 * It lives in the central config, because warnings are raised from it and from the bundle; a repo's own `gero.yaml` is not read for it
-
-## Where today's fields went
-
-[CONFIG_UNITS](CONFIG_UNITS.md#where-todays-fields-go) has the mapping. `release.branching: perLineTag` is no longer a layout: a project whose lines are only in its tags is `branches.layout: single` with a Stream whose scheme gives the line.

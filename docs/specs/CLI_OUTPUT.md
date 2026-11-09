@@ -51,11 +51,11 @@ Styling is lipgloss v2, behind `internal/ui/style`. The line editor is `ergochat
 * **A prompt library does not cope without a TTY, so `gero` checks first.** With stdin closed or piped, `go-gh`'s prompter wrote cursor-position escapes and failed, ignoring a piped `y`, and `huh` failed opening `/dev/tty`. The non-TTY rule in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract) (fail unless `--non-interactive`) is a check in `gero`, not something a library gives us.
 * **lipgloss v2, not v1, and not through its own detection.** In v1 `Style.Render` consults a `Renderer` and strips color itself; v2 removed it, and `Render` always returns full escapes whatever the environment. In v2 the downgrade happens only when the string is written through `lipgloss.Println` or a `colorprofile.Writer`, and the `Sprint` forms downsample for stdout only, so a string for another writer gets stdout's profile. So `internal/ui/style` decides by our own `Terminal` value, asks only for colors the terminal has, and returns the text unchanged when the profile is none. Advice found online mixes v1 and v2.
 * **`reeflective/console` and Bubble Tea are out.** The first runs the cobra commands itself and writes escapes when piped, so it would sit beside the REPL's own commands instead of under them. The second owns the screen, which breaks the one confirmation a write command reads from stdin and the way output and Ctrl-C reach the terminal, and nothing here needs it.
-* **Size is not what separates them.** On the real binary lipgloss is about +1.0 MB and the editor about +0.25 MB over the same build without them.
+* **Size is not what separates them.** lipgloss adds about a megabyte to the binary and the editor a quarter of one, small beside what they replace.
 
 ## Not built yet
 
-* A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag` and `shell install` each ask their own.
+* A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag`, `shell install` and `doctor self-update` each ask their own.
 * The final report of `ship` appended to `$GITHUB_STEP_SUMMARY` in CI, which belongs to `ci:ship`.
 * The logger handed to every command: `ship` gets one built in `cmd/`, and the others do not log yet.
 * The terminal and the prompt are verified by hand on a real terminal: tests run without one.

@@ -1,6 +1,6 @@
 # Workspace
 
-**Status:** implemented for the central config, its directory, the current repository and local repo paths. Inference of the upstream, fork, `githubUser` and release line is agreed, not built.
+**Status:** implemented for the central config (a directory or the release bundle), the current repository and local repo paths.
 
 `internal/workspace` is the one door from CLI settings to the world: the central config directory, the loaded application config, the current repository, and the local path, upstream and fork for a repo slug. Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md). The config it loads is in [APP_CONFIG](APP_CONFIG.md).
 
@@ -12,6 +12,7 @@ A command package may not locate the central config, discover a repo or scan for
 * The command's logic takes the `Workspace` through a small interface it defines, so tests inject a fake.
 * **Resolution is lazy.** `Open` does no I/O, and a method does only the work its caller needs. A command that needs no remote does not fail because the working directory is not a repo.
 * `internal/platform/clicfg` stays pure (flags, environment, file, defaults; unset stays zero) and does not import git. `workspace` takes `Settings` and does the inference.
+* **The source of the central config** is chosen here: a local directory, the cached release bundle, or a bundle file given by hand, by the rules in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config) and [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md). `ConfigSource()` says which was used, and the config is read from it once. The bundle is reached through a `BundleSource` the workspace is given, so tests use a fake.
 * The repository is offered as `Current()` (found from the working directory upward) and `CurrentAtRoot()` (`.git` must be in the working directory itself, for commands that port a script with that rule). `ErrNotRepository` is re-exported.
 
 ## Raw and effective values
@@ -23,36 +24,15 @@ A value in the central config can differ from the value an operation should act 
 
 `Workspace.Chain()` and `Workspace.Project()` return the config joined (`internal/chain`), with defaults applied and validated, and read once for the invocation, so every caller has the same graph; the loader is not reachable from anywhere else. `Workspace.Bump()` builds the update engine from that graph, reporting every edit or holding problem at once, so a command that applies a bump and `config validate` use the same check. A field with a fallback says so in its comment and names its getter.
 
-## Inferred defaults
+## Defaults from the working directory
 
-Most settings can be left unset because they are inferred from the repo at the working directory, its remotes and its branch. Full precedence per value:
+Every setting comes from a flag, the environment, the user file or a built-in default, in that order ([CLI_CONFIG](CLI_CONFIG.md)). Two things are also read from the working directory: the local path for a slug is the repository the working directory is in when its remotes name the slug ([Resolving repo paths](#resolving-repo-paths)), and `./config` is the central config when the working directory is a checkout of the central repo ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)). A user-file value always beats both.
 
-```
-flag > env > user file > inferred from CWD repo > built-in default > error
-```
-
-| Value | Inferred default |
-|---|---|
-| Current repo slug | `owner/name` parsed from remote URLs, matched against central-config `spec.repo.name` |
-| Local path for a slug | The CWD repo if its slug matches; else `repos.paths`; else the `repos.search` scan; else the flat sibling `<parent of CWD repo>/<name>` |
-| `centralConfigDir` | `./config` when the CWD has a YAML file there with documents of gero's (an `apiVersion` of `gero/`) |
-| `upstream` | Remote whose URL matches the slug; else the only remote; in CI, `origin` |
-| `fork` | Remote with the same repo name under a different owner |
-| `githubUser` | Owner of the fork remote's URL (no network call) |
-| Release line | `main` is the development line; `release/vX.Y` is that line |
-| `output` | `text`. The separate `color` setting is `auto` unless set, and its rules are in [CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities) |
-| `branchPrefix` | None |
-
-Rules:
-
-* Inference never picks silently among several candidates. Ambiguity is an error naming the key to set.
-* A user-file value always beats inference.
-* `gero config show` reports each value's source (`flag`, `env`, `file`, `inferred (reason)`, `default`), and verbose mode logs inferred values before any write (push, PR).
-* `gero config show` may report one slug's resolved path with an `inferred (reason)` source, but it never enumerates repos. When `repos.search` is set, the text output ends with a line pointing at `gero config resolve repos`. Json and env never carry it.
+The upstream remote, the fork, `githubUser` and the release line are set by the user (`gero init` writes them) and never guessed. Inferring them from remotes and branch names is a wishlist item, not a goal ([Wishlist](#wishlist)).
 
 ## Resolving repo paths
 
-`gero config resolve repos [slug]` answers "where does each repo live on this machine, and how did `gero` decide?". `config show` reports raw values and their sources. This command runs the same resolver (`Workspace.RepoPath`) the other commands use, so its output is what they would act on. The slugs come from `Workspace.Config()`, so an invalid config is rejected before anything is scanned. It is read-only and supports `--json`.
+`gero config resolve repos [slug]` answers "where does each repo live on this machine, and how did `gero` decide?". `config show` reports raw values and their sources. This command runs the same resolver (`Workspace.RepoPath`) the other commands use, so its output is what they would act on. The slugs come from the config graph (`Workspace.Chain()`), so an invalid config is rejected before anything is scanned. It is read-only and supports `--json`.
 
 **Order for one slug:** the CWD repo if one of its remotes is the slug (a fork alone does not count), then `repos.paths`, then the `repos.search` scan, then the flat sibling. A `repos.paths` entry is returned as written, without checking that it exists. The sibling is `<parent of the CWD repo's root>/<name>` and counts only when that directory exists and the working directory is in a repo. Paths derived from the CWD repo's root come back with symlinks resolved, as go-git reports them (`/tmp` is `/private/tmp` on macOS).
 
@@ -75,8 +55,11 @@ Rules:
 
 ## Not built yet
 
-* Inference of the upstream, fork, `githubUser` and release line from remotes, and the `inferred` source in `config show`.
 * `config resolve repos --verbose` **(leaning)**: log the scanned directories, the remotes read from each clone, and why each candidate matched or not.
+
+## Wishlist
+
+* Inferring the upstream (the remote whose URL matches the slug, else the only remote), the fork (the same repository name under another owner), `githubUser` (the owner of the fork remote) and the release line (`main` is the development line, `release/vX.Y` is that line) from the working directory's repository, with an `inferred (reason)` source in `gero config show`. Inference would never pick silently among several candidates, and a user-file value would always win. Not needed while the user file sets them; it could help someone who runs without one.
 
 ## Open questions
 

@@ -1,6 +1,6 @@
 # Project Layout
 
-**Status:** implemented, except three of the standalone commands for the tasks, a task for closing superseded PRs, and `test/integration/` (see Not built yet).
+**Status:** implemented, except what [Not built yet](#not-built-yet) lists.
 
 How Go code is organized in this repo. `gero` is a CLI, not a library, so the default is that nothing is importable from outside the module.
 
@@ -9,7 +9,7 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 * All Go packages live under `internal/`, except the `main` package (`main.go` at the repo root) and the cobra layer under `cmd/`. The compiler enforces that code outside this module cannot import `internal/`.
 * There is no `pkg/` directory. Moving a package out of `internal/` later is cheap. Retracting a public API is not.
 * **Promotion criteria.** A package leaves `internal/` only when all hold: a real external consumer exists, its API has survived at least one minor release unchanged, and it has no dependency on other `internal/` packages that are not themselves promoted. Promotion is a decision recorded in this spec, not a drive-by move.
-* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level, and so does `generated/`, which holds files that a tool writes and a test keeps current. A developer tool that is not part of `gero` is a `main` under `tools/` (today `tools/genschema`, which writes the JSON Schemas of the config, [APP_CONFIG](APP_CONFIG.md#json-schemas), and `tools/compilebundle`, which writes the central config bundle for a release, [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#compile-command)); it may import `internal/` and nothing imports it.
+* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level, and so does `generated/`, which holds files that a tool writes and a test keeps current. A developer tool that is not part of `gero` is a `main` under `tools/`: `tools/genschema` writes the JSON Schemas of the config ([APP_CONFIG](APP_CONFIG.md#json-schemas)), and `tools/compilebundle` writes the central config bundle for a release ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#compile-command)). A tool may import `internal/` and nothing imports it.
 
 ## 2. Layout
 
@@ -22,12 +22,15 @@ internal/cli/<cmd>/    one subpackage per command: its logic as plain functions,
 internal/cli/logging/  shared, not a command: builds the *slog.Logger, called once by cmd/   (CLI_OUTPUT)
 internal/cli/termfacts/  shared, not a command: the TTY and width checks of the process, handed to clicfg.Load; the only importer of golang.org/x/term
 internal/cli/identity/, cdpath/, cigate/, buildinfo/  shared, not commands: who commits are attributed to, the logic of gero cd, whether a CI-only command may run, the build's version
+internal/cli/selfupdate/  the flow of gero doctor self-update; the mechanics are internal/platform/selfupdate   (SELF_UPDATE)
 internal/ui/           the output seam: Output, Stream and Align (columns laid out by what a cell shows)   (CLI_OUTPUT)
 internal/ui/style/     the one importer of lipgloss: named styles and the Renderer built from clicfg.Terminal; plain when color is off   (CLI_OUTPUT)
 internal/ui/editor/    the one importer of ergochat/readline: the line reader seam, with a plain bufio implementation, for gero repl   (REPL)
 
 internal/workspace/    the one door from Settings to the world: config dir, the joined config and the update engine, repo paths, upstream, fork   (WORKSPACE)
-internal/ship/         one pull request for each target branch of a consumer: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It still holds most of the actions; they move to internal/task/ and ship keeps the decisions and the order
+internal/ship/         one pull request for each target branch of a consumer: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It holds most of the actions still; they move to internal/task/ and ship keeps the decisions and the order
+internal/bundle/       the format of the central config bundle: Compile for the release, Parse for the reader   (CENTRAL_BUNDLE)
+internal/bundlestore/  the cache and the release resolver of the bundle: which release, refreshed at most daily, verified before it is kept
 internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR, make a tag), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch, bumpcommit and createtag are built
 internal/bump/         the update engine: the routes of release holdings, the targets of a release, writing a holding in place, the edits' strategies and steps around the write; starts no process   (UPDATE_ENGINE)
 internal/steprun/      runs the pre-edit and post-edit steps of an update
@@ -54,13 +57,20 @@ internal/platform/errs/       error values shared across gero, such as NotImplem
 internal/platform/semver/     release tag classification, as the check-semver script did, and a Series of versions (9.x, 0.9.x) that holds versions and overlaps another   (CHECK_SEMVER)
 internal/platform/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
 internal/platform/git/repo/   local repository access with go-git; the only importer of go-git
-internal/platform/git/gitcli/ escape hatches to the git binary, one documented function per thing go-git cannot do; runs git through execx
+internal/platform/git/gitcli/ the git client for everything that touches a working tree, and the short commit: runs the git binary through execx   (GITHUB_ACCESS)
 internal/platform/github/     gero's access to GitHub: the host and token, the REST client, the rate limit, raw file reads
 internal/platform/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
 internal/platform/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
 internal/platform/workdir/    the branch a run edits and commits in: made in the engineer's clone or a temporary worktree of it, committed to, and put back when the work ends or fails; shared by the tasks that make a branch and the ones that commit to it
 internal/platform/templates/  the embedded commit, body and title templates and their placeholder renderer
 internal/platform/yamledit/   changes one YAML value in place without reflowing the file
+internal/platform/gomodedit/  reads and replaces the version of a module in a go.mod; the only importer of x/mod/modfile
+internal/platform/regexedit/  reads and replaces the capture group of a pattern in any file
+internal/platform/goproxy/    asks a Go module proxy whether a version of a module exists
+internal/platform/assetfetch/ downloads a release asset and verifies it against its checksum and signatures; the only importer of ghreleases
+internal/platform/releasesign/ the Sigstore verifier pinned to this repository's release workflow; the only importer of the Sigstore module
+internal/platform/selfupdate/ replaces the running binary with a verified release; the only importer of binup   (SELF_UPDATE)
+internal/platform/atomicfile/ writes a file by a temporary file and a rename, shared by shell install and init
 internal/platform/shellenv/   the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
 
 test/integration/      separate Go module (own go.mod) for integration tests     (TESTING)
@@ -79,7 +89,7 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ### Tasks: single actions that compose
 
-**Status: `pushbranch`, `createpr`, `createbranch`, `bumpcommit` and `createtag` are built. `ship` uses the first four, and `createbranch` and `createtag` each have a command that runs them alone (`repo branch`, `repo tag`). Closing superseded PRs is not a task.** `VISION.md` asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
+`pushbranch`, `createpr`, `createbranch`, `bumpcommit` and `createtag` are built, and closing superseded PRs is not a task yet. [VISION](../VISION.md) asks for the modular, "unix-style" composability of the old scripts. The idiomatic Go form of a pipe is small typed functions called in order by ordinary code, the way `io.Reader` and `io.Writer` compose, not a stream of bytes between processes. So a **task** is one package under `internal/task/<name>/` holding one action that is useful alone and as a step:
 
 * `createbranch`: a new branch for a project and release line, based on the upstream branch, made in the engineer's clone or in a temporary worktree of it, or an earlier branch of ours reused when it is current.
 * `bumpcommit`: apply one change set and make its commits. The change and its commits are never separated.
@@ -94,7 +104,7 @@ Package names beyond these are decided with the code that needs them. A package 
 * An `Output` of plain, serializable values: what the next step needs and what a report shows (the branch name, the commits made, the PR URL). The `Output` of one task is meant to be the `Input` of the next, and is what `--json` prints for a task run on its own. The one exception is a branch being worked on: `createbranch` returns a `*workdir.Work` from `internal/platform/workdir`, and `bumpcommit` takes it back in its `Input`, with the caller ending the work. It is a handle, shared and not serialized, so that pair is chained in Go only.
 * A `Run(ctx, deps, in) (Output, error)` with `deps` a small interface the task defines for what it calls, so a task is tested with a hand-written fake of that interface and nothing wider ([TESTING](TESTING.md)). A task reports progress through an optional event sink and never prints.
 
-**Who composes.** A task never calls another task. `internal/cli/<cmd>/` does, in two shapes. A *gadget* command (`gero repo branch`, `gero repo tag`, `gero pr create`; [TASK_COMMANDS](TASK_COMMANDS.md)) builds the deps, calls one task and renders its `Output`. A *conveyor* command (`gero ship`) calls several in order, passing each `Output` to the next `Input`, and owns what the tasks must not: the loops over targets, the decision whether to run a step, the one confirmation question and the final report. A conveyor's logic that is worth a test stays in its own domain package (`internal/ship`); the tasks are what it calls.
+**Who composes.** A task never calls another task. `internal/cli/<cmd>/` does, in two shapes. A *gadget* command (`gero repo branch`, `gero repo tag`; [TASK_COMMANDS](TASK_COMMANDS.md)) builds the deps, calls one task and renders its `Output`. A *conveyor* command (`gero ship`) calls several in order, passing each `Output` to the next `Input`, and owns what the tasks must not: the loops over targets, the decision whether to run a step, the one confirmation question and the final report. A conveyor's logic that is worth a test stays in its own domain package (`internal/ship`); the tasks are what it calls.
 
 **Pipes between commands.** Chaining in Go is the pipe. Chaining at the shell, one `gero` run reading what the last printed, needs nothing new in the layout: a task's `--json` output is its `Output`, and a later flag that reads an `Input` from a file or stdin would complete it. That flag is not designed. `gero repl` has no pipes ([REPL](REPL.md#boundaries)), and gadgets reach it as commands in the same tree.
 
@@ -102,23 +112,7 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ## 3. Dependency direction
 
-`internal/` has horizontal layers. Imports point down and never up:
-
-```
-main.go -> cmd
-cmd     -> internal/cli, internal/ui         (commands and the output seam)
-cli, ui -> domain packages
-domain  -> internal/apis
-apis    -> internal/platform
-```
-
-| Layer | Holds | May import |
-|---|---|---|
-| `internal/platform/` | low-level packages that know nothing of projects, releases or lines: clients, exec, YAML editing, version parsing, templates, the CLI settings loader | other platform packages and third-party libraries |
-| `internal/apis/` | the versioned config contract: the envelope and the kinds of each apiVersion | `internal/platform` and `internal/apis` |
-| domain (`ship`, `workspace`, `bump`, `chain`, `chainload`, `appconfig`, `tagscheme`, `calver`, `releasetag`, `registry`, `steprun`, `task/*`, `lifecycle`) | what gero knows about projects, releases and shipping | platform, apis and domain |
-| `internal/cli/`, `internal/ui/` | one package per command, and the output seam | everything below them |
-| `cmd/` | the cobra shell | `internal/cli` and the two platform packages named below |
+`internal/` has horizontal layers, and imports point down and never up: `cmd`, then `internal/cli` and `internal/ui`, then the domain packages, then `internal/apis`, then `internal/platform`. What each layer holds and may import is in [LAYERS](../design/LAYERS.md). The rules between them:
 
 * `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any lower package, but not another command package, with two exceptions: shared packages that are not commands (`identity`, `cdpath`, `termfacts`, `cigate`, `logging`, `buildinfo`), and `doctor`, which reuses `authstatus` and `configresolve` for its checks. Other shared command code goes in a third, smaller package.
@@ -160,7 +154,7 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
   * **The layers:** platform imports only platform; apis imports only platform and apis; domain packages do not import `internal/cli` or `internal/ui`; a command does not import another command except the shared helpers (and `doctor` its two named ones).
   * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`.
   * cobra is importable only from `cmd/` and `main.go`.
-  * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/config`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`.
+  * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/config`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`, `ghreleases` only in `internal/platform/assetfetch`, binup only in `internal/platform/selfupdate`, the Sigstore verifier only in `internal/platform/releasesign`, `x/mod/modfile` only in `internal/platform/gomodedit`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/platform/git/repo` directly. Its pure logic may still take `internal/platform/git` and domain types.
   * `internal/task/**` imports neither `internal/cli`, `internal/ui` nor another task.
 * **Central config has one door.** `internal/chainload` and `internal/appconfig` are importable only from `internal/workspace` (lint-enforced; `internal/chain` also imports the provider's type). A command package cannot load config, apply defaults or skip validation: it gets a `*chain.Graph` or a `*chain.Project` from `Workspace`, already defaulted and validated, and imports `internal/chain` for the types and their answers.
@@ -172,8 +166,8 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 
 ## Not built yet
 
-* A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag` and `shell install` each ask their own `[y/N]` through the style renderer ([CLI_OUTPUT](CLI_OUTPUT.md)).
-* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and the standalone commands for `pushbranch`, `createpr` and `bumpcommit` ([TASK_COMMANDS](TASK_COMMANDS.md)). `gero repo branch` and `gero repo tag` run `createbranch` and `createtag` alone.
+* A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag`, `shell install` and `doctor self-update` each ask their own `[y/N]` through the style renderer ([CLI_OUTPUT](CLI_OUTPUT.md)).
+* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and commands for `pushbranch`, `createpr` and `bumpcommit`, which are use cases without names ([TASK_COMMANDS](TASK_COMMANDS.md#use-cases-not-yet-commands)). `gero repo branch` and `gero repo tag` run `createbranch` and `createtag` alone.
 * Narrowing `ship.Git` and `ship.Remote` now that the tasks define what they call: both still carry every method any task needs.
 * `test/integration/` ([TESTING](TESTING.md)).
 

@@ -1,6 +1,6 @@
 # Ship (push to repo)
 
-**Status:** draft, built for the workstation. `gero ship` checks the state, asks once, makes the commits (one per unit of work), pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub, and the team has used it against real GitHub for bumps into `rancher/rancher`, including `--refresh`; the push spike test (`TestPushSpikeToARealRemote`) itself has not been run. The CI variant is not built.
+**Status:** implemented for the workstation. `gero ship` checks the state, asks once, makes the commits (one per unit of work), pushes to the fork or the upstream, opens the PR with the labels that exist and closes the actor's own older PRs. It is tested against real git and a fake GitHub. The CI variant is not built.
 
 `gero ship` takes a released version of a producer, brings the consumer repositories that take updates from it up to that version, and opens a PR for each branch that needs one. It is the write half of a downstream bump ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)). The first user is `scc-operator` into `rancher/rancher`, which today is the bash in [scc-operator](../projects/scc-operator.md).
 
@@ -73,7 +73,7 @@ Per target branch, newest first:
 4. **Edit and commit.** The lifecycle above, in that branch's directory, with a commit after each unit that changed files, made through `git` so the engineer's hooks, identity and signing settings apply ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). No unit changing anything ends the branch as **already up to date**: no commit and no PR.
 5. **Push** to the push target, never forced. Fetching is from `upstream`.
 6. **PR.** Find open PRs with the same key. The same version is **already open** and the run stops. An older version is **superseded**: the new PR is created, then the old one gets a comment linking it and is closed.
-7. **Report.** One line per branch: `updated`, `already up to date`, `already open`, `superseded`, `skipped (reason)` or `failed (reason)`.
+7. **Report.** One line per branch with its result, as in [What a run reports](#what-a-run-reports).
 
 `--dry-run` runs steps 1, 3 and 4 in a temporary worktree and prints what 5 and 6 would do. It never pushes a branch or opens a PR, and it never moves the engineer's checkout. The worktree and its branch are removed afterwards. The report says it was a dry run.
 
@@ -112,6 +112,10 @@ After the state check, each target that needs a PR gets a result, shown under th
 | `would commit` | A dry run made the commit in a temporary worktree, and removed it and the branch. The report shows the same detail |
 | `already up to date` | The edit and the steps changed nothing, so there is no commit and no branch |
 | `failed` | Preparing the branch, a step or the commit failed, with the reason and the step's phase and position. The work is aborted and the clone is as it was found |
+| `opened` | The branch was pushed and the PR opened. The older PRs of the actor's that it superseded are listed with it, each closed after a comment linking the new one |
+| `already open` | The actor's own PR at this version is open, so nothing was made. The report says whether it is behind its base |
+| `blocked` | The actor's own PR at a newer version is open, or the release is a downgrade, so this target is left alone |
+| `refreshed`, `would refresh` | With `--refresh`, the actor's open PR was rebuilt and its branch replaced, or a dry run found that it would be |
 
 A failure in one target does not stop the others, and the exit code is 1 when any target failed or was blocked. A branch that moved since the check is a failure that says to run again.
 
@@ -131,7 +135,7 @@ A failure in one target does not stop the others, and the exit code is 1 when an
 A branch or a PR for the bump may already exist, from an earlier run of this machine's or from a half-finished one. The rules are the same for the local branch and the remote one, and they turn on one question: are all of its commits **ours**?
 
 * **Ours** means a commit has the `Automation: gero ship` trailer **and** an author email equal to the actor's (the commit identity the clone gives, or the bot's in CI). Every commit between the branch and its merge-base with the target must be ours. A branch with a commit that is not ours is never replaced, rewritten or force-pushed, and the run says whose commit it found.
-* **A local branch that is ours** no longer fails a rerun. If it is based on the current head of the target it is reused, which also resumes a run whose push failed. If the target has moved on, it is rebuilt from the new head and replaces the old one. Only a local branch with commits that are not ours is an error, as before.
+* **A local branch that is ours** does not fail a rerun. If it is based on the current head of the target it is reused, which also resumes a run whose push failed. If the target has moved on, it is rebuilt from the new head and replaces the old one. Only a local branch with commits that are not ours is an error.
 * **An open PR of the actor's at this version** is still "already open" and nothing is rebuilt by default. The report says whether it is behind its base, which GitHub tells with one read and no build: `already open #104 (behind release/v2.15; --refresh to rebuild)`.
 * **`--refresh`** rebuilds it, and only when it is eligible: the PR is open, is the actor's, has its head in the repository the branch is pushed to, and every commit on the branch is ours. The branch is built again from the current head of the target in a scratch branch, running the edit and the steps as usual, and the result is compared with the existing branch. They are compared by the change each makes and not by their trees, since the trees differ wherever the target has moved: a fingerprint of each side's diff against its own base, with the hunk positions and the blob ids left out.
   * **Identical and not behind:** the branch is left alone and nothing is pushed. The report says `already open, identical`.
@@ -173,7 +177,7 @@ Creating, finding and closing PRs, and commenting and labelling them, is one ser
 
 ## Errors and exit codes
 
-Outcomes are typed, with a closed status and the step they happened in, so wording is generic and carries config values and no project's own phrasing. The command exits 0 when every branch is `updated`, `already up to date`, `already open` or `superseded`, and 1 when any branch is blocked, failed, or the preconditions stopped the run. A usage or config error is 2.
+Outcomes are typed, with a closed status and the step they happened in, so wording is generic and carries config values and no project's own phrasing. The command exits 0 when every branch is `opened`, `refreshed`, `committed`, `already up to date` or `already open`, and 1 when any branch is blocked or failed, or the preconditions stopped the run. A usage or config error should be 2, which waits for the exit-code helper ([CLI_FRAMEWORK](CLI_FRAMEWORK.md#4-exit-codes)).
 
 ## Testing
 
@@ -181,7 +185,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* The push spike test against a scratch repository (`TestPushSpikeToARealRemote`, which needs `GERO_SPIKE_PUSH_URL`), which would keep the credential questions in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing) settled by a test and not only by use. Optional: the workstation push is used against real remotes.
+* A test of the push against a real scratch repository in the integration tier ([TESTING](TESTING.md)), which would keep the credential questions in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing) settled by a test. `gitcli` has a spike test that runs only when `GERO_SPIKE_PUSH_URL` names one.
 * A way to name a step's commit, or fold it into the previous one, which is the first knob to add if a project needs it.
 * `gero ci:ship` ([CI_SHIP](CI_SHIP.md)).
 * The sequence above as chained tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).

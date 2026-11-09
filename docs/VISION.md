@@ -1,26 +1,40 @@
-# Engineering Automation & Tooling Vision
+# Vision
 
-## Overview
-This repository serves as the central command center for engineering tooling, developer workflows, and release orchestration across our software ecosystem. The goal is to move away from flimsy, sprawling shell scripts toward a robust, composable Go-based CLI and observational GitOps control plane built on top of native GitHub primitives.
+`gero` is a command-line tool for the release engineering of Rancher: the work of getting a change in one repository into a release of the products that depend on it, across many repositories and release lines, with every step checked and recorded.
 
-## Core Pillars
+> Automating workflows, orchestrating tasks, and powering team ORBS.
 
-### 1. Unified Go CLI (`gh` Companion)
-* **Philosophy:** Retain the modular, "unix-style" composability of our past scripts, but implement them cleanly in Go: small single-action tasks that a command runs alone or a higher-order one such as `gero ship` chains, composed in Go rather than through a shell ([PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
-* **Integration:** A standalone CLI (`gero`) that works well beside the GitHub CLI (`gh`), reusing existing authentication (`GH_TOKEN` or the local `gh` session) and command idioms (cobra noun-verb commands, `--json` output, `gh`-style flags), without requiring `gh` to run. See [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md).
-* **Scope:** Handles repo-local workflow generation, GHA-only release operations (such as binary and image signing, which always run on GitHub runners using keyless signing), and developer productivity tasks.
-* **Execution Contexts:** Commands are either CI-only (require GHA-provided tokens and fail fast outside GHA) or work in either context (developer workstation or CI).
+## The problem
 
-### 2. Hybrid Workflow Architecture
-* **Remote Reusable Workflows:** Stateless, standard CI pipelines (linting, testing, container builds) live in this central repo and are referenced directly by target repositories.
-* **Rendered Stub Workflows:** For tasks that must be defined inside the target repo itself (e.g., release, binary signing, and image signing workflows, which run on GitHub runners with keyless signing), a CLI sync command renders stub workflows and repo-local configuration into target repos.
+A Rancher release is a chain. A change in one project is released, taken into the next project, released again, and so on until it reaches Rancher, for each supported release line. Today that work is done by shell scripts in each repository and by people who know which script to run and which file to edit. The knowledge is spread out, the scripts differ, and nothing can answer "what does this repository hold, and is it the release we expect?"
 
-### 3. Observational Reconciler & GitHub Issue State Machines
-* **Human-Auditable State:** Releases are tracked via structured GitHub Issues in the automation repo. Machine state is stored in the issue, and a readable view (read-only markdown task lists and labels, including a stale marker) is rendered from it for engineers, QA and managers.
-* **Observational Cron:** A scheduled GHA workflow running a Go reconciler checks the actual state of GitHub (tags, PR merges, check runs) and updates the master tracking issues accordingly, avoiding brittle micro-management while maintaining full auditability.
+## The goal
 
-### 4. Cross-Boundary QA Integration (v3)
-* **Ecosystem Bridging:** Once core engineering release trains are stable, the central control plane connects with the dedicated QA automation repository, recording automated test results as evidence alongside manual sign-off for stable promotions. The exact handshake is undecided.
+One tool, written in Go, that knows the chain and can walk it:
 
-### 5. Moonshot: Local Web Dashboards
-* **Local Insight:** A lightweight, embedded Go web server mode to provide real-time visual dashboards for project topology, dependency trees, and active release trains.
+* **Say what is true.** What each repository holds of the others, for each release line, and where it is behind.
+* **Do each step the same way.** Bump a holding, commit, push, open the pull request, tag the release, from a workstation or from CI.
+* **Record the result.** Release state lives where people can read it and audit it.
+
+The shape of the chain is data, not code. A set of YAML documents says what each project releases, what it holds of the others, and what each Rancher line is. The same config drives every command.
+
+## Principles
+
+* **Composable, in the manner of unix.** A command is small and does one thing. A higher-order command such as `gero ship` chains single-action tasks in Go, not through a shell ([PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+* **A companion to `gh`.** `gero` is a standalone binary that reuses GitHub authentication and the idioms of `gh`: noun-verb commands, `--json` output, familiar flags. It does not need `gh` to run ([CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md)).
+* **Native GitHub, not a new control plane.** Builds and signing run in each repository's own GitHub Actions. `gero` renders the workflows those repositories need and observes the result.
+* **Works in two places.** A command runs on a workstation, in CI, or both, and a command that needs a CI-only credential fails early elsewhere.
+* **Observe, then record.** A scheduled reconciler compares the actual state of GitHub (tags, pull requests, check runs) with what a release expects, and writes it to a tracking issue. The issue is the audit trail for engineers, QA and managers.
+
+## Where it is going
+
+The [phases](PHASES.md) are the order of the work, and the [architecture](ARCHITECTURE_DESIGN.md) is the shape.
+
+* **Workstation flows.** Check, bump and ship through the chain, one release line at a time.
+* **CI and the reconciler.** The same steps in GitHub Actions, and tracking issues kept up to date by observation.
+* **QA evidence.** Automated test results recorded beside manual sign-off for stable promotion. How QA hands results over is undecided.
+* **A local dashboard** (a stretch goal): an embedded web view of the project graph and the release trains in flight.
+
+## The name
+
+The team is **ORBS**, after the Dragon Balls of *Dragon Ball Z*. The tool is `gero`, after Dr. Gero, who built tireless machines that watch, gather data and keep going without being asked. That is what we want from release automation. The interface stays plain: `gero repo status`, `gero ship`, `gero lines resolve`, `gero config validate`, `gero doctor`. `gero --help` is the current command tree.

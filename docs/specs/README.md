@@ -11,11 +11,11 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [LINES_RESOLVE](LINES_RESOLVE.md) | `gero lines resolve`: the release-line map, each Rancher line joined to the projects that feed it and follow it, and the gaps |
 | [CHAIN_TRACING](CHAIN_TRACING.md) | Following a release chain through every hop, including the charts and Assets hops the release team runs: `managedBy` with `owned`, observed edges, tag schemes and the shared release scheme, stages (later); Assets and Rancher implemented |
 | [REPO_STATUS](REPO_STATUS.md) | `gero repo status`: the sections of the report and what each answers, the state and next tags of a line, and who holds each release |
-| [TASK_COMMANDS](TASK_COMMANDS.md) | The steps of `ship` as commands of their own: `repo branch` and `repo tag` (built), `repo push`, `pr create`, `ship bump`, and the rules they share |
+| [TASK_COMMANDS](TASK_COMMANDS.md) | The steps of `ship` as commands of their own: `repo branch` and `repo tag`, the use cases for the other steps, and the rules they share |
 | [PUSH_TO_REPO](PUSH_TO_REPO.md) | The write half of a downstream bump: the work branch in the engineer's clone, remotes, branch and PR identity, per-target outcomes, what changes from today's scripts |
 | [CI_SHIP](CI_SHIP.md) | `gero ci:ship`: the same bump as `gero ship` run by a workflow as the bot, what it shares and what CI adds |
 | [METADATA](METADATA.md) | Labels and hidden markers (draft, not built): the marker as the record, label classes, owned versus shared repos, control labels |
-| [WORKSPACE](WORKSPACE.md) | The one door from settings to the world: inferred defaults (designed, not built), current repo, resolving repo paths |
+| [WORKSPACE](WORKSPACE.md) | The one door from settings to the world: the central config source, current repo, resolving repo paths |
 | [APP_CONFIG](APP_CONFIG.md) | Application config: document shape, kinds, placement, validation |
 | [CLI_OUTPUT](CLI_OUTPUT.md) | stdout and stderr, `--json`, terminal capabilities and color, styling (`internal/ui/style`), logging, the interactive boundary |
 | [GITHUB_ACCESS](GITHUB_ACCESS.md) | Token and host, REST, local git, subprocesses, consumer-side interfaces |

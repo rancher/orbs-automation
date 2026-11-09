@@ -19,7 +19,7 @@ Unmarked items are decisions or working agreements. **(leaning)** is a proposal 
 
 ## GitHub and Git Access
 
-`gero` uses `go-gh` (token and host only) and `go-github` (typed REST) directly, `go-git` for local repositories, and shells out only where nothing else works. The details, the reconciler's consumer-side interfaces and the evidence from the spike are in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md).
+`gero` uses `go-gh` (token and host only) and `go-github` (typed REST) directly. It runs the `git` binary for anything that touches a working tree, so an engineer's own SSH agent, credentials and signing apply, and reads refs and tags with `go-git`. A go-git client for the rest could replace the binary later. The details and the reconciler's consumer-side interfaces are in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md).
 
 ## Release Rules
 
@@ -102,7 +102,7 @@ Conventions the tool wants repos to follow, so automation does not fight them.
 * Config-shape questions (final names, whether config moves into target repos): see [APP_CONFIG](specs/APP_CONFIG.md). CLI-layer questions are in the spec each belongs to ([CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md), [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md)).
 * Reconciler triggering: cron only, or `repository_dispatch` where needed.
 * Which existing workflows to standardize first, and whether the central repo publishes them as reusable workflows or composite actions.
-* Whether the CLI replaces the existing "push to X" scripts or wraps them at first (decided in v0.x, see [PHASES](PHASES.md)).
+* Whether the CLI replaces the existing "push to X" scripts or wraps them at first (decided before v1.0.0, see [PHASES](PHASES.md)).
 * How new Rancher lines are cut and registered in the line map (manual edit, or a command that updates it). Updating the dates of lines already in the map is planned as `gero lines sync`; a new line also needs a Kubernetes range, which the lifecycle page does not give.
 * How downstream repos pin and call reusable workflows; resolve when we review a repo that consumes the existing core branches.
 * The `VERSION.md` format: one standard layout across repos, which fields it shows (branch, tag, Rancher line, Kubernetes range, EOL section), and whether other tools that read `VERSION.md` today (for example frameworks-automation reads per-repo `VERSION.md` at runtime) need the old formats to keep working.

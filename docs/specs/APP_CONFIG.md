@@ -1,10 +1,8 @@
 # Application Config
 
-**Status:** implemented: the provider, the graph, the update engine and the checks under Validation. The kind and field names are not final until the POC review at the end of v0.x ([PHASES](../PHASES.md)). The files in `config/` are the real configs.
+**Status:** implemented, except what [Not built yet](#not-built-yet) lists. The kind and field names are not final until the team's review before v1.0.0 ([PHASES](../PHASES.md)). The files in `config/` are the real configs.
 
 The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The field reference is [CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md), the reasons for the kinds are in [CONFIG_UNITS](../design/CONFIG_UNITS.md), and the real files and defaults are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`mock-repos/`](../../mock-repos/). The types and their rules are `internal/apis/v1alpha2`, the provider that reads a directory is `internal/appconfig`, the graph commands read is `internal/chain` ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), and the engine that ships into the holdings is `internal/bump` ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)). Config is reachable only through `internal/workspace`.
-
-Informed by [backup-restore-operator](../projects/backup-restore-operator.md) and [rancher-shell](../projects/rancher-shell.md). The backup-restore-operator style (hybrid: reusable workflows, composite actions and rendered templates) is the closer model for what the central repo offers.
 
 ## Shape
 
@@ -20,8 +18,8 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 |---|---|
 | `Project` | A repo as a place: `repo` (who owns it, whether it is outside the organization), `aliases`, `pullRequests`, and `branches` (the layout, the stages, and the branch of each Rancher line) |
 | `Stream` | What a project releases: the scheme and tag pattern, the stages, the lines and the version series of each, and whether any release serves every line |
-| `Artifact` | One thing each release of a stream produces: an image (checked in its registries, [IMAGES_EXIST](IMAGES_EXIST.md)) or a file of the GitHub release |
-| `Holding` | Where a piece of a producer's release lives in a repo, and how it is written: a file, a key and a format, and a release, a commit or a branch |
+| `Artifact` | One thing each release of a stream produces: an image (checked in its registries), a file of the GitHub release, or a Go module (checked on the Go module proxy), all by [IMAGES_EXIST](IMAGES_EXIST.md) |
+| `Holding` | Where a piece of a producer's release lives in a repo, and how it is written: one or several locations (a file, a key and a format), and a release, a commit or a branch |
 | `Edit` | Extra steps when shipping, around the write of the holdings, and a named rule that needs code |
 | `RancherLines` | The Rancher lines with their lifecycle dates and Kubernetes range. The phase is derived from the dates and the current time, with an optional `phase` override. No branches: each project maps its own to line ids |
 | `WorkflowsConfig` | How workflows are rendered into a repo's branches. Lives in the target repo's `gero.yaml`, not centrally |
@@ -34,9 +32,9 @@ A Project is named by its document name or its repo's `owner/name` slug, and als
 
 A bump has two halves, and each is configured by the project that knows it. The consumer knows its own layout, so it owns the **Holding**: the file and key it keeps a producer's release in, and the form it is written in (`{image}:{tag}`, a URL, a bare tag). The producer knows what it makes, so it owns the **Artifact** the holding refers to.
 
-* A **holding** has `at` (a file and a key, both templates over `{line}`, `{stage}` and `{branch}`, and a format, `yaml` today) and `holds` (a `kind` of release, commit or branch, the `form`, the `lines` it is for, a `stage`, and `accept`: `stable`, the default, or `all`). A consumer that wants both has two holdings.
+* A **holding** has `at` (a file and a key, both templates over `{line}`, `{stage}` and `{branch}`, and a format: `yaml`, `gomod` and `regex` are written, and `dockerfile` is accepted and refused by the engine; or a list of such locations, each with the `lines` its file exists for, so one release held in several files is written in all of them) and `holds` (a `kind` of release, commit or branch, the `form`, the `lines` it is for, a `stage`, and `accept`: `stable`, the default, or `all`). A consumer that wants both has two holdings.
 * **A route** is a producer and a consumer that holds releases of it. One run of `gero ship` writes every release holding of the route, in one pull request for each target branch ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)), so a consumer that holds two files of one release is never left half updated. The reverse view, "who holds X" and "what does Y take", is derived from the holdings and can be compiled into the bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
-* **An edit** follows one or more holdings. It has `preEdit` and `postEdit` steps (`run` is a program or script path, or an argument list; never a shell string) with optional `since` and `until`, a range of the consumer's lines for the target branch, and `from`, where the program comes from (the consumer's clone, the producer's repo for an owned project, or the central bundle). It may name a `strategy`, a rule in code with its own `with` values. A strategy is checked when the config loads, so `config validate` and `gero ship` agree; `chartsPackageBump` is named in the config and not built, and a run that needs it stops before anything is written.
+* **An edit** follows one or more holdings. It has `preEdit` and `postEdit` steps (`run` is a program or script path, or an argument list; never a shell string) with optional `since` and `until`, a range of the consumer's lines for the target branch, and `from`, where the program comes from (the consumer's clone, the producer's repo for an owned project, or the central bundle). It may name a `strategy`, a rule in code with its own `with` values. A strategy is checked when the config loads, so `config validate` and `gero ship` agree. `goBump` is built; `chartsPackageBump` is named in the config and not built, and a run that needs it stops before anything is written.
 * The order of a run is the edits' `preEdit` steps, the write of every holding, the strategies, and the edits' `postEdit` steps. Only steps whose range holds the branch's line run, and one with no range always does.
 
 **One project is the final destination.** A project may set `finalDestination: true`: the project that releases end in, `rancher/rancher`, which the others ship to and which ships to none. At most one project sets it, and it is what a view of how the lines connect starts from ([LINES_RESOLVE](LINES_RESOLVE.md)).
@@ -62,7 +60,7 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 **The set, in `ValidateSet`.** Names are unique within a kind; every ref is given, is one the kind has, takes one name or a list as the kind says, and names a document of the right kind; repo slugs are unique whatever their case and there is one `finalDestination`; image names are unique within a project; there is one `RancherLines` document and every line a document names is in it; a calver stream is on a project with the `single` layout; a holding of a release refs an artifact and one of a commit or branch refs the project it is taken from, and a project holds nothing of itself; a holding's stage is a stage of its holder and its stages are stages its producer's streams have; and a step run from the producer has a producer that is owned.
 
-**Warnings, never errors.** A lifecycle date ([CONSTRAINTS](../design/CONSTRAINTS.md)), a line with no `branch` once it is past development (an omitted branch means the default branch, which is for the line in development), and two projects that hold something of each other (the dependency is circular).
+**Warnings, never errors.** Each has a stable rule id, and a document can acknowledge a warning of its own with a reason ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#warnings) lists them). A line with no `branch` once it is past development (an omitted branch means the default branch, which is for the line in development), two projects that hold something of each other (the dependency is circular), a project with a branch for each line that holds another stream of an artifact than the final destination does, the locations of a holding that hold different versions (found when a command reads a repo, so `gero repo status` shows it and `config validate` does not), and an acknowledgement that matches nothing. A lifecycle date is meant to be one too ([CONSTRAINTS](../design/CONSTRAINTS.md)), and is not built.
 
 **What depends on a strategy or a format, in the update engine.** Building the engine finds an edit whose strategy does not exist or whose `with` it rejects, and a release holding in a format gero cannot write yet. It is the same construction a run uses; `gero doctor` does not run it yet.
 
@@ -93,7 +91,8 @@ The kinds are described as JSON Schema (draft 2020-12) so an editor can validate
 * Cycle warnings across more than two projects.
 * `gero config show --resolved`.
 * `gero doctor` checking the engine's findings as `config validate` does not yet either.
-* The `chartsPackageBump` strategy, which the real config names, and the `dockerfile` format.
+* The `chartsPackageBump` strategy, which the real config names, and writing the `dockerfile` format.
+* The `lifecycle-date` warning.
 
 ## Open questions
 

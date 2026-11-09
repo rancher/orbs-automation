@@ -1,6 +1,6 @@
 # Update Engine
 
-**Status:** implemented, 2026-11-08, except the strategy `chartsPackageBump`, which is declared and not built. The engine that ships a release into the holdings of a consumer, in `internal/bump`, built on the [chain model](CHAIN_MODEL.md). `gero ship` and `gero repo status` read it.
+**Status:** implemented, except the strategy `chartsPackageBump`, which is declared and not built. The engine that ships a release into the holdings of a consumer, in `internal/bump`, built on the [chain model](CHAIN_MODEL.md). `gero ship` and `gero repo status` read it.
 
 ## What it does
 

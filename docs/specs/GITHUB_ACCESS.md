@@ -20,20 +20,20 @@ All go-gh use stays in `internal/platform/github/gogh.go` (lint-enforced).
 
 ## REST: `google/go-github`
 
-Typed REST calls: PRs, labels and comments, user ids, and the rate limit today; issues, check runs and releases are planned. It is the main API client and its types stay inside `internal/platform/github` (lint-enforced).
+Typed REST calls: pull requests (find, create, edit, close), labels and comments, whether a fork exists, how far a branch is behind, user ids and the rate limit today; issues, check runs and releases are planned. It is the main API client and its types stay inside `internal/platform/github` (lint-enforced).
 
 * Authenticate with `github.WithAuthToken(token)` using the token from `pkg/auth`. The token goes only to the client's own API origins, sent as `Authorization: Bearer`.
 * Tests inject a fake `http.RoundTripper` with `github.WithTransport`, so no network or port is needed.
 * go-github bumps major versions often, and v93 changed `NewClient` to take options and return an error. Pin it and keep usage behind our own interfaces.
 * Enterprise hosts need the URLs set explicitly: `WithEnterpriseURLs("https://ghe.example.com", "https://ghe.example.com")` gives `/api/v3/` and `/api/uploads/`.
 
-## Local git: `go-git`
+## Local git: the `git` binary, with go-git for reads
 
-`go-git/go-git` is the way to do local git operations (reading refs and tags, cloning, committing rendered workflows). It needs no `git` binary on the machine and avoids running a subprocess with inherited environment and config, which is safer and more portable. Usage stays behind our own interfaces, and only `internal/platform/git/repo` imports it. PR creation goes through the API.
+Most local git work runs the `git` binary, through `internal/platform/git/gitcli`, which starts it through `internal/platform/execx`: cloning, fetching, reading the state of a working tree, starting a branch, committing, signing and pushing. It was chosen for speed of building and because the engineer's own git is what a push, a signature and a credential helper need: their SSH agent, `~/.ssh/config`, `gpg.*` and hooks. The reasoning for push and signing is in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
-**`git` via a subprocess is an escape hatch, not a fallback.** go-git is the implementation. There is no try-go-git-then-git at runtime and no matching API on both sides. The `git` binary is used only for a specific operation go-git cannot do, or does differently from git in a way that matters, and each use records the reason next to the code. All such uses live in `internal/platform/git/gitcli`, which starts git through `internal/platform/execx`, so `gitcli` is the list of what go-git could not do. **(unverified)** go-git's behavior for the first uses (tag ordering, detached HEAD, shallow clones in CI) needs confirming with tests against real repositories.
+`go-git/go-git` reads a repository: the current ref, the abbreviated commit, and tags by date. It needs no `git` binary for that, and only `internal/platform/git/repo` imports it.
 
-**Push and commit signing** are where the escape hatch is used (`gitcli.Push`, `gitcli.PushTag`, signed commits), because they depend on the engineer's SSH agent, credential helpers and signing configuration. The reasoning, and who the commits are attributed to in each context, is in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
+Both sit behind our own interfaces, so a go-git implementation of the `gitcli` operations could replace the binary later. That is a possibility and not a plan: `gero repo clone` says so with `TODO(go-git)`. A command that needs a working tree needs the `git` binary on `PATH`, which `gero doctor` checks.
 
 ## `gh` via subprocess
 

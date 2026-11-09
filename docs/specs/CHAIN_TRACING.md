@@ -1,8 +1,8 @@
 # Chain tracing
 
-**Status:** draft. Stretch 1 (Assets and Rancher) is implemented; stretches 2 and 3 are not designed in detail, as [Not built yet](#not-built-yet) says.
+**Status:** the hop between Assets and Rancher is implemented, and the config for the hops through charts is written. Reading a commit or branch holding, the walk through several hops and BRO into charts are not built ([Not built yet](#not-built-yet)).
 
-`gero lines resolve` and `gero repo status` answer "what is the state of this whole release chain?" from the central config and from what GitHub already holds, with no tracker. One hop is followed from any project. This spec is how they follow a chain through every hop, including the hop through the Rancher Assets image that connects `rancher/charts` to `rancher/rancher`, which we do not own. What the chain looks like today is in [rancher-assets](../projects/rancher-assets.md) and [rancher-charts](../projects/rancher-charts.md).
+`gero lines resolve` and `gero repo status` answer "what is the state of this whole release chain?" from the central config and from what GitHub already holds, with no tracker. This spec is how they follow a chain through its hops, including the hop through the Rancher Assets image that connects `rancher/charts` to `rancher/rancher`, which we do not own. What the chain looks like is in [rancher-assets](../projects/rancher-assets.md) and [rancher-charts](../projects/rancher-charts.md); the graph that answers it is [CHAIN_MODEL](../design/CHAIN_MODEL.md).
 
 ## The chain of one line
 
@@ -18,120 +18,89 @@ BRO tag ──bump PR──▶ charts dev-v2.15 ──promotion──▶ charts 
 
 Our own hop is the first one. The others are the release team's, and `gero` reads them.
 
-## Scope and order
+## Stretches
 
-The chain is traced from its far end back, one stretch at a time, and each stretch is finished before the next starts:
+The chain is traced from its far end back, one stretch at a time:
 
-1. **Assets and Rancher (implemented).** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. This is the simplest hop to read, and it establishes the shared release scheme, observed edges and the walk.
-2. **Charts to Assets.** Which charts commit an Assets tag was built from, and the dev and release tiers of `rancher/charts`.
-3. **Our projects to charts.** BRO's tag into a charts bump, and `chartsPackageBump`.
+1. **Assets and Rancher.** What Rancher holds in `defaultAssetsImage`, which Assets tag that is, and the reverse: which Rancher branches hold a given Assets tag. It establishes the shared release scheme, observed edges and stewardship.
+2. **Charts to Assets.** Which charts commit an Assets tag was built from, the dev and stable tiers of `rancher/charts`, and the walk through several hops.
+3. **Our projects to charts.** BRO's tag into a charts bump, and `chartsPackageBump` ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)).
 
-Stretch 1 is what the rest of this spec describes as built. Stages (the tiers of `rancher/charts`), the reading of `lock.yaml`, the walk through several hops (`internal/chain`) and `--depth` belong to stretch 2, and are kept here as the direction, marked as such.
+## What the config says
 
-## What the config adds
+The config for all three stretches is in `config/`. Tracing reads these parts of it ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md)).
 
-These are the parts of the config ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md)) that tracing reads.
-
-* **Stages.** A line of a project whose branches come in tiers has a branch for each stage, written where the branch already is. `branch` is a string for a project with one branch per line, or a map of stage to branch, and the stages are named in `branches.stages`:
-
-  ```yaml
-  branches:
-    layout: perLine
-    stages: [dev, stable]
-    lines:
-      - line: v2.16
-        branch: {dev: dev-v2.16, stable: release-v2.16}
-      - line: v2.15
-        branch: {dev: dev-v2.15, stable: release-v2.15}
-  ```
-
-  The stages are the two the tag schemes already have, `dev` and `stable`, in that order, and the first of a line's stages is its default. A holding names the stage it is found on (`holds.stage`), and the chain answers the branch of a line for a stage (`BranchOfLine(line, stage)`). A branch name found in another project's file, such as the charts branch Rancher's `build.yaml` names, maps back to its line and stage through this table, with no naming pattern to get wrong. The list of `stages` gives their order. A producer's holding names the stage it lands on, so a producer of ours lands on `dev` and the release team promotes to `stable`.
-* **Lines in tags.** A project whose layout is `single` has its stream list the lines, and the `calverLineStage` scheme says how its tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. Its stream lists `v2.16`, the line it is used for, with no series, and a line is added when it is used. A tag that does not parse, or that is of a line not listed, is skipped. All of its tags are on its one branch, the repository's default, so it needs no branch per line. Explicit lines keep the reports plain: the edge to Rancher reaches only the lines both projects list, so Rancher's older branches, which hold no Assets image, are not in the report as errors, and no code has to discover lines from tags. The stage names are the same as in the charts repo, `dev` and `stable`, so a holding between same-named stages needs no mapping.
-* **Stewardship: `repo.owned` and `repo.managedBy`, two fields that work together.** `owned` says whether `gero` ships from the repository: it is true when the repository's workflows run `gero` ([APP_CONFIG](APP_CONFIG.md)), and false, the default, when shipping to its downstream is not ours. `managedBy` says which team is responsible for the project. It is `orbs` when `owned` is true and `managedBy` is unset; for an unowned project there is no default, and an unset `managedBy` is reported as unspecified and never assumed to be ORBS. The four combinations:
+* **Stages.** A project whose branches come in tiers has a branch for each stage per line, `branch: {dev: dev-v2.16, stable: release-v2.16}`, with the stages named in `branches.stages`. The stages are `dev` and `stable`, the two the tag schemes have. A holding names the stage it is found on (`holds.stage`), and the chain answers the branch of a line for a stage (`BranchOfLine(line, stage)`). A branch name found in another project's file maps back to its line and stage through this table, with no naming pattern to get wrong. A producer of ours lands on `dev` and the release team promotes to `stable`.
+* **Lines in tags.** A project whose layout is `single` lists its lines in its stream, and the `calverLineStage` scheme says how its tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. A line is added when the project is used for it. A tag that does not parse, or is of a line not listed, is skipped, so no code discovers lines from tags, and the edge to Rancher reaches only the lines both projects list.
+* **Stewardship: `repo.owned` and `repo.managedBy`.** `owned` says whether `gero` ships from the repository, true when its workflows run `gero`. `managedBy` says which team is responsible. It is `orbs` when `owned` is true and it is unset; for an unowned project there is no default, and an unset one is reported as unspecified.
 
   | `owned` | `managedBy` | What it means |
   |---|---|---|
-  | true | `orbs` (the default when owned) | Ours in full: `gero` ships its downstream, and ORBS is responsible for the project. |
-  | true | another team | A project we help ship with `gero` tooling: its workflows run `gero`, and the other team stays responsible for it. |
-  | false | another team | Not ours: its downstream is shipped by that team's own tooling, and `gero` observes. |
-  | false | `orbs`, written out | ORBS's own, with no `gero` workflows in it yet: observed until there are. |
+  | true | `orbs` (the default when owned) | Ours in full: `gero` ships its downstream, and ORBS is responsible |
+  | true | another team | We help ship it with `gero` tooling, and the other team stays responsible |
+  | false | another team | Not ours: that team's own tooling ships its downstream, and `gero` observes |
+  | false | `orbs`, written out | ORBS's own, with no `gero` workflows in it yet: observed until there are |
 
-  **Every holding of a release of an unowned project is observed:** `gero` reads where it stands, and `gero ship` never opens a PR for it. A holding in an unowned project is written as usual, which is how `rancher/rancher` receives its bumps. `managedBy` does not change what is written: it is who is responsible, shown in reports and in the message when `gero ship` declines an observed project. **To adopt `gero` for a repository the release team manages,** set `owned: true` and change its workflows to call `gero` commands; `managedBy` keeps naming the team that is responsible, and its releases become ours to ship.
-* **A stage on a holding** means two things. On a release holding it is the stage of the holder's branch it is written to (`holds.stage`). On a commit or branch holding `stages` names the stages of the producer to read, and a release holding that sets none follows whatever stage the consumer holds. `rancher-holds-assets` sets none: Rancher holds a `dev` Assets tag until the release team makes a stable release and opens the PR for the stable tag, so either stage is normal there, and the report shows which one is held.
+  A release holding **of an unowned project** is observed: `gero` reads where it stands, and `gero ship` never opens a PR for it. A holding **in** an unowned project is written as usual, which is how `rancher/rancher` receives its bumps. `managedBy` is shown in reports and in the message when `gero ship` declines an observed project, and changes nothing that is written. To adopt `gero` for a repository the release team manages, set `owned: true` and have its workflows call `gero`.
+* **A stage on a holding.** On a release holding it is the stage of the holder's branch written to. On a commit or branch holding, `stages` names the stages of the producer to read. A release holding that sets none follows whatever stage the consumer holds: `rancher-holds-assets` sets none, since Rancher holds a `dev` Assets tag until the release team makes a stable release.
 
 ## Tag schemes
 
-A scheme is code, named in config and claimed from one registry, as update strategies are, and it is table-tested on real tags. It answers four questions: which line a tag is for, which stage, in what order tags of one line and stage come, and which tag is the newest.
+A scheme is code, named in config and claimed from one registry, as update strategies are, and table-tested on real tags. It answers which line a tag is for, which stage, in what order tags of one line and stage come, and which tag is the newest.
 
-In Go there are two layers.
+* **`internal/calver`** is the tag format of `calverLineStage` and nothing else: `Parse` a name into a line, stage and UTC time, `Compare` two tags of one line and stage, and `Select` the tags of a line and stage, newest first. It works on names.
+* **`internal/tagscheme`** is what every reader of a project's releases asks, chosen from the stream's `scheme`: its lines, the line a tag is in, the newest stable and prerelease of a line, whether a tag is stable, and the order of two tags. `ship` and `repo status` call it and carry no scheme code of their own. `lines resolve` reads the config alone. `repo tag` and `internal/releasetag` are for tags a person makes, so they stay semver and do not apply to a project whose tags its own CI makes.
 
-* **`internal/calver`** is the tag format of `calverLineStage` and nothing else: `Parse` of a tag name into a `Tag` with its line, stage and UTC time, `Compare` of two tags of one line and stage, and `Select` (the tags of a line and stage, newest first). It works on names and takes no `git` type.
-* **`internal/tagscheme`** is the one thing every reader of a project's releases asks, and is chosen from the stream by its `scheme` (`tagscheme.ForStream`, and `ForProject` for the one stream of a project). A `Scheme` answers: the lines of the project (`Lines`, the ones its config lists), the line a tag is in (`LineOf`), the newest stable and the newest prerelease of a line (`Latest`: for semver a stable and a prerelease tag, for `calverLineStage` the `stable` stage and the `dev` stage, since a dev tag is a prerelease), whether a tag is stable (`IsStable`), and the order of two tags of a line (`Compare`: semver order, or for CalVer the date, since a newer date with the same line prefix is a newer image). The semver implementation is what `git.LatestReleases` and `ship`'s `lineSeries` did, moved behind it unchanged, with a series read by `semver.Series`, and the CalVer one is `internal/calver`. `ship` (the choice of a release, and what a consumer holds against it) and `repo status` (a project's own latest tags) call it and carry no scheme code of their own, so `ship` has no CalVer code in it. `lines resolve` reads the config alone, and `repo tag` and what tag could be made next (`internal/releasetag`) are for tags a person makes: they stay semver and do not apply to a `perLineTag` project, whose tags its own CI makes. The release-line policy that `ship` had of its own is this scheme now.
+**`calverLineStage`** (the Assets tags): the format is `v{minor}-{YYYYMMDD}T{HHMM}Z`, with `-dev` after it for dev. The date is UTC and to the minute, and it is the commit time of the commit that was released, not the build time; prod and dev tags of one commit share it. The stage is the suffix (`-dev` is `dev`, none is `stable`) and the line is the `v{minor}` prefix. The newest is the greatest timestamp among the tags of the line and stage, filtered first and sorted second, since sorting every tag together mixes the stages. A tag that does not fit is not a release of that line.
 
-**`calverLineStage`** (the Assets tags):
-* The format is `v{minor}-{YYYYMMDD}T{HHMM}Z`, with `-dev` after it for dev. The date is UTC and to the minute, and it is the commit time of the commit that was released, not the build time. Prod and dev tags of one commit share it.
-* The stage is the suffix: `-dev` is `dev` and none is `stable`. The line is the `v{minor}` prefix.
-* **Newest** is the greatest timestamp among the tags of the line and stage. A tag is filtered by line and stage first and sorted second, since sorting every tag together mixes the two stages.
-* A tag that does not fit the format is not a release of that line and is skipped.
+## Charts as a project
 
-## Charts as a project (stretch 2, draft)
+`rancher/charts` is unowned and managed by the release team. It has no tagged releases: from v2.16 on the tagged releases of its content are the Assets tags, a project of their own, and before v2.16 Rancher names a charts branch directly. So charts is traced two ways, by line:
 
-`rancher/charts` is unowned and managed by the release team. It has no tagged releases: from v2.16 on the real tagged releases of its content are the Assets tags, a project of their own, and before v2.16 Rancher names the charts branch directly in its `build.yaml`. So charts is traced in two ways, by line:
+* **From v2.16, through Assets.** The charts commit an Assets tag was built from is pinned in Assets' `lock.yaml`, which the `assets-pins-charts` holding names. What Assets holds is that pinned commit, and what it should hold is the head of the stage's branch, so the answer is whether the newest Assets tag was built from today's head, and which tag first contains a given charts commit.
+* **Before v2.16, directly.** What Rancher holds is a charts branch name in `build.yaml` (the `rancher-follows-charts-branch` holding, up to v2.15), which the line's `branch` map turns into the stage held. Rancher does not say which commit, so the commit is an **estimate**: the newest commit of that branch at or before the time of the Rancher commit. It is a lower bound, shown labelled as an estimate and never as a pinned fact.
 
-* **From v2.16 (through Assets).** The charts commit an Assets tag was built from is pinned in Assets' `lock.yaml`, and the charts branch for each stage is in its `config.yaml`. The edge from charts to Assets is observed. What Assets holds of charts is that pinned commit, and what it should hold is the head of the stage's branch, so the answer is whether the newest Assets tag was built from today's head, and which tag first contains a given charts commit.
-* **Before v2.16 (directly).** The edge from charts to Rancher is observed, and what Rancher holds is a charts branch name in `build.yaml`, which the line's `branch` map turns into the stage held (dev or stable). Rancher does not say which commit, so the commit is an **estimate**: the newest commit of that charts branch at or before the time of the Rancher commit, a lower bound ("at least this much") since an image built later holds the head at that later time. It is shown labelled as an estimate and never as a pinned fact.
-* **Which holding applies to which line.** A holding may say `holds.lines`, a `since` and an `until` of the consumer's lines, as steps and artifacts do, validated against `RancherLines`. The holding of the charts branch in Rancher says `until: v2.15` and the holding of Assets reaches only the lines Assets lists.
+A holding says `holds.lines` to reach only the lines it applies to, so each is read only where it exists.
 
 ## Reading a hop
 
-* **No new strategy.** What a hop holds is read by the holding that already names it: `rancher-holds-assets` on Rancher's `build.yaml` is read by the engine's check (`bump.CheckHolding`, which reads a file at a commit and writes nothing). Read-only comes from the project being unowned, not from a second strategy: `gero ship` refuses an unowned producer, and `Holdings` and `Sources` read it. Reading `lock.yaml` at a ref in stretch 2 is a small helper over the file reader and the key-path code of `yamlBump`, not a strategy, and the quoting rule for a key that contains a dot (the line `2.16`) is settled there.
-* **Assets from charts (stretch 2).** See [Charts as a project](#charts-as-a-project-stretch-2-draft). The charts commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch: the cheap check. Reading `release.yaml` at that commit says whether a chart version is in it: the precise check.
-* **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, read as for any release holding, and its tag is parsed by the scheme. The stage of the tag held is shown, and neither stage is a warning.
+* **No new strategy.** What a hop holds is read by the holding that already names it. `rancher-holds-assets` on Rancher's `build.yaml` is read by the engine's check (`bump.CheckHolding`, which reads a file at a commit and writes nothing). Read-only comes from the project being unowned, not from a second strategy: `gero ship` refuses an unowned producer, and `Holdings` and `Sources` read it.
+* **Rancher from Assets.** What Rancher holds is the `defaultAssetsImage` key of `build.yaml` on a branch, and the scheme parses its tag. The stage of the tag held is shown, and neither stage is a warning.
+* **Assets from charts.** The commit an Assets tag was built from is `chart-versions."{minor}".upstream-refs.{stage}.charts.commit` in `lock.yaml` at that tag. Comparing it with the head of the stage's branch in `rancher/charts` says whether the newest tag was built from today's branch (the cheap check). Reading `release.yaml` at that commit says whether a chart version is in it (the precise check).
 
 ## What the reports show
 
-* **`gero repo status`** of a project shows what each consumer branch holds of its releases, and of a project shows what it takes from each source: for Assets and Rancher the Assets tag held on each listed line, whether it is behind the newest release or dev tag (by date), and the stage held in `--json`. The same read gives both directions, from Rancher and from Assets. A project whose lines are in its tags has a row for each line it lists, with its newest release tag as latest stable and a newer dev tag as latest pre-release, and no state or next tag ([REPO_STATUS](REPO_STATUS.md)). A hop that cannot be read is reported on its own and the rest is still shown.
+* **`gero repo status`** of a project shows what each consumer branch holds of its releases, and what it takes from each source. For Assets and Rancher that is the Assets tag held on each listed line, whether it is behind the newest release or dev tag (by date), and the stage held in `--json`. The same read gives both directions. A project whose lines are in its tags has a row for each line it lists, with its newest release tag as latest stable and a newer dev tag as latest pre-release, and no state or next tag ([REPO_STATUS](REPO_STATUS.md)). A hop that cannot be read is reported on its own and the rest is still shown.
 * **`gero lines resolve`** shows Assets as a source of Rancher on the lines Assets lists and says nothing of it on the others ([LINES_RESOLVE](LINES_RESOLVE.md)). It reads the config and never the network.
-* **Stretch 2:** `lines resolve` shows a line's chain as a tree from the hub back through every hop, with a hop that does not fit the line reported as a gap where it breaks, a project reached only through another is no longer under `also`, and `repo status` follows the chain to a depth that `--depth` caps. An observed hop is marked as observed.
+* **Planned:** `lines resolve` shows a line's chain as a tree from the hub back through every hop, with a hop that does not fit the line reported as a gap where it breaks, and `repo status` follows the chain to a depth that `--depth` caps. An observed hop is marked as observed.
 
 ## Where it lives
 
-* `internal/apis/v1alpha2` holds `managedBy`, the scheme of a stream, the stages and a holding's stage, and validates them: a calver stream is on a project with the `single` layout, a holding's stage is a stage of its holder and its stages are stages its producer's streams have, and `managedBy`, when set, is a lowercase slug (`orbs`). `internal/chain` answers the branch of a line, the stream and line of a tag and who holds what ([CHAIN_MODEL](../design/CHAIN_MODEL.md)).
-* `internal/calver` is pure: the tag format and nothing else. `internal/tagscheme` is the shared release scheme, with the semver implementation and a CalVer one on `internal/calver`.
-* `internal/ship` refuses an unowned producer, and asks the scheme for releases, lines and order; `internal/cli/repostatus` asks it for a project's latest tags.
-* **Stretch 2:** a pure, cycle-safe walk over the chain's graph (`internal/chain`, which already joins the projects, streams and holdings) that returns a tree. It asks the graph for holdings and a small reader interface for what a hop holds, and has fakes in tests, as the packages that read GitHub do. `internal/cli/linesresolve` and `internal/cli/repostatus` use it, and the per-run list of a repository's refs is read once and kept for the run. It waits for stretch 2 because the only second hop, charts to Assets, has no project config yet, so the walk would have one real hop to follow.
+* `internal/apis/v1alpha2` holds `managedBy`, the scheme of a stream, the stages and a holding's stage, and validates them. `internal/chain` answers the branch of a line, the stream and line of a tag, and who holds what ([CHAIN_MODEL](../design/CHAIN_MODEL.md)).
+* `internal/calver` and `internal/tagscheme` are above. `internal/ship` refuses an unowned producer and asks the scheme for releases, lines and order; `internal/cli/repostatus` asks it for a project's latest tags.
+* **The walk (planned):** a pure, cycle-safe walk over the chain's graph that returns a tree. It asks the graph for holdings and a small reader interface for what a hop holds, with fakes in tests, and `internal/cli/linesresolve` and `internal/cli/repostatus` use it.
 
 ## Not built yet
 
-Stretch 1 is implemented: the config fields (`repo.managedBy`, a stream with the `calverLineStage` scheme and its listed lines, and a holding's `stage`) and their checks, `Project.Steward`, `gero ship` refusing an unowned producer, `gero repo info` showing who manages a project, `internal/calver`, `internal/tagscheme`, `repo status` in both directions and `lines resolve` for Assets.
-
-Not built:
-
-* Stretch 2: `internal/chain` and the tree in `lines resolve`, `--depth`, the charts project config with stages, reading `lock.yaml` at a ref, and checking a held tag's stage against the release team's rule.
-* Stretch 3: `chartsPackageBump` and BRO's tag into a charts bump.
-* `repo status`'s `UNRELEASED` count and `LOCAL` comparison for a CalVer project are the generic ones (commits since the newest tag), and have not been checked against how Assets tags move.
-* `repo tag` and `releasetag` do not use the scheme: they are for tags a person makes.
+* Reading a commit or a branch holding at a ref, which `assets-pins-charts` and `rancher-follows-charts-branch` need, and the `lock.yaml` read built on it ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)).
+* The walk through several hops, the tree in `lines resolve` and `--depth`.
+* Checking a held tag's stage against the release team's rule.
+* `chartsPackageBump` and BRO's tag into a charts bump.
 
 ## Decided
 
-* An unowned project need not state `managedBy`: it is reported as unspecified.
-* A team name is a lowercase slug: `orbs`, `release-team`.
-* **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. The stage of a held tag is shown as a fact, and never as a warning or a failure: Rancher holds a `dev` Assets tag (a prerelease) until the release team cuts a stable one, so no stage is wrong there.
-* **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which a read of `lock.yaml` at a ref can do. It belongs to stretch 2: first to check a held tag's stage against the rule, and later, if the release team adopts `gero` for Assets, to make the rule part of a `ship` decision.
-* **Lines are listed.** A project that finds its lines in its tags lists them in its stream, without a series. Assets is used from v2.16 on and may stop being used, so the list says which lines it is for, and nothing discovers lines from tags.
+* An unowned project need not state `managedBy`: it is reported as unspecified. A team name is a lowercase slug.
+* **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. The stage of a held tag is a fact, never a warning or a failure.
+* **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which a read at a ref can do: first to check a held tag's stage against it, later, if the release team adopts `gero` for Assets, to make it part of a `ship` decision.
+* **Lines are listed.** A project that finds its lines in its tags lists them in its stream, without a series, and is judged on those lines: `lines resolve` shows no gap for one it does not list. A per-line project's missing line is still a gap.
 * **No `yamlRead`.** The read half of a holding reads what a hop holds, and ownership keeps it read-only.
-* **A line judged by what a project declares.** A project that finds its lines in its tags is judged on the lines its stream lists: `lines resolve` shows no gap for one it does not. A per-line project's missing line is still a gap.
-* **The walk waits.** The walk over the graph waits for stretch 2, when there is a second hop to follow.
-* **Branch of an Assets line is Rancher's.** The walk goes from a line to the hub's branch for it (from the hub's own `lines`), reads `build.yaml` there, and parses the Assets tag, whose line must match. Nothing maps lines between the two projects.
+* **The branch of an Assets line is Rancher's.** The walk goes from a line to the hub's branch for it, reads `build.yaml` there, and parses the Assets tag, whose line must match. Nothing maps lines between the two projects.
 
 ## Open questions
 
-None for stretch 1. For the later stretches:
-
 * The key in Rancher's `build.yaml` that names the charts branch before v2.16, and whether it holds the branch name alone.
-* The read of a pinned commit in Assets' `lock.yaml`: a new small read-only strategy or something simpler, and what the "release" is that a pin is compared with (the head of the stage's branch).
+* How a pinned commit in `lock.yaml` is read: a small read-only helper over the key-path code, or something else, and what "release" a pin is compared with (the head of the stage's branch). The key path needs a quoting rule for a key with a dot, such as the line `2.16`.
 * Whether `since` and `until` on a holding is all the line-range a holding needs.
-* Whether the key path for the `lock.yaml` read needs a quoting rule for keys that contain a dot, such as the line `2.16`.
 * How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
-* Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag". The answer is traced through the `lock.yaml` at that tag, which records the commit the generated Dockerfile used, to the contents of `rancher/charts` at that commit. It belongs to stretch 2, with the charts-to-Assets connection.
+* Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag", which is traced through `lock.yaml` at that tag to the contents of `rancher/charts` at the commit it records.
 * How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.

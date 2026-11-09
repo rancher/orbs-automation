@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** implemented for the flags, environment, user file and defaults (`internal/platform/clicfg`) and for locating the central config. The file keys `fork`, `githubUser`, `branchPrefix`, `pushTo`, `signCommits` and `repos.*` are read by `gero ship`, `gero repo tag` and the workspace.
+**Status:** implemented, except the `host` setting (see [Not built yet](#not-built-yet)).
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md). Inferring values from the working directory, and resolving repo paths, are in [WORKSPACE](WORKSPACE.md).
 
@@ -31,7 +31,7 @@ Highest wins:
                                   command RunE
 ```
 
-`GH_TOKEN` and `GITHUB_TOKEN` keep their meaning and are consumed by the GitHub access layer ([GITHUB_ACCESS](GITHUB_ACCESS.md)), not by this loader. Values that are left unset can be inferred from the repository at the working directory, which sits between the user file and the defaults ([WORKSPACE](WORKSPACE.md)).
+`GH_TOKEN` and `GITHUB_TOKEN` keep their meaning and are consumed by the GitHub access layer ([GITHUB_ACCESS](GITHUB_ACCESS.md)), not by this loader. A few values are read from the working directory, such as the local path of a repository ([WORKSPACE](WORKSPACE.md)); the rest are never guessed from it.
 
 ### Flag source
 
@@ -81,9 +81,9 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 | (none) | `GERO_DRY_RUN` | `--dry-run` | `true` or `false` (default). **Not a user-file key**: a file that turned it on would silence every write |
 | n/a | `GERO_NON_INTERACTIVE` | `--non-interactive`, `--yes` (on the write commands) | `true` skips the confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). No user-file key |
 | n/a | `GERO_BOT_USER` | n/a | The bot's login in CI, for example `rancher-scc-bot[bot]`, supplied by the workflow with the token. Names the commit identity ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)). Recorded as `Settings.BotUser`; no flag, no user-file key |
-| `host` | `GERO_HOST` | `--host` | **(not built)** GitHub host, if we ever target non-github.com |
 | n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md)). A setting named `log`; no user-file key |
 | `repl.prompt` | `GERO_REPL_PROMPT` | n/a | The prompt of `gero repl`, a template of plain text and placeholders (`{project}`, `{dir}`, `{path}`), default `gero{project: (%s)}> ` ([REPL](REPL.md#the-prompt)). No flag: a prompt is not a per-invocation choice. Checked by `gero repl` when it starts, and by no other command |
+| n/a | `GERO_OFFLINE` | n/a | `true` makes the central config bundle come from the cache only and a command skip the network where it has a local way. Env only: a file that turned it on would silence the network for every command |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
 | n/a | `GERO_CONTEXT` | n/a | `ci` or `workstation`, forcing the execution context ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)). Recorded as `Settings.CI`; no user-file key |
 
@@ -153,7 +153,7 @@ A source that is named but broken (a missing directory or file, invalid or empty
 
 ## Not built yet
 
-* The `inferred` source in `gero config show` ([WORKSPACE](WORKSPACE.md)).
+* A `host` setting (`GERO_HOST`, `--host`) for a GitHub host other than github.com. Today the host is `GH_HOST`, else the one in `gh`'s config, else github.com ([GITHUB_ACCESS](GITHUB_ACCESS.md)).
 
 ## Open questions
 

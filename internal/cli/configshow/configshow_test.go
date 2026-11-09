@@ -220,10 +220,12 @@ func TestRenderTextHintsForUnsetKeys(t *testing.T) {
 	out, err := Render(load(t, "", nil, nil), workspace.CentralConfigDir{}, clicfg.OutputText)
 
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^upstream\s+\(inferred from remotes\)\s+default$`, out)
-	assert.Regexp(t, `(?m)^fork\s+\(inferred from remotes\)\s+default$`, out)
-	assert.Regexp(t, `(?m)^githubUser\s+\(inferred from the fork remote\)\s+default$`, out)
+	// Nothing infers these from the remotes, so the hint must not say so.
+	assert.Regexp(t, `(?m)^upstream\s+\(none\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^fork\s+\(none\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^githubUser\s+\(none\)\s+default$`, out)
 	assert.Regexp(t, `(?m)^branchPrefix\s+\(none\)\s+default$`, out)
+	assert.NotContains(t, out, "inferred")
 	assert.NotContains(t, out, "(unset)")
 }
 

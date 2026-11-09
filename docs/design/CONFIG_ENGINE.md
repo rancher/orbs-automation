@@ -1,6 +1,6 @@
 # Config Engine
 
-**Status:** implemented, 2026-11-08. The engine in `internal/platform/config` and the providers built on it. Where it sits is in [LAYERS](LAYERS.md); the kinds it loads are in [CONFIG_SCHEMA](CONFIG_SCHEMA.md).
+**Status:** implemented. The engine in `internal/platform/config` and the providers built on it. Where it sits is in [LAYERS](LAYERS.md); the kinds it loads are in [CONFIG_SCHEMA](CONFIG_SCHEMA.md).
 
 ## What it does
 
@@ -39,5 +39,4 @@ The envelope, the kind registry and the multi-document loop stay in `apis/meta`;
 
 ## What stays as it is
 
-* The old `internal/config` and its loader were deleted in the [cutover](CUTOVER.md); the engine is what loads the config
 * The user's CLI config schema does not change

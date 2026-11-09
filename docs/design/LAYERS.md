@@ -1,6 +1,6 @@
 # Layers
 
-**Status:** implemented, 2026-11-08. The horizontal layers `internal/` is built in, the rule each layer follows, and what lint enforces. [CONFIG_ENGINE](CONFIG_ENGINE.md) is the config engine that sits in the lowest layer. The package-by-package layout is [PROJECT_LAYOUT](../specs/PROJECT_LAYOUT.md).
+**Status:** implemented. The horizontal layers `internal/` is built in, the rule each layer follows, and what lint enforces. [CONFIG_ENGINE](CONFIG_ENGINE.md) is the config engine that sits in the lowest layer. The package-by-package layout is [PROJECT_LAYOUT](../specs/PROJECT_LAYOUT.md).
 
 ## The layers
 
@@ -23,7 +23,7 @@ cmd
 | `cli`, `ui` | one package per command, and the output seam | everything below; commands do not import each other except the shared helpers |
 | `cmd` | the cobra shell | `internal/cli`, `platform/clicfg`, `platform/errs` |
 
-`lifecycle` is unused today but is reserved for the SUSE lifecycle parser, so it stays. `cmd/version` stays because the release build sets its variables by path.
+`lifecycle` is the SUSE lifecycle parser, kept for reading Rancher's lifecycle dates. `cmd/version` stays because the release build sets its variables by path.
 
 ## What lint enforces
 

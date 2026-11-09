@@ -1,6 +1,6 @@
 # Task commands
 
-**Status:** draft. `gero repo branch` and `gero repo tag` are built; the rest is not. The tasks they all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+**Status:** implemented for `gero repo branch` and `gero repo tag`. The other steps of `ship` are listed as use cases, not as commands, until one is built. The tasks they would all run are built ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 
 The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an engineer who wants one part of the process and not the whole. Each runs one task and `ship` chains the same tasks, so a step behaves the same alone and inside `ship`. They are workstation commands: they act as the engineer, in the engineer's own clone, and read the same settings as `ship`.
 
@@ -8,14 +8,13 @@ The steps of [`gero ship`](PUSH_TO_REPO.md) as commands of their own, for an eng
 |---|---|---|
 | `gero repo branch [project] <line> <name>` | `createbranch` | Makes a branch off the upstream branch of a release line |
 | `gero repo tag [project] <line> [tag]` | `createtag` | Tags the head of a release line's upstream branch in the clone, and with `--push` sends the tag |
-| `gero repo push [project] [--branch <name>]` | `pushbranch` | Pushes a branch, never forced |
-| `gero pr create [project] [--head <branch>] [--base <line\|branch>]` | `createpr` | Opens a PR for a branch that is already pushed, and labels it |
-| `gero ship bump …` **(leaning)** | `bumpcommit` | Applies one change set to a branch and commits it |
+
+The other steps of `ship` are [use cases](#use-cases-not-yet-commands), not named commands.
 
 ## Rules they share
 
 * **Project arguments** are as everywhere ([CLI_FRAMEWORK](CLI_FRAMEWORK.md#2-command-tree-and-global-flags)): the config name or `owner/name`, `.` for the project the working directory is in, and the working directory's project when none is named. In `gero repl` that is the project last changed into.
-* **The branch is never a silent guess.** Where a command acts on a branch of the engineer's, it takes the checked-out branch unless one is named (`--head` for `pr create`, `--branch` for `repo push`), and says which in the question, the dry run and the report. A detached HEAD with none named is an error that says to name one.
+* **The branch is never a silent guess.** Where a command acts on a branch of the engineer's, it takes the checked-out branch unless one is named, and says which in the question, the dry run and the report. A detached HEAD with none named is an error that says to name one.
 * **A command that sends something off the machine asks once, and honors `--dry-run`, `--yes` and `--json`**, as `ship` does ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). A dry run says what would be done and sends nothing. `--json` prints the task's result. A command that changes only the local clone, `repo branch`, asks nothing, as `ship --no-push` asks nothing, and still honors `--dry-run` and `--json`.
 * **Where a branch is pushed** is `--push-to fork|upstream`, decided as in `ship`: the flag, then the settings, then the fork when one is set. It sets the `owner:branch` head of a PR and the remote of a push.
 * **Never forced.** The one replacement is of an earlier attempt's branch whose every commit is ours, and only with `--refresh`, as in `ship`.
@@ -73,50 +72,27 @@ Tagged and pushed v0.8.4 on release/v2.15 at 8c61398 ... to upstream
 
 **In CI** the same task runs as the bot, with a push made with a token that starts workflows. The tracking issue's sign-off, a check before a stable tag is made, is a gate above this command and not part of it, and is not decided ([METADATA](METADATA.md#control-labels)).
 
-## `gero repo push [project] [--branch <name>]`
+## Use cases not yet commands
 
-Pushes a branch of the engineer's to the push target, with the checks `ship` makes: nothing on the remote is the ordinary push, the same commit sends nothing, a branch that grew from the remote's is a fast forward, and a branch that has gone another way is an earlier attempt's, which is replaced only when every commit on it is ours and `--refresh` was given. The error for one that is not ours says whose commit it is.
+Each is a goal an engineer may have of one step of `ship`, with the task that already does it. They have no command names on purpose: the name, and whether the goal is wanted as a command at all, wait until one is built. Each takes the project as every command does (the working directory's, or named), and the rules above apply.
 
-```
-$ gero repo push
-Push bot/scc-operator-v0.5.4-v2.15 to origin?  [y/N] y
-Pushed bot/scc-operator-v0.5.4-v2.15 to origin
-```
-
-## `gero pr create [project] [--head <branch>] [--base <line|branch>]`
-
-Opens a PR from `--head`, or the checked-out branch, into `--base`, or the repository's default branch (a line such as `v2.15` means `release/v2.15`). The head is `owner:branch` for a branch on the fork and the bare branch for the upstream. It does not push: a branch that is not on the remote is an error that says to run `gero repo push`. A head equal to the base is refused.
-
-The title and body default to the subject and the rest of the message of the branch's tip commit; `--title`, `--body` and `--body-file` replace them. `--label` (repeatable) names the labels to apply. A label the repository does not have, and a failure to read or apply labels, is a warning and never fails the PR. It does not close PRs it replaces; that is `ship`'s.
-
-```
-$ gero pr create --base v2.15 --label status/auto-created
-Open PR from danpock:bot/scc-operator-v0.5.4-v2.15 into release/v2.15 on rancher/rancher?  [y/N] y
-Opened rancher/rancher#104  https://github.com/rancher/rancher/pull/104
-  warning: label status/auto-created is not in rancher/rancher, so it was not applied
-
-$ gero pr create scc-operator --head my-fix --push-to upstream --dry-run
-Would open PR from my-fix into main on rancher/scc-operator   (nothing was sent)
-```
-
-## `gero ship bump` **(leaning)**
-
-`gero ship` keeps its meaning: a bare call with a project and a release or line runs the whole process, and its flags are its own. `bump` is a subcommand of it for the one step that writes the consumer's holdings of a release into a branch and commits it (the edit and its commits are never separated), so `ship` is the command that does everything and `ship bump` the part of it that changes files. Cobra reads `bump` as the subcommand when it is the first argument, so no project may be named `bump`; none is.
-
-What it needs is not decided: which branch it commits onto (the checked-out one, which must not be the target it is for), how the consumer is chosen (`--to` as in `ship`), and whether it may be run in a temporary worktree.
+* **Send a branch.** Push a branch of the engineer's to the push target, the checked-out one unless one is named, with the checks `ship` makes: nothing on the remote is the ordinary push, the same commit sends nothing, a branch that grew from the remote's is a fast forward, and one that has gone another way is an earlier attempt's, which is replaced only when every commit on it is ours and `--refresh` was given. The error for one that is not ours says whose commit it is. Task: `pushbranch`. It leaves the machine, so it asks once.
+* **Open a PR for a pushed branch.** From a head branch (the checked-out one unless one is named) into a base (a line such as `v2.15` means `release/v2.15`, else the repository's default branch). The head is `owner:branch` for a branch on the fork and the bare branch for the upstream. It does not push: a branch that is not on the remote is an error that says to send it first. A head equal to the base is refused. The title and body default to the subject and the rest of the message of the branch's tip commit, and may be given. The labels to apply may be named; a label the repository does not have, or a failure to read or apply labels, is a warning and never fails the PR. It does not close the PRs it replaces; that is `ship`'s. Task: `createpr`.
+* **Apply a release to a branch and commit it.** Write the consumer's holdings of a release into a branch and commit it, with the edit and its commits never separated, and no push and no PR. Task: `bumpcommit`. `gero ship --no-push` already does this for every target of a release and leaves each branch in the clone for review, so this is only for putting the change on one branch the engineer has already made. Not decided: which branch it commits onto (the checked-out one, which must not be the target it is for), how the consumer is chosen when the project ships to several, and whether it may run in a temporary worktree.
+* **Close the PRs a newer bump supersedes.** `ship` does this after it opens a PR, and when one is already open. It is not a task yet.
 
 ## Where the code goes
 
-Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds the dependencies, calls the task and renders its output, as for every command ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#2-layout)); none imports another command's package. The name is the command's: `repobranch`, `repopush`, `prcreate`, `shipbump`.
+Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds the dependencies, calls the task and renders its output, as for every command ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#2-layout)); none imports another command's package. The name is the command's: `repobranch` and `repotag` today.
 
 ## Not built yet
 
-* `gero repo push`, `gero pr create` and `gero ship bump`.
+* The use cases above as commands, under names not chosen.
 
 ## Open questions
 
-* What `ship bump` commits onto, and how it picks the consumer (above).
+* Whether each use case is wanted as a command of its own, and under what name.
 * Whether `repo branch` gets `--from <ref>`.
 * For `repo tag`: whether the default bump after a stable is always a patch with `--minor` and `--major` for the rest, and the name `--stable` for the promotion. Whether an annotated or signed tag is ever wanted, which the API does not make.
 * Whether a later token such as `@` should stand for the checked-out branch where a branch is a positional, which none is now.
-* Whether `repo push` and `pr create` share one `--push-to` resolution call or each repeats it. A shared one belongs in `internal/ship` with `resolvePushTarget` until a task needs it, then in a domain package.
+* Whether the push and PR use cases share one push-target resolution call or each repeats it. A shared one belongs in `internal/ship` with `resolvePushTarget` until a task needs it, then in a domain package.
