@@ -46,7 +46,7 @@ func (w *Workspace) ConfigSource() (ConfigSource, error) {
 func (w *Workspace) resolveSource() (ConfigSource, error) {
 	mode := w.settings.ConfigSource
 	if mode == clicfg.ConfigSourceBundle {
-		return w.loadBundle(fmt.Errorf("--config-source=bundle: the central config bundle is not available"))
+		return w.loadBundle(errors.New("--config-source=bundle: the central config bundle is not available"))
 	}
 	dir, err := w.CentralConfigDir()
 	if err == nil {

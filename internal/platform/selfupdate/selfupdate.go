@@ -14,12 +14,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/mallardduck/binup"
 	binupgithub "github.com/mallardduck/binup/github"
 	"github.com/rancher/orbs-automation/internal/platform/releasesign"
-	"golang.org/x/mod/semver"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 
 const (
@@ -131,13 +130,10 @@ func newUpdater(cfg Config, verifier signatureVerifier, target string) (*Updater
 	return &Updater{u: u}, nil
 }
 
-// isPrerelease reports whether version is a semver pre-release, with or without
-// the leading "v".
+// isPrerelease reports whether version is a pre-release, with or without the
+// leading "v".
 func isPrerelease(version string) bool {
-	if !strings.HasPrefix(version, "v") {
-		version = "v" + version
-	}
-	return semver.Prerelease(version) != ""
+	return semver.Classify(version).HasPrerelease
 }
 
 // Check says whether a newer release exists. It changes nothing.
