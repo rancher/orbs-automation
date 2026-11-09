@@ -14,10 +14,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/mallardduck/binup"
 	binupgithub "github.com/mallardduck/binup/github"
 	"github.com/mallardduck/ghreleases/sigstore"
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -40,6 +42,10 @@ const (
 type Config struct {
 	// Current is the version of the running binary.
 	Current string
+	// Prereleases says whether a pre-release may be the newest release. Nil
+	// leaves it to the running binary: a pre-release sees them, a stable
+	// release does not.
+	Prereleases *bool
 	// Token authenticates the GitHub API, and may be empty.
 	Token string
 	// HTTPClient carries every request; nil means the default client.
@@ -104,6 +110,15 @@ func newUpdater(cfg Config, verifier signatureVerifier, target string) (*Updater
 		binupgithub.WithManifestVerifier(verifier),
 		binupgithub.WithArtifactVerifier(verifier),
 	}
+	// Left to the binary, a pre-release is only offered to one: GitHub's
+	// "latest" is always stable, and so has none for it to move to.
+	prereleases := isPrerelease(cfg.Current)
+	if cfg.Prereleases != nil {
+		prereleases = *cfg.Prereleases
+	}
+	if prereleases {
+		opts = append(opts, binupgithub.WithPrereleases())
+	}
 	if cfg.Token != "" {
 		opts = append(opts, binupgithub.WithToken(cfg.Token))
 	}
@@ -119,6 +134,15 @@ func newUpdater(cfg Config, verifier signatureVerifier, target string) (*Updater
 		return nil, fmt.Errorf("self-update: %w", err)
 	}
 	return &Updater{u: u}, nil
+}
+
+// isPrerelease reports whether version is a semver pre-release, with or without
+// the leading "v".
+func isPrerelease(version string) bool {
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+	return semver.Prerelease(version) != ""
 }
 
 // Check says whether a newer release exists. It changes nothing.
