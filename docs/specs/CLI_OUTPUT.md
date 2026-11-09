@@ -55,7 +55,7 @@ Styling is lipgloss v2, behind `internal/ui/style`. The line editor is `ergochat
 
 ## Not built yet
 
-* A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag` and `shell install` each ask their own.
+* A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag`, `shell install` and `doctor self-update` each ask their own.
 * The final report of `ship` appended to `$GITHUB_STEP_SUMMARY` in CI, which belongs to `ci:ship`.
 * The logger handed to every command: `ship` gets one built in `cmd/`, and the others do not log yet.
 * The terminal and the prompt are verified by hand on a real terminal: tests run without one.
