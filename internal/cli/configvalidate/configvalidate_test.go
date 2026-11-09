@@ -72,6 +72,7 @@ func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "config OK")
 	assert.Contains(t, out, "warning: p.yaml: Project \"p\": spec.branches.lines[0].branch: omitted")
+	assert.Contains(t, out, "[default-branch-past-development]", "the warning names its rule, which is what a document acknowledges")
 }
 
 func TestRunReturnsAMissingConfigDirectory(t *testing.T) {

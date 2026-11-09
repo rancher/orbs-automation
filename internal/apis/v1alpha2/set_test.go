@@ -292,6 +292,7 @@ func TestProjectsThatHoldSomethingOfEachOtherAreAWarning(t *testing.T) {
 		assert.NoError(t, rep.Err(), "a circular dependency is not an error")
 		assert.True(t, hasSetWarning(rep, `Holding "q-holds-p"`, "refs", "circular"), "%v", rep.Findings)
 		assert.Len(t, rep.Warnings(), 1)
+		assert.Equal(t, RuleCircularHolding, rep.Warnings()[0].Rule)
 	})
 	t.Run("through a commit it is too", func(t *testing.T) {
 		rep := validateSet(t, append(set, doc("Holding", "q-tracks-p", "{project: q, from: p}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"))...)
@@ -336,6 +337,7 @@ func TestALineWithNoBranchAfterDevelopmentIsAWarning(t *testing.T) {
 				return
 			}
 			assert.True(t, hasSetWarning(rep, `Project "p"`, "spec.branches.lines[0].branch", tt.want), "%v", rep.Findings)
+			assert.Equal(t, RuleDefaultBranchPastDevelopment, rep.Warnings()[0].Rule)
 		})
 	}
 }
