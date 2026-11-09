@@ -43,11 +43,11 @@ const (
 
 // goBumpRoute is the consumer's holding of the library in two go.mod files, and an
 // edit with the strategy over it.
-func goBumpRoute(t *testing.T, strategyEdit string) (Route, Target) {
+func goBumpRoute(t *testing.T) (Route, Target) {
 	t.Helper()
 	e, g, err := buildEngine(t,
 		d("Holding", "cons-mod", "{project: cons, artifact: prod-image}", "  at:\n    - {file: go.mod, key: github.com/acme/lib, format: gomod}\n    - {file: pkg/apis/go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n"),
-		d("Edit", "tidy", "{holding: cons-mod}", strategyEdit),
+		d("Edit", "tidy", "{holding: cons-mod}", "  strategy: goBump\n"),
 	)
 	require.NoError(t, err)
 	var mod *chain.Holding
@@ -62,7 +62,7 @@ func goBumpRoute(t *testing.T, strategyEdit string) (Route, Target) {
 }
 
 func TestGoBumpTidiesEachModuleTheHoldingChanged(t *testing.T) {
-	route, target := goBumpRoute(t, "  strategy: goBump\n")
+	route, target := goBumpRoute(t)
 	tree := files{"go.mod": rootMod, "pkg/apis/go.mod": apisMod}
 	var order []string
 	run := &tidyRunner{order: &order}
@@ -81,7 +81,7 @@ func TestGoBumpTidiesEachModuleTheHoldingChanged(t *testing.T) {
 }
 
 func TestGoBumpReportsOnlyTheModulesTidyChanged(t *testing.T) {
-	route, target := goBumpRoute(t, "  strategy: goBump\n")
+	route, target := goBumpRoute(t)
 	tree := files{"go.mod": rootMod, "pkg/apis/go.mod": apisMod, "pkg/apis/go.sum": "old\n"}
 	run := &tidyRunner{onRun: func(dir string) {
 		if dir == "/work/pkg/apis" {
@@ -104,7 +104,7 @@ func TestGoBumpReportsOnlyTheModulesTidyChanged(t *testing.T) {
 }
 
 func TestGoBumpWhenTidyChangesNothingReportsNothing(t *testing.T) {
-	route, target := goBumpRoute(t, "  strategy: goBump\n")
+	route, target := goBumpRoute(t)
 	tree := files{"go.mod": rootMod, "pkg/apis/go.mod": apisMod}
 	var strategy []Change
 	called := false
@@ -122,7 +122,7 @@ func TestGoBumpWhenTidyChangesNothingReportsNothing(t *testing.T) {
 }
 
 func TestGoBumpDoesNotRunWhenTheHoldingChangedNothing(t *testing.T) {
-	route, target := goBumpRoute(t, "  strategy: goBump\n")
+	route, target := goBumpRoute(t)
 	tree := files{"go.mod": strings.Replace(rootMod, "v1.0.0", "v1.2.0", 1), "pkg/apis/go.mod": strings.Replace(apisMod, "v1.0.0", "v1.2.0", 1)}
 	run := &tidyRunner{}
 
@@ -177,7 +177,7 @@ func TestGoBumpOnlyTidiesGoModFilesNotOtherFilesTheEditsHoldingsWrite(t *testing
 }
 
 func TestGoBumpAFailedTidyStopsTheRunNamingTheEditAndTheModule(t *testing.T) {
-	route, target := goBumpRoute(t, "  strategy: goBump\n")
+	route, target := goBumpRoute(t)
 	tree := files{"go.mod": rootMod, "pkg/apis/go.mod": apisMod}
 	run := &tidyRunner{fail: "/work/pkg/apis"}
 
@@ -201,7 +201,7 @@ func TestGoBumpTakesNoValues(t *testing.T) {
 }
 
 func TestARouteWithGoBumpIsReady(t *testing.T) {
-	route, _ := goBumpRoute(t, "  strategy: goBump\n")
+	route, _ := goBumpRoute(t)
 
 	assert.NoError(t, route.Ready())
 }

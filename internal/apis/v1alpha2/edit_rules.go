@@ -15,6 +15,9 @@ const (
 	FromCentral  = "central"
 )
 
+// StrategyGoBump is the strategy that tidies the go.mod files its holdings write.
+const StrategyGoBump = "goBump"
+
 // strategyName is what the name of a strategy looks like: a camelCase word.
 var strategyName = regexp.MustCompile(`^[a-z][A-Za-z0-9]*$`)
 

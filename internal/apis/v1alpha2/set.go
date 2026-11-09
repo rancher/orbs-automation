@@ -86,6 +86,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.holdingRefs()
 	s.holdingStages()
 	s.editSteps()
+	s.goBumpHoldings()
 	s.circular()
 	s.omittedBranches()
 	s.streamsDifferFromDestination()
@@ -657,4 +658,31 @@ func listsLine(p *Project, line string) bool {
 		}
 	}
 	return false
+}
+
+// goBumpHoldings reports an Edit with the strategy goBump, which tidies go.mod
+// files, none of whose holdings has a location in the gomod format.
+func (s *set) goBumpHoldings() {
+	for _, o := range s.objs {
+		e, ok := o.(*Edit)
+		if !ok || e.Spec.Strategy != StrategyGoBump {
+			continue
+		}
+		found, refd := false, 0
+		for _, name := range e.Refs["holding"] {
+			h, _ := s.index[KindHolding][name].(*Holding)
+			if h == nil {
+				continue
+			}
+			refd++
+			for _, at := range h.Spec.At {
+				found = found || at.Format == FormatGoMod
+			}
+		}
+		if refd > 0 && !found {
+			r := s.at(o)
+			r.Errorf("refs.holding", "%s tidies go.mod files, and none of these holdings is in the gomod format", StrategyGoBump)
+			s.add(r)
+		}
+	}
 }
