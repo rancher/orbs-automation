@@ -302,3 +302,75 @@ func TestHoldingsOfOneLocationHaveNoLocationsToShow(t *testing.T) {
 		assert.False(t, h.Held[0].Differ)
 	}
 }
+
+// twoStreams is a producer with a stream for each of two major versions of its tags,
+// and a consumer that holds one for the newer lines and the other for the older.
+func twoStreams(t *testing.T) *fakeWorkspace {
+	t.Helper()
+	ws := fixture(t)
+	ws.producer = projectSpec{Name: "lib", Repo: "acme/lib", Owned: true, Streams: []extraStream{
+		{Name: "one", Pattern: "v1.*", Image: "acme/lib-one"}, {Name: "two", Pattern: "v2.*", Image: "acme/lib-two"},
+	}}
+	consumer := projectSpec{Name: "svc", Repo: "acme/svc", Lines: []lineSpec{{"v2.16", ""}, {"v2.15", "release/v2.15"}, {"v2.14", "release/v2.14"}}}
+	ws.links = []link{
+		{Consumer: consumer, Artifact: "lib-one-image", Key: "one", HoldsLines: "{since: v2.15}", Form: "{tag}"},
+		{Consumer: consumer, Artifact: "lib-two-image", Key: "two", HoldsLines: "{until: v2.14}", Form: "{tag}"},
+	}
+	ws.refs = map[string]git.Refs{
+		"acme/lib": {Tags: tags("v1.0.0", "v1.1.0", "v2.0.0", "v2.1.0")},
+		"acme/svc": {Branches: []git.Branch{{Name: "main", Commit: "sha-main"}, {Name: "release/v2.15", Commit: "sha-215"}, {Name: "release/v2.14", Commit: "sha-214"}}},
+	}
+	ws.files = map[string]string{
+		"acme/svc@sha-main:build.yaml": "one: v1.1.0\ntwo: v2.0.0\n",
+		"acme/svc@sha-215:build.yaml":  "one: v1.0.0\ntwo: v2.0.0\n",
+		"acme/svc@sha-214:build.yaml":  "one: v1.0.0\ntwo: v2.0.0\n",
+	}
+	return ws
+}
+
+func TestHoldingsOfAProducerWithSeveralStreamsAreAnEntryForEachStreamOfAConsumer(t *testing.T) {
+	got, err := holdings(t, twoStreams(t))
+
+	require.NoError(t, err)
+	require.Len(t, got, 2, "svc takes two streams of lib, and each is its own entry")
+	one, two := got[0], got[1]
+	assert.Equal(t, "lib-one", one.Stream)
+	assert.Equal(t, "lib-two", two.Stream)
+	assert.Empty(t, one.Error)
+	assert.Empty(t, two.Error)
+
+	oneBy := byBranch(t, one)
+	require.Len(t, oneBy, 2, "only the branches its holding covers")
+	assert.Equal(t, "v1.1.0", oneBy["main"].Stable.Tag, "the latest release of this stream and no other")
+	assert.True(t, oneBy["main"].Stable.UpToDate)
+	assert.Equal(t, "v1.1.0", oneBy["release/v2.15"].Stable.Tag)
+	assert.False(t, oneBy["release/v2.15"].Stable.UpToDate)
+
+	twoBy := byBranch(t, two)
+	require.Len(t, twoBy, 1)
+	assert.Equal(t, "v2.1.0", twoBy["release/v2.14"].Stable.Tag)
+	assert.Equal(t, bump.RelationNewer, twoBy["release/v2.14"].Stable.Relation)
+}
+
+func TestSourcesOfAConsumerThatTakesSeveralStreamsOfOneProducerAreAnEntryForEach(t *testing.T) {
+	ws := twoStreams(t)
+
+	got, err := Sources(ctx, ws, ws.config().Project("svc"))
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "acme/lib", got[0].Producer)
+	assert.Equal(t, "lib-one", got[0].Stream)
+	assert.Equal(t, "lib-two", got[1].Stream)
+	assert.Empty(t, got[0].Error)
+	assert.Empty(t, got[1].Error)
+	assert.NotContains(t, got[0].Error+got[1].Error, "one release is of one stream")
+}
+
+func TestHoldingsOfAProducerWithOneStreamNameItAndKeepTheirEntries(t *testing.T) {
+	got, err := holdings(t, loopFixture(t))
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "scc-operator", got[0].Stream)
+}

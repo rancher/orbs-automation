@@ -74,6 +74,61 @@ func TestRoutesFromAProducerAreOneForEachConsumerWithAllItsReleaseHoldings(t *te
 	assert.Empty(t, e.RoutesFrom(g.Project("cons")), "a commit holding is not a route, and cons makes nothing")
 }
 
+// twoStreams is a producer with a stream for each of two minors, the same Go module
+// in both, held by cons for some lines of each, and by other for one.
+func twoStreams() []string {
+	const hold = "  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"%s}\n"
+	return []string{
+		d("Project", "lib", "", "  repo: {name: acme/lib, owned: true}\n"),
+		d("Stream", "lib-1", "{project: lib}", "  tagPattern: \"v1.*\"\n  universal: true\n"),
+		d("Stream", "lib-2", "{project: lib}", "  tagPattern: \"v2.*\"\n  universal: true\n"),
+		d("Artifact", "lib-1-module", "{stream: lib-1}", "  kind: gomod\n  name: github.com/acme/lib\n"),
+		d("Artifact", "lib-2-module", "{stream: lib-2}", "  kind: gomod\n  name: github.com/acme/lib\n"),
+		d("Holding", "cons-lib-1", "{project: cons, artifact: lib-1-module}", fmt.Sprintf(hold, ", lines: {since: v2.15}")),
+		d("Holding", "cons-lib-2", "{project: cons, artifact: lib-2-module}", fmt.Sprintf(hold, ", lines: {until: v2.14}")),
+		d("Holding", "other-lib-1", "{project: other, artifact: lib-1-module}", fmt.Sprintf(hold, "")),
+	}
+}
+
+func TestRoutesAreOneForEachConsumerAndStreamOfTheProducer(t *testing.T) {
+	e, g, err := buildEngine(t, twoStreams()...)
+	require.NoError(t, err)
+
+	from := e.RoutesFrom(g.Project("lib"))
+
+	assert.Equal(t, []string{"lib > cons: cons-lib-1", "lib > cons: cons-lib-2", "lib > other: other-lib-1"}, names(from))
+	var streams []string
+	for _, r := range from {
+		require.NotNil(t, r.Stream)
+		streams = append(streams, r.Stream.Name())
+	}
+	assert.Equal(t, []string{"lib-1", "lib-2", "lib-1"}, streams, "each route ships the releases of one stream")
+
+	into := e.RoutesInto(g.Project("cons"))
+	assert.Equal(t, []string{"lib > cons: cons-lib-1", "lib > cons: cons-lib-2"}, names(into), "a consumer has a route for each stream it takes from")
+}
+
+func TestARouteHasTheStreamOfItsHoldings(t *testing.T) {
+	e, g, err := buildEngine(t)
+	require.NoError(t, err)
+
+	for _, r := range e.RoutesFrom(g.Project("prod")) {
+		require.NotNil(t, r.Stream)
+		assert.Equal(t, "prod", r.Stream.Name())
+	}
+}
+
+func TestAHoldingThatCannotBeUsedLeavesOutTheRouteOfItsStreamOnly(t *testing.T) {
+	docs := twoStreams()
+	docs[6] = d("Holding", "cons-lib-2", "{project: cons, artifact: lib-2-module}", "  at: {file: Dockerfile, key: LIB, format: dockerfile}\n  holds: {kind: release, lines: {until: v2.14}}\n")
+
+	e, g, err := buildEngine(t, docs...)
+
+	require.ErrorIs(t, err, ErrFormatNotBuilt)
+	assert.Equal(t, []string{"lib > cons: cons-lib-1", "lib > other: other-lib-1"}, names(e.RoutesFrom(g.Project("lib"))),
+		"the stream whose holding is not usable is left out, and the consumer's other stream is not")
+}
+
 func TestRoutesIntoAConsumerAreOneForEachProducer(t *testing.T) {
 	e, g, err := buildEngine(t)
 	require.NoError(t, err)
