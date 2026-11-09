@@ -21,4 +21,6 @@ type (
 	ObjectMeta = meta.ObjectMeta
 	Refs       = meta.Refs
 	Object     = meta.Object
+
+	Acknowledgement = meta.Acknowledgement
 )

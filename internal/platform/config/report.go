@@ -27,8 +27,11 @@ type Finding struct {
 	Path     string // where in the document, such as spec.layout
 	Line     string // the Rancher line a warning is about, when it is about one
 	Reason   string // why a warning is expected, when the document acknowledges it
-	Rule     string // the stable id of the rule a warning is of, such as circular-holding; none for an error
-	Msg      string
+	// Acknowledged is set on a warning that its document says is expected; it is not
+	// shown as a warning, and Reason says why.
+	Acknowledged bool
+	Rule         string // the stable id of the rule a warning is of, such as circular-holding; none for an error
+	Msg          string
 }
 
 // Error returns the finding as one line naming the source, the document, the path
@@ -91,13 +94,22 @@ func (r *Report) Warnf(rule, path, format string, args ...any) {
 
 // WarnLinef is Warnf for a warning about one Rancher line, which an
 // acknowledgement may then be limited to.
-func (r *Report) WarnLinef(rule, _, path, format string, args ...any) {
+func (r *Report) WarnLinef(rule, line, path, format string, args ...any) {
 	r.Warnf(rule, path, format, args...)
+	r.Findings[len(r.Findings)-1].Line = line
 }
 
 // Acknowledged returns the warnings that a document says are expected, in the
 // order reported. They are not in Warnings.
-func (r Report) Acknowledged() []Finding { return nil }
+func (r Report) Acknowledged() []Finding {
+	var out []Finding
+	for _, f := range r.Findings {
+		if f.Severity == Warning && f.Acknowledged {
+			out = append(out, f)
+		}
+	}
+	return out
+}
 
 // Err returns the errors as one error that joins them, or nil when there are
 // none. It is always a join, even for one finding, so a caller that walks to a
@@ -112,11 +124,12 @@ func (r Report) Err() error {
 	return errors.Join(errs...)
 }
 
-// Warnings returns the findings that are warnings, in the order reported.
+// Warnings returns the findings that are warnings and not acknowledged, in the
+// order reported.
 func (r Report) Warnings() []Finding {
 	var out []Finding
 	for _, f := range r.Findings {
-		if f.Severity == Warning {
+		if f.Severity == Warning && !f.Acknowledged {
 			out = append(out, f)
 		}
 	}

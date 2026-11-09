@@ -506,6 +506,75 @@ func (s *set) editSteps() {
 	}
 }
 
-// acknowledgements checks what each document says is expected, and silences the
-// warnings it matches.
-func (s *set) acknowledgements() {}
+// acknowledgements checks what each document says is expected, and marks the
+// warnings it matches as acknowledged. An acknowledgement that matches no warning
+// is a warning itself. It runs last, so every other warning exists.
+func (s *set) acknowledgements() {
+	for _, o := range s.objs {
+		acks := o.GetAcknowledge()
+		if len(acks) == 0 {
+			continue
+		}
+		r := s.at(o)
+		label := fmt.Sprintf("%s %q", o.GetKind(), o.GetName())
+		for i, a := range acks {
+			path := fmt.Sprintf("acknowledge[%d]", i)
+			if !validAcknowledgement(r, path, a) {
+				continue
+			}
+			if !s.acknowledge(label, a) {
+				r.Warnf(RuleAcknowledgementUnused, path, "acknowledges %s, which this document does not raise%s", a.Rule, forLines(a.Lines))
+			}
+		}
+		s.add(r)
+	}
+}
+
+// acknowledge marks the warnings of a document that an acknowledgement matches:
+// the same rule and, when it is limited to lines, a warning about one of them. It
+// reports whether it matched any.
+func (s *set) acknowledge(label string, a Acknowledgement) bool {
+	matched := false
+	for i := range s.rep.Findings {
+		f := &s.rep.Findings[i]
+		if f.Severity != config.Warning || f.Acknowledged || f.Label != label || f.Rule != a.Rule {
+			continue
+		}
+		if a.Lines != (lines.Range{}) && (f.Line == "" || !a.Lines.Contains(f.Line)) {
+			continue
+		}
+		f.Acknowledged, f.Reason = true, a.Reason
+		matched = true
+	}
+	return matched
+}
+
+// validAcknowledgement reports an error at path for each thing wrong with an
+// acknowledgement, and whether it had none.
+func validAcknowledgement(r *config.Report, path string, a Acknowledgement) bool {
+	before := len(r.Findings)
+	switch {
+	case a.Rule == "":
+		r.Errorf(path+".rule", "is required")
+	case !slices.Contains(acknowledgeable, a.Rule):
+		r.Errorf(path+".rule", "%q is not a rule a document can acknowledge: use %s", a.Rule, orList(acknowledgeable))
+	}
+	if strings.TrimSpace(a.Reason) == "" {
+		r.Errorf(path+".reason", "is required: say why the warning is expected")
+	}
+	checkRange(r, path+".lines", a.Lines)
+	return len(r.Findings) == before
+}
+
+// forLines writes " for lines from v2.15 to v2.16", or nothing for every line.
+func forLines(r lines.Range) string {
+	switch {
+	case r.Since != "" && r.Until != "":
+		return " for lines " + r.Since + " to " + r.Until
+	case r.Since != "":
+		return " for lines from " + r.Since
+	case r.Until != "":
+		return " for lines up to " + r.Until
+	}
+	return ""
+}
