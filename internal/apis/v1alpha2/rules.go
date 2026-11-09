@@ -16,6 +16,7 @@ const (
 	RuleCircularHolding              = "circular-holding"
 	RuleDefaultBranchPastDevelopment = "default-branch-past-development"
 	RuleAcknowledgementUnused        = "acknowledgement-unused"
+	RuleStreamDiffersFromDestination = "stream-differs-from-destination"
 )
 
 // acknowledgeable are the rules whose warnings a document can acknowledge: the

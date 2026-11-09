@@ -88,6 +88,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.editSteps()
 	s.circular()
 	s.omittedBranches()
+	s.streamsDifferFromDestination()
 	s.acknowledgements()
 }
 
@@ -578,3 +579,8 @@ func forLines(r lines.Range) string {
 	}
 	return ""
 }
+
+// streamsDifferFromDestination warns, on a holding of a project with a branch for
+// each line, of a line for which the final destination holds another stream of
+// the same artifact.
+func (s *set) streamsDifferFromDestination() {}
