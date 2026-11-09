@@ -19,7 +19,7 @@ Unmarked items are decisions or working agreements. **(leaning)** is a proposal 
 
 ## GitHub and Git Access
 
-`gero` uses `go-gh` (token and host only) and `go-github` (typed REST) directly, `go-git` for local repositories, and shells out only where nothing else works. The details, the reconciler's consumer-side interfaces and the evidence from the spike are in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md).
+`gero` uses `go-gh` (token and host only) and `go-github` (typed REST) directly. It runs the `git` binary for anything that touches a working tree, so an engineer's own SSH agent, credentials and signing apply, and reads refs and tags with `go-git`. A go-git client for the rest could replace the binary later. The details and the reconciler's consumer-side interfaces are in [GITHUB_ACCESS](specs/GITHUB_ACCESS.md).
 
 ## Release Rules
 

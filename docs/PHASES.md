@@ -45,16 +45,14 @@ Two flows, in order:
 | v0.2 | built | **The config model, `gero/v1alpha2`:** documents of small kinds (Project, Stream, Artifact, Holding, Edit, `RancherLines`), the engine that decodes, defaults and validates them, the graph every command reads ([CONFIG_UNITS](design/CONFIG_UNITS.md), [CHAIN_MODEL](design/CHAIN_MODEL.md)), and the real configs of the POC and chain projects, written from the [process docs](process/README.md) | v0.1 |
 | v0.3 | built | **Read-only insight:** the line map (`gero lines resolve`), a project's releases and who holds them (`gero repo status`), and the release-line rules in one place (`internal/releasetag`) | v0.2 |
 | v0.4 | built | **The update engine and the workstation bump** ([UPDATE_ENGINE](design/UPDATE_ENGINE.md)): routes, targets, holdings written in place, edits with steps, `gero ship` (commits, PRs, supersede, `--refresh`, fan-out with per-target status), and the pieces by hand, `repo branch` and `repo tag`. The POC flow runs for real | v0.3 |
-| v0.5 | next | **Chain tracing through the charts hop** ([CHAIN_TRACING](specs/CHAIN_TRACING.md) stretch 2; Assets and Rancher is built): charts with its stages, which charts commit an Assets tag was built from, and the walk through several hops (the tree in `lines resolve`, `--depth`). Reading what a commit or branch holding holds | v0.4 |
+| v0.5 | next | **Chain tracing through the charts hop** ([CHAIN_TRACING](specs/CHAIN_TRACING.md) stretch 2; Assets and Rancher is built, and the config for charts with its stages is written): reading what a commit or branch holding holds, which charts commit an Assets tag was built from, and the walk through several hops (the tree in `lines resolve`, `--depth`) | v0.4 |
 | v0.6 | later | **Our projects into charts** (CHAIN_TRACING stretch 3): `chartsPackageBump`, run in dry-run beside today's scripts, and BRO's tag into a charts bump; the tag step between hops is `gero repo tag`, and each hop is a `gero ship` once the one before it has merged and been tagged. Watching a whole chain without doing that by hand is the tracker, v1.2 | v0.5 |
 | v0.7 | later | **Checks over the chain** ([TOOLING_GOALS](design/TOOLING_GOALS.md)): stable readiness and line consistency, read-only, on the walk of v0.5 | v0.5 |
-| v0.8 | later | **Onboarding:** `gero init` writes the user file, and `gero repo clone` clones the team's projects, so a fresh workstation is usable in a few commands | v0.2 |
+| v0.8 | built | **Onboarding:** `gero init` writes the user file, `gero repo clone` clones the team's projects, `gero shell install` sets up the shell, the release's central config bundle means a fresh workstation needs no checkout, and `gero doctor self-update` keeps the binary current, so a fresh workstation is usable in a few commands ([CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md), [SELF_UPDATE](specs/SELF_UPDATE.md)) | v0.2 |
 | v0.9 | later | **The chain flow runs for real** from a workstation through `gero`, plus hardening ahead of v1.0.0: the loose ends in [TODO](../TODO.md), the process docs reviewed, field names settled | v0.6, v0.7, v0.8 |
 | | | **POC review with the team,** at the end of v0.x, when the author is done with it: show the POC flow and the chain flow from a workstation (`gero ship`, `gero repo status`, `gero lines resolve`), review the config shapes and the direction, and fold feedback in before v1.0.0 | v0.9 |
 
-`gero init` and `gero repo clone` are built. Clone finds the Projects in a local central config or, on a fresh workstation, in the central bundle that each release publishes ([CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)).
-
-v0.8 depends only on the config model, so it can be taken at any point before v0.9.
+Clone finds the Projects in a local central config or, on a fresh workstation, in the central bundle that each release publishes.
 
 ### Decides in v0.x
 
