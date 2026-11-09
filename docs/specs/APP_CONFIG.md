@@ -8,7 +8,7 @@ Informed by [backup-restore-operator](../projects/backup-restore-operator.md) an
 
 ## Shape
 
-* Every document has `apiVersion` (`gero/v1alpha2`), `kind`, `name` and `spec`, and may have `refs`. It is **inspired by Kubernetes resources but not compatible with them**: there is no `metadata`, no `status` and no controller semantics. State lives in tracking issues, not in config.
+* Every document has `apiVersion` (`gero/v1alpha2`), `kind`, `name` and `spec`, and may have `refs` and `acknowledge` (the warnings of the document that are expected, each with its reason). It is **inspired by Kubernetes resources but not compatible with them**: there is no `metadata`, no `status` and no controller semantics. State lives in tracking issues, not in config.
 * `name` is a lowercase slug, unique within its kind, and is how logs, errors and `refs` name the document. `refs` holds names only, and the key says which kind each name is of.
 * Files may hold several YAML documents, and **nothing depends on which file a document is in** or its place in it.
 * **Defaults are conservative.** Only no-surprise values are defaulted, and anything that changes release behavior is written out. Stricter release verification (`requiresPrerelease`) is **off by default and opt-in**. A change to a default is a breaking change and bumps `apiVersion`.

@@ -10,6 +10,7 @@
 | `kind` | what the document is | one of the kinds below |
 | `name` | its identity | a lowercase slug (`a-z`, `0-9`, `-`); unique within its kind; used in logs, errors and `refs` |
 | `refs` | references to other documents | names only, a name or a list of names; the key says the target kind; every name must exist |
+| `acknowledge` | warnings of this document that are expected | a list of `{rule, reason, lines}`; see [Warnings](#warnings) |
 | `spec` | the document's own fields | strict: an unknown field is an error |
 
 Nothing depends on which file a document is in or its place in the file. Several documents may share a file.
@@ -173,9 +174,34 @@ A warning never makes a document invalid. It names its rule by a stable id, show
 | `unknown-key` | a user file has a key it does not know (the user file is not a document, so it cannot be acknowledged) | yes |
 | `locations-differ` | the locations of one Holding hold different versions for a line | no |
 | `stream-differs-from-destination` | a project with `layout: perLine` holds another stream of an artifact than the `finalDestination` for a line | no |
+| `acknowledgement-unused` | an acknowledgement matches no warning of its document | yes |
 | `lifecycle-date` | a release is shipped to a line past a lifecycle date | no |
 
 The names of the rules not built are provisional until they are.
+
+### Acknowledging a warning
+
+A document says a warning of its own is expected with an `acknowledge` list in its envelope, on any kind:
+
+```yaml
+kind: Holding
+name: bro-holds-wrangler-3-7
+acknowledge:
+  - rule: stream-differs-from-destination
+    lines: {since: v2.16, until: v2.16}
+    reason: BRO main stays on wrangler 3.7 until the v12 release
+```
+
+| Field | Rules |
+|---|---|
+| `rule` | required; the id of a rule of a document (`circular-holding`, `default-branch-past-development`); the unknown key of a user file and `acknowledgement-unused` cannot be acknowledged |
+| `reason` | required, and not only space: it is what a reader of the config is told |
+| `lines` | `{since, until}`, optional; limits it to warnings about those lines, ends included. With no `lines` it covers every warning of the rule on the document, whether it is about a line or not; with `lines` it covers only a warning about a line in the range |
+
+* An acknowledgement matches a warning of the same document and rule. One on another document does not
+* An acknowledged warning is not a warning: it is not counted by `gero doctor` and not shown by `gero config validate`, which shows it with its reason under `-v`
+* An acknowledgement that matches no warning is itself a warning, `acknowledgement-unused`
+* It lives in the central config, because warnings are raised from it and from the bundle; a repo's own `gero.yaml` is not read for it
 
 ## Where today's fields went
 

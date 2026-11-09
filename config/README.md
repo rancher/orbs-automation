@@ -2,7 +2,7 @@
 
 The configs `gero` runs on, in `gero/v1alpha2`: the release chain of the projects we model, as documents. The shape of each kind is in [CONFIG_SCHEMA](../docs/design/CONFIG_SCHEMA.md); how a project is described and why is in [CONFIG_UNITS](../docs/design/CONFIG_UNITS.md), and what the tools read from it is in [APP_CONFIG](../docs/specs/APP_CONFIG.md).
 
-Every file is YAML. A document has `apiVersion`, `kind`, `name`, optional `refs` and a `spec`, inspired by Kubernetes resources but not compatible with them (no `metadata` or `status`). Files may hold several documents, and nothing depends on a file's name or place: a document is what it says it is.
+Every file is YAML. A document has `apiVersion`, `kind`, `name`, optional `refs` and `acknowledge`, and a `spec`, inspired by Kubernetes resources but not compatible with them (no `metadata` or `status`). Files may hold several documents, and nothing depends on a file's name or place: a document is what it says it is.
 
 | Kind | Meaning |
 |---|---|
