@@ -97,8 +97,8 @@ linters:
             - pkg: github.com/mallardduck/ghreleases/sigstore
               desc: the Sigstore verifier is only allowed in internal/platform/releasesign (docs/specs/DEPENDENCY_POLICY.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
-        # another program. internal/platform/git/gitcli (each use records why go-git
-        # cannot do it) and internal/platform/ghcli (gero doctor) go through it
+        # another program. internal/platform/git/gitcli (the git binary) and
+        # internal/platform/ghcli (gero doctor) go through it
         # (docs/specs/DEPENDENCY_POLICY.md).
         noexec:
           list-mode: lax
