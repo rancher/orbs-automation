@@ -1,6 +1,6 @@
 # Fixture: the proposed units, written out
 
-**Status:** working fixture, 2026-11-08. The projects in the shape [CONFIG_UNITS](../CONFIG_UNITS.md) proposes: the seven of the baseline, the frameworks team's wrangler and lasso, and examples in [`examples/`](examples/). The Go tests load it (`internal/apis/v1alpha2`, `internal/appconfig`, `internal/chain`), so it is the contract the loader meets: the Go module additions (`gomod`, a list in `at`, `{bareTag}`) are ahead of the loader and those tests fail until they are built. A Holding is one document with an `at` block (a location or a list) and a `holds` block.
+**Status:** working fixture, 2026-11-08. The projects in the shape [CONFIG_UNITS](../CONFIG_UNITS.md) proposes: the seven of the baseline, the frameworks team's wrangler and lasso, and examples in [`examples/`](examples/). The Go tests load it (`internal/apis/v1alpha2`, `internal/appconfig`, `internal/chain`), so it is the contract the loader meets, and it loads whole. What the fixture describes and nothing reads yet is in the status of [CONFIG_UNITS](../CONFIG_UNITS.md). A Holding is one document with an `at` block (a location or a list) and a `holds` block.
 
 | File | Documents |
 |---|---|
