@@ -299,6 +299,46 @@ func TestRunWritesAroundTheStepsAndCheckpointsEachUnit(t *testing.T) {
 	assert.Equal(t, []string{"prep v1.2.0 dev-v2.16", "gen v1.2.0 dev-v2.16"}, rec.steps)
 }
 
+// envRunner records the environment each step it runs is given.
+type envRunner struct{ envs []map[string]string }
+
+func (r *envRunner) Run(_ context.Context, _ chain.Step, env StepEnv) error {
+	r.envs = append(r.envs, env.Env)
+	return nil
+}
+
+func TestRunGivesAStepTheVersionWithoutThePrefixOfTheStream(t *testing.T) {
+	tests := []struct {
+		name, pattern, tag, wantVersion string
+	}{
+		{"a prefixed tag", "mod/v*", "mod/v1.2.0", "1.2.0"},
+		{"a tag with only a v", "v*", "v1.2.0", "1.2.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e, g, err := buildEngine(t,
+				d("Project", "mod", "", "  repo: {name: acme/mod, owned: true}\n"),
+				d("Stream", "mod", "{project: mod}", "  tagPattern: \""+tt.pattern+"\"\n  universal: true\n"),
+				d("Artifact", "mod-image", "{stream: mod}", "  kind: image\n  name: acme/mod\n"),
+				d("Holding", "cons-mod", "{project: cons, artifact: mod-image}", "  at: {file: mod.yaml, key: image}\n  holds: {kind: release, form: \"{image}:{version}\"}\n"),
+				d("Edit", "regen", "{holding: cons-mod}", "  postEdit:\n    - {run: gen}\n"),
+			)
+			require.NoError(t, err)
+			route := e.RoutesFrom(g.Project("mod"))[0]
+			rec := &envRunner{}
+			tree := files{"mod.yaml": "image: acme/mod:0.0.1\n"}
+
+			_, err = route.Run(bg, tree, rec, Target{Branch: "dev-v2.16", Line: "v2.16", Holdings: route.Holdings}, tt.tag, "abc", "/work", nil)
+
+			require.NoError(t, err)
+			require.Len(t, rec.envs, 1)
+			assert.Equal(t, tt.wantVersion, rec.envs[0]["GERO_VERSION"])
+			assert.Equal(t, tt.tag, rec.envs[0]["GERO_TAG"], "the tag is as published")
+			assert.Contains(t, tree["mod.yaml"], "acme/mod:"+tt.wantVersion, "the holding's form already has the same version")
+		})
+	}
+}
+
 func TestRunAFailedStepStopsItNamingWhereItWas(t *testing.T) {
 	e, g, err := buildEngine(t, d("Edit", "regen", "{holding: cons-image}", "  postEdit:\n    - {run: ok}\n    - {run: boom, from: producer}\n    - {run: never}\n"))
 	require.NoError(t, err)

@@ -95,6 +95,49 @@ func TestStrategyMessageNamesTheStrategyAndWhatItChanged(t *testing.T) {
 		"Part of updating scc-operator to v0.5.3: the goBump strategy of edit tidy.\n\nAutomation: gero ship\n", got)
 }
 
+// moduleProducer is a project whose releases are tagged with a prefix, as a Go module
+// in a subdirectory is, or with none.
+func moduleProducer(t *testing.T, tagPattern string) *chain.Project {
+	t.Helper()
+	return chaintest.Load(t,
+		chaintest.Doc("Project", "ob-charts-tool", "", "  repo: {name: rancher/ob-charts-tool}\n"),
+		chaintest.Doc("Stream", "helmtools", "{project: ob-charts-tool}", "  tagPattern: \""+tagPattern+"\"\n  universal: true\n"),
+	).Project("ob-charts-tool")
+}
+
+func TestTheVersionOfAReleaseIsTheTagWithoutThePrefixOfItsStreamOrItsV(t *testing.T) {
+	tests := []struct {
+		name, pattern, tag, want string
+	}{
+		{"a prefixed tag", "helmtools/v*", "helmtools/v0.1.2", "0.1.2"},
+		{"a tag with only a v", "v*", "v0.5.3", "0.5.3"},
+		{"a prerelease", "helmtools/v*", "helmtools/v0.1.2-rc.1", "0.1.2-rc.1"},
+		{"a tag the stream does not match", "pkg/v*", "v0.5.3", "0.5.3"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := previewFixture(t)
+			in.producer = moduleProducer(t, tt.pattern)
+			in.release = Release{Tag: tt.tag}
+
+			assert.Equal(t, tt.want, textVars(in)["version"])
+			assert.Equal(t, tt.tag, textVars(in)["tag"], "the tag is as published")
+		})
+	}
+}
+
+func TestAPullRequestTitleWithTheVersionOfAPrefixedReleaseHasNoPrefix(t *testing.T) {
+	in := previewFixture(t)
+	in.producer = moduleProducer(t, "helmtools/v*")
+	in.consumer = projectWith(t, "rancher-assets", "rancher/rancher-assets", `{title: "Bump {source} to {version}"}`)
+	in.release = Release{Tag: "helmtools/v0.1.2"}
+
+	got, err := renderPreview(in)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Bump ob-charts-tool to 0.1.2", got.Title)
+}
+
 func TestRenderPreviewBodyCarriesTheMarker(t *testing.T) {
 	got, err := renderPreview(previewFixture(t))
 	require.NoError(t, err)
