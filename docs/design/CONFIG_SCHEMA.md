@@ -1,6 +1,6 @@
 # Config Schema
 
-**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions: the loader reads the `gomod` Artifact kind and format, `at` as a location or a list with `lines`, and `{prefix}` and `{bareTag}` in a form, and a release gives `{version}` without a tag's prefix; `gero ship` and the checks read and write every location of a Holding that exists for the line, in the `yaml` and `gomod` formats, and `goBump` runs `go mod tidy` in each `go.mod` its holdings changed; not yet built: the Go proxy check of a `gomod` Artifact, `{version}` in a PR text and in a step's environment, a better commit message for a strategy's commit, and `locations-differ`. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
+**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions: the loader reads the `gomod` Artifact kind and format, `at` as a location or a list with `lines`, and `{prefix}` and `{bareTag}` in a form, and a release gives `{version}` without a tag's prefix; `gero ship` and the checks read and write every location of a Holding that exists for the line, in the `yaml` and `gomod` formats, and `goBump` runs `go mod tidy` in each `go.mod` its holdings changed; the commit of a strategy and the check of a `gomod` Artifact on the Go proxy are built; not yet built: `{version}` in a PR text and in a step's environment, and `locations-differ`. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
 
 ## Every document
 
@@ -74,7 +74,7 @@ One thing each release of a stream produces. `refs`: `stream` (required).
 | `lines` | `{since, until}` | every line | the lines that produce it |
 | `registries` | list | by release kind | an image only; `dockerhub`, `prime-staging`, `prime-production`; the default is Docker Hub and Prime staging always, Prime production for a stable |
 
-An image is checked in its registries; a file on the GitHub release **(provisional: exists only)**. A `gomod` exists when its tag is on the repo and the version is listed by the public Go module proxy **(provisional: the proxy is not configurable; a field can name another later)**.
+An image is checked in its registries; a file on the GitHub release **(provisional: exists only)**. A `gomod` exists when its tag is on the repo and the version is listed by the public Go module proxy, which `gero repo images exist` and `gero ship` ask over HTTP ([IMAGES_EXIST](../specs/IMAGES_EXIST.md#go-modules)) **(provisional: the proxy is not configurable; a field can name another later)**.
 
 ## Holding
 
