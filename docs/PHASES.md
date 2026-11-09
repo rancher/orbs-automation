@@ -20,8 +20,8 @@ Milestones are major versions of `gero`, and each has an **audience** and a **me
 | Tag | Name | Audience | What we say | Gate |
 |---|---|---|---|---|
 | **v0.x** | Foundation and the first flows | The team | Nothing outside it | The foundation under v1.0.0 is built |
-| **v1.0.0** | A tool the team can rely on | The wider organization, to a limited degree | "`gero` ships bump PRs from a workstation and from CI, in place of scripts in our repos, and traces our release chain" | The gate below |
-| **v1.x** | Tracking and standardization | The team, and early users | Progress updates | Releases are tracked and more of the work is shared |
+| **v1.0.0** | A tool the team can rely on | The team, and early users | "`gero` ships bump PRs from a workstation and from CI, in place of scripts in our repos, and traces our release chain" | The gate below |
+| **v1.x** | Tracking and standardization | The wider organization, to a limited degree | Progress updates | Releases are tracked and more of the work is shared |
 | **v2.0.0** | Complete | The wider organization and leadership | "Most of the release work we did by hand is now automated" | A real release cycle run through `gero` |
 | **v3.0.0** | QA bridge | Engineering and QA leadership | "Engineering and QA are in sync through shared tooling" | QA results appear on release tracking |
 | Moonshot | Dashboard | Managers and leadership | "Anyone can see the state of releases" | Whenever it is ready; unversioned |
