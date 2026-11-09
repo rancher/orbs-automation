@@ -77,12 +77,25 @@ var scalars = []scalar{
 		fromFile: func(*fileConfig) string { return "" },
 	},
 	{
-		// Flag and env only: a user file that pinned it would hide where the
-		// config of every command comes from.
 		name:     "configSource",
 		def:      ConfigSourceAuto,
 		validate: validateConfigSource,
 		field:    func(s *Settings) *string { return &s.ConfigSource },
+		fromFile: func(f *fileConfig) string { return f.ConfigSource },
+	},
+	{
+		name:     "bundleChannel",
+		def:      BundleChannelAuto,
+		validate: validateBundleChannel,
+		field:    func(s *Settings) *string { return &s.BundleChannel },
+		fromFile: func(f *fileConfig) string { return f.BundleChannel },
+	},
+	{
+		// Flag and env only: a user file that pinned a bundle would fix every
+		// command to one release.
+		name:     "bundleFile",
+		path:     true,
+		field:    func(s *Settings) *string { return &s.BundleFile },
 		fromFile: func(*fileConfig) string { return "" },
 	},
 	{
@@ -112,6 +125,14 @@ func validateConfigSource(v string) error {
 		return nil
 	}
 	return fmt.Errorf("must be %q, %q or %q, got %q", ConfigSourceAuto, ConfigSourceDir, ConfigSourceBundle, v)
+}
+
+func validateBundleChannel(v string) error {
+	switch v {
+	case BundleChannelAuto, BundleChannelStable, BundleChannelPrerelease:
+		return nil
+	}
+	return fmt.Errorf("must be %q, %q or %q, got %q", BundleChannelAuto, BundleChannelStable, BundleChannelPrerelease, v)
 }
 
 func validateLog(v string) error {

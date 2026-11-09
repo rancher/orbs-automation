@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
@@ -45,6 +46,12 @@ func (w *Workspace) ConfigSource() (ConfigSource, error) {
 
 func (w *Workspace) resolveSource() (ConfigSource, error) {
 	mode := w.settings.ConfigSource
+	if file := w.settings.BundleFile; file != "" {
+		if mode == clicfg.ConfigSourceDir {
+			return ConfigSource{}, errors.New("--bundle-file names a bundle and --config-source=dir allows none: use one of them")
+		}
+		return w.loadBundleFile(file)
+	}
 	if mode == clicfg.ConfigSourceBundle {
 		return w.loadBundle(errors.New("--config-source=bundle: the central config bundle is not available"))
 	}
@@ -56,6 +63,23 @@ func (w *Workspace) resolveSource() (ConfigSource, error) {
 		return ConfigSource{}, err
 	}
 	return w.loadBundle(ErrNotFound)
+}
+
+// loadBundleFile reads a bundle file the user downloaded, with no fetch and no
+// cache. Its format and versions are checked as for any bundle; its signature and
+// checksum are not, since the user chose the file.
+func (w *Workspace) loadBundleFile(path string) (ConfigSource, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ConfigSource{}, fmt.Errorf("--bundle-file %s: %w", path, err)
+	}
+	h, fsys, err := bundle.Parse(data)
+	if err != nil {
+		return ConfigSource{}, fmt.Errorf("--bundle-file %s: %w", path, err)
+	}
+	l := bundlestore.Loaded{Header: h, FS: fsys, Source: bundlestore.Source{File: path, Tag: h.GeroVersion}}
+	w.bundleFiles = &l
+	return ConfigSource{Bundle: &l.Source}, nil
 }
 
 // loadBundle reads the bundle. When there is none, or it cannot be loaded, the
@@ -84,11 +108,19 @@ func bundleFor(s clicfg.Settings) BundleSource {
 	if s.CI && s.ConfigSource != clicfg.ConfigSourceBundle {
 		return nil
 	}
-	return resolverSource{version: s.GeroVersion, offline: s.Offline}
+	return resolverSource{version: s.GeroVersion, offline: s.Offline, channel: channelOf(s)}
 }
 
-// channelOf is the bundle channel of the settings.
-func channelOf(clicfg.Settings) string { return "" }
+// channelOf is the bundle channel of the settings, as the resolver names it.
+func channelOf(s clicfg.Settings) string {
+	switch s.BundleChannel {
+	case clicfg.BundleChannelStable:
+		return bundlestore.ChannelStable
+	case clicfg.BundleChannelPrerelease:
+		return bundlestore.ChannelPrerelease
+	}
+	return bundlestore.ChannelAuto
+}
 
 // The repository whose releases carry the bundle. It is fixed in the binary: the
 // bundle is the central config of this project, and a release is what vouches for it.
@@ -104,6 +136,7 @@ const (
 type resolverSource struct {
 	version string
 	offline bool
+	channel string
 }
 
 func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
@@ -121,5 +154,5 @@ func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
 		_, token := defaultCredentials()
 		res.Releases = assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token, Verifier: verifier})
 	}
-	return res.Load(ctx, bundlestore.Request{GeroVersion: r.version, Offline: r.offline})
+	return res.Load(ctx, bundlestore.Request{GeroVersion: r.version, Offline: r.offline, Channel: r.channel})
 }

@@ -86,10 +86,13 @@ type Loaded struct {
 
 // Load finds the bundle for the request. The rules are the spec's:
 //
-//   - A stable gero uses the newest stable release's bundle, and a build that is
-//     not a release the same. A prerelease gero uses the newest release's bundle,
+//   - The channel says which releases are candidates. Auto follows the gero: a
+//     stable gero uses the newest stable release's bundle, and a build that is
+//     not a release the same; a prerelease gero uses the newest release's bundle,
 //     a prerelease or not, and its own when that is the newest or the newest is
-//     not readable.
+//     not readable. Stable takes the newest stable for any gero, and prerelease
+//     the newest of all for any gero.
+//   - A fresh cache is used only if its release is one the channel would choose.
 //   - A cached bundle under a day old is used with no request, unless it is older
 //     than the gero's own release. An older one is checked against the newest
 //     release, and downloaded only when that is a different one.
@@ -103,6 +106,7 @@ func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
 	now := r.now()
 	cached, have, _ := r.Cache.Read() // an unreadable cache is the same as none
 	own := ownRelease(req.GeroVersion)
+	channel := req.Channel
 
 	if req.Offline {
 		if !have {
@@ -119,13 +123,13 @@ func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
 		return l, nil
 	}
 
-	if have && now.Sub(cached.FetchedAt) < r.refresh() && !olderThan(cached.Tag, own) {
+	if have && now.Sub(cached.FetchedAt) < r.refresh() && !olderThan(cached.Tag, guard(own, channel)) && fitsChannel(cached.Tag, own, channel) {
 		if l, err := fromCache(cached, now); err == nil {
 			return l, nil
 		}
 	}
 
-	l, err := r.fetch(ctx, own, cached, have, now)
+	l, err := r.fetch(ctx, own, channel, cached, have, now)
 	if err == nil {
 		return l, nil
 	}
@@ -154,28 +158,74 @@ func (r *Resolver) refresh() time.Duration {
 }
 
 // fetch looks at the releases and takes the bundle that the rules choose.
-func (r *Resolver) fetch(ctx context.Context, own string, cached Entry, have bool, now time.Time) (Loaded, error) {
-	prerelease := own != "" && isPrerelease(own)
-	latest, err := r.Releases.Latest(ctx, prerelease)
+func (r *Resolver) fetch(ctx context.Context, own, channel string, cached Entry, have bool, now time.Time) (Loaded, error) {
+	prereleases := wantsPrereleases(own, channel)
+	latest, err := r.Releases.Latest(ctx, prereleases)
 	if err != nil {
 		return Loaded{}, err
 	}
 	target, fallback := latest.Tag, ""
-	if prerelease {
-		if cmp, ok := assetfetch.CompareVersions(latest.Tag, own); !ok || cmp <= 0 {
-			target = own
+	if floor := floor(own, channel); floor != "" {
+		if cmp, ok := assetfetch.CompareVersions(latest.Tag, floor); !ok || cmp <= 0 {
+			target = floor
 		} else {
-			fallback = own
+			fallback = floor
 		}
 	}
 	l, err := r.use(ctx, target, cached, have, now)
-	if err != nil && fallback != "" && errors.Is(err, bundle.ErrUnsupported) {
-		if l, ferr := r.use(ctx, fallback, cached, have, now); ferr == nil {
-			l.Source.Note = fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v); using the bundle of %s", target, err, fallback)
-			return l, nil
+	if err != nil && errors.Is(err, bundle.ErrUnsupported) {
+		if fallback == "" && prereleases && isPrerelease(target) {
+			// Nothing of the gero's own to fall back to: the newest stable release.
+			if stable, serr := r.Releases.Latest(ctx, false); serr == nil {
+				fallback = stable.Tag
+			}
+		}
+		if fallback != "" && fallback != target {
+			if l, ferr := r.use(ctx, fallback, cached, have, now); ferr == nil {
+				l.Source.Note = fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v); using the bundle of %s", target, err, fallback)
+				return l, nil
+			}
 		}
 	}
 	return l, err
+}
+
+// wantsPrereleases is whether pre-releases are candidates: as the channel says, or,
+// left to auto, when the gero itself is a pre-release.
+func wantsPrereleases(own, channel string) bool {
+	switch channel {
+	case ChannelStable:
+		return false
+	case ChannelPrerelease:
+		return true
+	}
+	return own != "" && isPrerelease(own)
+}
+
+// floor is the oldest release the gero may run on: its own, when it is a
+// pre-release made with that bundle and the channel does not exclude it. A stable
+// channel has none, and so has a gero that is not a pre-release.
+func floor(own, channel string) string {
+	if own == "" || !isPrerelease(own) || channel == ChannelStable {
+		return ""
+	}
+	return own
+}
+
+// guard is the release a cached bundle must not be older than: the gero's own,
+// which an upgraded gero must not run behind, except where a stable channel asks a
+// pre-release gero for releases that are older than it.
+func guard(own, channel string) string {
+	if channel == ChannelStable && own != "" && isPrerelease(own) {
+		return ""
+	}
+	return own
+}
+
+// fitsChannel is whether a cached release is one the channel would choose: a
+// pre-release is not, when pre-releases are not candidates.
+func fitsChannel(tag, own, channel string) bool {
+	return wantsPrereleases(own, channel) || !isPrerelease(tag)
 }
 
 // use is the bundle of the release: the cached one when it is of that release, else
@@ -275,5 +325,8 @@ func ageString(d time.Duration) string {
 // and gero doctor: the release and how old the copy is, such as "bundle v0.5.0, 3
 // hours old".
 func (s Source) Describe() string {
+	if s.File != "" {
+		return fmt.Sprintf("bundle file %s (%s)", s.File, s.Tag)
+	}
 	return fmt.Sprintf("bundle %s, %s old", s.Tag, ageString(s.Age))
 }

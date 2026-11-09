@@ -12,6 +12,8 @@ import (
 // step with the example in docs/specs/CLI_CONFIG.md.
 type fileConfig struct {
 	CentralConfigDir string    `yaml:"centralConfigDir"`
+	ConfigSource     string    `yaml:"configSource"`
+	BundleChannel    string    `yaml:"bundleChannel"`
 	Output           string    `yaml:"output"`
 	Color            string    `yaml:"color"`
 	Upstream         string    `yaml:"upstream"`

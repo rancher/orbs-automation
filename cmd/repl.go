@@ -91,7 +91,7 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 
 // globalFlags are the names addGlobalFlags declares, the only flags that can be
 // given to gero repl and carried to its lines.
-var globalFlags = []string{"central-config-dir", "config-source", "upstream", "output", "json", "color", "no-color", "dry-run", "verbose"}
+var globalFlags = []string{"central-config-dir", "config-source", "bundle-channel", "bundle-file", "upstream", "output", "json", "color", "no-color", "dry-run", "verbose"}
 
 // baseFlags returns the global flags given explicitly to cmd, as arguments to
 // put in front of every line.

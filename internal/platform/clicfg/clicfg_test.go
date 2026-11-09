@@ -857,7 +857,7 @@ func TestLoadRejectsABundleChannelThatIsNotOne(t *testing.T) {
 
 	_, err = Load(Inputs{Getenv: env(map[string]string{"GERO_BUNDLE_CHANNEL": "beta"})})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "GERO_BUNDLE_CHANNEL")
+	assert.Contains(t, err.Error(), "(from env)")
 }
 
 func TestLoadBundleFileFromTheEnvAndFlagAndNeverTheFile(t *testing.T) {

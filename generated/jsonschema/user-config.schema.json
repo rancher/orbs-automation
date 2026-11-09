@@ -7,6 +7,22 @@
         "centralConfigDir": {
           "type": "string"
         },
+        "configSource": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "bundle",
+            "dir"
+          ]
+        },
+        "bundleChannel": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "stable",
+            "prerelease"
+          ]
+        },
         "output": {
           "type": "string",
           "enum": [
