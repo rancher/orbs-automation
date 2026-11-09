@@ -517,3 +517,47 @@ func TestAProjectUsedForOneLineTakesPartOnThatLineAndHasNoGapOnTheOthers(t *test
 	}
 	assert.Len(t, got.Gaps, 1, "shell's missing v2.13 is the only gap, as without Assets")
 }
+
+// moduleDocs adds a library with a stream for each of two minors, held by svc, a
+// project on the lines that is not connected to the hub, for different lines.
+func moduleDocs() *docSet {
+	d := fixtureDocs()
+	d.put("lib", project("lib", "  repo: {name: acme/lib, owned: true}\n"))
+	d.put("lib-1", chaintest.Doc("Stream", "lib-1", "{project: lib}", "  tagPattern: \"v1.*\"\n  universal: true\n"))
+	d.put("lib-2", chaintest.Doc("Stream", "lib-2", "{project: lib}", "  tagPattern: \"v2.*\"\n  universal: true\n"))
+	d.put("lib-1-module", chaintest.Doc("Artifact", "lib-1-module", "{stream: lib-1}", "  kind: gomod\n  name: github.com/acme/lib\n"))
+	d.put("lib-2-module", chaintest.Doc("Artifact", "lib-2-module", "{stream: lib-2}", "  kind: gomod\n  name: github.com/acme/lib\n"))
+	d.put("svc", project("svc", "  repo: {name: acme/svc}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.16}\n      - {line: v2.15, branch: release/v2.15}\n"))
+	hold := func(name, artifact, lines string) string {
+		return chaintest.Doc("Holding", name, "{project: svc, artifact: "+artifact+"}",
+			"  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", lines: "+lines+"}\n")
+	}
+	d.put("svc-holds-lib-1", hold("svc-holds-lib-1", "lib-1-module", "{since: v2.16}"))
+	d.put("svc-holds-lib-2", hold("svc-holds-lib-2", "lib-2-module", "{until: v2.15}"))
+	return d
+}
+
+func alsoOf(t *testing.T, r Result, line, name string) Also {
+	t.Helper()
+	for _, a := range lineOf(t, r, line).Also {
+		if a.Name == name {
+			return a
+		}
+	}
+	require.Failf(t, "not also on the line", "%s on %s in %v", name, line, lineOf(t, r, line).Also)
+	return Also{}
+}
+
+func TestResolveAProjectOnALineTakesFromOnlyTheStreamsItsHoldingsCoverForThatLine(t *testing.T) {
+	g, engine := graphOf(t, moduleDocs())
+	got, err := Resolve(g, engine, Options{}, now)
+	require.NoError(t, err)
+
+	newer := alsoOf(t, got, "v2.16", "svc")
+	require.Len(t, newer.TakesFrom, 1, "only the holding that covers v2.16")
+	assert.Equal(t, []string{"svc-holds-lib-1"}, newer.TakesFrom[0].Holdings)
+
+	older := alsoOf(t, got, "v2.15", "svc")
+	require.Len(t, older.TakesFrom, 1)
+	assert.Equal(t, []string{"svc-holds-lib-2"}, older.TakesFrom[0].Holdings)
+}
