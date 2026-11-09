@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -244,7 +245,27 @@ func (c userFileCheck) Run(context.Context) Result {
 			Remediation: "fix or remove the keys the message names, as gero ignores them; the keys are listed in docs/specs/CLI_CONFIG.md",
 		}
 	}
+	if missing := missingDirs(s.Repos.Search); len(missing) > 0 {
+		// The scan skips a directory it cannot read without a word, so a typo hides
+		// every clone under it.
+		return Result{
+			Status:      StatusWarn,
+			Message:     "repos.search is not a directory: " + strings.Join(missing, ", "),
+			Remediation: "fix or remove the repos.search entries the message names, as the scan skips them",
+		}
+	}
 	return Result{Status: StatusOK, Message: path}
+}
+
+// missingDirs are the paths that are not an existing directory.
+func missingDirs(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		if info, err := os.Stat(p); err != nil || !info.IsDir() {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // withoutGeroVars hides the GERO_* variables from the loader, which would

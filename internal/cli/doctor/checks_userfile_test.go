@@ -53,7 +53,7 @@ func TestUserFileCheckWithoutAnEnvironmentDoesNotPanic(t *testing.T) {
 }
 
 func TestUserFileCheckLoadedFileReportsItsPath(t *testing.T) {
-	path := writeUserFile(t, "output: json\nrepos:\n  search:\n    - /src\n")
+	path := writeUserFile(t, "output: json\nrepos:\n  search:\n    - "+t.TempDir()+"\n")
 	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path})
 
 	got := NewUserFileCheck(env).Run(context.Background())
@@ -121,4 +121,31 @@ func TestUserFileCheckUnknownKeyWarns(t *testing.T) {
 	assert.Contains(t, got.Message, "line 3")
 	assert.Contains(t, got.Message, "cloneDir")
 	assert.Contains(t, got.Remediation, "docs/specs/CLI_CONFIG.md")
+}
+
+// A search directory that is not there is skipped by the scan without a word, so
+// a typo in it hides every clone under it. The check names it.
+func TestUserFileCheckSearchDirectoryThatIsNotThereWarns(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "GitProject")
+	present := t.TempDir()
+	path := writeUserFile(t, "repos:\n  search:\n    - "+present+"\n    - "+missing+"\n")
+	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path})
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	assert.Equal(t, StatusWarn, got.Status)
+	assert.Contains(t, got.Message, "repos.search")
+	assert.Contains(t, got.Message, missing)
+	assert.NotContains(t, got.Message, present)
+	assert.Contains(t, got.Remediation, "repos.search")
+}
+
+// The clone root is made by the first clone, so it is not expected to exist.
+func TestUserFileCheckCloneRootThatIsNotThereIsFine(t *testing.T) {
+	path := writeUserFile(t, "repos:\n  cloneRoot: "+filepath.Join(t.TempDir(), "later")+"\n")
+	env, _ := userFileEnv(t, map[string]string{"GERO_CONFIG": path})
+
+	got := NewUserFileCheck(env).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: path}, got)
 }
