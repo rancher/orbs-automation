@@ -227,6 +227,21 @@ func trace(ctx context.Context, ws ship.Reader, p *chain.Project, opts Options, 
 // exists the newest. A Relation of newer means the release is newer than what the
 // branch holds, so the branch is behind.
 func holdStatus(h ship.HeldValue) string {
+	status := compareStatus(h)
+	if h.Differ && h.DifferReason == "" && h.Error == "" {
+		// The locations of the holding hold different values. A document that says
+		// that is expected is not contradicted here, and the values are still shown.
+		if status == "-" {
+			return "locations differ"
+		}
+		return status + "; locations differ"
+	}
+	return status
+}
+
+// compareStatus is the part of the status that compares what is held with the
+// releases.
+func compareStatus(h ship.HeldValue) string {
 	if h.Error != "" {
 		return "unreadable: " + h.Error
 	}
@@ -511,7 +526,7 @@ func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText s
 			if v.Stable != nil {
 				latest = v.Stable.Tag
 			}
-			holds := v.Current
+			holds := heldCell(v)
 			if holds == "" {
 				holds = "-"
 			}
@@ -521,6 +536,22 @@ func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText s
 		}
 	}
 	b.WriteString(ui.Align(table, view.Width))
+}
+
+// heldCell is what a holding holds, as the HOLDS column shows it: the value, or
+// each distinct value of its locations, in the order they are listed, when they
+// differ.
+func heldCell(v ship.HeldValue) string {
+	if !v.Differ {
+		return v.Current
+	}
+	var values []string
+	for _, loc := range v.Locations {
+		if !slices.Contains(values, loc.Current) {
+			values = append(values, loc.Current)
+		}
+	}
+	return strings.Join(values, ", ")
 }
 
 // heads is a row of column heads, as secondary text, indented under its

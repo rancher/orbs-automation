@@ -524,6 +524,9 @@ func (s *set) acknowledgements() {
 			if !validAcknowledgement(r, path, a) {
 				continue
 			}
+			if slices.Contains(observed, a.Rule) {
+				continue // raised by reading a repo, which validation does not do: it cannot say none matched
+			}
 			if !s.acknowledge(label, a) {
 				r.Warnf(RuleAcknowledgementUnused, path, "acknowledges %s, which this document does not raise%s", a.Rule, forLines(a.Lines))
 			}
@@ -539,10 +542,7 @@ func (s *set) acknowledge(label string, a Acknowledgement) bool {
 	matched := false
 	for i := range s.rep.Findings {
 		f := &s.rep.Findings[i]
-		if f.Severity != config.Warning || f.Acknowledged || f.Label != label || f.Rule != a.Rule {
-			continue
-		}
-		if a.Lines != (lines.Range{}) && (f.Line == "" || !a.Lines.Contains(f.Line)) {
+		if f.Severity != config.Warning || f.Acknowledged || f.Label != label || !covers(a, f.Rule, f.Line) {
 			continue
 		}
 		f.Acknowledged, f.Reason = true, a.Reason
@@ -555,8 +555,22 @@ func (s *set) acknowledge(label string, a Acknowledgement) bool {
 // it has one, and the reason when they do. An acknowledgement with no lines
 // covers every warning of the rule; one with lines covers only a warning about a
 // line in them.
-func Acknowledges(_ []Acknowledgement, _, _ string) (reason string, ok bool) {
+func Acknowledges(acks []Acknowledgement, rule, line string) (reason string, ok bool) {
+	for _, a := range acks {
+		if covers(a, rule, line) {
+			return a.Reason, true
+		}
+	}
 	return "", false
+}
+
+// covers says whether an acknowledgement covers a warning of a rule about a line:
+// the same rule and, when it is limited to lines, a warning about one of them.
+func covers(a Acknowledgement, rule, line string) bool {
+	if a.Rule != rule {
+		return false
+	}
+	return a.Lines == (lines.Range{}) || (line != "" && a.Lines.Contains(line))
 }
 
 // validAcknowledgement reports an error at path for each thing wrong with an

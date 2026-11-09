@@ -14,9 +14,13 @@ type Holding struct {
 
 // Acknowledgement says whether the holding's document acknowledges a warning of a
 // rule, about a line when it has one, and the reason when it does.
-func (h *Holding) Acknowledgement(_, _ string) (reason string, ok bool) {
-	return "", false
+func (h *Holding) Acknowledgement(rule, line string) (reason string, ok bool) {
+	return v1alpha2.Acknowledges(h.Doc.Acknowledge, rule, line)
 }
+
+// RuleLocationsDiffer is the rule of the warning that the locations of a holding
+// hold different versions, found by reading a repo.
+const RuleLocationsDiffer = v1alpha2.RuleLocationsDiffer
 
 // Name is the name of the document.
 func (h *Holding) Name() string { return h.Doc.Name }
