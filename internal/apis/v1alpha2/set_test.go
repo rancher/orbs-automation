@@ -173,6 +173,30 @@ func TestRepoSlugsAreUnique(t *testing.T) {
 	assert.True(t, hasSetError(rep, `Project "q"`, "spec.repo.name", `already the repo of Project "p"`), "%v", rep.Findings)
 }
 
+func TestAnAliasIsNotTheNameOrAnAliasOfAnotherProject(t *testing.T) {
+	tests := []struct {
+		name, want string
+		other      string
+	}{
+		{"the name of another project", `already the name of Project "q"`, "  repo: {name: acme/b}\n"},
+		{"the alias of another project", `already an alias of Project "q"`, "  repo: {name: acme/b}\n  aliases: [rk]\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			alias := "rk"
+			if strings.Contains(tt.want, "name") {
+				alias = "q"
+			}
+			rep := validateSet(t,
+				doc("Project", "q", "", tt.other),
+				doc("Project", "p", "", projectSpec+"  aliases: ["+alias+"]\n"),
+			)
+
+			assert.True(t, hasSetError(rep, `Project "p"`, "spec.aliases[0]", tt.want), "%v", rep.Findings)
+		})
+	}
+}
+
 func TestAtMostOneProjectIsTheFinalDestination(t *testing.T) {
 	rep := validateSet(t,
 		doc("Project", "p", "", projectSpec+"  finalDestination: true\n"),
