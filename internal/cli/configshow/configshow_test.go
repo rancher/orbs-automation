@@ -360,3 +360,18 @@ func TestRenderEnvHasTheConfigSource(t *testing.T) {
 
 	assert.Contains(t, out, "GERO_CONFIG_SOURCE=bundle\n")
 }
+
+func TestEntriesShowTheBundleChannelAndTheBundleFile(t *testing.T) {
+	got := byKey(Entries(load(t, "bundleChannel: stable\n", nil, map[string]string{"bundle-file": "/tmp/b.yaml"}), workspace.CentralConfigDir{}))
+
+	assert.Equal(t, Entry{"bundleChannel", "stable", "file"}, got["bundleChannel"])
+	assert.Equal(t, Entry{"bundleFile", "/tmp/b.yaml", "flag"}, got["bundleFile"])
+	assert.Equal(t, Entry{"configSource", "auto", "default"}, got["configSource"])
+}
+
+func TestRenderEnvHasTheBundleChannelAndTheBundleFile(t *testing.T) {
+	out := renderEnv(Entries(load(t, "", nil, map[string]string{"bundle-channel": "stable", "bundle-file": "/tmp/b.yaml"}), workspace.CentralConfigDir{}))
+
+	assert.Contains(t, out, "GERO_BUNDLE_CHANNEL=stable\n")
+	assert.Contains(t, out, "GERO_BUNDLE_FILE=/tmp/b.yaml\n")
+}

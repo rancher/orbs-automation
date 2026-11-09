@@ -247,3 +247,73 @@ func TestTheDefaultBundleSourceFollowsTheConfigSource(t *testing.T) {
 	assert.Nil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", ConfigSource: clicfg.ConfigSourceDir}))
 	assert.Nil(t, bundleFor(clicfg.Settings{ConfigSource: clicfg.ConfigSourceBundle}), "still no release context, so none")
 }
+
+// bundleFileOf writes the bundle of the release to a file, as a user downloads it.
+func bundleFileOf(t *testing.T, tag string, names ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "gero-config-bundle.yaml")
+	require.NoError(t, os.WriteFile(path, bundletest.Compile(t, tag, bundletest.Config(names...)), 0o600))
+	return path
+}
+
+func TestABundleFileIsTheConfigWhateverElseIsSet(t *testing.T) {
+	dir, published := bothSources(t)
+	file := bundleFileOf(t, "v0.3.0", "x", "y", "z")
+	flags := map[string]string{"central-config-dir": dir, "bundle-file": file}
+
+	w := Open(settings(t, "configSource: bundle\n", nil, flags), t.TempDir()).WithBundle(published)
+	g, err := w.Chain()
+
+	require.NoError(t, err)
+	assert.Len(t, g.Projects(), 3)
+	src, err := w.ConfigSource()
+	require.NoError(t, err)
+	require.NotNil(t, src.Bundle)
+	assert.Equal(t, file, src.Bundle.File)
+	assert.Equal(t, "v0.3.0", src.Bundle.Tag)
+	assert.Zero(t, published.calls, "no fetch and no cache read")
+}
+
+func TestABundleFileWithConfigSourceDirIsAnErrorNamingBoth(t *testing.T) {
+	file := bundleFileOf(t, "v0.3.0", "x")
+	flags := map[string]string{"bundle-file": file, "config-source": "dir"}
+
+	_, err := Open(settings(t, "", nil, flags), t.TempDir()).ConfigSource()
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--bundle-file")
+	assert.Contains(t, err.Error(), "--config-source=dir")
+}
+
+func TestABundleFileThatCannotBeUsedFailsAndNeverFallsBack(t *testing.T) {
+	dir, published := bothSources(t)
+	bad := filepath.Join(t.TempDir(), "not-a-bundle.yaml")
+	require.NoError(t, os.WriteFile(bad, []byte("kind: Nothing\n"), 0o600))
+	for name, path := range map[string]string{"missing": filepath.Join(t.TempDir(), "gone.yaml"), "not a bundle": bad} {
+		flags := map[string]string{"central-config-dir": dir, "bundle-file": path}
+
+		w := Open(settings(t, "", nil, flags), t.TempDir()).WithBundle(published)
+		_, err := w.Chain()
+
+		require.Error(t, err, name)
+		assert.Contains(t, err.Error(), path, name)
+		assert.Zero(t, published.calls, name)
+	}
+}
+
+func TestABundleFileIsReadWithNoBundleSourceAtAll(t *testing.T) {
+	file := bundleFileOf(t, "v0.3.0", "x")
+
+	w := Open(settings(t, "", nil, map[string]string{"bundle-file": file}), t.TempDir()).WithBundle(nil)
+	g, err := w.Chain()
+
+	require.NoError(t, err)
+	assert.Len(t, g.Projects(), 1)
+}
+
+func TestTheChannelOfTheSettingsReachesTheBundleRequest(t *testing.T) {
+	assert.Equal(t, bundlestore.ChannelStable, channelOf(clicfg.Settings{BundleChannel: clicfg.BundleChannelStable}))
+	assert.Equal(t, bundlestore.ChannelPrerelease, channelOf(clicfg.Settings{BundleChannel: clicfg.BundleChannelPrerelease}))
+	assert.Equal(t, bundlestore.ChannelAuto, channelOf(clicfg.Settings{BundleChannel: clicfg.BundleChannelAuto}))
+	assert.Equal(t, bundlestore.ChannelAuto, channelOf(clicfg.Settings{}))
+}

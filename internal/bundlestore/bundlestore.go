@@ -48,10 +48,23 @@ type Request struct {
 	GeroVersion string
 	// Offline reads the cache and nothing else: no request is made.
 	Offline bool
+	// Channel is which releases may be chosen: ChannelAuto, ChannelStable or
+	// ChannelPrerelease. Empty is ChannelAuto.
+	Channel string
 }
+
+// The channels of Request.
+const (
+	ChannelAuto       = "auto"       // follows the running gero
+	ChannelStable     = "stable"     // stable releases only
+	ChannelPrerelease = "prerelease" // the newest release, a pre-release or not
+)
 
 // Source says where a loaded bundle came from, for gero config show and doctor.
 type Source struct {
+	// File is the path of a bundle file given by hand, when that is the source:
+	// there is then no release fetched, no cache and no age.
+	File      string
 	Tag       string        // the release the bundle is of
 	FetchedAt time.Time     // when it was downloaded, or last confirmed current
 	Age       time.Duration // how long ago that was

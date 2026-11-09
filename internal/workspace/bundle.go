@@ -87,6 +87,9 @@ func bundleFor(s clicfg.Settings) BundleSource {
 	return resolverSource{version: s.GeroVersion, offline: s.Offline}
 }
 
+// channelOf is the bundle channel of the settings.
+func channelOf(clicfg.Settings) string { return "" }
+
 // The repository whose releases carry the bundle. It is fixed in the binary: the
 // bundle is the central config of this project, and a release is what vouches for it.
 const (

@@ -791,11 +791,89 @@ func TestLoadRejectsAConfigSourceThatIsNotOne(t *testing.T) {
 	assert.Contains(t, err.Error(), "flag")
 }
 
-func TestLoadConfigSourceIsNotAUserFileKey(t *testing.T) {
-	s, err := Load(Inputs{UserFile: file("configSource: bundle\n"), UserFileName: "gero.yaml"})
+func TestLoadConfigSourceFromTheFileEnvAndFlag(t *testing.T) {
+	tests := []struct {
+		name       string
+		file       string
+		env        map[string]string
+		flags      map[string]string
+		want       string
+		wantSource Source
+	}{
+		{"file", "configSource: bundle\n", nil, nil, ConfigSourceBundle, SourceFile},
+		{"env beats the file", "configSource: bundle\n", map[string]string{"GERO_CONFIG_SOURCE": "dir"}, nil, ConfigSourceDir, SourceEnv},
+		{"flag beats env and file", "configSource: bundle\n", map[string]string{"GERO_CONFIG_SOURCE": "auto"}, map[string]string{"config-source": "dir"}, ConfigSourceDir, SourceFlag},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{UserFile: file(tt.file), UserFileName: "gero.yaml", Getenv: env(tt.env), Flags: flags(tt.flags)})
 
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.ConfigSource)
+			assert.Equal(t, tt.wantSource, s.Source("configSource"))
+			assert.Empty(t, s.Warnings)
+		})
+	}
+}
+
+func TestLoadRejectsAConfigSourceInTheFileThatIsNotOneAndNamesTheFileAndKey(t *testing.T) {
+	_, err := Load(Inputs{UserFile: file("configSource: cloud\n"), UserFileName: "gero.yaml"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gero.yaml")
+	assert.Contains(t, err.Error(), "configSource")
+	assert.Contains(t, err.Error(), "cloud")
+}
+
+func TestLoadBundleChannel(t *testing.T) {
+	tests := []struct {
+		name       string
+		file       string
+		env        map[string]string
+		flags      map[string]string
+		want       string
+		wantSource Source
+	}{
+		{"default is auto", "", nil, nil, BundleChannelAuto, SourceDefault},
+		{"file", "bundleChannel: stable\n", nil, nil, BundleChannelStable, SourceFile},
+		{"env beats the file", "bundleChannel: stable\n", map[string]string{"GERO_BUNDLE_CHANNEL": "prerelease"}, nil, BundleChannelPrerelease, SourceEnv},
+		{"flag beats env", "", map[string]string{"GERO_BUNDLE_CHANNEL": "prerelease"}, map[string]string{"bundle-channel": "stable"}, BundleChannelStable, SourceFlag},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{UserFile: file(tt.file), UserFileName: "gero.yaml", Getenv: env(tt.env), Flags: flags(tt.flags)})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.BundleChannel)
+			assert.Equal(t, tt.wantSource, s.Source("bundleChannel"))
+		})
+	}
+}
+
+func TestLoadRejectsABundleChannelThatIsNotOne(t *testing.T) {
+	_, err := Load(Inputs{UserFile: file("bundleChannel: beta\n"), UserFileName: "gero.yaml"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "bundleChannel")
+
+	_, err = Load(Inputs{Getenv: env(map[string]string{"GERO_BUNDLE_CHANNEL": "beta"})})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GERO_BUNDLE_CHANNEL")
+}
+
+func TestLoadBundleFileFromTheEnvAndFlagAndNeverTheFile(t *testing.T) {
+	s, err := Load(Inputs{Home: "/home/dan", Getenv: env(map[string]string{"GERO_BUNDLE_FILE": "~/b.yaml"})})
 	require.NoError(t, err)
-	assert.Equal(t, ConfigSourceAuto, s.ConfigSource)
+	assert.Equal(t, "/home/dan/b.yaml", s.BundleFile)
+	assert.Equal(t, SourceEnv, s.Source("bundleFile"))
+
+	s, err = Load(Inputs{Getenv: env(map[string]string{"GERO_BUNDLE_FILE": "/env.yaml"}), Flags: flags(map[string]string{"bundle-file": "/flag.yaml"})})
+	require.NoError(t, err)
+	assert.Equal(t, "/flag.yaml", s.BundleFile)
+	assert.Equal(t, SourceFlag, s.Source("bundleFile"))
+
+	s, err = Load(Inputs{UserFile: file("bundleFile: /file.yaml\n"), UserFileName: "gero.yaml"})
+	require.NoError(t, err)
+	assert.Empty(t, s.BundleFile)
 	require.Len(t, s.Warnings, 1)
-	assert.Contains(t, s.Warnings[0], "configSource")
+	assert.Contains(t, s.Warnings[0], "bundleFile")
 }
