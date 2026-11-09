@@ -286,8 +286,8 @@ every stable tag. A promotion says which prerelease it is.`,
 of the tag must be in: Docker Hub and Prime staging always, and Prime
 production only for a stable tag. A port of validate_image_exists.
 
-The images are the Project's images config, or the one named for its
-repository. Name a Project (its config name or its owner/name slug, or . for the
+The images are the image artifacts of the Project's streams in the central
+config. Name a Project (its config name or its owner/name slug, or . for the
 repository you are in) before the tag; with only a tag, the repository you
 are in is used. The registries are read
 anonymously. The report is printed before the command exits 1 when an image
