@@ -395,7 +395,7 @@ func TestTheRegistryFindsStrategiesByName(t *testing.T) {
 	_, err = r.Get("c")
 	assert.ErrorContains(t, err, `strategy "c" is not known: use one of a, b`)
 	assert.Panics(t, func() { r.Register(namedStrategy{"a"}) })
-	assert.Equal(t, []string{"chartsPackageBump"}, Builtin().Names())
+	assert.Equal(t, []string{"chartsPackageBump", "goBump"}, Builtin().Names())
 }
 
 func TestTargetsOnALineOfTheConsumerAreItsBranchesForEachStage(t *testing.T) {

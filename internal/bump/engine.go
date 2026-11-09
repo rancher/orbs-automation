@@ -28,6 +28,14 @@ type StrategyInput struct {
 	Release  Release
 	Line     string
 	Branch   string
+	// Dir is the directory the tree is, for a strategy that runs a program in it.
+	Dir string
+	// Runner runs a program in a directory, as a step does, so a strategy runs
+	// programs the way the steps of an edit do and no other way.
+	Runner StepRunner
+	// Changes is what the holdings of the edit wrote for this target, before the
+	// strategy runs.
+	Changes []Change
 }
 
 // Applier is a strategy configured for one edit: the extra change a named rule
@@ -168,6 +176,15 @@ func (r Route) holdingsOf(t Target) []*chain.Holding {
 }
 
 // editsOf returns the edits that follow the holdings, each once, in order.
+// changesOf is what the holdings of an edit wrote, in the order the edit lists them.
+func changesOf(ed *chain.Edit, written map[*chain.Holding][]Change) []Change {
+	var out []Change
+	for _, h := range ed.Holdings() {
+		out = append(out, written[h]...)
+	}
+	return out
+}
+
 func editsOf(holdings []*chain.Holding) []*chain.Edit {
 	var out []*chain.Edit
 	for _, h := range holdings {
@@ -402,6 +419,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 	}
 	var res Result
+	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
 		rel, err := ReleaseOf(h, tag, commit)
 		if err != nil {
@@ -413,6 +431,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		res.Changed = res.Changed || got.Changed
 		res.Changes = append(res.Changes, got.Changes...)
+		written[h] = got.Changes
 	}
 	if err := checkpoint(Unit{Kind: UnitEdit, Changes: res.Changes}); err != nil {
 		return res, err
@@ -426,6 +445,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
 			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
 			Line:    t.Line, Branch: t.Branch,
+			Dir: dir, Runner: runner, Changes: changesOf(ed, written),
 		})
 		if err != nil {
 			return res, fmt.Errorf("Edit %q: %w", ed.Name(), err)
