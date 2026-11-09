@@ -67,6 +67,68 @@ spec:
   at: {file: package/Dockerfile, key: CHART_DEFAULT_BRANCH, format: dockerfile}
   holds: {kind: branch, lines: {until: v2.15}}
 ---
+# What Rancher holds of wrangler and lasso, in go.mod: the root and its nested modules (pkg/apis, pkg/client,
+# pkg/plan, which exists from v2.15). Each line stays on one wrangler minor, so a Holding for each minor and the
+# lines that hold it; the locations of one Holding should hold the same version. Observed only: both are unowned.
+# `replace` directives (v2.12's pkg/client pins wrangler v3.2.2) are not modelled.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-8
+refs: {project: rancher, artifact: wrangler-v3-8-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/plan/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.15}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-7
+refs: {project: rancher, artifact: wrangler-v3-7-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/plan/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.15}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.15, until: v2.15}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-6
+refs: {project: rancher, artifact: wrangler-v3-6-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.14, until: v2.14}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-3
+refs: {project: rancher, artifact: wrangler-v3-3-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.12, until: v2.13}}
+---
+# lasso, in the root and in pkg/apis (indirect there) and pkg/plan. One minor, every line.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-lasso
+refs: {project: rancher, artifact: lasso-v0-2-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/lasso, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/lasso, format: gomod}
+    - {file: pkg/plan/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.15}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.12}}
+---
 # After any change to build.yaml, Rancher regenerates its build config (a step of the consumer, not of the producer).
 apiVersion: gero/v1alpha2
 kind: Edit
