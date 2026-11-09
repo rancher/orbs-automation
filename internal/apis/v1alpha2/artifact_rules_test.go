@@ -29,6 +29,8 @@ func TestAValidArtifactHasNoFindings(t *testing.T) {
 		"a file named by the version":    "  kind: file\n  name: \"rancher-backup-{version}.tgz\"\n",
 		"a file named by the tag":        "  kind: file\n  name: \"libfoo-{tag}.zip\"\n",
 		"a file with a modifier":         "  kind: file\n  name: \"x-{tag|trimprefix:v}.tgz\"\n",
+		"a Go module":                    "  kind: gomod\n  name: github.com/rancher/wrangler/v3\n",
+		"a Go module in a subdirectory":  "  kind: gomod\n  name: github.com/rancher/ob-charts-tool/helmtools\n",
 		"a range of lines":               "  kind: image\n  name: a/b\n  lines: {since: v2.14, until: v2.16}\n",
 		"a range with the same two ends": "  kind: image\n  name: a/b\n  lines: {since: v2.15, until: v2.15}\n",
 	} {
@@ -45,12 +47,16 @@ func TestArtifactRules(t *testing.T) {
 	tests := []struct {
 		name, spec, path, want string
 	}{
-		{"no kind", "  name: a/b\n", "spec.kind", "image or file"},
-		{"a kind that is neither", "  kind: chart\n  name: a/b\n", "spec.kind", "image or file"},
+		{"no kind", "  name: a/b\n", "spec.kind", "image, file or gomod"},
+		{"a kind that is neither", "  kind: chart\n  name: a/b\n", "spec.kind", "image, file or gomod"},
 		{"no name", "  kind: image\n", "spec.name", "required"},
 		{"an image name with a variable", "  kind: image\n  name: \"rancher/{tag}\"\n", "spec.name", "variables"},
 		{"a file name with an unknown variable", "  kind: file\n  name: \"x-{nope}.tgz\"\n", "spec.name", "unknown placeholder {nope}"},
 		{"a file name that is malformed", "  kind: file\n  name: \"x-{tag.tgz\"\n", "spec.name", "unclosed"},
+		{"a Go module with no name", "  kind: gomod\n", "spec.name", "required"},
+		{"a Go module with a variable", "  kind: gomod\n  name: \"github.com/rancher/{tag}\"\n", "spec.name", "module path"},
+		{"a Go module with a space", "  kind: gomod\n  name: \"github.com/rancher/a b\"\n", "spec.name", "module path"},
+		{"registries on a Go module", "  kind: gomod\n  name: github.com/rancher/lasso\n  registries: [dockerhub]\n", "spec.registries", "image"},
 		{"registries on a file", "  kind: file\n  name: x\n  registries: [dockerhub]\n", "spec.registries", "image"},
 		{"a registry that does not exist", "  kind: image\n  name: a/b\n  registries: [quay]\n", "spec.registries[0]", "dockerhub, prime-staging or prime-production"},
 		{"a registry listed twice", "  kind: image\n  name: a/b\n  registries: [dockerhub, dockerhub]\n", "spec.registries[1]", "twice"},
