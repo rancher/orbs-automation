@@ -1,6 +1,6 @@
 # Config Schema
 
-**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions: the loader reads the `gomod` Artifact kind and format, `at` as a location or a list with `lines`, and `{prefix}` and `{bareTag}` in a form, and a release gives `{version}` without a tag's prefix; `gero ship` and the checks read and write every location of a Holding that exists for the line, in the `yaml` format; not yet built: reading and writing `go.mod`, `goBump`, the `gomod` rules across documents, `{version}` in a PR text and in a step's environment, and `locations-differ`. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
+**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions: the loader reads the `gomod` Artifact kind and format, `at` as a location or a list with `lines`, and `{prefix}` and `{bareTag}` in a form, and a release gives `{version}` without a tag's prefix; `gero ship` and the checks read and write every location of a Holding that exists for the line, in the `yaml` and `gomod` formats, and `goBump` runs `go mod tidy` in each `go.mod` its holdings changed; not yet built: the Go proxy check of a `gomod` Artifact, `{version}` in a PR text and in a step's environment, a better commit message for a strategy's commit, and `locations-differ`. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
 
 ## Every document
 
@@ -117,7 +117,7 @@ Extra steps when shipping, beyond writing the form. `refs`: `holding`, a list (r
 | Field | Type | Rules |
 |---|---|---|
 | `preEdit`, `postEdit` | list of steps | a step is `run` (a program, or a list of arguments), `since`, `until`, `from` |
-| `strategy` | name | a named rule that needs code (`chartsPackageBump`, `goBump`) |
+| `strategy` | name | a named rule that needs code (`chartsPackageBump`, `goBump`); `goBump` needs a holding with a `gomod` location |
 | `with` | map | the strategy's own values, declared by the strategy; `goBump` declares none |
 
 Commits are the engine's, not a field: shipping commits after the Holding writes and after each step or strategy phase, and skips a commit when a step changed nothing. `goBump` over a `gomod` Holding is two commits, the `require` change and `go mod tidy`.
