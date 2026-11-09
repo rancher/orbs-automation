@@ -122,7 +122,7 @@ func textVars(in previewInput) map[string]string {
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
 		"sourceReleaseURL": "https://github.com/" + in.producer.Slug() + "/releases/tag/" + in.release.Tag,
-		"file":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Change.Path }),
+		"file":             changedFiles(in.checks),
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
 		"to":               joined(in.checks, func(c bump.HoldingCheck) string { return c.Want }),
 	}
@@ -154,12 +154,28 @@ func joined(checks []bump.HoldingCheck, of func(bump.HoldingCheck) string) strin
 	return strings.Join(seen, ", ")
 }
 
+// changedFiles is the files that a bump changes, in order and without repeats,
+// joined by a comma: every location of a holding that is not up to date.
+func changedFiles(checks []bump.HoldingCheck) string {
+	var files []string
+	for _, c := range checks {
+		for _, change := range c.Changes() {
+			if !slices.Contains(files, change.Path) {
+				files = append(files, change.Path)
+			}
+		}
+	}
+	return strings.Join(files, ", ")
+}
+
 // changes lists what a bump changes, from what each holding changes and the
 // commands that run around the write, one bullet each.
 func changes(in previewInput) string {
 	var lines []string
 	for _, c := range in.checks {
-		lines = append(lines, "- "+c.Change.Description)
+		for _, change := range c.Changes() {
+			lines = append(lines, "- "+change.Description)
+		}
 	}
 	for _, ref := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")

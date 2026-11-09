@@ -30,13 +30,18 @@ func previewFixture(t *testing.T) previewInput {
 		consumer: projectWith(t, "rancher", "rancher/rancher", ""),
 		release:  Release{Tag: "v0.5.3", Commit: "sha", Stable: true},
 		target:   Target{Branch: "release/v2.15", Commit: "sha-215"},
-		checks: []bump.HoldingCheck{{Check: bump.Check{
-			Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3",
-			Change: bump.Change{
-				Path: "build.yaml", From: "rancher/scc-operator:v0.5.2", To: "rancher/scc-operator:v0.5.3",
-				Description: "Updated `defaultSccOperatorImage` in `build.yaml` from `rancher/scc-operator:v0.5.2` to `rancher/scc-operator:v0.5.3`",
-			},
-		}}},
+		checks:   []bump.HoldingCheck{{Check: oneLocation()}},
+	}
+}
+
+func oneLocation() bump.Check {
+	change := bump.Change{
+		Path: "build.yaml", From: "rancher/scc-operator:v0.5.2", To: "rancher/scc-operator:v0.5.3",
+		Description: "Updated `defaultSccOperatorImage` in `build.yaml` from `rancher/scc-operator:v0.5.2` to `rancher/scc-operator:v0.5.3`",
+	}
+	return bump.Check{
+		Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3", Change: change,
+		Locations: []bump.LocationCheck{{Current: "rancher/scc-operator:v0.5.2", Change: change}},
 	}
 }
 
@@ -52,6 +57,28 @@ func TestRenderPreviewDefaults(t *testing.T) {
 	assert.Contains(t, got.Body, "Update scc-operator to [`v0.5.3`](https://github.com/rancher/scc-operator/releases/tag/v0.5.3)")
 	assert.Contains(t, got.Body, "- Updated `defaultSccOperatorImage` in `build.yaml` from `rancher/scc-operator:v0.5.2` to `rancher/scc-operator:v0.5.3`",
 		"the changes come from what the strategy did, so the body cannot name a step that did not run")
+}
+
+func TestRenderPreviewListsEveryLocationThatChanges(t *testing.T) {
+	in := previewFixture(t)
+	first := bump.Change{Path: "go.mod", Description: "Updated `a` in `go.mod` from `v1` to `v2`"}
+	second := bump.Change{Path: "pkg/apis/go.mod", Description: "Updated `a` in `pkg/apis/go.mod` from `v1` to `v2`"}
+	upToDate := bump.Change{Path: "pkg/plan/go.mod", Description: "Updated `a` in `pkg/plan/go.mod` from `v2` to `v2`"}
+	in.checks = []bump.HoldingCheck{{Check: bump.Check{
+		Current: "v1", Want: "v2", Change: first,
+		Locations: []bump.LocationCheck{
+			{Current: "v1", Change: first},
+			{Current: "v1", Change: second},
+			{Current: "v2", UpToDate: true, Change: upToDate},
+		},
+	}}}
+
+	got, err := renderPreview(in)
+
+	require.NoError(t, err)
+	assert.Contains(t, got.Body, "- "+first.Description)
+	assert.Contains(t, got.Body, "- "+second.Description, "a second location is changed too")
+	assert.NotContains(t, got.Body, upToDate.Description, "a location that already holds it is not a change")
 }
 
 func TestRenderPreviewBodyCarriesTheMarker(t *testing.T) {
