@@ -93,7 +93,7 @@ func TestLoadReadsTheDesignFixture(t *testing.T) {
 	assert.Equal(t, "stream-differs-from-destination", rep.Warnings()[0].Rule)
 	assert.Len(t, cfg.Projects, 9)
 	assert.Len(t, cfg.Streams, 12)
-	assert.Len(t, cfg.Artifacts, 13)
+	assert.Len(t, cfg.Artifacts, 15)
 	assert.Len(t, cfg.Holdings, 16)
 	assert.Len(t, cfg.Edits, 2)
 	assert.NotNil(t, cfg.Lines)
@@ -163,8 +163,11 @@ func TestLoadAcceptsTheCheckedInV1alpha2Config(t *testing.T) {
 	cfg, rep := Load(os.DirFS("../../config"), ctx)
 
 	require.NoError(t, rep.Err())
-	assert.Empty(t, rep.Warnings())
-	assert.Len(t, cfg.Projects, 7)
+	// BRO holds an older wrangler minor than Rancher on v2.16: the config says so, and
+	// the warning is left visible.
+	require.Len(t, rep.Warnings(), 1)
+	assert.Equal(t, "stream-differs-from-destination", rep.Warnings()[0].Rule)
+	assert.Len(t, cfg.Projects, 9)
 	assert.NotNil(t, cfg.Lines)
 	var images []string
 	for _, a := range cfg.Artifacts {
