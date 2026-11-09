@@ -146,6 +146,11 @@ func settingsLoader(getenv func(string) string, home string, skipUserFile bool) 
 		}
 		cmd.SetContext(context.WithValue(ctx, settingsKey{}, s))
 		logger := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
+		// The scan skips a search directory that is not there, so a typo hides the
+		// clones under it. Only gero doctor fails on it; the rest say so with -v.
+		for _, dir := range s.Repos.MissingSearch() {
+			logger.Info("repos.search is not a directory, so the scan skips it", "dir", dir)
+		}
 		logger.Debug("settings loaded",
 			"output", s.Output, "upstream", s.Upstream, "log", s.LogLevel)
 		return nil

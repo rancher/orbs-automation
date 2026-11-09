@@ -244,6 +244,15 @@ func (c userFileCheck) Run(context.Context) Result {
 			Remediation: "fix or remove the keys the message names, as gero ignores them; the keys are listed in docs/specs/CLI_CONFIG.md",
 		}
 	}
+	if missing := s.Repos.MissingSearch(); len(missing) > 0 {
+		// The scan skips a directory it cannot read without a word, so a typo hides
+		// every clone under it. Other commands stay quiet; doctor is where it is an error.
+		return Result{
+			Status:      StatusFail,
+			Message:     "repos.search is not a directory: " + strings.Join(missing, ", "),
+			Remediation: "fix or remove the repos.search entries the message names, as the scan skips them",
+		}
+	}
 	return Result{Status: StatusOK, Message: path}
 }
 

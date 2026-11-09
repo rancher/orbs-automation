@@ -877,3 +877,15 @@ func TestLoadBundleFileFromTheEnvAndFlagAndNeverTheFile(t *testing.T) {
 	require.Len(t, s.Warnings, 1)
 	assert.Contains(t, s.Warnings[0], "bundleFile")
 }
+
+func TestMissingSearchIsTheEntriesThatAreNotDirectories(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a-file")
+	require.NoError(t, os.WriteFile(file, nil, 0o600))
+	gone := filepath.Join(dir, "GitProject")
+
+	got := Repos{Search: []string{dir, gone, file}}.MissingSearch()
+
+	assert.Equal(t, []string{gone, file}, got)
+	assert.Empty(t, Repos{}.MissingSearch())
+}
