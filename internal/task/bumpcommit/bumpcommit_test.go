@@ -323,3 +323,95 @@ func TestRunTheCommitCallbackGetsTheFilesToo(t *testing.T) {
 	require.Len(t, seen, 1)
 	assert.Equal(t, []string{"build.yaml"}, seen[0].Files)
 }
+
+// goBumpScene is the same release held in a go.mod, with the goBump strategy.
+func goBumpScene(t *testing.T) scene {
+	t.Helper()
+	docs := []string{
+		chaintest.Doc("Project", "lib", "", "  repo: {name: acme/lib, owned: true}\n"),
+		chaintest.Doc("Stream", "lib", "{project: lib}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "lib-image", "{stream: lib}", "  kind: image\n  name: acme/lib\n"),
+		chaintest.Doc("Project", "svc", "", "  repo: {name: acme/svc}\n"),
+		chaintest.Doc("Holding", "svc-holds-lib", "{project: svc, artifact: lib-image}", "  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n"),
+		chaintest.Doc("Edit", "tidy", "{holding: svc-holds-lib}", "  strategy: goBump\n"),
+	}
+	g := chaintest.Load(t, docs...)
+	engine, err := bump.NewEngine(bump.Builtin(), g)
+	require.NoError(t, err)
+	routes := engine.RoutesFrom(g.Project("lib"))
+	require.Len(t, routes, 1)
+	targets, err := routes[0].TargetsFor("")
+	require.NoError(t, err)
+	require.Len(t, targets, 1)
+	return scene{route: routes[0], target: targets[0]}
+}
+
+func goModWork(t *testing.T, g *fakeGit) *workdir.Work {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module acme.test/svc\n\nrequire github.com/acme/lib v0.5.2\n"), 0o644))
+	return workdir.NewInWorktree(g, "/clone", dir, "bot/x-v0.5.3-main", "a test")
+}
+
+// goSumWriter is a runner whose go mod tidy writes a go.sum in the directory it runs in.
+type goSumWriter struct{ ran []string }
+
+func (r *goSumWriter) Run(_ context.Context, step chain.Step, env bump.StepEnv) error {
+	r.ran = append(r.ran, strings.Join(step.Run, " "))
+	return os.WriteFile(filepath.Join(env.Dir, "go.sum"), []byte("github.com/acme/lib v0.5.3 h1:x\n"), 0o644)
+}
+
+func TestRunAStrategyGetsItsOwnCommitWithTheMessageOfTheStrategy(t *testing.T) {
+	g := &fakeGit{}
+	in := input(goModWork(t, g), goBumpScene(t))
+	var seen bump.Unit
+	in.StrategyMessage = func(u bump.Unit) (string, error) {
+		seen = u
+		return "Run " + u.Strategy + "\n\nAutomation: gero ship", nil
+	}
+
+	out, err := Run(bg, &goSumWriter{}, in)
+
+	require.NoError(t, err)
+	require.Len(t, g.commits, 2)
+	assert.Equal(t, "Update to v0.5.3\n\nbody", g.commits[0].Message, "the write keeps the message of the bump")
+	assert.Equal(t, "Run goBump\n\nAutomation: gero ship", g.commits[1].Message)
+	assert.Equal(t, bump.UnitStrategy, seen.Kind)
+	assert.Equal(t, "tidy", seen.Edit)
+	assert.Equal(t, "goBump", seen.Strategy)
+	require.Len(t, seen.Changes, 1)
+	assert.Equal(t, []string{"Update to v0.5.3", "Run goBump"}, subjects(out.Commits))
+}
+
+func TestRunWithoutAStrategyMessageItsCommitSaysWhichStrategyRanAndWhatItChanged(t *testing.T) {
+	g := &fakeGit{}
+	in := input(goModWork(t, g), goBumpScene(t))
+
+	_, err := Run(bg, &goSumWriter{}, in)
+
+	require.NoError(t, err)
+	require.Len(t, g.commits, 2)
+	assert.Equal(t, "Run goBump\n\n- Ran `go mod tidy`", g.commits[1].Message)
+}
+
+func TestRunAStrategyThatChangesNothingMakesNoCommit(t *testing.T) {
+	g := &fakeGit{nothingFor: map[int]bool{2: true}}
+	in := input(goModWork(t, g), goBumpScene(t))
+
+	out, err := Run(bg, &goSumWriter{}, in)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Update to v0.5.3"}, subjects(out.Commits))
+}
+
+func TestRunAFailureToMakeAStrategysMessageIsAFailure(t *testing.T) {
+	g := &fakeGit{}
+	in := input(goModWork(t, g), goBumpScene(t))
+	in.StrategyMessage = func(bump.Unit) (string, error) { return "", errors.New("no template") }
+
+	_, err := Run(bg, &goSumWriter{}, in)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no template")
+	assert.Contains(t, err.Error(), "goBump")
+}

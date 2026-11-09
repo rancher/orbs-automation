@@ -81,6 +81,20 @@ func TestRenderPreviewListsEveryLocationThatChanges(t *testing.T) {
 	assert.NotContains(t, got.Body, upToDate.Description, "a location that already holds it is not a change")
 }
 
+func TestStrategyMessageNamesTheStrategyAndWhatItChanged(t *testing.T) {
+	in := previewFixture(t)
+	unit := bump.Unit{Kind: bump.UnitStrategy, Edit: "tidy", Strategy: "goBump", Changes: []bump.Change{
+		{Path: "go.mod", Description: "Ran `go mod tidy`"},
+		{Path: "pkg/apis/go.mod", Description: "Ran `go mod tidy` in `pkg/apis`"},
+	}}
+
+	got, err := strategyMessage(in)(unit)
+
+	require.NoError(t, err)
+	assert.Equal(t, "Run goBump\n\n- Ran `go mod tidy`\n- Ran `go mod tidy` in `pkg/apis`\n\n"+
+		"Part of updating scc-operator to v0.5.3: the goBump strategy of edit tidy.\n\nAutomation: gero ship\n", got)
+}
+
 func TestRenderPreviewBodyCarriesTheMarker(t *testing.T) {
 	got, err := renderPreview(previewFixture(t))
 	require.NoError(t, err)

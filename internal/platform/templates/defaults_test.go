@@ -44,6 +44,23 @@ func TestDefaultsAreTrimmedOfTheFileEnding(t *testing.T) {
 	assert.False(t, strings.HasSuffix(DefaultBranchPrefix(), "\n"))
 }
 
+func TestStrategyCommitMessageOnlyUsesItsVariables(t *testing.T) {
+	require.NotEmpty(t, StrategyCommitMessage())
+	assert.NoError(t, Validate(StrategyCommitMessage(), StrategyCommitVars))
+}
+
+func TestStrategyCommitMessageNamesTheStrategyWhatItChangedAndKeepsTheTrailers(t *testing.T) {
+	msg := StrategyCommitMessage()
+	lines := strings.Split(strings.TrimRight(msg, "\n"), "\n")
+
+	assert.Equal(t, "Run {strategy}", lines[0], "the subject says which strategy ran")
+	assert.Contains(t, msg, "{changes}")
+	assert.Contains(t, msg, "{source} to {tag}")
+	assert.Contains(t, msg, "{edit}")
+	assert.Equal(t, "Automation: gero ship", lines[len(lines)-1])
+	assert.True(t, strings.HasSuffix(msg, "\n"))
+}
+
 func TestStepCommitMessageOnlyUsesItsVariables(t *testing.T) {
 	require.NotEmpty(t, StepCommitMessage())
 	assert.NoError(t, Validate(StepCommitMessage(), StepCommitVars))
