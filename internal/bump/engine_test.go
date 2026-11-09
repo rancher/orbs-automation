@@ -142,6 +142,13 @@ func TestNewEngineAcceptsAGoModHolding(t *testing.T) {
 	assert.Contains(t, strings.Join(names(e.RoutesFrom(g.Project("prod"))), ";"), "gomod")
 }
 
+func TestNewEngineAcceptsARegexHolding(t *testing.T) {
+	e, g, err := buildEngine(t, d("Holding", "rx", "{project: other, artifact: prod-chart}", "  at: {file: v.txt, key: 'v=(.*)', format: regex}\n  holds: {kind: release, form: \"{tag}\"}\n"))
+
+	require.NoError(t, err)
+	assert.Contains(t, strings.Join(names(e.RoutesFrom(g.Project("prod"))), ";"), "rx")
+}
+
 func TestNewEngineAcceptsAHoldingWithSeveralLocationsInABuiltFormat(t *testing.T) {
 	e, g, err := buildEngine(t, d("Holding", "two", "{project: other, artifact: prod-chart}", "  at:\n    - {file: a.yaml, key: .url}\n    - {file: b/a.yaml, key: .url}\n  holds: {kind: release, form: \"{url}\"}\n"))
 

@@ -496,3 +496,52 @@ func TestAGoModuleThatIsNotRequiredIsAnErrorNamingIt(t *testing.T) {
 	require.ErrorContains(t, err, "github.com/acme/missing")
 	assert.Equal(t, libMod, tree["go.mod"])
 }
+
+// braValues is BRO's chart values in shape: a placeholder that is not YAML, and the
+// kuberlr tag under global.kubectl.
+const braValues = "image:\n  tag: %TAG%\n\nglobal:\n  kubectl:\n    repository: rancher/kuberlr-kubectl\n    tag: v8.2.0  # read by gero\n"
+
+const regexHolding = "img\n  at: {file: charts/values.yaml, key: 'kubectl:\\n(?:[ \\t]+.*\\n)*?[ \\t]+tag: (\\S+)', format: regex}\n  holds: {kind: release, form: \"{tag}\"}\n"
+
+func TestAHoldingInTheRegexFormatIsCheckedAndWritten(t *testing.T) {
+	h := holdings(t, regexHolding)[0]
+	rel, _ := ReleaseOf(h, "v8.3.0", "c")
+	tree := files{"charts/values.yaml": braValues}
+
+	check, err := CheckHolding(bg, tree, h, "v2.16", "main", rel)
+	require.NoError(t, err)
+	assert.Equal(t, "v8.2.0", check.Current)
+	assert.Equal(t, "v8.3.0", check.Want)
+	assert.Equal(t, RelationNewer, check.Relation)
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+	require.NoError(t, err)
+	assert.True(t, got.Changed)
+	assert.Equal(t, strings.Replace(braValues, "v8.2.0", "v8.3.0", 1), tree["charts/values.yaml"], "the placeholder and the comment are as they were")
+
+	again, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+	require.NoError(t, err)
+	assert.False(t, again.Changed)
+}
+
+func TestAHoldingInTheRegexFormatRendersItsKeyForTheLine(t *testing.T) {
+	h := holdings(t, "img\n  at: {file: Makefile, key: '^TOOL_{line|trimprefix:v}_VERSION = (.*)$', format: regex}\n  holds: {kind: release, form: \"{tag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"Makefile": "TOOL_2.15_VERSION = v0.5.2\nTOOL_2.16_VERSION = v0.5.2\n"}
+
+	_, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.Equal(t, "TOOL_2.15_VERSION = v0.5.2\nTOOL_2.16_VERSION = v0.5.3\n", tree["Makefile"])
+}
+
+func TestAHoldingInTheRegexFormatThatMatchesNothingIsAnErrorNamingThePattern(t *testing.T) {
+	h := holdings(t, regexHolding)[0]
+	rel, _ := ReleaseOf(h, "v8.3.0", "c")
+
+	_, err := CheckHolding(bg, files{"charts/values.yaml": "other: 1\n"}, h, "v2.16", "main", rel)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "charts/values.yaml")
+	assert.Contains(t, err.Error(), "matches nowhere")
+}
