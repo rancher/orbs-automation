@@ -18,6 +18,7 @@ const (
 	FormatYAML       = "yaml"
 	FormatDockerfile = "dockerfile"
 	FormatGoMod      = "gomod"
+	FormatRegex      = "regex"
 
 	AcceptStable = "stable"
 	AcceptAll    = "all"
