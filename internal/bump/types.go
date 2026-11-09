@@ -5,8 +5,10 @@ import "context"
 // Release is what a form may be made from: the tag being shipped, and where it
 // comes from. Which of them a holding's form uses is the holding's.
 type Release struct {
-	Tag        string // as published, such as v0.5.3
-	Version    string // the tag without a leading v
+	Tag        string // as published, such as v0.5.3 or helmtools/v0.1.2
+	Prefix     string // the stream's tag prefix, such as helmtools/, or none
+	BareTag    string // the tag without the prefix
+	Version    string // the tag without the prefix and without a leading v
 	Image      string // the artifact's repository path, for an image
 	File       string // the artifact's file name, for a file
 	URL        string // where the file is among the release's files, for a file

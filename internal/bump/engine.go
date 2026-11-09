@@ -424,7 +424,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		got, err := applier.Apply(ctx, tree, StrategyInput{
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
-			Release: Release{Tag: tag, Version: strings.TrimPrefix(tag, "v"), SourceRepo: r.Producer.Slug(), Commit: commit},
+			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
 			Line:    t.Line, Branch: t.Branch,
 		})
 		if err != nil {

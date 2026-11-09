@@ -32,7 +32,7 @@ func ReleaseOf(h *chain.Holding, tag, commit string) (Release, error) {
 	if a == nil {
 		return Release{}, fmt.Errorf("Holding %q holds no artifact of a release", h.Name())
 	}
-	rel := Release{Tag: tag, Version: strings.TrimPrefix(tag, "v"), SourceRepo: h.Producer().Slug(), Commit: commit}
+	rel := newRelease(tag, tagPatternOf(h), h.Producer().Slug(), commit)
 	if a.IsImage() {
 		rel.Image = a.Ref()
 		return rel, nil
@@ -44,6 +44,21 @@ func ReleaseOf(h *chain.Holding, tag, commit string) (Release, error) {
 	rel.File = file
 	rel.URL = fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", rel.SourceRepo, tag, file)
 	return rel, nil
+}
+
+// newRelease makes the variables that come from a tag, for a stream whose tags
+// match a pattern.
+func newRelease(tag, _, sourceRepo, commit string) Release {
+	return Release{Tag: tag, Version: strings.TrimPrefix(tag, "v"), SourceRepo: sourceRepo, Commit: commit}
+}
+
+// tagPatternOf is the pattern of the tags of the stream a holding's artifact is
+// produced by, or none when the holding has no artifact.
+func tagPatternOf(h *chain.Holding) string {
+	if a := h.Artifact(); a != nil && a.Stream() != nil {
+		return a.Stream().TagPattern()
+	}
+	return ""
 }
 
 // Place is where a holding is found in a consumer's repo for one target.
