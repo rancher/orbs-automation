@@ -39,7 +39,7 @@ func (w *widget) Validate(ctx Context, r *Report) {
 		r.Errorf("spec.layout", "must be single or perLine, got %q", w.Layout)
 	}
 	if !w.Expires.IsZero() && ctx.Now.After(w.Expires) {
-		r.Warnf("spec.expires", "passed on %s", w.Expires.Format("2006-01-02"))
+		r.Warnf("expired", "spec.expires", "passed on %s", w.Expires.Format("2006-01-02"))
 	}
 }
 

@@ -321,7 +321,7 @@ func (s *set) circular() {
 		if first, ok := seen[back]; ok && !warned[back] && !warned[pair] {
 			warned[pair] = true
 			r := s.at(o)
-			r.Warnf("refs", "Project %q holds something of Project %q, which holds something of it (Holding %q): the dependency is circular", holder, producer, first)
+			r.Warnf(RuleCircularHolding, "refs", "Project %q holds something of Project %q, which holds something of it (Holding %q): the dependency is circular", holder, producer, first)
 			s.add(r)
 		}
 		if _, ok := seen[pair]; !ok {
@@ -354,7 +354,7 @@ func (s *set) omittedBranches() {
 				continue
 			}
 			if phase := ln.PhaseAt(s.ctx.Now); phase != lines.PhaseDevelopment {
-				r.Warnf(fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
+				r.Warnf(RuleDefaultBranchPastDevelopment, fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
 			}
 		}
 		s.add(r)

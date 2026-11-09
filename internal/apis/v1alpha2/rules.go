@@ -10,6 +10,13 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
+// The ids of the rules that raise a warning. An id is stable: it is what a
+// document names to acknowledge the warning, so it is not renamed.
+const (
+	RuleCircularHolding              = "circular-holding"
+	RuleDefaultBranchPastDevelopment = "default-branch-past-development"
+)
+
 // slug is what a lowercase slug looks like, as in a team name.
 var slug = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 

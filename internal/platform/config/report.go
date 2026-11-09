@@ -22,6 +22,7 @@ type Finding struct {
 	Doc      int    // the document's place in the source, from 1; 0 when there is one
 	Label    string // what the document is, such as Project "rancher"
 	Path     string // where in the document, such as spec.layout
+	Rule     string // the stable id of the rule a warning is of, such as circular-holding; none for an error
 	Msg      string
 }
 
@@ -72,8 +73,9 @@ func (r *Report) Errorf(path, format string, args ...any) {
 	r.add(Error, path, fmt.Sprintf(format, args...))
 }
 
-// Warnf reports a warning at path.
-func (r *Report) Warnf(path, format string, args ...any) {
+// Warnf reports a warning of a rule at path. The rule is the stable id that
+// names the warning, which a document can acknowledge.
+func (r *Report) Warnf(_, path, format string, args ...any) {
 	r.add(Warning, path, fmt.Sprintf(format, args...))
 }
 

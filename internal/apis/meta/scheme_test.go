@@ -134,7 +134,7 @@ func (w *rulesWidget) Validate(_ config.Context, r *config.Report) {
 		r.Errorf("spec.size", "must not be negative, got %d", w.Spec.Size)
 	}
 	if w.Spec.Size > 100 {
-		r.Warnf("spec.size", "is large, %d", w.Spec.Size)
+		r.Warnf("large", "spec.size", "is large, %d", w.Spec.Size)
 	}
 }
 
