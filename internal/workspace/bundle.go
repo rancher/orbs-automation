@@ -43,16 +43,29 @@ func (w *Workspace) ConfigSource() (ConfigSource, error) {
 }
 
 func (w *Workspace) resolveSource() (ConfigSource, error) {
+	mode := w.settings.ConfigSource
+	if mode == clicfg.ConfigSourceBundle {
+		return w.loadBundle(fmt.Errorf("--config-source=bundle: the central config bundle is not available"))
+	}
 	dir, err := w.CentralConfigDir()
 	if err == nil {
 		return ConfigSource{Dir: dir}, nil
 	}
-	if !errors.Is(err, ErrNotFound) || w.bundle == nil {
+	if mode == clicfg.ConfigSourceDir || !errors.Is(err, ErrNotFound) || w.bundle == nil {
 		return ConfigSource{}, err
 	}
-	l, berr := w.bundle.Load(context.Background())
-	if berr != nil {
-		return ConfigSource{}, fmt.Errorf("%w; the central config bundle is not available either: %w", ErrNotFound, berr)
+	return w.loadBundle(ErrNotFound)
+}
+
+// loadBundle reads the bundle. When there is none, or it cannot be loaded, the
+// error wraps lead, which says what was being looked for, and the cause.
+func (w *Workspace) loadBundle(lead error) (ConfigSource, error) {
+	if w.bundle == nil {
+		return ConfigSource{}, fmt.Errorf("%w: there is no release to take it from (a development build, or no gero version)", lead)
+	}
+	l, err := w.bundle.Load(context.Background())
+	if err != nil {
+		return ConfigSource{}, fmt.Errorf("%w; the central config bundle is not available either: %w", lead, err)
 	}
 	w.bundleFiles = &l
 	return ConfigSource{Bundle: &l.Source}, nil
@@ -63,7 +76,11 @@ func (w *Workspace) resolveSource() (ConfigSource, error) {
 // cmd/ sets, so no test or library caller reaches the network by accident, and
 // none in CI, which has a checkout of the central repo (docs/specs/CENTRAL_BUNDLE.md).
 func bundleFor(s clicfg.Settings) BundleSource {
-	if s.GeroVersion == "" || s.CI {
+	if s.GeroVersion == "" || s.ConfigSource == clicfg.ConfigSourceDir {
+		return nil
+	}
+	// CI has a checkout, unless the bundle is asked for by name.
+	if s.CI && s.ConfigSource != clicfg.ConfigSourceBundle {
 		return nil
 	}
 	return resolverSource{version: s.GeroVersion, offline: s.Offline}

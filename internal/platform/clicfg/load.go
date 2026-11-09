@@ -77,6 +77,15 @@ var scalars = []scalar{
 		fromFile: func(*fileConfig) string { return "" },
 	},
 	{
+		// Flag and env only: a user file that pinned it would hide where the
+		// config of every command comes from.
+		name:     "configSource",
+		def:      ConfigSourceAuto,
+		validate: validateConfigSource,
+		field:    func(s *Settings) *string { return &s.ConfigSource },
+		fromFile: func(*fileConfig) string { return "" },
+	},
+	{
 		name:     "upstream",
 		field:    func(s *Settings) *string { return &s.Upstream },
 		fromFile: func(f *fileConfig) string { return f.Upstream },
@@ -95,6 +104,14 @@ func validateColor(v string) error {
 		return fmt.Errorf("must be %q, %q or %q, got %q", ColorAuto, ColorAlways, ColorNever, v)
 	}
 	return nil
+}
+
+func validateConfigSource(v string) error {
+	switch v {
+	case ConfigSourceAuto, ConfigSourceDir, ConfigSourceBundle:
+		return nil
+	}
+	return fmt.Errorf("must be %q, %q or %q, got %q", ConfigSourceAuto, ConfigSourceDir, ConfigSourceBundle, v)
 }
 
 func validateLog(v string) error {

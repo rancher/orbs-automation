@@ -334,3 +334,29 @@ func TestRenderEnvHasTheReplPrompt(t *testing.T) {
 
 	assert.Contains(t, out, "GERO_REPL_PROMPT={dir}$ \n")
 }
+
+func TestEntriesShowTheConfigSourceAndWhereItCameFrom(t *testing.T) {
+	tests := []struct {
+		name  string
+		env   map[string]string
+		flags map[string]string
+		want  Entry
+	}{
+		{"default", nil, nil, Entry{"configSource", "auto", "default"}},
+		{"env", map[string]string{"GERO_CONFIG_SOURCE": "dir"}, nil, Entry{"configSource", "dir", "env"}},
+		{"flag", nil, map[string]string{"config-source": "bundle"}, Entry{"configSource", "bundle", "flag"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := byKey(Entries(load(t, "", tt.env, tt.flags), workspace.CentralConfigDir{}))
+
+			assert.Equal(t, tt.want, got["configSource"])
+		})
+	}
+}
+
+func TestRenderEnvHasTheConfigSource(t *testing.T) {
+	out := renderEnv(Entries(load(t, "", nil, map[string]string{"config-source": "bundle"}), workspace.CentralConfigDir{}))
+
+	assert.Contains(t, out, "GERO_CONFIG_SOURCE=bundle\n")
+}
