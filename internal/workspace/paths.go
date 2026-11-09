@@ -208,7 +208,7 @@ func clonePath(path string, r *repo.Repo) *clone {
 // goes, so a team directory, or a group inside one, can hold clones without being
 // listed itself. It bounds the walk, which stops at every clone and skips hidden
 // directories, when a search directory is much larger than a projects directory.
-const maxScanDepth = 5
+const maxScanDepth = 3
 
 // scanClones finds the clones below each dir, to maxScanDepth levels, without
 // looking inside a clone. A directory that cannot be read is skipped, hidden
