@@ -1,6 +1,6 @@
 # Config Units
 
-**Status:** decisions, 2026-11-07, built in v1alpha2. The decisions so far on breaking the config into smaller units, kept in one place. [CONFIG_REVIEW](CONFIG_REVIEW.md) has the gaps and questions this answers; the [fixture](fixture/README.md) writes the seven projects in this shape; [CONFIG_SCHEMA](CONFIG_SCHEMA.md) is the field reference. Breaking changes are acceptable while the version is `gero/v1alpha2`; the real config is written in it ([CUTOVER](CUTOVER.md)).
+**Status:** decisions, 2026-11-07, built in v1alpha2 except the Go module additions of 2026-11-08 (the `gomod` Artifact kind and format, a list in `at`, `{prefix}` and `{bareTag}`, `goBump`), which are designed and in the fixture, not yet built. The decisions so far on breaking the config into smaller units, kept in one place. [CONFIG_REVIEW](CONFIG_REVIEW.md) has the gaps and questions this answers; the [fixture](fixture/README.md) writes the seven projects in this shape; [CONFIG_SCHEMA](CONFIG_SCHEMA.md) is the field reference. Breaking changes are acceptable while the version is `gero/v1alpha2`; the real config is written in it ([CUTOVER](CUTOVER.md)).
 
 ## What the tooling works from
 
@@ -27,12 +27,20 @@ Writing is the same path in reverse: render the form from a release and put it a
 * Every document has a `name`, unique within its kind; a name identifies it in logs and errors and can be used to pick it
 * References are explicit names; nothing depends on which file a document is in or its place in the file
 * A top-level `refs` key holds every reference to another document, and only names (a name or a list of names); anything that qualifies a reference goes in `spec` or becomes its own kind
-* What a release produces is its own kind, `Artifact`, a separate document with `spec.kind` of `image` or `file`
+* What a release produces is its own kind, `Artifact`, a separate document with `spec.kind` of `image`, `file` or `gomod`
+* A `gomod` Artifact is a Go module. Its `name` is the module path, and a release exists when its tag is on the repo and the version is on the public Go module proxy. The proxy is not configurable yet; a later field can name another. The kind is named for the module type, not `module`, so another language's modules are a new kind
+* A Holding with `format: gomod` writes the `require` line for a module path; what else a Go bump needs (`go mod tidy`) is an Edit with the named strategy `goBump`
+* A tag may carry a path prefix (`helmtools/v0.1.2`, as Go requires for a module in a subdirectory). `{tag}` is the tag as published; `{prefix}`, `{bareTag}` and `{version}` split it (see Templates)
+* A module's major version (`/v3`) is part of its path and not of its tag, so each major is its own Stream (`tagPattern: "v3.*"`) and its own `gomod` Artifact. Moving a consumer to the next major is a new path, so a new Holding, not a bump
+* A line of a consumer stays on one minor of a library and takes only its patches, so each minor is its own Stream (`tagPattern: "v3.8.*"`, `universal`) and its own Artifact, even when the module path is the same. Which line holds which minor is a fact about the consumer (BRO and Rancher hold different minors for one line), so it is written on the consumer's Holdings with `lines`, not on the Stream. The library's own Kubernetes ranges are not in the config ([`wrangler.yaml`](fixture/wrangler.yaml))
+* **A Holding's locations agree.** The locations of one Holding should hold the same version for a line; a difference is a warning (Rancher main: `pkg/client` and `pkg/plan` on `rc.2` while the root and `pkg/apis` are on `rc.3`). `replace` directives in a `go.mod` are not modelled
+* **Line consistency is derived from the layout.** A Project with `branches.layout: perLine` is compared with the `finalDestination` (Rancher): for a module or image both hold, the stream it holds for a line should be the stream Rancher holds for that line, and a difference is a warning. A holder with `layout: single` (SCC operator) has no lines of its own and is not compared. It needs no field: it follows from the layouts and the Holdings
+* **Commits are the engine's, one for each step.** Shipping commits after the Holding writes and after each Edit step or strategy phase, and skips a commit when a step changed nothing. There is no setting for it; a Holding, Edit or strategy does not decide where a commit falls
 * The second stage is `stable`; a scheme supplies a project's default stages, and a project writes `stages:` only to override (review Q1)
-* A Holding is one document with two blocks: `at` is where to look, and `holds` is what it holds of a producer and how the text is written. The fixture showed every location has exactly one such tie (11 of 11). Revisit and split the kind if a case needs one location tied to two producers.
+* A Holding is one document with two blocks: `at` is where to look, and `holds` is what it holds of a producer and how the text is written. The fixture showed every location has exactly one such tie. Revisit and split the kind if a case needs one location tied to two producers. The reverse, one producer held at several locations, is a list: `at` is a location or a list of locations, each with its own `file`, `key`, `format` and optional `lines`, all tied to the same artifact and `holds` (Rancher's nested `go.mod` files)
 * The `form` is a template; the variables it may use are listed under Templates
 * A key is rendered from its template first, then read as a path in the file's own style: for `yaml` that is the path syntax `yq` uses (`.global.kubectl.tag`, `.chart-versions."2.16"`, `.additionalCharts[0].url`). The schema documents the subset it supports (keys, quoted keys, list items); a leading dot is optional. A key in a YAML flow mapping needs quoting when it contains `[`
-* The schema lists only the formats a project needs now (`yaml`, `dockerfile`) and documents the others, so adding one is a new row, not a new idea
+* The schema lists only the formats a project needs now (`yaml`, `dockerfile`, `gomod`) and documents the others, so adding one is a new row, not a new idea
 * Templates take modifiers (`{line|trimprefix:v}`, `{stage|replace:stable=prod}`) from a small closed set, so a respelled value needs no map of its own
 
 ## Units (proposed)
@@ -43,14 +51,14 @@ Writing is the same path in reverse: render the form from a release and put it a
 |---|---|---|---|
 | `Project` | the repo as a place, and its branch layout | none | `repo` (name, `owned`, `external`, `managedBy`, default branch), `finalDestination`, `pullRequests` (title, branch prefix, labels, push target), `branches` (layout, stages, and the branch for each line) |
 | `Stream` | what a project releases: the versions and the lines | `project` | `scheme`, `stages` (override only), `lines` (each with its series), `universal` |
-| `Artifact` | one thing each release of a stream produces | `stream` | `kind` (`image` or `file`), `name` (an image's repository path, or a file name template such as `rancher-backup-{version}.tgz`), `lines` (which lines produce it), `registries` (an image's override of the default by release kind) |
-| `Holding` | a named rule: where a piece of information lives in a repo, and what it holds | `project` (whose repo), and `artifact` (a release) or `from` (a project whose commit or branch it holds) | `at` (`file`, `key`, `format`) and `holds` (`kind`: `release`, `commit` or `branch`; `form`; `lines`; `stage` or `stages`; `accept`) |
+| `Artifact` | one thing each release of a stream produces | `stream` | `kind` (`image`, `file` or `gomod`), `name` (an image's repository path, a file name template such as `rancher-backup-{version}.tgz`, or a Go module path), `lines` (which lines produce it), `registries` (an image's override of the default by release kind) |
+| `Holding` | a named rule: where a piece of information lives in a repo, and what it holds | `project` (whose repo), and `artifact` (a release) or `from` (a project whose commit or branch it holds) | `at` (a location, or a list of locations: `file`, `key`, `format`, `lines`) and `holds` (`kind`: `release`, `commit` or `branch`; `form`; `lines`; `stage` or `stages`; `accept`) |
 | `Edit` (later) | extra steps when shipping, beyond writing the form | `holding` | steps before and after, and a named strategy for a rule (a chart version rule, regeneration) |
 | `Policy` | rules shared across projects | as needed | RC-first, registries |
 | `RancherLines` | public line facts | none | unchanged |
 
 * A project can have several streams (charts: one for each package), and a stream has one artifact for each thing a release produces (BRO: an image and two chart packages; shell: an image)
-* An image artifact is checked in the registries its release kind goes to, and a file artifact on the GitHub release; a published release missing a declared artifact is drift
+* An image artifact is checked in the registries its release kind goes to, a file artifact on the GitHub release, and a `gomod` artifact on the repo's tag and the Go module proxy; a published release missing a declared artifact is drift
 * Holdings are declared by the consumer, which knows its own files; "who consumes X" is derived
 * A holding can name an artifact or project with no configured project, so a component we do not trace can still be located and classified
 * Read-only first: readiness, consistency, status and resolve need only Streams, Artifacts and Holdings
@@ -72,15 +80,17 @@ A template is text with `{variable}` parts, each with optional modifiers. Two pl
 | Variable | Is | Example |
 |---|---|---|
 | `{image}` | an image artifact's repository path | `rancher/shell` |
-| `{tag}` | the release tag as published | `v0.9.1-rc.2` |
-| `{version}` | the tag without a leading `v` | `0.9.1-rc.2` |
+| `{tag}` | the release tag as published | `v0.9.1-rc.2`, `helmtools/v0.1.2` |
+| `{prefix}` | the stream's tag prefix: its `tagPattern` up to and including the last `/`; empty when there is none | `helmtools/` |
+| `{bareTag}` | the tag without the prefix | `v0.1.2` |
+| `{version}` | the tag without the prefix and without a leading `v` | `0.9.1-rc.2`, `0.1.2` |
 | `{url}` | a file artifact's download URL | `https://github.com/…/rancher-backup-12.0.0.tgz` |
 | `{file}` | a file artifact's name | `rancher-backup-12.0.0.tgz` |
 | `{sourceRepo}` | the producer's owner/name | `rancher/shell` |
 | `{commit}` | the release's commit | a sha |
 | `{base}`, `{upstream}` | a chart version split at `+up` | `111.0.0`, `0.12.1-rc.16` |
 
-More variables are added as a case needs them; each is a release or layout fact. `{version}` is `{tag|trimprefix:v}`, kept as a shorthand because it is so common.
+More variables are added as a case needs them; each is a release or layout fact. `{version}` is `{bareTag|trimprefix:v}`, kept as a shorthand because it is so common. (Before the prefix variables it was `{tag|trimprefix:v}`, which left a prefixed tag unchanged: `pkg-a/v1.2.3` stayed `pkg-a/v1.2.3`.)
 
 **Modifiers** respell a value where it is used. They follow the variable after `|` and apply left to right: `"{line|trimprefix:v}"` turns `v2.16` into `2.16`, and `"{stage|replace:stable=prod}"` turns `stable` into `prod` and leaves `dev` alone.
 
@@ -106,7 +116,7 @@ The set is closed and small, and grows only when a case needs one. An unknown mo
 | `toml` | the same path syntax as `yaml`, with table names as keys | `.package.version` | documented |
 | `env` | a variable name in a `KEY=value` file | `VERSION` | documented |
 | `makefile` | a variable name in `VAR = value` or `VAR ?= value` | `IMAGE_TAG` | documented |
-| `gomod` | a module path | `github.com/acme/libfoo` | documented |
+| `gomod` | a module path; reads and replaces the version on that module's `require` line in `go.mod` | `github.com/acme/libfoo` | now |
 | `regex` | a pattern with one capture group; the escape hatch for any other file | `^version: (.*)$` | documented |
 
 Every format must let a tool do two things: read the text at a key, and replace it leaving the rest of the file unchanged, comments included. A format the schema does not list is an error when the config loads. A documented format becomes listed when a project uses it.
@@ -182,9 +192,9 @@ spec:
 
 ## What the fixture showed
 
-The [fixture](fixture/README.md) writes the seven projects, plus a Go library and a monorepo, in this shape. All references resolve, and every tool command finds what it needs.
+The [fixture](fixture/README.md) writes nine projects (the seven of the baseline plus the frameworks team's wrangler and lasso), plus a Go library, a monorepo, a prefix-tagged module and an external SDK, in this shape. All references resolve, and every tool command finds what it needs.
 
-* **Four forms covered every holding:** `{image}:{tag}` (4), `{tag}` (3), `{version}` (1) and `{url}` (2); a commit or a branch needs none. Other projects will need more variables, which is why the catalog is open
+* **Five forms covered every holding:** `{image}:{tag}`, `{tag}`, `{version}`, `{url}` and (a Go module) `{bareTag}`; a commit or a branch needs none. Other projects will need more variables, which is why the catalog is open
 * **Only one holding needs a modifier:** Assets' lock file (`{line|trimprefix:v}` and `{stage|replace:stable=prod}`). Everything else reads a plain key
 * **BRO's two URLs need no multi-edit.** Two holdings do it. Only two Edits were needed in the whole fixture
 * **Branches belong to the Project, series to the Stream.** A repo has one branch layout for every line (BRO's `release/v11.x`), while charts has about twenty streams each with its own series on the same branches (O5)
@@ -192,6 +202,9 @@ The [fixture](fixture/README.md) writes the seven projects, plus a Go library an
 * **A commit or a branch is of a repo, not of an artifact.** Assets holds a charts commit and older Rancher holds a charts branch (O10)
 * **Consumer steps attach to a file, not a holding.** Rancher regenerates its build config after any change to `build.yaml` (O11)
 * **The shape is not Rancher-specific.** The library and monorepo fit with `universal`, `tagPattern` and the format `dockerfile`; lines and stages are simply absent
+* **A Go module fits the same kinds.** Wrangler and lasso are a Project, a Stream for each minor and an `Artifact` of kind `gomod`; ob-charts-tool adds a prefix-tagged module. Rancher holds them in four `go.mod` files, so a Holding takes a list of locations
+* **Consumers disagree, so the line mapping is theirs.** For one line, BRO and Rancher hold different wrangler minors (v2.16: 3.7 against 3.8), so which line holds which minor is written on each consumer's Holdings
+* **Drift is visible in the data.** Rancher main holds wrangler `rc.3` in the root and `rc.2` in `pkg/client` and `pkg/plan`
 * **Verbosity:** shell is three documents, Assets four, charts five, BRO six, Rancher eight. All can share one file
 
 ## Open
@@ -204,6 +217,7 @@ Provisional: none of these is forced by the shell and SCC to Rancher baseline, w
 * **Evidence:** the fixture needed two Edits. Charts' bump carries a strategy and a package (`chartsPackageBump`). Rancher's regeneration after any change to `build.yaml` is a step that belongs to the consumer's file, not to one holding (O11).
 * **Option A, steps only.** **Option B, steps and a named strategy** for a rule that needs code. **Option C, no Edit kind:** steps and strategy on the holding.
 * **Lean B.** No multi-edit shape is needed.
+* **Second case: `goBump`.** A Go module consumer needs more than the written line: `go mod tidy` follows the `require` change. It is an Edit with `strategy: goBump`, over a Holding with `format: gomod`, and takes no values of its own yet. Commits are the engine's (see Decided), so the `require` change and the tidy are two commits with nothing in the strategy about it ([`examples/gomod.yaml`](fixture/examples/gomod.yaml)). No real project uses it yet: Assets is only observed for now, and ob-charts-tool's `goBump` is an example, not a decision to ship into Assets.
 
 ### O5. Do lines and series live in the Stream or in their own kind?
 
@@ -248,10 +262,23 @@ Provisional: none of these is forced by the shell and SCC to Rancher baseline, w
 * **Option A, an Edit that refs every holding it follows** (as the fixture does). Repeats the list when a file gains a holding. **Option B, an Edit that refs the project and names files.** One place for a file. **Option C, steps in the holding's `at` block,** repeated for each holding of one file.
 * **Lean A (changed from B).** B adds a concept (named files) the baseline does not need; A works today and can change when the repetition hurts.
 
+### O12. How do two packages say their versions go together?
+
+* **Context:** lasso `v0.2.*` goes with any wrangler `v3.*.*`. That is a fact about two producers' releases and matters to every project holding both (BRO, Rancher), not to how one flows into the other. No kind says it: a Holding is a consumer's file, a Stream is one producer's releases, and a Policy is a project's practice.
+* **Option A, nothing yet:** today every pair held is inside the one range that exists, so a check would never fail. **Option B, a `Pairing` kind** that refs two or more `gomod` Artifacts and selects the releases of each that go together (`series`); a project holding both must hold a declared pair, and a failure is a warning. **Option C, derive it** from each module's own `go.mod`, which already holds the hard minimums.
+* **Lean A now, B** when a case needs it: lasso `v0.3` or higher, or wrangler `v4` or higher. Until one exists the shape is a guess, and the cross-version matrix is what such a case would show. Go's own resolution keeps enforcing minimums meanwhile.
+
+### O13. How is a warning acknowledged?
+
+* **Context:** warnings are only ever shown. Today's are a lifecycle date, a line on the default branch after it is past development, a circular holding and an unknown key; this work adds two more (a Holding's locations disagree, and a perLine project holds a different stream than Rancher for a line). The two new ones will fire on real data from the first run (BRO v2.14 and v2.12), so a deliberate difference needs a way to be said.
+* **Evidence:** a finding has a severity and the path of the document it names (`internal/platform/config/report.go`) but no stable id for its rule, so nothing can say "this one is expected".
+* **Option A, none:** warnings stay and are counted by `gero doctor`. **Option B, an acknowledgement on the document the finding names:** `acknowledge: [{rule, reason}]`, with the reason required, and an acknowledgement that no longer matches a finding is itself a warning. **Option C, a separate `Acknowledgement` kind,** in one place. **Option D, a user file:** rejected, as it would differ by machine.
+* **Lean B**, applied first to the warnings that exist, then to the two new ones. The first step is a stable rule id on every finding, which is also what a table of the warnings in the docs needs.
+
 ## How to settle it
 
 1. List the questions the tools must answer; keep only fields some question needs (done, in the fixture)
-2. Write the real configs of all seven projects in the new shape, plus two invented non-Rancher examples (done, in the fixture)
+2. Write the real configs of the projects in the new shape, plus non-Rancher examples (done, in the fixture)
 3. Walk each existing command through the new kinds and check it still finds what it needs (done: all do)
 4. Prototype the readiness walk on a small in-memory graph before the loader
 5. Generate the JSON schema last, from the Go types

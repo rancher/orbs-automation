@@ -1,6 +1,6 @@
 # Config Schema
 
-**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
+**Status:** field reference, built in `internal/apis/v1alpha2`, 2026-11-08, except the Go module additions (the `gomod` Artifact kind and format, a list in `at` and its `lines`, `{prefix}` and `{bareTag}`, `goBump`, and the consistency warnings), which are designed and in the fixture, not yet built. Each kind in [CONFIG_UNITS](CONFIG_UNITS.md) with its fields, types, defaults and rules. Items marked **(provisional)** take the lean of an open question and are revisited when the charts bump is built. The shapes are written in [`fixture/`](fixture/README.md). Design only: nothing here says how it is built.
 
 ## Every document
 
@@ -68,12 +68,12 @@ One thing each release of a stream produces. `refs`: `stream` (required).
 
 | Field | Type | Default | Rules |
 |---|---|---|---|
-| `kind` | `image` or `file` | required | |
-| `name` | text | required | an image: its repository path. A file: a name template; variables `tag`, `version` |
+| `kind` | `image`, `file` or `gomod` | required | |
+| `name` | text | required | an image: its repository path. A file: a name template; variables `tag`, `version`. A `gomod`: the module path, no space |
 | `lines` | `{since, until}` | every line | the lines that produce it |
 | `registries` | list | by release kind | an image only; `dockerhub`, `prime-staging`, `prime-production`; the default is Docker Hub and Prime staging always, Prime production for a stable |
 
-An image is checked in its registries; a file on the GitHub release **(provisional: exists only)**.
+An image is checked in its registries; a file on the GitHub release **(provisional: exists only)**. A `gomod` exists when its tag is on the repo and the version is listed by the public Go module proxy **(provisional: the proxy is not configurable; a field can name another later)**.
 
 ## Holding
 
@@ -89,20 +89,21 @@ A named rule for where a piece of information lives in a repo, and what it holds
 
 Exactly one of `artifact` and `from`, matching `holds.kind`.
 
-`spec.at`: where to look.
+`spec.at`: where to look. One location, or a list of locations for one piece of a producer held in several places (Rancher's nested `go.mod` files, or one tag in two files). Every location is tied to the same artifact and `holds` rule.
 
 | Field | Type | Default | Rules |
 |---|---|---|---|
 | `file` | template | required | variables `line`, `stage`, `branch` |
 | `key` | template | required | rendered first, then read in the format's own style (below) |
-| `format` | name | `yaml` | `yaml` or `dockerfile` now; others documented below |
+| `lines` | `{since, until}` | every line of the holding | a location only: the lines the file exists for. A location's lines and `holds.lines` overlap; where they do not, the location is not read. The two ranges work on different layers (`holds.lines` is the lines the tie covers; a location's `lines` is where a file exists), and validation warns where they leave a line with no location |
+| `format` | name | `yaml` | `yaml`, `dockerfile` or `gomod` now; others documented below. `gomod` needs a `release` holding of a `gomod` Artifact **(provisional)** |
 
 `spec.holds`: what it holds.
 
 | Field | Type | Default | Rules |
 |---|---|---|---|
 | `kind` | `release`, `commit` or `branch` | required | |
-| `form` | template | `{tag}` | for `release`; how the text is written; variables `image`, `tag`, `version`, `url`, `file`, `sourceRepo`, `commit`, `base`, `upstream`; only modifiers that can be undone |
+| `form` | template | `{tag}` | for `release`; how the text is written; variables `image`, `tag`, `prefix`, `bareTag`, `version`, `url`, `file`, `sourceRepo`, `commit`, `base`, `upstream`; only modifiers that can be undone |
 | `lines` | `{since, until}` | every line the holder and the producer both list | |
 | `stage` | stage name | none | the stage branch of the holder where the holding is found |
 | `stages` | list of stage names | none | for `commit` or `branch`: which stages of the producer are read; the key uses `{stage}` |
@@ -115,8 +116,10 @@ Extra steps when shipping, beyond writing the form. `refs`: `holding`, a list (r
 | Field | Type | Rules |
 |---|---|---|
 | `preEdit`, `postEdit` | list of steps | a step is `run` (a program, or a list of arguments), `since`, `until`, `from` |
-| `strategy` | name | a named rule that needs code (`chartsPackageBump`) |
-| `with` | map | the strategy's own values, declared by the strategy |
+| `strategy` | name | a named rule that needs code (`chartsPackageBump`, `goBump`) |
+| `with` | map | the strategy's own values, declared by the strategy; `goBump` declares none |
+
+Commits are the engine's, not a field: shipping commits after the Holding writes and after each step or strategy phase, and skips a commit when a step changed nothing. `goBump` over a `gomod` Holding is two commits, the `require` change and `go mod tidy`.
 
 ## Templates, formats and paths
 
@@ -131,7 +134,7 @@ Extra steps when shipping, beyond writing the form. `refs`: `holding`, a list (r
 | `json`, `toml` | the same path syntax as `yaml` | documented |
 | `env` | a variable name in a `KEY=value` file | documented |
 | `makefile` | a variable name in `VAR = value` or `VAR ?= value` | documented |
-| `gomod` | a module path | documented |
+| `gomod` | a module path: the version on its `require` line in `go.mod` | now |
 | `regex` | a pattern with one capture group | documented |
 
 ## Unchanged kinds
@@ -153,6 +156,9 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
 * A calver stream is on a project whose layout is `single`; a project holds nothing of itself
 * A holding's `stage` is a stage of its holder's `branches.stages`, and its `stages` are stages of the producer's streams
+* The locations of one Holding should hold the same version for a line; a difference is a warning (a repo's nested modules out of step). A project's locations at the same file and key, in one Holding or several, do not overlap in lines; a `gomod` name is unique within a stream, not a project (the same module is one Artifact for each minor)
+* A project with `layout: perLine` that holds an artifact (matched by its image name or module path) which the `finalDestination` also holds (a project is not compared with itself) should hold the same stream for each line; a difference is a warning. A `single` layout is not compared
+* A `gomod` Artifact's `name` is a module path; a Holding with `format: gomod` holds a `gomod` Artifact; a `goBump` Edit has at least one such Holding
 * A step run `from: producer` needs a producer that is owned
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
 
