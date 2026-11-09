@@ -31,6 +31,9 @@ type Input struct {
 	// StepMessage is the commit message for a step that changed files. Without it
 	// the message is just what ran.
 	StepMessage func(bump.Unit) (string, error)
+	// StrategyMessage is the commit message for a strategy that changed files.
+	// Without it the message says which strategy ran and what it changed.
+	StrategyMessage func(bump.Unit) (string, error)
 	// OnCommit, when set, is called with each commit as it is made.
 	OnCommit func(workdir.CommitInfo)
 	Name     string // the commit's author and committer, or empty for the clone's git config

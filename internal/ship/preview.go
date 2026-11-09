@@ -142,6 +142,16 @@ func stepMessage(in previewInput) func(bump.Unit) (string, error) {
 	}
 }
 
+// strategyMessage returns the function that makes the commit message of a
+// strategy that changed files: which strategy ran and what it changed, from the
+// embedded template.
+func strategyMessage(in previewInput) func(bump.Unit) (string, error) {
+	return func(bump.Unit) (string, error) {
+		vars := textVars(in)
+		return templates.Render(templates.StrategyCommitMessage(), vars)
+	}
+}
+
 // joined is a value of each check, in order, with the repeats left out and the
 // rest joined by a comma: one value when the holdings share it.
 func joined(checks []bump.HoldingCheck, of func(bump.HoldingCheck) string) string {

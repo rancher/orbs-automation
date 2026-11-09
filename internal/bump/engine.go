@@ -336,12 +336,13 @@ const (
 
 // Unit is one piece of the lifecycle that may leave changes behind.
 type Unit struct {
-	Kind    UnitKind
-	Phase   Phase    // for a step: where it runs
-	Edit    string   // for a step or a strategy: the edit it is of
-	Index   int      // for a step: its position in that edit's list
-	Run     []string // for a step: its command
-	Changes []Change // for the write and a strategy: what it changed
+	Kind     UnitKind
+	Phase    Phase    // for a step: where it runs
+	Edit     string   // for a step or a strategy: the edit it is of
+	Strategy string   // for a strategy: its name
+	Index    int      // for a step: its position in that edit's list
+	Run      []string // for a step: its command
+	Changes  []Change // for the write and a strategy: what it changed
 }
 
 // Checkpoint is called after each unit has finished, so the caller can act on
@@ -452,7 +453,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		res.Changed = res.Changed || got.Changed
 		res.Changes = append(res.Changes, got.Changes...)
-		if err := checkpoint(Unit{Kind: UnitStrategy, Edit: ed.Name(), Changes: got.Changes}); err != nil {
+		if err := checkpoint(Unit{Kind: UnitStrategy, Edit: ed.Name(), Strategy: ed.Strategy(), Changes: got.Changes}); err != nil {
 			return res, err
 		}
 	}
