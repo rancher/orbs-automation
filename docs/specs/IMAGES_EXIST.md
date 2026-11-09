@@ -11,7 +11,7 @@ Port of `validate_image_exists` from the `push-to-rancher` bash scripts: before 
 * The Project is found as for `gero repo info` ([WORKSPACE](WORKSPACE.md)): named, or the repository you are in. One argument is the tag, two are the project and the tag. The tag is used as given (`v0.5.3`).
 * Read-only, and it needs the network. `--json` is supported.
 * The text report is a title line (`<project> <tag> (stable|prerelease)`), a table with one row per image and registry (`IMAGE`, `REGISTRY`, `STATUS`, `REFERENCE`: the registry's label, the full reference, and `found`, `not found` or `unreachable` with the reason), the warnings, and a closing line. It is styled by the terminal of the settings ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)). `--json` is the one machine format and is never styled, and `--output env` is refused.
-* Exit 0 when every required image is found. Exit 1 when any is not found or could not be reached. Usage and config errors are 2 ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). The rows are printed before a non-zero exit.
+* Exit 0 when every required image is found. Exit 1 when any is not found or could not be reached. Usage and config errors should be 2, which waits for the exit-code helper ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). The rows are printed before a non-zero exit.
 
 `not found` and `unreachable` are different results: a missing image means the publish has not happened, and an unreachable registry means nothing is known. Both fail the run, and the report says which.
 
@@ -25,22 +25,28 @@ A release is also checked for the Go modules it publishes: the `gomod` artifacts
 
 ## Config
 
-A Project may list the images it publishes:
+The images a project publishes are `Artifact` documents of kind `image` on its streams ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#artifact)):
 
 ```yaml
+kind: Artifact
+name: scc-operator-image
+refs: {stream: scc-operator}
 spec:
-  images:                       # optional
-    - name: rancher/scc-operator
-      registries: [dockerhub, prime-staging, prime-production]
-    - name: rancher/rancher-server
-      since: v2.16                # only for tags in this line and newer
+  kind: image
+  name: rancher/scc-operator
+  registries: [dockerhub, prime-staging, prime-production]   # optional
+---
+kind: Artifact
+name: rancher-server-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher-server, lines: {since: v2.16}}
 ```
 
-* With no `images`, the Project publishes one image named `repo.name` to every registry. That is the common case and needs no config. The effective list comes from a getter on the Project, and the field stays as written ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)).
-* An entry's `name` overrides the default, and several entries track several images. `registries` narrows an image to some of the registries, and defaults to all of them.
-* `since` is a Rancher line ID, and the image is expected only for a tag in that line or a newer one. The tag's line is found from the Project's `branches.lines` and the series of its streams ([WORKSPACE](WORKSPACE.md#raw-and-effective-values)), and lines compare by their numbers (`v2.16` is newer than `v2.15`), so only the Project is needed. An image the tag is too old for is not checked and is not in the report at all, since a row for it would only take up space. If that leaves nothing to check, the report says no image is expected for the tag. `since` must be a line in `RancherLines`, and it is an error on a Project with no `release.lines`.
-* When the tag is in none of the Project's lines, such as a tag of a line not in config yet, there is nothing to compare, so the check is a plain one: every image is checked in every registry, with no `since` rule applied, and the report carries a warning saying why. It is a warning and not an error because the check is still a useful one-off answer to "does this tag exist".
-* Registries are named by role: `dockerhub`, `prime-staging` and `prime-production`. What a role means is built into `gero`, not config: its host, and that production applies only to stable tags. The hosts are `docker.io` (read through `registry-1.docker.io`), `stgregistry.suse.com` and `registry.rancher.com`. A role is a constant until there is a second registry or an auth need, which is the point to make it a document of its own ([APP_CONFIG](APP_CONFIG.md)). An unknown role is a config error.
+* There is no implicit image: an artifact is written for each thing a release produces, and a project with none has nothing to check ([CHAIN_MODEL](../design/CHAIN_MODEL.md)).
+* `registries` narrows an image to some of the registries. Without it an image is checked in Docker Hub and Prime staging, and in Prime production for a stable tag (`Artifact.Registries`).
+* `lines` is a range of Rancher lines (`since`, `until`), and the image is expected only for a tag in those lines. The tag's line is found from the project's `branches.lines` and the series of its streams, and lines compare by their numbers (`v2.16` is newer than `v2.15`). An image the tag is out of range for is not checked and is not in the report, since a row for it would only take up space. If that leaves nothing to check, the report says no image is expected for the tag.
+* When the tag is in none of the project's lines, such as a tag of a line not in config yet, there is nothing to compare, so every image is checked in every registry, and the report carries a warning saying why. It is a warning and not an error because the check is still a useful one-off answer to "does this tag exist".
+* Registries are named by role: `dockerhub`, `prime-staging` and `prime-production`. What a role means is built into `gero`, not config: its host, and that production applies only to stable tags. The hosts are `docker.io` (read through `registry-1.docker.io`), `stgregistry.suse.com` and `registry.rancher.com`. A role is a constant until there is a second registry or an auth need, which is the point to make it a document of its own. An unknown role is a config error.
 
 ## The registry client
 
@@ -54,7 +60,7 @@ Tests run the client against an `httptest` registry, including the token challen
 
 ## Not built yet
 
-* `until`, to stop expecting an image after some line. Nothing needs it yet, so it is not designed; an image that is dropped is the case that would.
+None.
 
 ## Open questions
 
