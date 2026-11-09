@@ -54,7 +54,7 @@ The CLI is built on **cobra** with a small custom loader for CLI config (no vipe
                         internal/platform/clicfg  ->  Settings  ->  command
 ```
 
-A few settings are narrower: `configSource` takes a flag or env var only, and `--bundle-file` has no file key ([CLI_CONFIG](specs/CLI_CONFIG.md)).
+Some settings have no file key, so a file cannot change what a run does: `--dry-run`, `--bundle-file`, `GERO_OFFLINE` and the CI settings ([CLI_CONFIG](specs/CLI_CONFIG.md)).
 
 Data goes to stdout and diagnostics to stderr, with `--json` on data commands and `log/slog` for logs. Output for a person is styled by `internal/ui/style` (lipgloss v2) and laid out by `ui.Align`, and `gero repl` reads its lines through `internal/ui/editor` (ergochat/readline). Each outside module sits behind one package, dependencies are stdlib-first, and the allow-list is in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md). A full-screen TUI is not planned. All decisions are in the [specs](specs/README.md).
 
