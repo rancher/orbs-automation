@@ -22,8 +22,8 @@ type fakeProxy struct {
 	paths   []string
 	methods []string
 	agents  []string
-	down    bool          // every request fails to connect
-	delay   time.Duration // how long each answer takes
+	down    bool // every request fails to connect
+	hang    bool // no answer comes: the request waits until it is cancelled
 }
 
 type answer struct {
@@ -38,9 +38,13 @@ func (f *fakeProxy) RoundTrip(r *http.Request) (*http.Response, error) {
 	if f.down {
 		return nil, errors.New("dial tcp: connection refused")
 	}
-	select {
-	case <-time.After(f.delay):
-	case <-r.Context().Done():
+	// A transport gives up on a cancelled request before it does anything else; the
+	// order is not left to a select, which picks at random when both are ready.
+	if err := r.Context().Err(); err != nil {
+		return nil, err
+	}
+	if f.hang {
+		<-r.Context().Done()
 		return nil, r.Context().Err()
 	}
 	a, ok := f.answers[r.URL.EscapedPath()]
@@ -160,10 +164,9 @@ func TestACancelledRequestIsUnreachable(t *testing.T) {
 }
 
 func TestARequestThatTakesTooLongIsUnreachable(t *testing.T) {
-	f := answers("/github.com/acme/lib/@v/v1.0.0.info", 200, `{"Version":"v1.0.0"}`)
-	f.delay = 300 * time.Millisecond
+	f := &fakeProxy{hang: true}
 
-	got := Checker{BaseURL: base, Client: &http.Client{Transport: f, Timeout: 50 * time.Millisecond}}.Exists(context.Background(), "github.com/acme/lib", "v1.0.0")
+	got := Checker{BaseURL: base, Client: &http.Client{Transport: f, Timeout: 20 * time.Millisecond}}.Exists(context.Background(), "github.com/acme/lib", "v1.0.0")
 
 	assert.Equal(t, Unreachable, got.Status)
 }
