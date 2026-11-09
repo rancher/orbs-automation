@@ -33,6 +33,7 @@ linters:
             - github.com/mallardduck/ghreleases
             - github.com/go-git/go-git
             - go.yaml.in/yaml/v3
+            - golang.org/x/mod/modfile
             - golang.org/x/net/html
             - golang.org/x/term
             - charm.land/lipgloss
@@ -115,6 +116,16 @@ linters:
           deny:
             - pkg: go.yaml.in/yaml
               desc: YAML is only allowed in internal/platform/config, internal/apis and internal/platform/yamledit (docs/specs/DEPENDENCY_POLICY.md)
+        # The go.mod parser reads and edits the version of a module in one place
+        # (docs/specs/DEPENDENCY_POLICY.md).
+        nomodfile:
+          list-mode: lax
+          files:
+            - "!**/internal/platform/gomodedit/**"
+            - "!$test"
+          deny:
+            - pkg: golang.org/x/mod
+              desc: the go.mod parser is only allowed in internal/platform/gomodedit (docs/specs/DEPENDENCY_POLICY.md)
         # The HTML parser reads the SUSE lifecycle page and nothing else
         # (docs/specs/DEPENDENCY_POLICY.md).
         nohtml:
