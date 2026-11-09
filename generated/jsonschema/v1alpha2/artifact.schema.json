@@ -2,6 +2,25 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$ref": "#/$defs/Artifact",
   "$defs": {
+    "Acknowledgement": {
+      "properties": {
+        "rule": {
+          "type": "string",
+          "description": "the id of the rule of the warning"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the warning is expected"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range",
+          "description": "only for a warning about these lines; every line when not given"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Acknowledgement says a warning of a rule on this document is expected, so it is not shown as one."
+    },
     "Artifact": {
       "properties": {
         "apiVersion": {
@@ -33,6 +52,13 @@
           },
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
         },
         "spec": {
           "$ref": "#/$defs/ArtifactSpec"

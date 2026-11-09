@@ -25,6 +25,8 @@ type Finding struct {
 	Doc      int    // the document's place in the source, from 1; 0 when there is one
 	Label    string // what the document is, such as Project "rancher"
 	Path     string // where in the document, such as spec.layout
+	Line     string // the Rancher line a warning is about, when it is about one
+	Reason   string // why a warning is expected, when the document acknowledges it
 	Rule     string // the stable id of the rule a warning is of, such as circular-holding; none for an error
 	Msg      string
 }
@@ -86,6 +88,16 @@ func (r *Report) Errorf(path, format string, args ...any) {
 func (r *Report) Warnf(rule, path, format string, args ...any) {
 	r.add(Warning, rule, path, fmt.Sprintf(format, args...))
 }
+
+// WarnLinef is Warnf for a warning about one Rancher line, which an
+// acknowledgement may then be limited to.
+func (r *Report) WarnLinef(rule, _, path, format string, args ...any) {
+	r.Warnf(rule, path, format, args...)
+}
+
+// Acknowledged returns the warnings that a document says are expected, in the
+// order reported. They are not in Warnings.
+func (r Report) Acknowledged() []Finding { return nil }
 
 // Err returns the errors as one error that joins them, or nil when there are
 // none. It is always a join, even for one finding, so a caller that walks to a

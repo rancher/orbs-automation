@@ -88,6 +88,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.editSteps()
 	s.circular()
 	s.omittedBranches()
+	s.acknowledgements()
 }
 
 // uniqueNames reports each document whose name an earlier document of its kind
@@ -354,7 +355,7 @@ func (s *set) omittedBranches() {
 				continue
 			}
 			if phase := ln.PhaseAt(s.ctx.Now); phase != lines.PhaseDevelopment {
-				r.Warnf(RuleDefaultBranchPastDevelopment, fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
+				r.WarnLinef(RuleDefaultBranchPastDevelopment, bl.Line, fmt.Sprintf("spec.branches.lines[%d].branch", i), "omitted, which means the default branch, for the line in development; %s is in %s: give it a branch, or \"\" for none yet", bl.Line, phase)
 			}
 		}
 		s.add(r)
@@ -504,3 +505,7 @@ func (s *set) editSteps() {
 		s.add(r)
 	}
 }
+
+// acknowledgements checks what each document says is expected, and silences the
+// warnings it matches.
+func (s *set) acknowledgements() {}

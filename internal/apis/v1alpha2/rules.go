@@ -15,6 +15,7 @@ import (
 const (
 	RuleCircularHolding              = "circular-holding"
 	RuleDefaultBranchPastDevelopment = "default-branch-past-development"
+	RuleAcknowledgementUnused        = "acknowledgement-unused"
 )
 
 // slug is what a lowercase slug looks like, as in a team name.

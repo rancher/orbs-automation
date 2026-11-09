@@ -2,6 +2,25 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$ref": "#/$defs/Project",
   "$defs": {
+    "Acknowledgement": {
+      "properties": {
+        "rule": {
+          "type": "string",
+          "description": "the id of the rule of the warning"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the warning is expected"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range",
+          "description": "only for a warning about these lines; every line when not given"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Acknowledgement says a warning of a rule on this document is expected, so it is not shown as one."
+    },
     "BranchLine": {
       "properties": {
         "line": {
@@ -86,6 +105,13 @@
           "type": "object",
           "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
         },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
         "spec": {
           "$ref": "#/$defs/ProjectSpec"
         }
@@ -150,6 +176,21 @@
       "additionalProperties": false,
       "type": "object",
       "description": "PullRequests holds the conventions for PRs opened against the repo."
+    },
+    "Range": {
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "a line id: from this line on"
+        },
+        "until": {
+          "type": "string",
+          "description": "a line id: up to and including this line"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Range limits something to the Rancher lines from Since to Until, either of which may be left out."
     },
     "Repo": {
       "properties": {
