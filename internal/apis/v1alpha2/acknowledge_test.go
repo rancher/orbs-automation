@@ -191,3 +191,49 @@ func TestAnAcknowledgementHasOnlyItsFields(t *testing.T) {
 	require.Error(t, rep.Err())
 	assert.Contains(t, rep.Err().Error(), "until")
 }
+
+func TestAcknowledgesSaysWhetherTheAcknowledgementsCoverAWarningAndWhy(t *testing.T) {
+	acks := []Acknowledgement{
+		{Rule: "circular-holding", Reason: "they build each other"},
+		{Rule: "locations-differ", Reason: "only v2.16 is expected", Lines: lines.Range{Since: "v2.16", Until: "v2.16"}},
+		{Rule: "locations-differ", Reason: "every line of v2.14 and older", Lines: lines.Range{Until: "v2.14"}},
+	}
+	tests := []struct {
+		name, rule, line, reason string
+		ok                       bool
+	}{
+		{"a rule it does not have", "stream-differs-from-destination", "v2.16", "", false},
+		{"a rule with no lines covers a warning with none", "circular-holding", "", "they build each other", true},
+		{"a rule with no lines covers a warning about a line", "circular-holding", "v2.15", "they build each other", true},
+		{"lines cover a line in them", "locations-differ", "v2.16", "only v2.16 is expected", true},
+		{"the next acknowledgement covers another line", "locations-differ", "v2.13", "every line of v2.14 and older", true},
+		{"a line in none of them", "locations-differ", "v2.15", "", false},
+		{"lines do not cover a warning about no line", "locations-differ", "", "", false},
+		{"a line written without its v", "locations-differ", "2.16", "only v2.16 is expected", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason, ok := Acknowledges(acks, tt.rule, tt.line)
+
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.reason, reason)
+		})
+	}
+	reason, ok := Acknowledges(nil, "locations-differ", "v2.16")
+	assert.False(t, ok, "no acknowledgements cover nothing")
+	assert.Empty(t, reason)
+}
+
+func TestAnAcknowledgementOfARuleRaisedByReadingARepoIsNotUnusedAtValidation(t *testing.T) {
+	set := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+		doc("Stream", "s", "{project: p}", streamSpec),
+		doc("Artifact", "a", "{stream: s}", artifactSpec),
+		docAck("Holding", "h", "{project: q, artifact: a}", "  - {rule: locations-differ, reason: nested modules lag by design}\n", holdingSpec),
+	}
+
+	rep := validateSet(t, set...)
+
+	assert.Empty(t, rep.Findings, "validation cannot see that rule, so it cannot call the acknowledgement unused")
+}

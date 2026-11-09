@@ -223,3 +223,82 @@ func TestSourcesASourceThatCannotBeTracedIsReportedWithItsError(t *testing.T) {
 	assert.Equal(t, "rancher/scc-operator", got[0].Producer)
 	assert.Contains(t, got[0].Error, "network down")
 }
+
+const twoLocations = "  at:\n    - {file: build.yaml, key: defaultSccOperatorImage}\n    - {file: nested/build.yaml, key: image}\n"
+
+// nestedFiles puts a nested file on each branch of loopFixture, holding the given
+// image tags in the order main, release/v2.15, release/v2.14.
+func nestedFiles(ws *fakeWorkspace, tags ...string) {
+	for i, ref := range []string{"sha-main", "sha-215", "sha-214"} {
+		ws.files["rancher/rancher@"+ref+":nested/build.yaml"] = "image: rancher/scc-operator:" + tags[i] + "\n"
+	}
+}
+
+func TestHoldingsOfSeveralLocationsAgreeingHaveEachOfThem(t *testing.T) {
+	ws := withDevLine(loopFixture(t))
+	ws.links[0].Locations = twoLocations
+	nestedFiles(ws, "v0.5.3", "v0.5.2", "v0.5.1") // each as the root file holds it
+
+	got, err := holdings(t, ws)
+
+	require.NoError(t, err)
+	held := got[0].Targets[0].Held[0]
+	require.Len(t, held.Locations, 2)
+	assert.Equal(t, "build.yaml", held.Locations[0].File)
+	assert.Equal(t, "nested/build.yaml", held.Locations[1].File)
+	assert.False(t, held.Differ)
+	assert.Empty(t, held.DifferReason)
+}
+
+func TestHoldingsOfSeveralLocationsThatDifferSayWhatEachHolds(t *testing.T) {
+	ws := withDevLine(loopFixture(t))
+	ws.links[0].Locations = twoLocations
+	nestedFiles(ws, "v0.5.2", "v0.5.2", "v0.5.1") // main: the root holds v0.5.3, the nested file v0.5.2
+
+	got, err := holdings(t, ws)
+
+	require.NoError(t, err)
+	var main HeldValue
+	for _, h := range got[0].Targets {
+		if h.Branch == "main" {
+			main = h.Held[0]
+		}
+	}
+	assert.True(t, main.Differ)
+	assert.Equal(t, "rancher/scc-operator:v0.5.3", main.Current, "the first location's value")
+	assert.Equal(t, []HeldLocation{
+		{File: "build.yaml", Current: "rancher/scc-operator:v0.5.3"},
+		{File: "nested/build.yaml", Current: "rancher/scc-operator:v0.5.2"},
+	}, main.Locations)
+	assert.Empty(t, main.DifferReason, "nothing acknowledges it")
+}
+
+func TestHoldingsAnAcknowledgementOfTheDifferenceGivesItsReasonForTheLinesItNames(t *testing.T) {
+	ws := withDevLine(loopFixture(t))
+	ws.links[0].Locations = twoLocations
+	ws.links[0].Acknowledge = "  - {rule: locations-differ, reason: nested modules lag on main, lines: {since: v2.16, until: v2.16}}\n"
+	nestedFiles(ws, "v0.5.2", "v0.5.1", "v0.5.1") // main and v2.15 differ; v2.14 agrees
+
+	got, err := holdings(t, ws)
+
+	require.NoError(t, err)
+	byB := map[string]HeldValue{}
+	for _, h := range got[0].Targets {
+		byB[h.Branch] = h.Held[0]
+	}
+	assert.True(t, byB["main"].Differ)
+	assert.Equal(t, "nested modules lag on main", byB["main"].DifferReason)
+	assert.True(t, byB["release/v2.15"].Differ)
+	assert.Empty(t, byB["release/v2.15"].DifferReason, "the acknowledgement is for v2.16 only")
+	assert.False(t, byB["release/v2.14"].Differ)
+}
+
+func TestHoldingsOfOneLocationHaveNoLocationsToShow(t *testing.T) {
+	got, err := holdings(t, withDevLine(loopFixture(t)))
+
+	require.NoError(t, err)
+	for _, h := range got[0].Targets {
+		assert.Empty(t, h.Held[0].Locations)
+		assert.False(t, h.Held[0].Differ)
+	}
+}

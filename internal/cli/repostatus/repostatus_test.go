@@ -651,6 +651,11 @@ func TestHoldStatus(t *testing.T) {
 		{"behind the stable, a prerelease is newer", ship.HeldValue{Stable: stable("v0.5.3", false, newer), Newest: stable("v0.6.0-rc.1", false, newer)}, "behind v0.5.3"},
 		{"between the stable and the newest", ship.HeldValue{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.2", false, newer)}, "on a prerelease, v0.6.0-rc.2 is newer"},
 		{"past the newest", ship.HeldValue{Stable: stable("v0.5.3", false, older), Newest: stable("v0.6.0-rc.1", false, older)}, "ahead of v0.6.0-rc.1"},
+		{"current, but the locations differ", ship.HeldValue{Stable: stable("v0.5.3", true, same), Differ: true}, "current; locations differ"},
+		{"behind, and the locations differ", ship.HeldValue{Stable: stable("v0.5.3", false, newer), Differ: true}, "behind v0.5.3; locations differ"},
+		{"nothing to compare, and the locations differ", ship.HeldValue{Differ: true}, "locations differ"},
+		{"the locations differ and the document says why", ship.HeldValue{Stable: stable("v0.5.3", false, newer), Differ: true, DifferReason: "lag by design"}, "behind v0.5.3"},
+		{"an error says nothing of the locations", ship.HeldValue{Error: "no value for the key", Differ: true}, "unreadable: no value for the key"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -707,4 +712,34 @@ func TestRenderJSONCarriesTheConsumersAndTheSources(t *testing.T) {
 	assert.Equal(t, got, back)
 	assert.Contains(t, out, `"sources"`)
 	assert.Contains(t, out, `"current": "rancher/scc-operator:v0.5.3"`)
+}
+
+func TestRenderTextShowsEachDistinctValueOfALocationThatDiffers(t *testing.T) {
+	held := func(v ship.HeldValue) Status {
+		return Status{Slug: "rancher/wrangler", Consumers: []ship.ConsumerHoldings{{
+			Consumer: "rancher/rancher", Name: "rancher",
+			Targets: []ship.Holding{{Line: "v2.16", Branch: "main", Held: []ship.HeldValue{v}}},
+		}}}
+	}
+	differ := ship.HeldValue{
+		Name: "rancher-holds-wrangler", Current: "v3.8.0-rc.3", Differ: true,
+		Locations: []ship.HeldLocation{
+			{File: "go.mod", Current: "v3.8.0-rc.3"}, {File: "pkg/apis/go.mod", Current: "v3.8.0-rc.3"}, {File: "pkg/client/go.mod", Current: "v3.8.0-rc.2"},
+		},
+		Stable: &ship.Verdict{Tag: "v3.8.0", UpToDate: false, Relation: bump.RelationNewer},
+	}
+
+	out := renderText(held(differ), nil)
+	assert.Contains(t, out, "v3.8.0-rc.3, v3.8.0-rc.2", "each value once, in the order the locations list them")
+	assert.Contains(t, out, "behind v3.8.0; locations differ")
+
+	acknowledged := differ
+	acknowledged.DifferReason = "nested modules lag by design"
+	quiet := renderText(held(acknowledged), nil)
+	assert.Contains(t, quiet, "v3.8.0-rc.3, v3.8.0-rc.2", "the values are still shown")
+	assert.NotContains(t, quiet, "locations differ", "an acknowledged difference is not announced")
+	assert.NotContains(t, quiet, "nested modules lag by design")
+
+	agree := ship.HeldValue{Name: "h", Current: "v3.8.0", Locations: []ship.HeldLocation{{File: "a", Current: "v3.8.0"}, {File: "b", Current: "v3.8.0"}}}
+	assert.NotContains(t, renderText(held(agree), nil), "v3.8.0, v3.8.0", "locations that agree show one value")
 }

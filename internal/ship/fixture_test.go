@@ -49,6 +49,8 @@ type link struct {
 	Strategy          string // the strategy of an edit that follows the holding
 	Pre, Post         []stepSpec
 	PackageForTheEdit string
+	Locations         string // the at block as YAML, for a holding with several locations; File and Key otherwise
+	Acknowledge       string // the lines of an acknowledge list on the holding
 }
 
 // fakeWorkspace is a workspace served from the specs: the documents are built
@@ -121,8 +123,15 @@ func (f *fakeWorkspace) docs() []string {
 			holds += ", lines: " + l.HoldsLines
 		}
 		holds += "}\n"
-		docs = append(docs, chaintest.Doc("Holding", name, "{project: "+c.Name+", artifact: "+f.producer.Name+"-image-0}",
-			fmt.Sprintf("  at: {file: %s, key: %s}\n", file, key)+holds))
+		at := fmt.Sprintf("  at: {file: %s, key: %s}\n", file, key)
+		if l.Locations != "" {
+			at = l.Locations
+		}
+		holding := chaintest.Doc("Holding", name, "{project: "+c.Name+", artifact: "+f.producer.Name+"-image-0}", at+holds)
+		if l.Acknowledge != "" {
+			holding = strings.Replace(holding, "name: "+name+"\n", "name: "+name+"\nacknowledge:\n"+l.Acknowledge, 1)
+		}
+		docs = append(docs, holding)
 		if l.Strategy != "" || len(l.Pre)+len(l.Post) > 0 {
 			spec := ""
 			if l.Strategy != "" {
