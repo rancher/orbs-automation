@@ -59,15 +59,25 @@ type LocationCheck struct {
 }
 
 // Differ reports whether the locations of the holding hold different values.
-func (c Check) Differ() bool { return false }
+func (c Check) Differ() bool {
+	for _, loc := range c.Locations {
+		if loc.Current != c.Locations[0].Current {
+			return true
+		}
+	}
+	return false
+}
 
 // Changes is what a bump would change: one change for each location that is not
-// up to date.
+// up to date, in the order the holding lists them.
 func (c Check) Changes() []Change {
-	if c.UpToDate {
-		return nil
+	var out []Change
+	for _, loc := range c.Locations {
+		if !loc.UpToDate {
+			out = append(out, loc.Change)
+		}
 	}
-	return []Change{c.Change}
+	return out
 }
 
 // Result is what the write side did.

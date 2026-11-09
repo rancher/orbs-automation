@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -73,11 +74,15 @@ type Place struct {
 
 // PlacesOf renders where a holding is found for a line and a branch of the
 // consumer, one place for each of its locations that exists for the line: the
-// file and key with the line, the holding's stage and the branch.
+// file and key with the line, the holding's stage and the branch. A location
+// limited to other lines is left out, so a holding can have none for a line.
 func PlacesOf(h *chain.Holding, line, branch string) ([]Place, error) {
 	vars := map[string]string{"line": line, "stage": h.Doc.Spec.Holds.Stage, "branch": branch}
 	var places []Place
-	for _, at := range h.Doc.Spec.At[:1] {
+	for _, at := range h.Doc.Spec.At {
+		if !at.Lines.Contains(line) {
+			continue
+		}
 		file, err := templates.Render(at.File, vars)
 		if err != nil {
 			return nil, fmt.Errorf("Holding %q: at.file %q: %w", h.Name(), at.File, err)
@@ -105,67 +110,104 @@ func FormOf(h *chain.Holding, rel Release) (string, error) {
 	return value, nil
 }
 
-// resolveHolding finds the place and the value a holding wants for a target, and refuses
-// a format that is not built.
-func resolveHolding(h *chain.Holding, line, branch string, rel Release) (Place, string, error) {
+// resolveHolding finds the places and the value a holding wants for a target. It
+// refuses a holding with no location for the line, and a format that is not
+// built, before anything is read or written.
+func resolveHolding(h *chain.Holding, line, branch string, rel Release) ([]Place, string, error) {
 	places, err := PlacesOf(h, line, branch)
 	if err != nil {
-		return Place{}, "", err
+		return nil, "", err
 	}
-	place := places[0]
-	if place.Format != formatYAML {
-		return Place{}, "", fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), place.Format)
+	if len(places) == 0 {
+		return nil, "", fmt.Errorf("Holding %q has no location for %s", h.Name(), line)
+	}
+	for _, place := range places {
+		if place.Format != formatYAML {
+			return nil, "", fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), place.Format)
+		}
 	}
 	want, err := FormOf(h, rel)
 	if err != nil {
-		return Place{}, "", err
+		return nil, "", err
 	}
-	return place, want, nil
+	return places, want, nil
 }
 
-// CheckHolding reads what a holding holds in src for a line and a branch, and
-// says how it compares with what the release wants. It never writes.
+// CheckHolding reads what a holding holds, in each of its locations, in src for a
+// line and a branch, and says how it compares with what the release wants. It
+// never writes.
 func CheckHolding(ctx context.Context, src Tree, h *chain.Holding, line, branch string, rel Release) (Check, error) {
-	place, want, err := resolveHolding(h, line, branch, rel)
+	places, want, err := resolveHolding(h, line, branch, rel)
 	if err != nil {
 		return Check{}, err
 	}
-	data, err := src.ReadFile(ctx, place.File)
-	if err != nil {
-		return Check{}, fmt.Errorf("read %s: %w", place.File, err)
+	check := Check{Want: want, UpToDate: true}
+	for _, place := range places {
+		data, err := src.ReadFile(ctx, place.File)
+		if err != nil {
+			return Check{}, fmt.Errorf("read %s: %w", place.File, err)
+		}
+		current, err := yamledit.Get(data, place.Key)
+		if err != nil {
+			return Check{}, fmt.Errorf("read %s: %w", place.File, err)
+		}
+		check.Locations = append(check.Locations, LocationCheck{
+			Place: place, Current: current, UpToDate: current == want,
+			Relation: relation(current, want), Change: change(place, current, want),
+		})
 	}
-	current, err := yamledit.Get(data, place.Key)
-	if err != nil {
-		return Check{}, fmt.Errorf("read %s: %w", place.File, err)
+	first := check.Locations[0]
+	check.Current, check.Relation, check.Change = first.Current, first.Relation, first.Change
+	for _, loc := range check.Locations {
+		if !loc.UpToDate {
+			check.UpToDate = false
+			check.Relation, check.Change = loc.Relation, loc.Change
+			break
+		}
 	}
-	return Check{
-		Current: current, Want: want, UpToDate: current == want, Relation: relation(current, want),
-		Change: change(place, current, want),
-	}, nil
+	return check, nil
 }
 
-// ApplyHolding writes the release into the holding's place in dst, changing only
-// that value, and says what changed.
+// ApplyHolding writes the release into each of the holding's locations in dst,
+// changing only those values, and says what changed. Every location is read and
+// set before any file is written, so a location that cannot be written leaves the
+// tree as it was.
 func ApplyHolding(ctx context.Context, dst WritableTree, h *chain.Holding, line, branch string, rel Release) (Result, error) {
-	place, want, err := resolveHolding(h, line, branch, rel)
+	places, want, err := resolveHolding(h, line, branch, rel)
 	if err != nil {
 		return Result{}, err
 	}
-	data, err := dst.ReadFile(ctx, place.File)
-	if err != nil {
-		return Result{}, fmt.Errorf("read %s: %w", place.File, err)
+	pending := map[string][]byte{} // each file as it is once the places so far are set
+	var order []string             // the files that changed, in the order they first did
+	var res Result
+	for _, place := range places {
+		data, read := pending[place.File]
+		if !read {
+			if data, err = dst.ReadFile(ctx, place.File); err != nil {
+				return Result{}, fmt.Errorf("read %s: %w", place.File, err)
+			}
+		}
+		out, old, err := yamledit.Set(data, place.Key, want)
+		if err != nil {
+			return Result{}, fmt.Errorf("set %s in %s: %w", place.Key, place.File, err)
+		}
+		pending[place.File] = data
+		if old == want {
+			continue
+		}
+		pending[place.File] = out
+		if !slices.Contains(order, place.File) {
+			order = append(order, place.File)
+		}
+		res.Changes = append(res.Changes, change(place, old, want))
 	}
-	out, old, err := yamledit.Set(data, place.Key, want)
-	if err != nil {
-		return Result{}, fmt.Errorf("set %s in %s: %w", place.Key, place.File, err)
+	for _, file := range order {
+		if err := dst.WriteFile(ctx, file, pending[file]); err != nil {
+			return Result{}, fmt.Errorf("write %s: %w", file, err)
+		}
 	}
-	if old == want {
-		return Result{}, nil
-	}
-	if err := dst.WriteFile(ctx, place.File, out); err != nil {
-		return Result{}, fmt.Errorf("write %s: %w", place.File, err)
-	}
-	return Result{Changed: true, Changes: []Change{change(place, old, want)}}, nil
+	res.Changed = len(res.Changes) > 0
+	return res, nil
 }
 
 func change(place Place, from, to string) Change {
