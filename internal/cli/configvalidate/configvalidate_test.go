@@ -75,6 +75,36 @@ func TestRunShowsEachWarningAndStillSucceeds(t *testing.T) {
 	assert.Contains(t, out, "[default-branch-past-development]", "the warning names its rule, which is what a document acknowledges")
 }
 
+func acknowledgedConfig(t *testing.T) fakeWorkspace {
+	t.Helper()
+	g, rep := chaintest.LoadFS(files(map[string]string{
+		"lines.yaml": "apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n",
+		"p.yaml":     "apiVersion: gero/v1alpha2\nkind: Project\nname: p\nacknowledge:\n  - {rule: default-branch-past-development, reason: read from main by design}\nspec:\n  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n",
+	}))
+	require.NoError(t, rep.Err())
+	return fakeWorkspace{dir: workspace.CentralConfigDir{Dir: "/work/config"}, graph: g}
+}
+
+func TestRunSaysNothingOfAnAcknowledgedWarningByDefault(t *testing.T) {
+	out, err := run(acknowledgedConfig(t), nil, false)
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "config OK")
+	assert.NotContains(t, out, "warning:")
+	assert.NotContains(t, out, "acknowledged")
+	assert.NotContains(t, out, "read from main by design")
+}
+
+func TestRunShowsAnAcknowledgedWarningWithItsReasonWhenVerbose(t *testing.T) {
+	out, err := run(acknowledgedConfig(t), nil, true)
+
+	require.NoError(t, err)
+	assert.NotContains(t, out, "warning:", "it is still not a warning")
+	assert.Contains(t, out, "acknowledged: p.yaml: Project \"p\": spec.branches.lines[0].branch: omitted")
+	assert.Contains(t, out, "[default-branch-past-development]")
+	assert.Contains(t, out, "(reason: read from main by design)")
+}
+
 func TestRunReturnsAMissingConfigDirectory(t *testing.T) {
 	_, err := run(fakeWorkspace{dirErr: workspace.ErrNotFound}, nil, false)
 

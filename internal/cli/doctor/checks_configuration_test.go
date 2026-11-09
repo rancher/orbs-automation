@@ -183,6 +183,18 @@ func TestConfigCheckWarnsOfTheConfigsWarnings(t *testing.T) {
 	}, got)
 }
 
+func TestConfigCheckDoesNotCountAnAcknowledgedWarning(t *testing.T) {
+	g, rep := chaintest.LoadFS(fstest.MapFS{
+		"lines.yaml": {Data: []byte("apiVersion: gero/v1alpha2\nkind: RancherLines\nname: rancher\nspec:\n  lines:\n    - id: v2.15\n      dates: {ga: 2026-08-27}\n")},
+		"p.yaml":     {Data: []byte("apiVersion: gero/v1alpha2\nkind: Project\nname: p\nacknowledge:\n  - {rule: default-branch-past-development, reason: read from main by design}\nspec:\n  repo: {name: acme/a}\n  branches:\n    layout: perLine\n    lines: [{line: v2.15}]\n")},
+	})
+	require.NoError(t, rep.Err())
+
+	got := NewConfigCheck(&fakeWorkspace{graph: g}).Run(context.Background())
+
+	assert.Equal(t, Result{Status: StatusOK, Message: "1 project, 0 streams, 0 artifacts, 0 holdings, 1 line"}, got)
+}
+
 func TestConfigCheckProblemsFail(t *testing.T) {
 	tests := []struct {
 		name string
