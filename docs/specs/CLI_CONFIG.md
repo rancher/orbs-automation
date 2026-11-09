@@ -71,7 +71,8 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 
 | File key | Env var | Flag | Meaning |
 |---|---|---|---|
-| `centralConfigDir` | `GERO_CENTRAL_CONFIG_DIR` | `--central-config-dir` | The local clone of the central repo's `config/` directory, where the central application config is. Named for that, since gero's own config directory is the user's, where the user file is. Needed only until gero can fetch the config from a release bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), when it becomes an override |
+| `centralConfigDir` | `GERO_CENTRAL_CONFIG_DIR` | `--central-config-dir` | The local clone of the central repo's `config/` directory, where the central application config is. Named for that, since gero's own config directory is the user's, where the user file is. Takes precedence over the release bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) unless `--config-source=bundle` is given |
+| (none) | `GERO_CONFIG_SOURCE` | `--config-source` | `auto` (default), `dir` or `bundle`: where the central config comes from, below. **Not a user-file key**: a file that pinned it would hide where the config of every command comes from, and a stray file must not move CI |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
 | `color` | `GERO_COLOR` | `--color`, `--no-color` | `auto` (default), `always` or `never`. `auto` defers to `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and TTY detection ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) |
@@ -138,7 +139,13 @@ Commands that read the central `config/` find it in this order:
 4. `./config`, when the working directory is a checkout of the central repo (reported as source `cwd`)
 5. The central config bundle of the `gero` release, from the user's cache or fetched ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), only when none of 1 to 4 is named, and never in CI
 
-A local source always wins. One that is named but broken (a missing directory, invalid or empty config) is an error and never falls back to the bundle, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow, to the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
+A local source almost always wins when one is configured. `--config-source` (or `GERO_CONFIG_SOURCE`; never the user file) is the one way to change that:
+
+* `auto`, the default, is the order above.
+* `dir` uses 1 to 4 only and never reads the bundle, so it never reaches the cache or the network. With none named it fails as `auto` does without a bundle.
+* `bundle` skips 1 to 4, even a `centralConfigDir` that is set, and reads the bundle of the release, to see what a workstation with no local config sees. It fails, naming why, when the bundle is not available, and never falls back to a local directory. `GERO_OFFLINE` still limits it to the cache, and unlike `auto` it is read in CI when asked for by name.
+
+In `auto`, a source that is named but broken (a missing directory, invalid or empty config) is an error and never falls back to the bundle, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). In CI, which runs `auto`, the central repo is checked out and `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir` is set explicitly in the workflow, to the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
 
 ## Not built yet
 

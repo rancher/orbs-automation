@@ -8,7 +8,7 @@ How the central repo's shared content ships as one file with each `gero` release
 
 Today a command needs the central `config/` directory on disk, so every workstation and every job needs a clone or checkout of the central repo. The release of `gero` happens in a public repo, so the same release can carry a compiled copy of what the CLI needs from that repo, and the CLI can fetch it with no clone and no token.
 
-A local source always wins. The bundle is the fallback for when none is configured, never an override.
+A local source almost always wins. By default the bundle is the fallback for when none is configured; the one override is `--config-source=bundle` (or `GERO_CONFIG_SOURCE=bundle`), which skips every local source on purpose, and `--config-source=dir` is its opposite: local only, never the bundle ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)).
 
 ## The bundle
 
@@ -74,7 +74,7 @@ Every download of a release asset, the bundle or anything else, is verified agai
 
 ## Source precedence
 
-The bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config):
+With `--config-source=auto`, the default, the bundle is one more source, after the local ones in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config):
 
 1. `--central-config-dir`
 2. `GERO_CENTRAL_CONFIG_DIR`
@@ -101,13 +101,13 @@ A change to config therefore reaches workstations with a release, not with a mer
 * `internal/bundle`: the format, `Compile` (for the release) and `Parse` (for the reader), which share one definition and check each other.
 * `internal/platform/assetfetch`: the one place a release asset is downloaded and verified, over `ghreleases`. An asset with no published checksum, or one that does not match, is never returned.
 * `internal/bundlestore`: the cache (`$XDG_CACHE_HOME/gero/`, else `~/.cache/gero/`, which replaces its bundle and record together and treats damage as empty) and the resolver, which applies the release rules above, refreshes at most daily, and falls back to the cache saying why.
-* `internal/workspace`: the fifth source, `ConfigSource`, and the rule that a local source always wins. `gero config show` and `gero doctor` report the source. Doctor is offline unless `--online`, and then reads the cache only.
+* `internal/workspace`: the fifth source, `ConfigSource`, and the rule that a local source wins unless `--config-source` says otherwise (`bundle` skips them, `dir` never reads the bundle). `gero config show` and `gero doctor` report the source. Doctor is offline unless `--online`, and then reads the cache only.
 * `bundletest` and `fakehub`: imagined releases for tests, with a tampered asset, a missing checksum, a rate limit and a bundle of a newer format, all without a network.
 
 ## Not built yet
 
 * Verifying the release's signature when the bundle is fetched, with the pinned release-workflow identity self-update uses. The checksums come from the same release as the bundle, so a download is known to be intact, not to be the maintainers'.
-* The newer of a local copy and the bundle: a local source always wins.
+* The newer of a local copy and the bundle: in `auto` a local source wins, and `--config-source` picks one or the other.
 * Conditional requests (`ghreleases` has none), so the daily refresh is by the age of the cache alone.
 * The templates and generated chunks, a way to name a release to use, and a refresh interval setting.
 
