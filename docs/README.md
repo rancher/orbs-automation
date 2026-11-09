@@ -14,7 +14,7 @@ Each kind of document answers one question, and each kind changes at a different
 | [process/](process/README.md) | How is a Rancher release made, and how does each project take part? Drafts, not yet reviewed by the release team | When the process changes |
 | [specs/](specs/README.md) | How is one part built, and why that way? | While the part is being built, then it settles |
 | [projects/](projects/README.md), [references/](references/frameworks-automation.md) | What do we know about a repo we automate, or a tool we learned from? Notes from reading the repos | When the repo changes |
-| [contributing/](contributing/red-green-commits.md) | How do we work on this repo (contributor guidance)? | Rarely |
+| [contributing/](contributing/README.md) | How do we work on this repo, for a person or an assistant? | Rarely |
 | [`../config/README.md`](../config/README.md) | What do the real config files say, and what are the defaults? | With the config |
 
 For what is built today, run `gero --help`, read the code and read the tests. Docs do not keep a build log.
