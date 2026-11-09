@@ -124,8 +124,8 @@ func TestUserFileCheckUnknownKeyWarns(t *testing.T) {
 }
 
 // A search directory that is not there is skipped by the scan without a word, so
-// a typo in it hides every clone under it. The check names it.
-func TestUserFileCheckSearchDirectoryThatIsNotThereWarns(t *testing.T) {
+// a typo in it hides every clone under it. Doctor fails on it and names it.
+func TestUserFileCheckSearchDirectoryThatIsNotThereFails(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "GitProject")
 	present := t.TempDir()
 	path := writeUserFile(t, "repos:\n  search:\n    - "+present+"\n    - "+missing+"\n")
@@ -133,7 +133,7 @@ func TestUserFileCheckSearchDirectoryThatIsNotThereWarns(t *testing.T) {
 
 	got := NewUserFileCheck(env).Run(context.Background())
 
-	assert.Equal(t, StatusWarn, got.Status)
+	assert.Equal(t, StatusFail, got.Status)
 	assert.Contains(t, got.Message, "repos.search")
 	assert.Contains(t, got.Message, missing)
 	assert.NotContains(t, got.Message, present)

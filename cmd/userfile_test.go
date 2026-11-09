@@ -153,3 +153,22 @@ func TestAnUnknownKeyIsAWarningAndTheRestStillApplies(t *testing.T) {
 	assert.Contains(t, stderr, "line 3")
 	assert.Contains(t, stderr, "cloneDir")
 }
+
+// A search directory that is not there is quiet by default and named with -v, so
+// a typo can be found without every command complaining about a drive that is
+// not mounted.
+func TestMissingSearchDirectoryIsNamedOnlyWhenVerbose(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "GitProject")
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("repos:\n  search:\n    - "+missing+"\n"), 0o600))
+	t.Setenv("GERO_CONFIG", path)
+
+	_, quiet, err := execRoot(t, "semver", "check", "v1.2.3")
+	require.NoError(t, err)
+	assert.NotContains(t, quiet, missing)
+
+	_, verbose, err := execRoot(t, "-v", "semver", "check", "v1.2.3")
+	require.NoError(t, err)
+	assert.Contains(t, verbose, missing)
+	assert.Contains(t, verbose, "repos.search")
+}

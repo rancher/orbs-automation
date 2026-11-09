@@ -1,5 +1,7 @@
 package clicfg
 
+import "os"
+
 // Source says which layer a Settings value came from.
 type Source int
 
@@ -65,6 +67,18 @@ type Repos struct {
 	CloneRoot string                  // where new clones go, as <root>/<name>; never taken from Search
 	Paths     map[string]string       // slug (owner/name) to clone path
 	Overrides map[string]RepoOverride // slug to per-repo settings
+}
+
+// MissingSearch is the repos.search entries that are not an existing directory.
+// The scan skips them without a word, so a typo in one hides every clone under it.
+func (r Repos) MissingSearch() []string {
+	var out []string
+	for _, dir := range r.Search {
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			out = append(out, dir)
+		}
+	}
+	return out
 }
 
 // Settings is the resolved CLI config. Treat it as read-only and pass it down by
