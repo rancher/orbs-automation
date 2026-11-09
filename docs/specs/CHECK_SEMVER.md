@@ -2,7 +2,7 @@
 
 The command is `gero semver check`. `check` is the lenient script port described here. Strict SemVer operations, if they come, are separate verbs under `gero semver` and do not change `check` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md) section 2).
 
-**Status:** implemented for the faithful port (sections 1 to 4). Not built yet: the opt-in improvements in section 6 and the parity test.
+**Status:** implemented for the faithful port (sections 1 to 4), except the opt-in improvements in section 6 and the parity test.
 
 Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by the [release rules](../IMPLEMENTATION.md#release-rules).
 
@@ -44,7 +44,7 @@ gero semver check [tag]
 
 ## 3. Library
 
-`internal/platform/semver` exposes a pure function, shaped like:
+`internal/platform/semver` has two halves that stay apart. `Classify`, below, is the lenient script port and accepts any text. The rest (`Parse`, `Version`, `Compare`, `Series`, `NextStable` and `NextPrerelease`) reads a tag with the SemVer grammar, for ordering, series and choosing the next tag, and is what `repo tag`, `repo status` and the release rules use. `Classify` is a pure function, shaped like:
 
 ```go
 type Info struct {
@@ -53,20 +53,20 @@ type Info struct {
     HasPrerelease bool
     HasBuildMeta  bool
 
-    // Set only with WithGrammar (section 6).
+    // Reserved for the SemVer grammar option (section 6): always zero today.
     IsSemver            bool
     Major, Minor, Patch uint64
     Prerelease          string
     BuildMeta           string
 }
 
-func Classify(tag string, opts ...Option) Info
+func Classify(tag string) Info
 ```
 
-* The default call reproduces the script (section 2). `WithGrammar()` switches to the SemVer 2.0.0 grammar (section 6).
+* The call reproduces the script (section 2). A `WithGrammar` option that switches it to the SemVer 2.0.0 grammar (section 6) is not built; `Parse` already reads that grammar and is what it would use.
 * No I/O, no environment, no error return: non-SemVer is a result, not a failure.
 * Implemented with the stdlib `regexp`, with no dependency **(leaning)**. The script's regex must be reproduced exactly, which a strict SemVer library would not do. A library can be adopted later for the grammar mode if [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) allows it and the tests still hold.
-* It is the one place tag classification lives. `repo images exist`, `ship` (the prerelease policy) and later `reconcile` call it instead of reimplementing the shell check.
+* It is the one place the script's classification lives. Self-update uses it to tell a pre-release `gero`, and the commands that order or choose tags use `Parse` instead of reimplementing the shell check.
 
 ## 4. Test plan
 
