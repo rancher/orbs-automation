@@ -17,6 +17,7 @@ type fileConfig struct {
 	Output           string    `yaml:"output"`
 	Color            string    `yaml:"color"`
 	Upstream         string    `yaml:"upstream"`
+	Team             string    `yaml:"team"`
 	Fork             string    `yaml:"fork"`
 	GitHubUser       string    `yaml:"githubUser"`
 	BranchPrefix     string    `yaml:"branchPrefix"`
