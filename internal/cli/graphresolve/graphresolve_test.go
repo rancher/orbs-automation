@@ -10,6 +10,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 
 type fakeWorkspace struct {
@@ -175,4 +176,20 @@ func TestGraphLabelsAnEditWithItsStrategyAndStepCounts(t *testing.T) {
 	out := withEdits(t)
 	assert.Contains(t, out, `"edit:app-steps": {class: [edit]; label: "app-steps\npre 1 step, post 2 steps"}`)
 	assert.Contains(t, out, `"edit:app-bump": {class: [edit]; label: "app-bump\nstrategy chartsPackageBump"}`)
+}
+
+func TestRunWritesD2ForTheTextFormat(t *testing.T) {
+	out, err := run(fakeWorkspace{g: shipping(t)}, clicfg.OutputText)
+	require.NoError(t, err)
+	assert.Contains(t, out, "classes: {")
+}
+
+func TestRunRefusesTheOtherFormatsAndWritesNothing(t *testing.T) {
+	for _, format := range []string{clicfg.OutputJSON, clicfg.OutputEnv} {
+		out, err := run(fakeWorkspace{g: shipping(t)}, format)
+		require.Error(t, err, format)
+		assert.Contains(t, err.Error(), "config resolve graph", format)
+		assert.Contains(t, err.Error(), "D2", format)
+		assert.Empty(t, out, format)
+	}
 }
