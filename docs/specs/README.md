@@ -8,6 +8,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [CLI_FRAMEWORK](CLI_FRAMEWORK.md) | cobra, command tree, global flags, context gating, exit codes |
 | [CLI_CONFIG](CLI_CONFIG.md) | CLI config versus application config, sources and precedence, user file, locating central config |
 | [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md) | Workstation versus CI for commands that run in both: detection, the actor (PR author, commit identity), push and signing, the write-command contract |
+| [CONFIG_GRAPH](CONFIG_GRAPH.md) | `gero config resolve graph`: the whole application config as a D2 diagram, projects as nodes and holdings as the one-way flow between them |
 | [LINES_RESOLVE](LINES_RESOLVE.md) | `gero lines resolve`: the release-line map, each Rancher line joined to the projects that feed it and follow it, and the gaps |
 | [CHAIN_TRACING](CHAIN_TRACING.md) | Following a release chain through every hop, including the charts and Assets hops the release team runs: `managedBy` against the active team, observed edges, tag schemes and the shared release scheme, stages; the hop between Assets and Rancher is implemented, and the walk through several hops, the stage check of a held tag and the charts bump are not |
 | [REPO_STATUS](REPO_STATUS.md) | `gero repo status`: the sections of the report and what each answers, the state and next tags of a line, and who holds each release |
