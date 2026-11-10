@@ -41,10 +41,10 @@ func (c configDirCheck) Run(context.Context) Result {
 	src, err := c.ws.ConfigSource()
 	switch {
 	case errors.Is(err, workspace.ErrNotFound):
-		remediation := workspace.NotFoundHint + "; or run gero doctor --online to fetch the central config bundle"
+		remediation := workspace.NotFoundHint
 		if err != workspace.ErrNotFound {
 			// The bundle was tried and failed, and the rest of the error says why.
-			remediation = workspace.NotFoundHint + strings.TrimPrefix(err.Error(), workspace.ErrNotFound.Error())
+			remediation += strings.TrimPrefix(err.Error(), workspace.ErrNotFound.Error())
 		}
 		return Result{Status: StatusFail, Message: "no central config directory found", Remediation: remediation}
 	case err != nil:

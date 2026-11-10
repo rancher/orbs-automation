@@ -82,7 +82,7 @@ func TestConfigDirCheckMissingFailsWithTheAdviceAndTheBundle(t *testing.T) {
 	assert.Equal(t, Result{
 		Status:      StatusFail,
 		Message:     "no central config directory found",
-		Remediation: workspace.NotFoundHint + "; or run gero doctor --online to fetch the central config bundle",
+		Remediation: workspace.NotFoundHint,
 	}, got)
 }
 
