@@ -1,6 +1,6 @@
 # GitHub Access
 
-**Status:** implemented (`internal/platform/github`): token and host resolution and the REST client. The reconciler's interface over the client is agreed, not built.
+**Status:** implemented (`internal/platform/github`): token and host resolution and the REST client, except what [Not built yet](#not-built-yet) lists.
 
 How `gero` talks to GitHub and to git. Two Go libraries each do one job, and a subprocess is used only where it adds something. A spike (go-gh v2.17.0, go-github v93.0.0) confirmed the behavior below. Which modules are approved, and why, is in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md).
 
@@ -15,6 +15,7 @@ How `gero` talks to GitHub and to git. Two Go libraries each do one job, and a s
 * **Failures are silent in go-gh**: no token, a missing `gh` or a failing `gh` all give `"", "default"`. `gero` wraps that in an error that says which variables to set, or to run `gh auth login`.
 * **The `gh` config file is read once per process**, so a test sets `GH_CONFIG_DIR` before the first call.
 * **`DefaultHost`** honors `GH_HOST`, then a lone host in `hosts.yml`, then `github.com`.
+* **Only github.com is supported.** Another host is tolerated where the code happens to work, such as token resolution and an Enterprise Server API client, and refused where it does not: `NewClient` for `*.ghe.com` and `github.localhost`, `RawFile`, and the SSH URL of `gero repo clone`. Support for other hosts is built only if someone asks.
 
 All go-gh use stays in `internal/platform/github/gogh.go` (lint-enforced).
 
@@ -33,7 +34,7 @@ Most local git work runs the `git` binary, through `internal/platform/git/gitcli
 
 `go-git/go-git` reads a repository: the current ref, the abbreviated commit, and tags by date. It needs no `git` binary for that, and only `internal/platform/git/repo` imports it.
 
-Both sit behind our own interfaces, so a go-git implementation of the `gitcli` operations could replace the binary later. That is a possibility and not a plan: `gero repo clone` says so with `TODO(go-git)`. A command that needs a working tree needs the `git` binary on `PATH`, which `gero doctor` checks.
+Both sit behind our own interfaces, so a go-git implementation of the `gitcli` operations could replace the binary later. `gero repo clone` marks the seam with `TODO(go-git)`. A command that needs a working tree needs the `git` binary on `PATH`, which `gero doctor` checks.
 
 ## `gh` via subprocess
 
@@ -56,8 +57,9 @@ Only if REST proves insufficient (for example batched state queries). That is th
 ## Not built yet
 
 * The reconciler's interface over the client, and the reads and writes of issues, check runs and releases.
-* Enterprise hosts under `*.ghe.com` and `github.localhost`: `NewClient` refuses them until their API address is worked out.
+* Enterprise hosts under `*.ghe.com` and `github.localhost`, built only if someone asks: `NewClient` refuses them until their API address is worked out.
+* A go-git client for the git work that runs the `git` binary.
 
 ## Open questions
 
-* Whether we ever target hosts other than `github.com`.
+None yet.

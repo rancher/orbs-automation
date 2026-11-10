@@ -16,7 +16,7 @@ One function in `internal/platform/clicfg` decides, once, and the result is `Set
 
 * CI is `GITHUB_ACTIONS=true`, or `CI=true`.
 * `GERO_CONTEXT=ci|workstation` forces the answer and wins over both. It lets a developer reproduce a CI failure locally, lets a test pin the context, and lets a developer who exports `CI=true` for another tool keep their user file. Any other value is a usage error naming the variable.
-* **Workstation signs under a forced CI.** When `GERO_CONTEXT=ci` forces CI, `gero` also looks for signs that this is a person's machine: none of `GITHUB_ACTIONS` and the other runner variables (`GITHUB_RUN_ID`, `GITHUB_REPOSITORY`, `RUNNER_*`), a TTY on stdin and stdout, and a user file at the default path. Any one is reported, all are listed in the preflight line of a write command, and none changes what the command does **(leaning)**. They exist so a bot-shaped write from a laptop is never a surprise. Like the rest of detection they are read in `internal/platform/clicfg`.
+* **Workstation signs under a forced CI.** When `GERO_CONTEXT=ci` forces CI, `gero` also looks for signs that this is a person's machine: none of `GITHUB_ACTIONS` and the other runner variables (`GITHUB_RUN_ID`, `GITHUB_REPOSITORY`, `RUNNER_*`), a TTY on stdin and stdout, and a user file at the default path. Any one is reported, all are listed in the preflight line of a write command, and none changes what the command does: they only warn. A TTY is itself one of the signs, so refusing on it would block scripted local debugging. They exist so a bot-shaped write from a laptop is never a surprise. Like the rest of detection they are read in `internal/platform/clicfg`.
 * CI-only gating needs the CI context above (any of `GITHUB_ACTIONS=true`, `CI=true`, `GERO_CONTEXT=ci`) **and** a resolvable token ([GITHUB_ACCESS](GITHUB_ACCESS.md)), enforced by the root `PersistentPreRunE` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)). It deliberately does not require `GITHUB_ACTIONS` itself, so a developer can run a CI job locally with `GERO_CONTEXT=ci` and their own token to debug it.
 
 ## What differs by context
@@ -69,7 +69,7 @@ The CI path, the token as a one-shot credential over HTTPS and never written to 
 
 * The signature is made by `git` with the engineer's own `gpg.*` and `user.signingkey` configuration, so `gero` holds no key and never reads one. With signing on, the commit is created through `gitcli`, not go-git.
 * If signing is requested and fails (no key, agent locked), the command fails. It never falls back to an unsigned commit, because the engineer asked for the opposite.
-* In CI the setting is ignored, as every user-file key is ([CLI_CONFIG](CLI_CONFIG.md)). Bot commits are assumed not to need verification (decided). If that changes, the open question is whether the App commits through the API, which signs them, instead of through `git`.
+* In CI the setting is ignored, as every user-file key is ([CLI_CONFIG](CLI_CONFIG.md)). Bot commits are not signed and not verified.
 
 `signCommits` fits the user file because it states how one engineer's commits are made, not what the tool decides.
 
@@ -79,7 +79,7 @@ Every command that writes to git or GitHub follows these rules in both contexts.
 
 1. **Preflight line.** Before the first write, the command prints who it acts as and where it writes: token login (or "installation token"), commit identity, push target, signing on or off. `--dry-run` prints the same line. `gero ship` prints the identity, signing and the PR author's login as one line, `acting as Dan Pock <dan@example.com>, commits not signed, PRs by danpock`, after the PR preview and before the work, and the push target in the question it asks and in the closing summary. A missing identity fails the run before anything is written.
 2. **`--dry-run` parity.** A dry run computes and prints everything, including the branch names and PR titles, and changes nothing remote. It takes the same path as a real run up to the first write.
-3. **Never lose the engineer's work.** A checkout with uncommitted changes is never touched: the edit happens in a temporary worktree of the same repository. A clean checkout may be switched to the work branch and is put back on the branch it started on. A dry run always uses a worktree, and a `gero` run leaves the clones it found as it found them, including after a failure ([PUSH_TO_REPO](PUSH_TO_REPO.md#preparing-the-branch)). In CI there is no engineer's checkout, and the edit happens in a temporary clone.
+3. **Never lose the engineer's work.** A checkout with uncommitted changes is never touched: the edit happens in a temporary worktree of the same repository. A clean checkout may be switched to the work branch and is put back on the branch it started on. A dry run always uses a worktree, and a `gero` run leaves the clones it found as it found them, including after a failure ([PUSH_TO_REPO](PUSH_TO_REPO.md#preparing-the-branch)). In CI there is no engineer's checkout: `gero ci:ship` works in the checkouts the workflow provides ([CI_SHIP](CI_SHIP.md)).
 4. **Per-target results.** A fan-out reports each target and tolerates partial failure ([IMPLEMENTATION](../IMPLEMENTATION.md#repo-shapes-and-downstream-bumps)), so exit code and output do not depend on the context.
 5. **One confirmation per command, and a flag to skip it.** Before a command starts writing it prints the preflight line and asks once, "proceed?", in both contexts. `--non-interactive` (alias `--yes`, env `GERO_NON_INTERACTIVE`) answers yes and never prompts, which is how a workflow, or a script, runs the same command. Without the flag and without a TTY the command fails before any write, with a message naming the flag, so a forgotten flag in CI is a loud failure and not a hang or a silent yes. A forced CI context that shows workstation signs (see [Detecting the context](#detecting-the-context)) adds a warning line naming them to the preflight line. `--dry-run` writes nothing and so never asks. `--dry-run` stays opt-in: making it the default would mean every real run needs `--dry-run=false`, so the confirmation is the safety instead.
 
@@ -93,15 +93,8 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 * The `auth status` fallback treats a 403 from `GET /user` as an installation token, which is unverified against a real one.
 * The preflight line that names workstation signs under a forced CI context.
 * `gero repo branch` and `gero repo tag` follow the one-confirmation and `--dry-run` rules but do not print the preflight line, which only `gero ship` prints.
-
-## Decided
-
-* Bot commits are not verified for now.
-* The bot's login comes from the workflow as `GERO_BOT_USER`, with the token, from Vault. `gero` is the name in prose and the `User-Agent`.
-* Only the descriptive labels are fixed in the tool (a constant, or config if it ever needs to vary): the full `User-Agent` and its short form for "Created with: ..." lines in PRs and comments. Nothing that identifies an account is config. The login, the token and so the App all come from the environment, so different targets using different Apps is the workflow's choice per step.
-* A write command confirms once per command, before it starts writing, in both contexts. `--non-interactive` (alias `--yes`, env `GERO_NON_INTERACTIVE`) skips it. Workstation signs under a forced CI are warned about in the preflight line. `--dry-run` does not become the default.
-* A cross-repo write checks the token and refuses the default `GITHUB_TOKEN`.
+* The push of `gero ci:ship` without an engineer's credentials.
 
 ## Open questions
 
-* Whether workstation signs under a forced CI should do more than warn, for example refuse `--non-interactive` while a TTY is attached. A TTY is itself one of the signs, so this would block scripted local debugging.
+None yet.

@@ -1,6 +1,6 @@
 # CLI Config
 
-**Status:** implemented, except the `host` setting (see [Not built yet](#not-built-yet)).
+**Status:** implemented, except what [Not built yet](#not-built-yet) lists.
 
 How a single invocation of `gero` gets its settings, and how it finds the central application config. Flags and the command tree are in [CLI_FRAMEWORK](CLI_FRAMEWORK.md). Inferring values from the working directory, and resolving repo paths, are in [WORKSPACE](WORKSPACE.md).
 
@@ -8,8 +8,8 @@ How a single invocation of `gero` gets its settings, and how it finds the centra
 
 Two kinds of config exist, and the docs keep them apart.
 
-* **Application config** describes the world `gero` operates on: projects, Rancher lines, external projects, and per-repo workflow settings. It is the multi-document YAML in `config/` and a target repo's `gero.yaml` ([APP_CONFIG](APP_CONFIG.md)). Versioned by `apiVersion`.
-* **CLI config** describes how one invocation behaves: where to find the application config, which remote counts as upstream, output format, verbosity, host. It comes from flags, environment variables and an optional user file. It never holds application facts, and it never holds secrets.
+* **Application config** describes the world `gero` operates on: projects, Rancher lines and per-repo workflow settings. It is the multi-document YAML in `config/` and a target repo's `gero.yaml` ([APP_CONFIG](APP_CONFIG.md)). Versioned by `apiVersion`.
+* **CLI config** describes how one invocation behaves: where to find the application config, which remote counts as upstream, output format, verbosity. It comes from flags, environment variables and an optional user file. It never holds application facts, and it never holds secrets.
 
 Code mirrors the split: `internal/apis`, `internal/appconfig` and `internal/chain` for application config (the types, the provider and the joined model, behind `internal/workspace`), `internal/platform/clicfg` for CLI config ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
 
@@ -153,7 +153,9 @@ A source that is named but broken (a missing directory or file, invalid or empty
 
 ## Not built yet
 
-* A `host` setting (`GERO_HOST`, `--host`) for a GitHub host other than github.com. Today the host is `GH_HOST`, else the one in `gh`'s config, else github.com ([GITHUB_ACCESS](GITHUB_ACCESS.md)).
+* A `host` setting (`GERO_HOST`, `--host`) for a GitHub host other than github.com, built only if someone asks. Today the host is `GH_HOST`, else the one in `gh`'s config, else github.com ([GITHUB_ACCESS](GITHUB_ACCESS.md)).
+* A `ci:*` command with no config directory loading the bundle of its own `gero` version, and the default bundle embedded in the binary, so a CI job needs only the binary ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
+* A fork whose repository name differs from the upstream's, under `githubUser`.
 
 ## Open questions
 

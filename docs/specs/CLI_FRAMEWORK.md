@@ -1,6 +1,6 @@
 # CLI Framework
 
-**Status:** implemented, except the commands marked **(leaning)** or **(not built)**, which are proposals. [Not built yet](#not-built-yet) lists the gaps.
+**Status:** implemented, except what [Not built yet](#not-built-yet) lists.
 
 How `gero` is built as a CLI: framework, command tree, global flags, context gating and exit codes. Product design is in [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md). Settings and their sources are in [CLI_CONFIG](CLI_CONFIG.md).
 
@@ -48,10 +48,10 @@ Human-run commands are noun-verb chains, like `gh` (real parent commands such as
 | `gero repo branch [project] <line> <name>` | workstation | Writes the local clone only, so it asks nothing; honors `--dry-run`, `--json` supported. Makes a branch off the upstream branch of a release line and leaves the checkout alone; `--switch` moves onto it ([TASK_COMMANDS](TASK_COMMANDS.md)) |
 | `gero repo tag [project] <line> [tag]` | either | Makes a lightweight tag in the clone, so it asks nothing; `--push` sends it to the upstream and asks once (`--yes` or `GERO_NON_INTERACTIVE` skips it). Honors `--dry-run`, `--json` supported (a push needs `--yes`). The tag is on the head of the upstream branch of a release line, chosen from the line's newest when not named (`--stable`, `--minor`, `--major`), never moving one ([TASK_COMMANDS](TASK_COMMANDS.md#gero-repo-tag-project-line-tag)) |
 | `gero repo clone [project...] [--all] [--into <dir>]` | workstation | Writes new clones, so it asks nothing; honors `--dry-run`, `--json` supported. Clones each named Project, or with `--all` every Project that is `owned` and not `external` (an external one needs its name), into `<root>/<name>`, `<name>` being the repository's name and not the Project's. The root is `--into`, then env `GERO_REPOS_CLONE_ROOT`, then `repos.cloneRoot`, and a `repos.paths` entry for the slug beats it ([CLI_CONFIG](CLI_CONFIG.md)); with none set the command fails naming the three. Uses SSH. With a `fork` and `githubUser` configured it clones the fork (a repository of the same name under `githubUser`) as the fork remote and adds the upstream; when that fork does not exist on the host it clones the upstream alone, under the upstream remote's name, and says so. A clone already there with the right remote is skipped and reported; a non-empty directory that is something else fails that Project only, the rest go on, and the exit is 1 if any failed. The Projects come from the central config, found as every command finds it: a local directory when one is named, else the central bundle of the `gero` release, so a fresh workstation needs no checkout ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config), [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)). Runs the `git` binary, not go-git, so the user's SSH setup is used ([GITHUB_ACCESS](GITHUB_ACCESS.md)) |
-| `gero ci:ship` **(not built)** | CI-only | The same bump as the bot, from a workflow ([CI_SHIP](CI_SHIP.md)) |
+| `gero ci:ship` **(not built)** | CI-only | The bump loop of `gero ship` as the bot, for one release event, over the checkouts the workflow provides ([CI_SHIP](CI_SHIP.md)) |
 | `gero workflows sync` | either | Writes; honors `--dry-run` |
-| `gero workflows verify` | either | Drift check **(leaning)**; replaces a free-standing `verify` |
-| `gero ci:reconcile` | CI-only | Cron; the only reconciler entry point **(leaning)**. Named with the group prefix, listed under the CI-only help group |
+| `gero workflows verify` | either | Drift check; exits 3 when a copy has drifted |
+| `gero ci:reconcile` | CI-only | Runs from a cron and from `repository_dispatch`; the only reconciler entry point. Named with the group prefix, listed under the CI-only help group |
 | `gero dashboard` | either | Moonshot; the name may become `triage` |
 
 A noun names the thing a command operates on. `gero repo` is for commands that read a repository (its refs, HEAD, tags), so the project arguments below and the upstream and clone paths in [CLI_CONFIG](CLI_CONFIG.md) apply to everything under it. `gero semver` works on version strings and never opens a repository. The noun names the domain, not the implementation: `semver check` is the lenient script port (any text, one leading `v` stripped). Later verbs such as `compare` or `bump` may use a strict SemVer parser, which needs its own entry in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md); they get their own verbs and must not change what `check` accepts.
@@ -68,8 +68,8 @@ Global (persistent) flags:
 | `--bundle-file <path>` | One bundle file, downloaded by hand, as the central config; env `GERO_BUNDLE_FILE` |
 | `--upstream <remote>` | The remote treated as the real source; env `GERO_UPSTREAM` ([CLI_CONFIG](CLI_CONFIG.md)) |
 | `--output text\|json\|env` | The output format; env `GERO_OUTPUT`. `--json` is shorthand for `--output json` |
-| `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing: no branch is pushed and no PR is opened. Read-only commands accept and ignore it. Env `GERO_DRY_RUN`; not a user-file key, so a file cannot turn it on for every run. Default is off, with `verify` as the explicit check mode **(leaning)**. |
-| `--non-interactive`, `--yes` | On the commands that write (`gero ship`, `gero repo tag`; `gero shell install` has `--yes`; `gero init` has `--force` for an existing file and never confirms), not global: never prompt (env `GERO_NON_INTERACTIVE`, which any command reads), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing **(leaning)** |
+| `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing: no branch is pushed and no PR is opened. Read-only commands accept and ignore it. Env `GERO_DRY_RUN`; not a user-file key, so a file cannot turn it on for every run. Default is off, with `gero workflows verify` as the explicit check mode. |
+| `--non-interactive`, `--yes` | On the commands that write (`gero ship`, `gero repo tag`; `gero shell install` has `--yes`; `gero init` has `--force` for an existing file and never confirms), not global: never prompt (env `GERO_NON_INTERACTIVE`, which any command reads), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing |
 | `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
 | `--color auto\|always\|never` | When output is styled ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)). `auto` (default) follows `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and whether stdout is a TTY. `always` and `never` decide it, and beat those variables |
@@ -93,17 +93,16 @@ Commands that run in both contexts behave the same in each, except for who acts 
 | 0 | Success |
 | 1 | Runtime error (I/O, GitHub, unexpected) |
 | 2 | Usage or validation error (bad flag, invalid config) |
-| 3 | `--dry-run` or `verify` found drift **(leaning)** |
+| 3 | `gero workflows verify` found a copy that has drifted |
 
 One helper maps errors to codes so commands return errors and never call `os.Exit`.
 
 ## Not built yet
 
-* `gero workflows sync`, `gero workflows verify` and `gero ci:reconcile` are stubs that return `errs.NotImplemented`. `gero ci:ship` and `gero dashboard` are not registered. The remaining steps of `ship` are [use cases](TASK_COMMANDS.md#use-cases-not-yet-commands) without command names.
+* `gero workflows sync`, `gero workflows verify` and `gero ci:reconcile` are stubs that return `errs.NotImplemented`. `gero ci:ship` and `gero dashboard` are not registered. The remaining steps of `ship` are [use cases](TASK_COMMANDS.md#use-cases-not-yet-commands) without command names, and get one only if someone asks.
 * The exit-code helper. Until it exists, a usage or validation error exits 1, not 2.
 * `--json` for `config validate`, and `--output env` for `auth status`.
 
 ## Open questions
 
-* Whether exit code 3 for drift is wanted, or `verify` output alone is enough.
 * Final name for `gero dashboard` versus `triage`.
