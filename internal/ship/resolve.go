@@ -335,7 +335,7 @@ func narrowStreams(producer *chain.Project, routes []bump.Route, in Input) ([]bu
 				return nil, fmt.Errorf("%w: %s holds no stream of %s for %s; it holds %s", ErrNoTargets, consumer.Name(), producer.Name(), line, describeStreams(of))
 			}
 			return nil, fmt.Errorf("%w for %s: %s holds %s on different streams, and one run ships one stream: %s",
-				ErrAmbiguousConsumer, producer.Name(), strings.Join(lines, " and "), consumer.Name(), describeStreams(of))
+				ErrAmbiguousConsumer, producer.Name(), consumer.Name(), strings.Join(lines, " and "), describeStreams(of))
 		}
 		return nil, fmt.Errorf("%w: %s holds no stream of %s for %s; it holds %s", ErrNoTargets, consumer.Name(), producer.Name(), strings.Join(lines, ", "), describeStreams(of))
 	}
