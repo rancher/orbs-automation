@@ -94,6 +94,11 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 			}
 		}
 	}
+	for _, v := range g.Virtual() {
+		if e.unusable[v.PinnedBy()] {
+			e.unusable[v] = true // it is written with the Holding it comes from, and with its edits
+		}
+	}
 	return e, errors.Join(errs...)
 }
 
@@ -230,6 +235,40 @@ type Target struct {
 	Branch   string
 	Line     string // the Rancher line of the branch, empty for a branch of none
 	Holdings []*chain.Holding
+	// Pinned is the tag of each virtual Holding among Holdings: the release of the
+	// pinned module that the pinning release requires, which the caller derived from
+	// its file. The engine reads no host. A virtual Holding with no entry is an error.
+	Pinned map[*chain.Holding]string
+}
+
+// releaseOf is the release a holding of the target holds: the tag of the run for a
+// holding of the route, and for a virtual one the tag that was derived for it.
+func (t Target) releaseOf(h *chain.Holding, tag, commit string) (Release, error) {
+	if !h.Virtual() {
+		return ReleaseOf(h, tag, commit)
+	}
+	pinned, ok := t.Pinned[h]
+	if !ok {
+		return Release{}, fmt.Errorf("Holding %q is virtual and no release was derived for it", h.Name())
+	}
+	return ReleaseOf(h, pinned, "")
+}
+
+// Companions returns the virtual Holdings that follow the target's holdings: what
+// the pins of their Artifacts make in the consumer, for the target's line, each once,
+// in the order of the holdings they come from. A run that ships the release also
+// writes these, with the releases the pins resolve; the caller gives them to the
+// target in Holdings and Pinned.
+func (r Route) Companions(t Target) []*chain.Holding {
+	var out []*chain.Holding
+	for _, h := range r.holdingsOf(t) {
+		for _, v := range h.Pinned() {
+			if (t.Line == "" || v.AppliesTo(t.Line)) && !slices.Contains(out, v) {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
 
 // TargetsFor returns the targets a release goes to, in order. line is the
@@ -428,7 +467,7 @@ type HoldingCheck struct {
 func (r Route) Check(ctx context.Context, src Tree, t Target, tag, commit string) ([]HoldingCheck, error) {
 	var out []HoldingCheck
 	for _, h := range r.holdingsOf(t) {
-		rel, err := ReleaseOf(h, tag, commit)
+		rel, err := t.releaseOf(h, tag, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -481,7 +520,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	var res Result
 	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
-		rel, err := ReleaseOf(h, tag, commit)
+		rel, err := t.releaseOf(h, tag, commit)
 		if err != nil {
 			return res, err
 		}
