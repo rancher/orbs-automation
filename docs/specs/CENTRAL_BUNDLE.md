@@ -100,7 +100,7 @@ A change to config therefore reaches workstations with a release, not with a mer
 
 * The newer of a local copy and the bundle: in `auto` a local source wins, and `--config-source` picks one or the other.
 * Conditional requests (`ghreleases` has none), so the daily refresh is by the age of the cache alone.
-* A way to name a release tag to use, for reproducing an old run (`--bundle-file` names a file, not a release), and a refresh interval setting.
+* A refresh interval setting. Reproducing an old run needs no more: download that release's bundle and give it with `--bundle-file`.
 * The templates and generated chunks.
 
 ## Open questions

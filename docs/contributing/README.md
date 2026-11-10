@@ -1,6 +1,6 @@
 # Contributing
 
-How we work on this repo, for anyone, a person or an assistant. The rules are short because the tools enforce most of them. To find something to work on, see the [TODO](../../TODO.md).
+How we work on this repo, for anyone, a person or an assistant. The rules are short because the tools enforce most of them. To find something to work on, see the [TODO](../TODO.md).
 
 ## Code and tests
 

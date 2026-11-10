@@ -1,6 +1,6 @@
 # Phases and Milestones
 
-How we turn [VISION](VISION.md) into reality, using the design in [ARCHITECTURE_DESIGN](ARCHITECTURE_DESIGN.md) and the decisions in [IMPLEMENTATION](IMPLEMENTATION.md). The open work, in pieces someone can pick up, is the [TODO](../TODO.md). **Draft: milestones and order are proposals.**
+How we turn [VISION](VISION.md) into reality, using the design in [ARCHITECTURE_DESIGN](ARCHITECTURE_DESIGN.md) and the decisions in [IMPLEMENTATION](IMPLEMENTATION.md). The open work, in pieces someone can pick up, is the [TODO](TODO.md). **Draft: milestones and order are proposals.**
 
 Milestones are major versions of `gero`, and each has an **audience** and a **message**. We tag v1.0.0 only when we are confident of the foundation under it, not on a date. There are no dates here by design.
 
@@ -67,7 +67,7 @@ The chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`, one
 
 * The process docs reviewed by the release team, and the config kinds and field names settled, so `gero/v1alpha2` becomes `gero/v1`.
 * The exit-code helper, the integration test tier, and a release that is signed, installed and self-updated by the team in practice.
-* A contribution guide and a backlog of well-sized issues someone else can pick up without the author ([TODO](../TODO.md)).
+* A contribution guide and a backlog of well-sized issues someone else can pick up without the author ([TODO](TODO.md)).
 * A review with the team: show the CI bump and the chain from a workstation, review the config shapes and the direction, and fold feedback in.
 
 **Gate for v1.0.0**

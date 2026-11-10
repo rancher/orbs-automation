@@ -10,6 +10,7 @@ Each kind of document answers one question, and each kind changes at a different
 | [ARCHITECTURE_DESIGN](ARCHITECTURE_DESIGN.md) | What is the product shape? | When the design changes |
 | [IMPLEMENTATION](IMPLEMENTATION.md) | What does the tool do, and what did we decide about it? | When a decision is made or reversed |
 | [PHASES](PHASES.md) | What gets built, in what order? | When the plan changes |
+| [TODO](TODO.md) | What is open, in pieces someone can pick up as an issue? | When work is added or done |
 | [design/](design/CHAIN_MODEL.md) | What are the config model, the layers and the engines, and what did we decide? Where a spec disagrees, the newer `design/` account wins | While the design moves, then it is folded into specs and `doc.go` files |
 | [process/](process/README.md) | How is a Rancher release made, and how does each project take part? Drafts, not yet reviewed by the release team | When the process changes |
 | [specs/](specs/README.md) | How is one part built, and why that way? | While the part is being built, then it settles |
