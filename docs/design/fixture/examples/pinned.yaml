@@ -1,0 +1,69 @@
+# Two Go modules that go together, and a service that holds one. Every release of libmain has a go.mod that requires a
+# release of libaux, and that is the one that goes with it: libmain's Artifact pins libaux's. The service holds only
+# libmain, in go.mod and in a nested module from v2.16; the pin makes a virtual Holding of libaux in the same two files
+# for the same lines, so shipping a libmain tag ships the libaux its go.mod requires, in one pull request, and goBump
+# tidies once. A virtual Holding is a floor: a libaux newer than the pin resolves is kept.
+apiVersion: gero/v1alpha2
+kind: Project
+name: libmain
+spec:
+  repo: {name: acme/libmain, managedBy: frameworks-team}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: libmain
+refs: {project: libmain}
+spec: {scheme: semver, tagPattern: "v1.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: libmain-module
+refs: {stream: libmain, pins: libaux-module}
+spec: {kind: gomod, name: github.com/acme/libmain}
+---
+apiVersion: gero/v1alpha2
+kind: Project
+name: libaux
+spec:
+  repo: {name: acme/libaux, managedBy: frameworks-team}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: libaux
+refs: {project: libaux}
+spec: {scheme: semver, tagPattern: "v0.2.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: libaux-module
+refs: {stream: libaux}
+spec: {kind: gomod, name: github.com/acme/libaux}
+---
+apiVersion: gero/v1alpha2
+kind: Project
+name: pinsvc
+spec:
+  repo: {name: acme/pinsvc, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v2.15}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: pinsvc-holds-libmain
+refs: {project: pinsvc, artifact: libmain-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/acme/libmain, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/acme/libmain, format: gomod, lines: {since: v2.16}}
+  holds: {kind: release, form: "{bareTag}", accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Edit
+name: pinsvc-bump-go-modules
+refs: {holding: pinsvc-holds-libmain}
+spec: {strategy: goBump}
