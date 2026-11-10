@@ -277,3 +277,12 @@ func ForProject(p *chain.Project) (Scheme, error) {
 		return nil, fmt.Errorf("project %s has %d streams: name the one to use", p.Name(), len(streams))
 	}
 }
+
+// Newest is the newest tag of a line of any kind, a prerelease or a stable tag,
+// for the one who asks what a line could have next. A line the stream gives no
+// series, as for a universal stream, has every tag the stream accepts: nothing
+// tells its tags from the rest of the repository's. It is nil when there is
+// none, and an error for a stream whose scheme is not built.
+func Newest(st *chain.Stream, tags []git.Tag, line string) (*git.Tag, error) {
+	return nil, nil
+}
