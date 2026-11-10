@@ -82,3 +82,9 @@ func TestGraphReturnsTheWorkspaceError(t *testing.T) {
 	_, err := graph(fakeWorkspace{err: boom})
 	assert.ErrorIs(t, err, boom)
 }
+
+func TestGraphAsksForTheELKLayout(t *testing.T) {
+	out, err := graph(fakeWorkspace{g: shipping(t)})
+	require.NoError(t, err)
+	assert.Contains(t, out, "layout-engine: elk")
+}
