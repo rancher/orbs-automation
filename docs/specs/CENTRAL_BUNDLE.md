@@ -1,6 +1,6 @@
 # Central Bundle
 
-**Status:** implemented for the config chunk: the release publishes the bundle and `gero` reads it. The templates and the generated chunk are not built.
+**Status:** implemented for the config chunk: the release publishes the bundle and `gero` reads it. The templates, the generated chunk, the embedded default and the version match of a `ci:*` command are not built.
 
 How the central repo's shared content ships as one file with each `gero` release, and how the CLI uses that file when no local checkout is available. The content is the application config ([APP_CONFIG](APP_CONFIG.md)) and the workflow templates for `gero workflows sync` ([ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md)). How a local directory is found is in [CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config).
 
@@ -82,6 +82,10 @@ With `configSource: auto`, the default, a local source that is present is read a
 4. `./config`, when the working directory is a checkout of the central repo
 5. The cached bundle, refreshed from the release chosen above
 
+## In CI
+
+A `ci:*` command loads the bundle that matches its own version. From orbs-automation a job uses the local `config/`. From any other repo it uses the bundle of the `gero` version it runs, not the newest release. The default bundle is embedded in the binary and also kept as a release asset, so a CI job needs only the binary.
+
 ## Visibility and compatibility
 
 * **Say which source was used.** `gero config show` and `gero doctor` report the source of the config, and for a bundle its release tag and age. A stale cache must never stand in for local config without saying so.
@@ -98,13 +102,11 @@ A change to config therefore reaches workstations with a release, not with a mer
 
 ## Not built yet
 
-* The newer of a local copy and the bundle: in `auto` a local source wins, and `--config-source` picks one or the other.
-* A refresh interval setting. Reproducing an old run needs no more: download that release's bundle and give it with `--bundle-file`.
-* The templates and generated chunks.
+* A `ci:*` command loading the bundle that matches its own version: today CI uses a checkout of the central repo, and the bundle only when `--config-source=bundle` asks for it.
+* The default bundle embedded in the binary, kept as a release asset too.
+* The templates and generated chunks, which come with `gero workflows sync`.
 
 ## Open questions
 
-* What `ghreleases` does about the REST API's unauthenticated rate limit (60 requests an hour per IP, shared by CI runners and office networks). If it uses the API, the daily refresh limit matters more.
+* How a fetched bundle, newer or older, overrides the embedded default, and its size and which config goes in.
 * Whether `centralConfigDir`, which names the central repo's `config/` directory, should name the whole central repo once the bundle holds templates as well as config ([CLI_CONFIG](CLI_CONFIG.md)).
-* How `gero ci:*` commands in other repos get config. Today the bundle is never used in CI, which sets `GERO_CENTRAL_CONFIG_DIR` to a checkout of the central repo. Whether a job without a checkout should use the bundle of the installed release is not decided.
-* Whether the refresh interval is a setting.

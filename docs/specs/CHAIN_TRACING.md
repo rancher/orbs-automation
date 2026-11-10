@@ -1,6 +1,6 @@
 # Chain tracing
 
-**Status:** the hop between Assets and Rancher is implemented, and the config for the hops through charts is written. Reading a commit or branch holding, the walk through several hops and BRO into charts are not built ([Not built yet](#not-built-yet)).
+**Status:** the hop between Assets and Rancher is implemented, and the config for the hops through charts is written. Reading a commit or branch holding, the walk through several hops, the stage check of a held tag, the `chartVersion` scheme and BRO into charts are not built ([Not built yet](#not-built-yet)).
 
 `gero lines resolve` and `gero repo status` answer "what is the state of this whole release chain?" from the central config and from what GitHub already holds, with no tracker. This spec is how they follow a chain through its hops, including the hop through the Rancher Assets image that connects `rancher/charts` to `rancher/rancher`, which we do not own. What the chain looks like is in [rancher-assets](../projects/rancher-assets.md) and [rancher-charts](../projects/rancher-charts.md); the graph that answers it is [CHAIN_MODEL](../design/CHAIN_MODEL.md).
 
@@ -55,12 +55,16 @@ A scheme is code, named in config and claimed from one registry, as update strat
 
 ## Charts as a project
 
-`rancher/charts` is unowned and managed by the release team. It has no tagged releases: from v2.16 on the tagged releases of its content are the Assets tags, a project of their own, and before v2.16 Rancher names a charts branch directly. So charts is traced two ways, by line:
+`rancher/charts` is unowned and managed by the release team. It has no tagged releases: from v2.16 on the tagged releases of its content are the Assets tags, a project of their own, and before v2.16 Rancher names a charts branch directly. Some components touch neither Assets nor charts. The chain differs by line and by component, so the walk assumes no fixed path and follows each project's own holdings by line. Charts is traced two ways, by line:
 
 * **From v2.16, through Assets.** The charts commit an Assets tag was built from is pinned in Assets' `lock.yaml`, which the `assets-pins-charts` holding names. What Assets holds is that pinned commit, and what it should hold is the head of the stage's branch, so the answer is whether the newest Assets tag was built from today's head, and which tag first contains a given charts commit.
-* **Before v2.16, directly.** What Rancher holds is a charts branch name in `build.yaml` (the `rancher-follows-charts-branch` holding, up to v2.15), which the line's `branch` map turns into the stage held. Rancher does not say which commit, so the commit is an **estimate**: the newest commit of that branch at or before the time of the Rancher commit. It is a lower bound, shown labelled as an estimate and never as a pinned fact.
+* **Before v2.16, directly.** What Rancher holds is a charts branch name, the `CHART_DEFAULT_BRANCH` key of `package/Dockerfile` (the `rancher-follows-charts-branch` holding, up to v2.15), which the line's `branch` map turns into the stage held. Rancher does not say which commit, so the commit is an **estimate**: the newest commit of that branch at or before the time of the Rancher commit. It is a lower bound, shown labelled as an estimate and never as a pinned fact.
 
-A holding says `holds.lines` to reach only the lines it applies to, so each is read only where it exists.
+A holding's `holds.lines` is a `{since, until}` range of lines, so each holding is read only where it exists.
+
+## The charts bump
+
+`chartsPackageBump` is an abstraction of the team's existing bash tooling for Charts PRs: it replicates the team's process and takes its settings from `with:`, so others can use it. It turns BRO's tag into a charts bump and reports what it wrote through `Result.Changes`, as the other strategies do. How a line differs in the bump is what the team's tooling does by line. The tags of a chart are read by the `chartVersion` scheme: the part after `+up` is the upstream version, and the stable test reads that part.
 
 ## Reading a hop
 
@@ -78,14 +82,19 @@ A holding says `holds.lines` to reach only the lines it applies to, so each is r
 
 * `internal/apis/v1alpha2` holds `managedBy`, the scheme of a stream, the stages and a holding's stage, and validates them. `internal/chain` answers the branch of a line, the stream and line of a tag, and who holds what ([CHAIN_MODEL](../design/CHAIN_MODEL.md)).
 * `internal/calver` and `internal/tagscheme` are above. `internal/ship` refuses an unowned producer and asks the scheme for releases, lines and order; `internal/cli/repostatus` asks it for a project's latest tags.
-* **The walk (planned):** a pure, cycle-safe walk over the chain's graph that returns a tree. It asks the graph for holdings and a small reader interface for what a hop holds, with fakes in tests, and `internal/cli/linesresolve` and `internal/cli/repostatus` use it.
+* **The walk (planned):** a pure, cycle-safe walk over the chain's graph that returns a tree and follows each project's own holdings by line. It asks the graph for holdings and a small reader interface for what a hop holds, with fakes in tests, and `internal/cli/linesresolve` and `internal/cli/repostatus` use it.
 
 ## Not built yet
 
-* Reading a commit or a branch holding at a ref, which `assets-pins-charts` and `rancher-follows-charts-branch` need, and the `lock.yaml` read built on it ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)).
+* Reading a commit or a branch holding at a ref, which `assets-pins-charts` and `rancher-follows-charts-branch` need ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)).
+* Reading the commit pinned in `lock.yaml` at a ref and comparing it with the head of the stage's branch.
+* The `dockerfile` format in the update engine, which the pre-v2.16 Rancher holding uses: it returns `ErrFormatNotBuilt`.
+* Confirming where Rancher holds the charts branch for each line, with a test that reads it.
 * The walk through several hops, the tree in `lines resolve` and `--depth`.
 * Checking a held tag's stage against the release team's rule.
-* `chartsPackageBump` and BRO's tag into a charts bump.
+* The `chartVersion` scheme in `internal/tagscheme`: the `rancher-charts` stream names it and `tagscheme.ForStream` answers that it is not built.
+* Reading the team's bash tooling for Charts PRs and writing down what it does, by line.
+* `chartsPackageBump` and BRO's tag into a charts bump: the strategy is registered and stops a run before it writes.
 
 ## Decided
 
@@ -98,9 +107,4 @@ A holding says `holds.lines` to reach only the lines it applies to, so each is r
 
 ## Open questions
 
-* The key in Rancher's `build.yaml` that names the charts branch before v2.16, and whether it holds the branch name alone.
-* How a pinned commit in `lock.yaml` is read: a small read-only helper over the key-path code, or something else, and what "release" a pin is compared with (the head of the stage's branch). The key path needs a quoting rule for a key with a dot, such as the line `2.16`.
-* Whether `since` and `until` on a holding is all the line-range a holding needs.
-* How BRO's tag maps to the chart version in `release.yaml` (`110.0.3+up11.0.4`), and whether that rule is written down by the release team or only encoded in the scripts that make it.
-* Whether an Assets tag's charts commit is enough to answer "is this chart version in this tag", which is traced through `lock.yaml` at that tag to the contents of `rancher/charts` at the commit it records.
-* How a charts line differs in how it is bumped beyond the steps that `since` and `until` already vary.
+None yet.

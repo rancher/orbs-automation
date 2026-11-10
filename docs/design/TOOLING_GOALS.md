@@ -14,11 +14,7 @@ The primary user config fields that are worth prompting for are:
 - `githubUser` - To identify their forks of repos
 - `fork` & `upstream` - To identify the remote repo names for projects under their fork and Rancher upstream respectively
 - `branchPrefix` - A branch prefix - support minimal vars - to use when creating PRs via the tooling
-- `centralConfigDir` - The directory path to the ORBS automation repo's config dir - for now clone is kept in sync manually
-  - This item will matter less when:
-    - Build the config bundle renderer (built: `tools/compilebundle`, [CENTRAL_BUNDLE](../specs/CENTRAL_BUNDLE.md)),
-    - Update the tooling to be able to use the release file sourced config, AND
-    - we setup the release repo for these tools
+- `centralConfigDir` - The directory path to the ORBS automation repo's config dir. It matters less than the others: with none set, `gero` reads the config bundle of a release ([CENTRAL_BUNDLE](../specs/CENTRAL_BUNDLE.md))
 - `repos.search` - Would be useful to have set
 - `repos.cloneRoot` - Will be needed for repo clone tooling; if possible we prompt to set this (single dir value) to the first input search path?
 
@@ -31,11 +27,11 @@ The file it writes starts with the `yaml-language-server` comment that points at
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/user-config.schema.json
 ```
-On a fresh workstation it would enable `gero repo clone [project name] [--all]` or similar to help clone individual projects or all (owned only).
+On a fresh workstation it enables `gero repo clone [project...] [--all]`, which clones the named projects, or every project that is owned and not external, under `repos.cloneRoot` or `--into`.
 
 ## Goal: a repo clone tool to fetch team projects
 
-Answer, use the same configs collected by `gero init` to allow easier workstaion project setup.
+Answer, use the same configs collected by `gero init` to allow easier workstation project setup.
 
 ## Goal: stable readiness
 
@@ -56,6 +52,7 @@ Answer, for one line: would a stable Rancher build be valid with what Rancher ho
 
 * A blocker is a held version that is a prerelease under its project's scheme
 * A `dev` stage is a prerelease: an Assets `dev` tag blocks a stable
+* A chart version holds its upstream version after `+up`, and the stable test reads that part (the `chartVersion` scheme)
 * Reporting what Rancher holds is separate from readiness: holding a `dev` Assets tag is not an error, but it is not stable
 * Only configured projects and traceable edges count; the answer says how many are traced and never claims readiness beyond them
 * Unknown is never reported as ready
@@ -81,7 +78,7 @@ Answer, for one line: would a stable Rancher build be valid with what Rancher ho
 ### Open
 
 * A chart version holds its upstream version after `+up`; the stable test reads that part
-* A component with no tracing config: how a view names it as not traced
+* A component with no tracing config: how a view names it as not traced. It is settled while the view is built
 
 ## Goal: line consistency
 

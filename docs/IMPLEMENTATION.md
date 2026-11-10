@@ -49,7 +49,7 @@ Informed by [frameworks-automation](references/frameworks-automation.md) (an ins
 * **Stale state** is marked with labels, using a threshold on the last reconciled time.
 * **Locking is per operation**, not a global lock across all workflows.
 * Idempotency uses deterministic branch names and reuses an existing open PR.
-* Cron minutes are staggered off the round hour. Actions are pinned by SHA.
+* The reconciler runs from a cron, which catches periodic work and drift from people editing issues and PRs across repos, and from `repository_dispatch`, which is nearer to real time. Cron minutes are staggered off the round hour. Actions are pinned by SHA.
 * Listing calls (releases, PRs) must paginate. Decide up front how prereleases are treated, since `/releases/latest` excludes them.
 * Render everything from one state object, with a zero- vs one-based stage convention documented in code, so rendering cannot contradict state.
 * The reconciler is tested with fixture-driven cases (state in, expected state out), and config validation runs without credentials.
@@ -57,7 +57,7 @@ Informed by [frameworks-automation](references/frameworks-automation.md) (an ins
 
 ## Config
 
-The shape of the config, where it lives and what validation checks are in [APP_CONFIG](specs/APP_CONFIG.md). The product decisions it expresses are in the next section.
+The shape of the config, where it lives and what validation checks are in [APP_CONFIG](specs/APP_CONFIG.md). Only `WorkflowsConfig` lives in a target repo. The product decisions the config expresses are in the next section.
 
 ## Repo Shapes and Downstream Bumps
 
@@ -67,7 +67,7 @@ Evidence: [scc-operator](projects/scc-operator.md), [rancher-charts](projects/ra
 * **Every project is tied to a Rancher line for our team's repos**, except "universal" projects (for example `ob-team-charts`, `scc-operator`) that only become line-specific when they land in a branch of a line-specific repo such as `rancher/charts`. These give their stream `universal: true` and list no lines.
 * **Release branches are optional.** A repo declares its branch layout (`single` or `perLine`), and the tool must not assume `release/vX.Y`.
 * **A repo's version line is separate from its consumers' branches.** Producers do not carry downstream branch names.
-* **One shared line map.** The mapping from a line to each repo's branch was encoded in many places with different logic. The `RancherLines` document holds line facts only (lifecycle dates, Kubernetes range), with no branches. The dates (GA, EOM, EOL) are copied from the [SUSE lifecycle page](https://www.suse.com/lifecycle/#suse-rancher-prime). Phase is derived from them and the current UTC time, never stored: `development` (no GA date yet, or GA is in the future), `ga`, `eom`, `eol`, each beginning at 00:00 UTC on its date. An optional `phase` on a line overrides the dates. The page is the source of truth; a `gero lines sync` command (planned) updates the dates from it, and `gero doctor` will flag drift. Each project maps its own series (in its stream) and branches (in `branches.lines`) to line IDs, including `rancher/rancher` itself.
+* **One shared line map.** The mapping from a line to each repo's branch was encoded in many places with different logic. The `RancherLines` document holds line facts only (lifecycle dates, Kubernetes range), with no branches. The dates (GA, EOM, EOL) are copied from the [SUSE lifecycle page](https://www.suse.com/lifecycle/#suse-rancher-prime). Phase is derived from them and the current UTC time, never stored: `development` (no GA date yet, or GA is in the future), `ga`, `eom`, `eol`, each beginning at 00:00 UTC on its date. An optional `phase` on a line overrides the dates. The page is the source of truth; a `gero lines sync` command (planned) updates the dates from it, and `gero doctor` will flag drift. A new line is added by hand, since its Kubernetes range is not on the page. Each project maps its own series (in its stream) and branches (in `branches.lines`) to line IDs, including `rancher/rancher` itself.
   * The development line comes from a repo's default branch. A branch cut moves `main` to the next line. A `branches.lines` entry with no `branch` resolves to the default branch only while the line's derived phase is `development`; any other missing branch is an error, never a silent skip.
   * A holding maps, per Rancher line, the producer's release for that line to the consumer's branch for that line. A producer whose stream is `universal` goes to every release branch of the consumer.
 * **A downstream bump has four parts:**
@@ -94,14 +94,10 @@ Evidence: [observability-e2e](projects/observability-e2e.md). Nothing here is de
 Conventions the tool wants repos to follow, so automation does not fight them.
 
 * **Helm chart unit tests and dynamic values.** Tests for a value that automation bumps (for example a default image tag) should set the input explicitly and assert the same value, not depend on the chart's default. That way the value can change without breaking tests, and the tests still validate the template mechanics. For example, `backup-restore-operator`'s `kubectl-image_test.yaml` asserts the default `kuberlr-kubectl` tag, so a default bump would break it. The tool does not edit test files as part of a bump.
-* **`VERSION.md` is the standard place for branch and version mapping, and it is generated from config.** Repos document their line mapping today in different places and formats (a `VERSION.md`, a README table). The standard is a `VERSION.md` in each owned repo, generated by `gero` from the project's `branches.lines` and the `RancherLines` facts (for example the Kubernetes range), and kept in sync on the default branch with a PR, like rendered workflows. It carries a generated header, and `verify` detects drift. This also moves toward automating today's manual "branch for X" workflow. Release branches keep whatever copy they had when cut.
+* **`VERSION.md` is the standard place for branch and version mapping, and it is generated from config.** Repos document their line mapping today in different places and formats (a `VERSION.md`, a README table). The standard is a `VERSION.md` in each owned repo, generated by `gero` from the project's `branches.lines` and the `RancherLines` facts (for example the Kubernetes range), and kept in sync on the default branch with a PR, like rendered workflows. The columns and format are chosen per repo: a `Project` config opts into the ones it wants. It carries a generated header, and `verify` detects drift. This also moves toward automating today's manual "branch for X" workflow. Release branches keep whatever copy they had when cut.
+
+* **Workflows come from templates the repo provides.** `gero` renders them with the RancherLines variables injected, and `verify` detects drift. Which workflows a repo has, and how its jobs call each other, is that repo's own.
 
 ## Open Questions
 
-* Config-shape questions (final names, whether config moves into target repos): see [APP_CONFIG](specs/APP_CONFIG.md). CLI-layer questions are in the spec each belongs to ([CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md), [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md)).
-* Reconciler triggering: cron only, or `repository_dispatch` where needed.
-* Which existing workflows to standardize first, and whether the central repo publishes them as reusable workflows or composite actions.
-* How new Rancher lines are cut and registered in the line map (manual edit, or a command that updates it). Updating the dates of lines already in the map is planned as `gero lines sync`; a new line also needs a Kubernetes range, which the lifecycle page does not give.
-* How downstream repos pin and call reusable workflows; resolve when we review a repo that consumes the existing core branches.
-* The `VERSION.md` format: one standard layout across repos, which fields it shows (branch, tag, Rancher line, Kubernetes range, EOL section), and whether other tools that read `VERSION.md` today (for example frameworks-automation reads per-repo `VERSION.md` at runtime) need the old formats to keep working.
 * The "branch for X" workflow itself: which steps `gero` automates (create branches, update `branches.lines`, regenerate `VERSION.md`, re-render workflows) and in what order.
