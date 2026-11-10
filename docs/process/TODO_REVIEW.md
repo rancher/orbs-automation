@@ -95,7 +95,7 @@ For the release team, not for you (T08): how the Rancher key and `lock.yaml` pin
 | IDs | Work | Size |
 |---|---|---|
 | E01 ★ | A `chartVersion` scheme in `tagscheme` (Valid, LineOf, Latest, IsStable, Compare), reading the part after `+up` | M |
-| New ★ | Read the team's existing bash tooling for charts PRs and write down what it does and per line (no code). Where it lives is not in this repo | S, no code |
+| New ★ | Read the team's existing bash tooling for charts PRs and write down what it does and per line (no code). It is not in this repo; the maintainer provides it when the build starts, and not before | S, no code |
 | D04, A06, T12 | Real `chartsPackageBump` Apply: an abstraction of that tooling that replicates the team's process and can serve others through `with:` config; plus BRO tag to chart version. Dry run beside the bash first (PHASES) | L |
 
 | # | Decision | Proposed | Your call |
