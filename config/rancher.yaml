@@ -144,6 +144,10 @@ apiVersion: gero/v1alpha2
 kind: Edit
 name: rancher-build-yaml-steps
 refs: {holding: [rancher-holds-shell, rancher-holds-scc-operator, rancher-holds-assets]}
+# The script runs go generate, so it runs in the Go toolchain the branch pins, as the by-hand process forces GOTOOLCHAIN
+# to the downstream's pinned toolchain so generated files do not drift between lines.
 spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"
   postEdit:
     - {run: scripts/generate-buildconfig}

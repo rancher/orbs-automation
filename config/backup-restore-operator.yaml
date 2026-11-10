@@ -118,4 +118,11 @@ apiVersion: gero/v1alpha2
 kind: Edit
 name: bro-bump-go-modules
 refs: {holding: [bro-holds-wrangler-3-8, bro-holds-wrangler-3-7, bro-holds-wrangler-3-6, bro-holds-wrangler-3-3, bro-holds-lasso]}
-spec: {strategy: goBump}
+# Every step and goBump's tidy run with the Go toolchain the branch pins in its go.mod, whatever the engineer's own is:
+# generated files made by a newer Go can come out incomplete on an older line (wrangler's code does not run on a newer one).
+spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"
+  strategy: goBump
+  postEdit:
+    - {run: [go, generate]}
