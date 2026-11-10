@@ -233,3 +233,21 @@ func TestAVirtualHoldingIsUnusableWhenTheHoldingItComesFromIs(t *testing.T) {
 	assert.Empty(t, e.RoutesFrom(g.Project("wr")), "the pinning holding is not usable")
 	assert.Empty(t, e.RoutesFrom(g.Project("la")), "and nor is what it makes")
 }
+
+func TestAVirtualHoldingOfTheRoutesOwnProducerIsShippedWithTheTagOfTheRun(t *testing.T) {
+	g := pinGraph(t)
+	e, err := NewEngine(Builtin(), g)
+	require.NoError(t, err)
+	routes := e.RoutesFrom(g.Project("la"))
+	require.Len(t, routes, 1, "the pin makes a route out of lasso")
+	route := routes[0]
+	target := Target{Branch: "main", Line: "v2.16", Holdings: route.Holdings}
+	tree := files{"go.mod": broRoot, "cmd/tool/go.mod": broTool}
+
+	got, err := route.Check(bg, tree, target, "v0.2.7", "sha")
+
+	require.NoError(t, err, "shipping lasso itself needs no pin to resolve")
+	require.Len(t, got, 1)
+	assert.Equal(t, "v0.2.7", got[0].Want)
+	assert.False(t, got[0].UpToDate)
+}

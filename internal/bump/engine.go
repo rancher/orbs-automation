@@ -242,9 +242,12 @@ type Target struct {
 }
 
 // releaseOf is the release a holding of the target holds: the tag of the run for a
-// holding of the route, and for a virtual one the tag that was derived for it.
-func (t Target) releaseOf(h *chain.Holding, tag, commit string) (Release, error) {
-	if !h.Virtual() {
+// holding of the route, and for a companion, a virtual one of another producer's
+// Artifact that follows the route's holding, the tag that was derived for it. A
+// virtual holding of the route's own producer is shipped as any other: when lasso is
+// shipped, what its pins make in a consumer is written with the tag of the run.
+func (t Target) releaseOf(producer *chain.Project, h *chain.Holding, tag, commit string) (Release, error) {
+	if !h.Virtual() || h.Producer() == producer {
 		return ReleaseOf(h, tag, commit)
 	}
 	pinned, ok := t.Pinned[h]
@@ -467,7 +470,7 @@ type HoldingCheck struct {
 func (r Route) Check(ctx context.Context, src Tree, t Target, tag, commit string) ([]HoldingCheck, error) {
 	var out []HoldingCheck
 	for _, h := range r.holdingsOf(t) {
-		rel, err := t.releaseOf(h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, h, tag, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -520,7 +523,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	var res Result
 	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
-		rel, err := t.releaseOf(h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, h, tag, commit)
 		if err != nil {
 			return res, err
 		}
