@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/appconfig"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
@@ -59,6 +60,13 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 			artifacts[a.Name()] = a
 		}
 	}
+	for _, doc := range cfg.Artifacts { // in the order read, so what pins and what is pinned come in one
+		a := artifacts[doc.Name]
+		for _, name := range doc.Refs["pins"] {
+			a.pins = append(a.pins, artifacts[name])
+			artifacts[name].pinnedBy = append(artifacts[name].pinnedBy, a)
+		}
+	}
 	holdings := map[string]*Holding{}
 	for _, doc := range cfg.Holdings {
 		h := &Holding{Doc: doc, holder: g.byName[strings.ToLower(doc.Refs["project"][0])]}
@@ -73,6 +81,7 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 		h.holder.held = append(h.holder.held, h)
 		h.producer.sourced = append(h.producer.sourced, h)
 	}
+	g.makeVirtual()
 	for _, doc := range cfg.Edits {
 		e := &Edit{Doc: doc}
 		for _, name := range doc.Refs["holding"] {
@@ -80,11 +89,53 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 			e.holdings = append(e.holdings, h)
 			h.edits = append(h.edits, e)
 		}
+		for _, name := range doc.Refs["holding"] {
+			for _, v := range holdings[name].pinned {
+				e.holdings = append(e.holdings, v) // the file a pin writes is part of what the edit follows
+				v.edits = append(v.edits, e)
+			}
+		}
 	}
 	if cfg.Lines != nil {
 		g.lines = cfg.Lines.Spec.Lines
 	}
 	return g
+}
+
+// makeVirtual makes the Holdings the pins make: for each Holding of an Artifact
+// that pins others, one of each pinned Artifact, in the same files and for the same
+// lines, held in the pinned module's own path as a Go module is, as a floor. Each
+// is a Holding of its holder and a source of the pinned Artifact's project, so a
+// route, a check and a run see it as they see any other.
+func (g *Graph) makeVirtual() {
+	for _, h := range g.holdings {
+		if h.artifact == nil {
+			continue
+		}
+		for _, pinned := range h.artifact.pins {
+			doc := &v1alpha2.Holding{
+				TypeMeta: h.Doc.TypeMeta,
+				ObjectMeta: v1alpha2.ObjectMeta{
+					Name: h.Name() + "+" + pinned.Name(),
+					Refs: v1alpha2.Refs{"project": h.Doc.Refs["project"], "artifact": {pinned.Name()}},
+				},
+				Spec: v1alpha2.HoldingSpec{
+					Holds: v1alpha2.Holds{Kind: v1alpha2.HoldsRelease, Form: "{bareTag}", Lines: h.Doc.Spec.Holds.Lines, Accept: v1alpha2.AcceptAll},
+				},
+			}
+			for _, at := range h.Doc.Spec.At {
+				doc.Spec.At = append(doc.Spec.At, v1alpha2.At{File: at.File, Key: pinned.Ref(), Format: v1alpha2.FormatGoMod, Lines: at.Lines})
+			}
+			v := &Holding{
+				Doc: doc, holder: h.holder, producer: pinned.stream.project, artifact: pinned,
+				virtual: true, pinnedBy: h,
+			}
+			h.pinned = append(h.pinned, v)
+			g.virtual = append(g.virtual, v)
+			v.holder.held = append(v.holder.held, v)
+			v.producer.sourced = append(v.producer.sourced, v)
+		}
+	}
 }
 
 // Projects returns every Project, in the order read.
