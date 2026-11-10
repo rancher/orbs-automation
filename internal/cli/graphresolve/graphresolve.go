@@ -95,13 +95,23 @@ func writeProject(b *strings.Builder, p *chain.Project) {
 	}
 	fmt.Fprintf(b, "%s: {\n  class: [%s]\n  label: %s\n", quote(p.Slug()), classes, quote(label))
 	for _, st := range p.Streams() {
-		fmt.Fprintf(b, "  %s: {\n    class: [%s]\n    label: %s\n", quote(streamKey(st)), classStream, quote("stream "+st.Name()))
+		fmt.Fprintf(b, "  %s: {\n    class: [%s]\n    label: %s\n", quote(streamKey(st)), classStream, quote(streamLabel(st)))
 		for _, a := range st.Artifacts() {
-			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(artifactKey(a)), classArtifact, quote(a.Ref()))
+			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(artifactKey(a)), classArtifact, quote(a.Name()+"\n"+a.Ref()))
 		}
 		b.WriteString("  }\n")
 	}
 	b.WriteString("}\n")
+}
+
+// streamLabel names the stream and, when it has one, its tag pattern, since a
+// project may release several streams of one thing that only the pattern tells
+// apart.
+func streamLabel(s *chain.Stream) string {
+	if s.TagPattern() == "" {
+		return "stream " + s.Name()
+	}
+	return "stream " + s.Name() + "\n" + s.TagPattern()
 }
 
 func streamKey(s *chain.Stream) string     { return "stream:" + s.Name() }
@@ -119,10 +129,7 @@ func producerPath(h *chain.Holding) string {
 
 func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
 	id := quote("holding:" + h.Name())
-	label := h.Kind()
-	if a := h.Artifact(); a != nil {
-		label += "\n" + a.Ref()
-	}
+	label := h.Name() + "\n" + h.Kind()
 	fmt.Fprintf(b, "%s: {class: [%s]; label: %s}\n", id, classHolding, quote(label))
 	fmt.Fprintf(b, "%s -> %s\n", producerPath(h), id)
 	var served []string
