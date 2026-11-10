@@ -12,6 +12,7 @@ import (
 type Graph struct {
 	projects []*Project
 	holdings []*Holding
+	virtual  []*Holding          // the Holdings the pins make, in the order of the Holdings they come from
 	byName   map[string]*Project // lowercase name
 	bySlug   map[string]*Project // lowercase owner/name
 	byAlias  map[string]*Project // lowercase alias
@@ -102,6 +103,10 @@ func (g *Graph) Project(key string) *Project {
 	}
 	return g.byAlias[key]
 }
+
+// Virtual returns the Holdings the pins make, in the order of the Holdings they
+// come from. They are no documents, so Holdings does not list them.
+func (g *Graph) Virtual() []*Holding { return g.virtual }
 
 // Holdings returns every Holding, in the order read.
 func (g *Graph) Holdings() []*Holding { return g.holdings }
