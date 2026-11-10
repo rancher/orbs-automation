@@ -42,8 +42,10 @@ I would also fix these in place, with no list entry: the `TODO(release-state)` c
 | IDs | Work | Size |
 |---|---|---|
 | C34, C35, T01 | Register `ci:ship` as CI-only and run `gero ship`'s bump loop as the bot (the bot identity, `GERO_BOT_USER` and `identity.ResolveIn`, is built and tested; no CI command calls it) | L |
-| C36, T02 | A temporary clone as a `Workspace`, and a one-shot token credential for push and tag push | M |
-| C37, T03 | Step summary and workflow run URL in the PR body | S |
+| C36, T02 | Reshaped by DEC-1: `ci:ship` works in the checkouts the workflow provides (`repos.paths.<slug>`), not a clone of its own. Left to settle at build: whether push needs a credential of ours or the checkout's cross-repo token is enough; and, if a step uses `gero repo clone`, an HTTPS-with-token path (`sshURL` is SSH-only today, see Domain 16) | S-M |
+| C37, T03 | Step summary and workflow run URL in the PR body: one report model, a fuller rendering for the job log and a shorter one for comments (DEC-4) | S |
+| New ★ | `ci:*` uses the bundle that matches its own `gero` version when run from another repo, and the local `config/` when run from orbs-automation (DEC-5). Today the resolver takes the newest release's bundle with the running version as a floor | M |
+| New ★ | Embed the default config bundle in the binary and keep it as a release asset, so a CI run needs only the binary. Design first: size, which config, how a newer bundle overrides it | M-L |
 | C28, T04 | Steps `from: producer` and `from: central` (steprun refuses both) | M |
 | A22, A24, T32 | Call `RequireCrossRepoToken` and `WorkstationSigns` (neither has a caller) and print the preflight line | S |
 | C39, T06 | Workflows in `scc-operator` and `shell` that install a pinned, signed `gero` and run `ci:ship` beside the script | M |
@@ -51,14 +53,14 @@ I would also fix these in place, with no list entry: the `TODO(release-state)` c
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-1 | C40: does `gero` make its own temp clone, or take a directory from the workflow? | Its own, since PHASES says "a temporary clone" and a workflow then needs no checkout | |
-| DEC-2 | C41: does `ci:ship` fan out over lines like `gero ship`? | Yes, same loop | |
-| DEC-3 | C42: when the deterministic branch already moved (push rejected) | Report it and exit non-zero; no retry | |
-| DEC-4 | C43: do the step summary and the PR comments carry the same text? | Yes | |
-| DEC-5 | D17, T05: what config a `ci:*` job without a checkout uses | The bundle of the installed release by default; a checkout still wins when `GERO_CENTRAL_CONFIG_DIR` is set | |
-| DEC-6 | A26: do workstation signs under a forced CI do more than warn? | No, warn only (the spec says so) | |
+| DEC-1 | C40: does `gero` make its own temp clone, or take a directory from the workflow? | Its own, since PHASES says "a temporary clone" and a workflow then needs no checkout | Let's assume by convention CI jobs will provide clones of repos needed via checkout GHA. OR a CI workflow step will use `gero repo clone`. |
+| DEC-2 | C41: does `ci:ship` fan out over lines like `gero ship`? | Yes, same loop | (Confirmed in chat: one release event opens PRs on every active consumer branch of that release.) Lets assume for now that `ci:ship` will mainly trigger for a specifc release event like existing `push-to-x` scripts we use - gero ci:ship run as a final step replacing bash tools. |
+| DEC-3 | C42: when the deterministic branch already moved (push rejected) | Report it and exit non-zero; no retry | Agreed, the action run will fail.  |
+| DEC-4 | C43: do the step summary and the PR comments carry the same text? | Yes | I could imagine that in general CI versions of tools will use a mix of GH envs that allow us to control output - we might want to be more verbose in the CI action logs than in comments. However I think they would be similar, or at least come from the same source. |
+| DEC-5 | D17, T05: what config a `ci:*` job without a checkout uses | The bundle of the installed release by default; a checkout still wins when `GERO_CENTRAL_CONFIG_DIR` is set | Great question - when CI is run from orbs-automation it will have and use local `config/` dir. When called via another repo in their CI it will fetch the bundle file matching the version. (this begs the question of if we should ship the bundle as a release asset AND embed the default in the go bin. Embedding would allow other CI runs to only download the binary and be "good" to run. Bundle embed could be it's own PreV1 item.) |
+| DEC-6 | A26: do workstation signs under a forced CI do more than warn? | No, warn only (the spec says so) | Warn only. |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Before V1.
 
 ---
 
