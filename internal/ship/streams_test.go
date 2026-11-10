@@ -92,3 +92,25 @@ func TestACheckRefusesALineTwoStreamsAreHeldFor(t *testing.T) {
 	assert.ErrorContains(t, err, "lib-one")
 	assert.ErrorContains(t, err, "lib-two")
 }
+
+func TestShipWritesTheStreamTheConsumerHoldsForTheLineGivenAsTheArgument(t *testing.T) {
+	ws, clone, ex := newShip(t)
+	ws.producer = projectSpec{
+		Name: "scc-operator", Repo: "rancher/scc-operator", ManagedBy: testTeam,
+		Streams: []extraStream{{Name: "old", Pattern: "v0.5.*", Image: "rancher/scc-operator"}, {Name: "next", Pattern: "v0.6.*", Image: "rancher/scc-operator-next"}},
+	}
+	consumer := riLink().Consumer
+	ws.links = []link{
+		{Consumer: consumer, Artifact: "scc-operator-old-image", HoldsLines: "{since: v2.15, until: v2.15}"},
+		{Consumer: consumer, Artifact: "scc-operator-next-image", HoldsLines: "{until: v2.14}"},
+	}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", To: "rancher", Arg: "v2.15", NoPush: true}, ex, nil)
+
+	require.NoError(t, err)
+	require.Len(t, plan.Releases, 1)
+	assert.Equal(t, "v0.5.3", plan.Releases[0].Tag, "the latest stable tag of the stream held for v2.15, and not of the other")
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultCommitted, res.Status)
+	assert.Equal(t, newImage, runGit(t, clone, "show", res.Branch+":build.yaml")+"\n")
+}
