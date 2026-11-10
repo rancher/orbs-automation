@@ -97,10 +97,12 @@ const (
 func projects(t *testing.T) fakeSource {
 	t.Helper()
 	return fakeSource{chaintest.Load(t,
-		chaintest.Doc("Project", "rancher", "", "  repo: {name: "+rancher+", owned: true}\n"),
-		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: "+scc+", owned: true}\n"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: "+rancher+", managedBy: orbs}\n"),
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: "+scc+", managedBy: orbs}\n"),
 		chaintest.Doc("Project", "sdk", "", "  repo: {name: "+ext+", external: true}\n"),
 		chaintest.Doc("Project", "other", "", "  repo: {name: rancher/other}\n"),
+		chaintest.Doc("Project", "frameworks", "", "  repo: {name: rancher/wrangler, managedBy: frameworks-team}\n"),
+		chaintest.Doc("Project", "everyones", "", "  repo: {name: rancher/charts, managedBy: shared}\n"),
 	)}
 }
 
@@ -123,7 +125,7 @@ func newRig(t *testing.T) *rig {
 		ws:    &fakeWorkspace{upstream: "upstream", paths: map[string]workspace.RepoPath{}},
 		git:   &fakeGit{remotes: map[string]string{}, cloneErr: map[string]error{}},
 		forks: fakeForks{have: map[string]bool{}},
-		s:     clicfg.Settings{Output: clicfg.OutputText, Upstream: "upstream", Repos: clicfg.Repos{CloneRoot: root}},
+		s:     clicfg.Settings{Output: clicfg.OutputText, Upstream: "upstream", Team: "orbs", Repos: clicfg.Repos{CloneRoot: root}},
 	}
 }
 
@@ -214,6 +216,43 @@ func TestRunAllIsTheOwnedProjectsThatAreNotExternal(t *testing.T) {
 	assert.Contains(t, out, "Cloned rancher/scc-operator")
 	assert.NotContains(t, out, ext, "an external project needs its name")
 	assert.NotContains(t, out, "rancher/other", "a project that is not owned is not cloned by --all")
+}
+
+func TestRunAllIsTheProjectsOfTheActiveTeam(t *testing.T) {
+	r := newRig(t)
+	r.s.Team = "frameworks-team"
+
+	out, err := r.do(Options{All: true})
+
+	require.NoError(t, err)
+	assert.Len(t, r.git.calls, 1)
+	assert.Contains(t, out, "Cloned rancher/wrangler")
+	assert.NotContains(t, out, scc, "a project of another team is not cloned by --all")
+}
+
+func TestRunAllNeverTakesASharedProjectButItCanBeNamed(t *testing.T) {
+	r := newRig(t)
+
+	out, err := r.do(Options{All: true})
+
+	require.NoError(t, err)
+	assert.NotContains(t, out, "rancher/charts", "no team owns a shared project")
+
+	r = newRig(t)
+	out, err = r.do(named("everyones"))
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "Cloned rancher/charts")
+}
+
+func TestRunAllWithNoActiveTeamClonesNothing(t *testing.T) {
+	r := newRig(t)
+	r.s.Team = ""
+
+	_, err := r.do(Options{All: true})
+
+	require.NoError(t, err)
+	assert.Empty(t, r.git.calls)
 }
 
 func TestRunAnExternalProjectIsClonedWhenNamed(t *testing.T) {

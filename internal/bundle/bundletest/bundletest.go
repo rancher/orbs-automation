@@ -29,7 +29,7 @@ func Config(names ...string) fstest.MapFS {
 kind: Project
 name: ` + n + `
 spec:
-  repo: {name: rancher/` + n + `, owned: true}
+  repo: {name: rancher/` + n + `, managedBy: orbs}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

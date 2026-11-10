@@ -5,7 +5,7 @@ kind: Project
 name: scc-operator
 spec:
   aliases: ["scc"]
-  repo: {name: rancher/scc-operator, owned: true}
+  repo: {name: rancher/scc-operator, managedBy: orbs}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

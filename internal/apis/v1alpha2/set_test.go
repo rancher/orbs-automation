@@ -516,7 +516,7 @@ func TestTheStagesAHoldingNamesAreStagesOfTheProjectsInvolved(t *testing.T) {
 	})
 }
 
-func TestAStepFromTheProducerNeedsAnOwnedProducer(t *testing.T) {
+func TestAStepFromTheProducerNeedsAProducerATeamManages(t *testing.T) {
 	holder := doc("Project", "p", "", projectSpec)
 	step := "  postEdit:\n    - {run: x, from: producer}\n"
 	build := func(producer string) []string {
@@ -530,14 +530,20 @@ func TestAStepFromTheProducerNeedsAnOwnedProducer(t *testing.T) {
 		}
 	}
 
-	t.Run("owned", func(t *testing.T) {
-		assert.Empty(t, validateSet(t, build("  repo: {name: acme/b, owned: true}\n")...).Findings)
+	t.Run("a team manages it", func(t *testing.T) {
+		assert.Empty(t, validateSet(t, build("  repo: {name: acme/b, managedBy: orbs}\n")...).Findings)
 	})
-	t.Run("not owned", func(t *testing.T) {
-		rep := validateSet(t, build("  repo: {name: acme/b}\n")...)
+	for name, repo := range map[string]string{
+		"no team":         "  repo: {name: acme/b}\n",
+		"shared":          "  repo: {name: acme/b, managedBy: shared}\n",
+		"outside the org": "  repo: {name: acme/b, external: true}\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			rep := validateSet(t, build(repo)...)
 
-		assert.True(t, hasSetError(rep, `Edit "e"`, "spec.postEdit[0].from", `Project "q" is not owned`), "%v", rep.Findings)
-	})
+			assert.True(t, hasSetError(rep, `Edit "e"`, "spec.postEdit[0].from", `no team manages Project "q"`), "%v", rep.Findings)
+		})
+	}
 }
 
 func TestAGoBumpEditNeedsAHoldingInTheGoModFormat(t *testing.T) {

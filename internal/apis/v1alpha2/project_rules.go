@@ -32,7 +32,8 @@ var prVars = func() []string {
 }()
 
 // SetDefaults fills the default branch and the layout. managedBy is not filled:
-// it depends on whether the repo is owned, so it is read through a getter.
+// whether a team owns the repo depends on the active team, which only the CLI
+// settings know, so it is read through a getter.
 func (p *Project) SetDefaults() {
 	if p.Spec.Repo.DefaultBranch == "" {
 		p.Spec.Repo.DefaultBranch = DefaultBranch
@@ -57,8 +58,8 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 	if repo.ManagedBy != "" && !slug.MatchString(repo.ManagedBy) {
 		r.Errorf("spec.repo.managedBy", "%q must be a lowercase slug such as release-team", repo.ManagedBy)
 	}
-	if repo.External && repo.Owned {
-		r.Errorf("spec.repo.external", "a repo outside the organization cannot be owned: set owned to false")
+	if repo.External && repo.ManagedBy != "" {
+		r.Errorf("spec.repo.external", "a repo outside the organization has no managing team: remove managedBy")
 	}
 
 	p.validateAliases(r)

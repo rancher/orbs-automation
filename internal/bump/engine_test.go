@@ -25,11 +25,11 @@ var d = chaintest.Doc
 func world(extra ...string) []string {
 	docs := []string{
 		chaintest.Lines("v2.16", "v2.15"),
-		d("Project", "prod", "", "  repo: {name: acme/prod, owned: true}\n"),
+		d("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
 		d("Stream", "prod", "{project: prod}", "  universal: true\n"),
 		d("Artifact", "prod-image", "{stream: prod}", "  kind: image\n  name: acme/prod\n"),
 		d("Artifact", "prod-chart", "{stream: prod}", "  kind: file\n  name: prod-{version}.tgz\n"),
-		d("Project", "lined", "", "  repo: {name: acme/lined, owned: true}\n"),
+		d("Project", "lined", "", "  repo: {name: acme/lined, managedBy: orbs}\n"),
 		d("Stream", "lined", "{project: lined}", "  lines:\n    - {line: v2.16, series: \"2.x\"}\n    - {line: v2.15, series: \"1.x\"}\n"),
 		d("Artifact", "lined-image", "{stream: lined}", "  kind: image\n  name: acme/lined\n"),
 		d("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    stages: [dev, stable]\n    lines:\n      - {line: v2.16, branch: {dev: dev-v2.16, stable: rel-v2.16}}\n      - {line: v2.15, branch: {dev: dev-v2.15, stable: rel-v2.15}}\n"),
@@ -79,7 +79,7 @@ func TestRoutesFromAProducerAreOneForEachConsumerWithAllItsReleaseHoldings(t *te
 func twoStreams() []string {
 	const hold = "  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"%s}\n"
 	return []string{
-		d("Project", "lib", "", "  repo: {name: acme/lib, owned: true}\n"),
+		d("Project", "lib", "", "  repo: {name: acme/lib, managedBy: orbs}\n"),
 		d("Stream", "lib-1", "{project: lib}", "  tagPattern: \"v1.*\"\n  universal: true\n"),
 		d("Stream", "lib-2", "{project: lib}", "  tagPattern: \"v2.*\"\n  universal: true\n"),
 		d("Artifact", "lib-1-module", "{stream: lib-1}", "  kind: gomod\n  name: github.com/acme/lib\n"),
@@ -384,7 +384,7 @@ func TestRunGivesAStepTheVersionWithoutThePrefixOfTheStream(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e, g, err := buildEngine(t,
-				d("Project", "mod", "", "  repo: {name: acme/mod, owned: true}\n"),
+				d("Project", "mod", "", "  repo: {name: acme/mod, managedBy: orbs}\n"),
 				d("Stream", "mod", "{project: mod}", "  tagPattern: \""+tt.pattern+"\"\n  universal: true\n"),
 				d("Artifact", "mod-image", "{stream: mod}", "  kind: image\n  name: acme/mod\n"),
 				d("Holding", "cons-mod", "{project: cons, artifact: mod-image}", "  at: {file: mod.yaml, key: image}\n  holds: {kind: release, form: \"{image}:{version}\"}\n"),

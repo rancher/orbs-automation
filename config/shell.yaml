@@ -4,7 +4,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: shell
 spec:
-  repo: {name: rancher/shell, owned: true}
+  repo: {name: rancher/shell, managedBy: orbs}
   branches:
     layout: perLine
     lines:

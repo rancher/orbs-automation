@@ -23,8 +23,8 @@ var (
 	// ErrNoTargets is returned when no consumer branch can be worked out for the
 	// release, and none was named.
 	ErrNoTargets = errors.New("no target branch for the release")
-	// ErrNotOwned is returned when the producer is not an owned project: gero reads
-	// where its releases stand and never opens a PR for them.
+	// ErrNotOwned is returned when the producer is not owned by the active team: gero
+	// reads where its releases stand and never opens a PR for them.
 	ErrNotOwned = errors.New("not owned")
 	// ErrBranchNotFound is returned when the consumer's repository has no branch
 	// of the name.
@@ -80,6 +80,8 @@ type Input struct {
 	To         string   // the consumer, when the producer ships to several
 	Lines      []string // the consumer's Rancher lines to ship to, such as v2.15, in place of every branch the release goes to
 	Prerelease bool     // let prereleases count
+	// Team is the active team context: a producer it owns is shipped from.
+	Team string
 	// DryRun is the invocation's --dry-run: compute and report, and create no
 	// branch or PR. It is carried into the plan so the report says which it is.
 	DryRun bool

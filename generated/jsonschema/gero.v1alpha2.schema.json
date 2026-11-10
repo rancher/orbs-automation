@@ -641,9 +641,6 @@
           "type": "string",
           "description": "owner/name"
         },
-        "owned": {
-          "type": "boolean"
-        },
         "external": {
           "type": "boolean",
           "description": "outside our organization"

@@ -21,7 +21,7 @@ var ctx = context.Background()
 func TestCheckReady(t *testing.T) {
 	ws, p := fixture(t), &fakeProber{}
 
-	got, err := Check(ctx, ws, p, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, ws, p, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/scc-operator", got.Producer)
@@ -41,14 +41,14 @@ func TestCheckReady(t *testing.T) {
 
 func TestCheckReadsTheFileAtTheCommitItListed(t *testing.T) {
 	ws := fixture(t)
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.Contains(t, ws.asked, "file rancher/rancher@sha-215:build.yaml", "the head commit, so the read is exact")
 }
 
 func TestCheckAlreadyUpToDate(t *testing.T) {
 	p := &fakeProber{}
-	got, err := Check(ctx, withDevLine(fixture(t)), p, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+	got, err := Check(ctx, withDevLine(fixture(t)), p, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, got.Status)
 	assert.Equal(t, got.Targets[0].Holdings[0].Current, got.Targets[0].Holdings[0].Want)
@@ -60,7 +60,7 @@ func TestCheckBlockedByAMissingImage(t *testing.T) {
 	p := &fakeProber{results: map[string]ociregistry.Result{
 		"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: ociregistry.NotFound},
 	}}
-	got, err := Check(ctx, fixture(t), p, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, fixture(t), p, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, got.Status)
 	require.Len(t, got.Blockers, 1)
@@ -70,7 +70,7 @@ func TestCheckBlockedByAMissingImage(t *testing.T) {
 }
 
 func TestCheckAnExplicitTagAndALine(t *testing.T) {
-	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.5.2", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	require.Len(t, got.Releases, 1)
 	assert.Equal(t, "v0.5.2", got.Releases[0].Tag)
@@ -78,10 +78,10 @@ func TestCheckAnExplicitTagAndALine(t *testing.T) {
 }
 
 func TestCheckARefusedPrerelease(t *testing.T) {
-	_, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.6.0-rc.1", Lines: []string{"v2.16"}})
+	_, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.6.0-rc.1", Lines: []string{"v2.16"}})
 	assert.ErrorIs(t, err, ErrPrerelease)
 
-	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.6.0-rc.1", Lines: []string{"v2.16"}, Prerelease: true})
+	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.6.0-rc.1", Lines: []string{"v2.16"}, Prerelease: true})
 	require.NoError(t, err)
 	require.Len(t, got.Releases, 1)
 	assert.Equal(t, "v0.6.0-rc.1", got.Releases[0].Tag)
@@ -89,7 +89,7 @@ func TestCheckARefusedPrerelease(t *testing.T) {
 }
 
 func TestCheckABranchTheConsumerDoesNotHave(t *testing.T) {
-	_, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.14"}})
+	_, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.14"}})
 	assert.ErrorIs(t, err, ErrBranchNotFound)
 	assert.ErrorContains(t, err, "release/v2.14")
 }
@@ -98,7 +98,7 @@ func TestCheckConsumers(t *testing.T) {
 	t.Run("none", func(t *testing.T) {
 		ws := withDevLine(fixture(t))
 		ws.links = nil
-		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+		_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 		assert.ErrorIs(t, err, ErrNoConsumer)
 	})
 	t.Run("several and none chosen", func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestCheckConsumers(t *testing.T) {
 		other := riLink()
 		other.Consumer.Name, other.Consumer.Repo = "charts", "rancher/charts"
 		ws.links = append(ws.links, other)
-		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+		_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 		assert.ErrorIs(t, err, ErrAmbiguousConsumer)
 		assert.ErrorContains(t, err, "charts")
 		assert.ErrorContains(t, err, "rancher")
@@ -120,13 +120,13 @@ func TestCheckConsumers(t *testing.T) {
 			ws.links = append(ws.links, other)
 			ws.refs["rancher/charts"] = ws.refs["rancher/rancher"]
 			ws.files["rancher/charts@sha-main:build.yaml"] = "defaultSccOperatorImage: x\n"
-			got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", To: to, Lines: []string{"v2.16"}})
+			got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", To: to, Lines: []string{"v2.16"}})
 			require.NoError(t, err, to)
 			assert.Equal(t, "rancher/charts", got.Consumer)
 		}
 	})
 	t.Run("a --to that is not a consumer", func(t *testing.T) {
-		_, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", To: "nope", Lines: []string{"v2.16"}})
+		_, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", To: "nope", Lines: []string{"v2.16"}})
 		assert.ErrorIs(t, err, ErrNoConsumer)
 	})
 }
@@ -134,7 +134,7 @@ func TestCheckConsumers(t *testing.T) {
 func TestCheckAStrategyThatIsNotBuiltStopsBeforeAnythingIsRead(t *testing.T) {
 	ws := withDevLine(fixture(t))
 	ws.links[0].Strategy = "chartsPackageBump"
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, bump.ErrNotBuilt)
 	assert.Contains(t, err.Error(), "chartsPackageBump", "it says which strategy is not built")
@@ -145,7 +145,7 @@ func TestCheckReadFailures(t *testing.T) {
 	t.Run("the file is missing", func(t *testing.T) {
 		ws := fixture(t)
 		delete(ws.files, "rancher/rancher@sha-215:build.yaml")
-		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+		_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "build.yaml")
 		assert.ErrorContains(t, err, "release/v2.15")
@@ -153,7 +153,7 @@ func TestCheckReadFailures(t *testing.T) {
 	t.Run("the key is missing", func(t *testing.T) {
 		ws := fixture(t)
 		ws.files["rancher/rancher@sha-215:build.yaml"] = "other: 1\n"
-		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+		_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 		assert.ErrorIs(t, err, yamledit.ErrKeyNotFound)
 		assert.ErrorContains(t, err, "defaultSccOperatorImage")
 	})
@@ -164,7 +164,7 @@ func TestCheckHostErrors(t *testing.T) {
 	for slug := range map[string]bool{"rancher/scc-operator": true, "rancher/rancher": true} {
 		ws := withDevLine(fixture(t))
 		ws.refsErr = map[string]error{slug: boom}
-		_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+		_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 		assert.ErrorIs(t, err, boom, slug)
 	}
 }
@@ -172,7 +172,7 @@ func TestCheckHostErrors(t *testing.T) {
 func TestCheckProducerErrors(t *testing.T) {
 	ws := withDevLine(fixture(t))
 	ws.projectErr = workspace.ErrUnknownProject
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "nope", Lines: []string{"v2.16"}})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "nope", Lines: []string{"v2.16"}})
 	assert.ErrorIs(t, err, workspace.ErrUnknownProject)
 }
 
@@ -181,13 +181,13 @@ func TestCheckValueVariables(t *testing.T) {
 	c := riLink()
 	c.Form = "{sourceRepo}@{version}"
 	ws.links = []link{c}
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/scc-operator@0.5.3", got.Targets[0].Holdings[0].Want)
 }
 
 func TestCheckPreviewsWhatARunWouldWrite(t *testing.T) {
-	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	require.NotNil(t, got.Targets[0].Preview)
 	assert.Equal(t, "bot/scc-operator-v0.5.3-v2.15", got.Targets[0].Preview.Branch)
@@ -197,20 +197,20 @@ func TestCheckPreviewsWhatARunWouldWrite(t *testing.T) {
 }
 
 func TestCheckPreviewUsesTheUsersBranchPrefix(t *testing.T) {
-	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}, BranchPrefix: "dan/"})
+	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}, BranchPrefix: "dan/"})
 	require.NoError(t, err)
 	assert.Equal(t, "dan/v0.5.3-v2.15", got.Targets[0].Preview.Branch)
 }
 
 func TestCheckHasNoPreviewWhenAlreadyUpToDate(t *testing.T) {
-	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 	require.NoError(t, err)
 	assert.Nil(t, got.Targets[0].Preview)
 }
 
 func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
 	p := &fakeProber{results: map[string]ociregistry.Result{"registry.rancher.com rancher/scc-operator:v0.5.3": {Status: ociregistry.NotFound}}}
-	got, err := Check(ctx, fixture(t), p, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, fixture(t), p, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, got.Status)
 	assert.NotNil(t, got.Targets[0].Preview, "so the reader sees what would have been written")
@@ -218,7 +218,7 @@ func TestCheckPreviewIsThereWhenBlocked(t *testing.T) {
 
 func TestCheckABlockedDowngrade(t *testing.T) {
 	// main holds v0.5.3; shipping the older v0.5.2 is a downgrade.
-	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Lines: []string{"v2.16"}})
+	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.5.2", Lines: []string{"v2.16"}})
 
 	require.NoError(t, err)
 	assert.True(t, got.Targets[0].Downgrade)
@@ -232,7 +232,7 @@ func TestCheckABlockedDowngrade(t *testing.T) {
 }
 
 func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
-	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.2", Lines: []string{"v2.16"}, AllowDowngrade: true})
+	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.5.2", Lines: []string{"v2.16"}, AllowDowngrade: true})
 	require.NoError(t, err)
 	assert.True(t, got.Targets[0].Downgrade, "it is still a downgrade")
 	assert.Equal(t, StatusReady, got.Status)
@@ -244,13 +244,13 @@ func TestCheckAllowedDowngradeIsAWarning(t *testing.T) {
 }
 
 func TestCheckNewerIsNotADowngrade(t *testing.T) {
-	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.False(t, got.Targets[0].Downgrade, "v0.5.2 to v0.5.3")
 }
 
 func TestCheckAlreadyUpToDateIsNotADowngrade(t *testing.T) {
-	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 	require.NoError(t, err)
 	assert.False(t, got.Targets[0].Downgrade)
 	assert.Equal(t, StatusUpToDate, got.Status)
@@ -260,7 +260,7 @@ func TestCheckAPrereleaseOfTheSameVersionIsADowngrade(t *testing.T) {
 	// main holds v0.5.3; v0.5.3-rc.1 is lower, though it has the same numbers.
 	ws := withDevLine(fixture(t))
 	ws.refs["rancher/scc-operator"] = git.Refs{Tags: tags("v0.5.3", "v0.5.3-rc.1")}
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.3-rc.1", Lines: []string{"v2.16"}, Prerelease: true})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.5.3-rc.1", Lines: []string{"v2.16"}, Prerelease: true})
 	require.NoError(t, err)
 	assert.True(t, got.Targets[0].Downgrade)
 }
@@ -268,7 +268,7 @@ func TestCheckAPrereleaseOfTheSameVersionIsADowngrade(t *testing.T) {
 func TestCheckFromAPrereleaseToTheStableReleaseIsNotADowngrade(t *testing.T) {
 	ws := fixture(t)
 	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3-rc.1\n"
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.False(t, got.Targets[0].Downgrade)
 	assert.Equal(t, StatusReady, got.Status)
@@ -277,7 +277,7 @@ func TestCheckFromAPrereleaseToTheStableReleaseIsNotADowngrade(t *testing.T) {
 func TestCheckAValueWithNoVersionIsNotJudged(t *testing.T) {
 	ws := fixture(t)
 	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:latest\n"
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.False(t, got.Targets[0].Downgrade, "there is nothing to compare")
 	assert.Equal(t, StatusReady, got.Status)
@@ -304,7 +304,7 @@ func branchesOf(p Plan) []string {
 }
 
 func TestCheckWithNoBranchChecksEveryBranchAUniversalReleaseGoesTo(t *testing.T) {
-	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.15", "release/v2.14"}, branchesOf(got), "the consumer's release branches, in config order")
@@ -315,7 +315,7 @@ func TestCheckWithNoBranchChecksEveryBranchAUniversalReleaseGoesTo(t *testing.T)
 
 func TestCheckChecksTheImagesOnceForAllTheTargets(t *testing.T) {
 	p := &fakeProber{}
-	_, err := Check(ctx, loopFixture(t), p, Input{Project: "scc-operator"})
+	_, err := Check(ctx, loopFixture(t), p, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, 3, p.calls, "one check per registry for the release, not one per branch")
 }
@@ -325,7 +325,7 @@ func TestCheckNoImagesWhenEveryTargetIsUpToDate(t *testing.T) {
 	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"
 	ws.files["rancher/rancher@sha-214:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"
 	p := &fakeProber{}
-	got, err := Check(ctx, ws, p, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, p, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, got.Status)
 	assert.Empty(t, got.Images)
@@ -335,7 +335,7 @@ func TestCheckNoImagesWhenEveryTargetIsUpToDate(t *testing.T) {
 func TestCheckAMixOfUpToDateAndReady(t *testing.T) {
 	ws := loopFixture(t)
 	ws.files["rancher/rancher@sha-215:build.yaml"] = "defaultSccOperatorImage: rancher/scc-operator:v0.5.3\n"
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, StatusUpToDate, got.Targets[0].Status)
 	assert.Equal(t, StatusReady, got.Targets[1].Status)
@@ -348,7 +348,7 @@ func TestCheckAMixOfUpToDateAndReady(t *testing.T) {
 func TestCheckABranchThatCannotBeReadFailsOnlyItself(t *testing.T) {
 	ws := loopFixture(t)
 	delete(ws.files, "rancher/rancher@sha-214:build.yaml")
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 
 	require.NoError(t, err, "one branch does not stop the others")
 	assert.Equal(t, StatusReady, got.Targets[0].Status)
@@ -361,7 +361,7 @@ func TestCheckABranchThatCannotBeReadFailsOnlyItself(t *testing.T) {
 func TestCheckABranchTheHostLacksFailsOnlyItself(t *testing.T) {
 	ws := loopFixture(t)
 	ws.refs["rancher/rancher"] = git.Refs{Branches: []git.Branch{{Name: "release/v2.15", Commit: "sha-215"}}}
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, StatusReady, got.Targets[0].Status)
 	assert.Equal(t, StatusFailed, got.Targets[1].Status)
@@ -369,13 +369,13 @@ func TestCheckABranchTheHostLacksFailsOnlyItself(t *testing.T) {
 }
 
 func TestCheckABranchFlagChecksOnlyThatBranch(t *testing.T) {
-	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.14"}})
+	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.14"}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.14"}, branchesOf(got))
 }
 
 func TestCheckABranchFlagOutsideTheReleaseBranchesIsStillAllowed(t *testing.T) {
-	got, err := Check(ctx, withDevLine(loopFixture(t)), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+	got, err := Check(ctx, withDevLine(loopFixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main"}, branchesOf(got))
 }
@@ -383,7 +383,7 @@ func TestCheckABranchFlagOutsideTheReleaseBranchesIsStillAllowed(t *testing.T) {
 func TestCheckANamedBranchThatCannotBeReadIsAnError(t *testing.T) {
 	ws := loopFixture(t)
 	delete(ws.files, "rancher/rancher@sha-214:build.yaml")
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.14"}})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.14"}})
 	require.Error(t, err, "asked for that one branch, so failing to read it is the answer")
 	assert.ErrorContains(t, err, "build.yaml")
 }
@@ -394,7 +394,7 @@ func linedLoop(t *testing.T) *fakeWorkspace {
 	t.Helper()
 	ws := loopFixture(t)
 	producer := projectSpec{
-		Name: "kuberlr", Repo: "rancher/kuberlr", Owned: true, Images: []string{"rancher/kuberlr"},
+		Name: "kuberlr", Repo: "rancher/kuberlr", ManagedBy: testTeam, Images: []string{"rancher/kuberlr"},
 		Stream: "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n",
 	}
 	c := riLink()
@@ -412,7 +412,7 @@ func linedLoop(t *testing.T) *fakeWorkspace {
 func TestCheckALinedProducerFeedsTheConsumersBranchForTheLine(t *testing.T) {
 	for tag, want := range map[string]string{"v8.1.0": "release/v2.15", "v9.0.0": "main"} {
 		ws := linedLoop(t)
-		got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: tag})
+		got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Arg: tag})
 		require.NoError(t, err, tag)
 		assert.Equal(t, []string{want}, branchesOf(got), tag)
 	}
@@ -420,7 +420,7 @@ func TestCheckALinedProducerFeedsTheConsumersBranchForTheLine(t *testing.T) {
 
 func TestCheckATagInNoLineOfTheProducerHasNoTarget(t *testing.T) {
 	ws := linedLoop(t)
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v7.0.0"})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Arg: "v7.0.0"})
 	assert.ErrorIs(t, err, ErrNoTargets)
 	assert.ErrorContains(t, err, "--line")
 }
@@ -430,7 +430,7 @@ func TestCheckAConsumerWithoutTheLineHasNoTarget(t *testing.T) {
 	c := ws.links[0]
 	c.Consumer.Lines = []lineSpec{{Line: "v2.14", Branch: "release/v2.14"}}
 	ws.links[0] = c
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0"})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Arg: "v8.1.0"})
 	assert.ErrorIs(t, err, ErrNoTargets)
 	assert.ErrorContains(t, err, "v2.15")
 }
@@ -440,17 +440,17 @@ func TestCheckASingleBranchConsumerTakesEveryReleaseOnItsDefaultBranch(t *testin
 	c := ws.links[0]
 	c.Consumer.Lines = nil
 	ws.links[0] = c
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main"}, branchesOf(got))
 }
 
 func TestCheckCarriesADryRunIntoThePlan(t *testing.T) {
-	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator", DryRun: true})
+	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", DryRun: true})
 	require.NoError(t, err)
 	assert.True(t, got.DryRun)
 
-	got, err = Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator"})
+	got, err = Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.False(t, got.DryRun)
 }
@@ -458,7 +458,7 @@ func TestCheckCarriesADryRunIntoThePlan(t *testing.T) {
 func TestCheckADryRunChecksTheSameThings(t *testing.T) {
 	// A dry run is the same check: it previews and checks the images, so it shows
 	// what a real run would do.
-	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator", DryRun: true})
+	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", DryRun: true})
 	require.NoError(t, err)
 	assert.Equal(t, StatusReady, got.Status)
 	assert.NotEmpty(t, got.Images)
@@ -468,11 +468,11 @@ func TestCheckADryRunChecksTheSameThings(t *testing.T) {
 func TestCheckNamesEachTargetByItsRancherLine(t *testing.T) {
 	ws := fixture(t)
 
-	onALine, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	onALine, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	single := fixture(t)
 	single.links[0].Consumer.Lines = nil
-	inNoLine, err := Check(ctx, single, &fakeProber{}, Input{Project: "scc-operator"})
+	inNoLine, err := Check(ctx, single, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 	require.NoError(t, err)
 	require.Len(t, inNoLine.Targets, 1)
 
@@ -482,7 +482,7 @@ func TestCheckNamesEachTargetByItsRancherLine(t *testing.T) {
 
 func TestCheckALineIsTheBranchTheConsumerKeepsItOn(t *testing.T) {
 	for _, line := range []string{"v2.15", "2.15"} {
-		got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{line}})
+		got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{line}})
 		require.NoError(t, err, line)
 		assert.Equal(t, []string{"release/v2.15"}, branchesOf(got), line)
 	}
@@ -492,7 +492,7 @@ func TestCheckALineWithNoBranchOfItsOwnIsTheDefaultBranch(t *testing.T) {
 	ws := fixture(t)
 	ws.links[0].Consumer.Lines = append(ws.links[0].Consumer.Lines, lineSpec{Line: "v2.16"})
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.16"}})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.16"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main"}, branchesOf(got))
@@ -500,7 +500,7 @@ func TestCheckALineWithNoBranchOfItsOwnIsTheDefaultBranch(t *testing.T) {
 }
 
 func TestCheckALineTheConsumerDoesNotHaveSaysWhichItDoes(t *testing.T) {
-	_, err := Check(ctx, fixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.99"}})
+	_, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.99"}})
 
 	require.ErrorIs(t, err, ErrNoTargets)
 	assert.ErrorContains(t, err, "v2.99")
@@ -511,14 +511,14 @@ func TestCheckALineOfAConsumerWithoutLinesIsAnError(t *testing.T) {
 	ws := fixture(t)
 	ws.links[0].Consumer.Lines = nil
 
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.15"}})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}})
 
 	require.ErrorIs(t, err, ErrNoTargets)
 	assert.ErrorContains(t, err, "no release lines")
 }
 
 func TestCheckSeveralLinesAreEachATargetOnceInTheOrderGiven(t *testing.T) {
-	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator", Lines: []string{"v2.14", "2.15", "v2.14"}})
+	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.14", "2.15", "v2.14"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.14", "release/v2.15"}, branchesOf(got))
@@ -545,7 +545,7 @@ func releasesOf(p Plan) []string {
 func TestCheckALinedProducerWithNoReleaseGivesEachLineTheLatestOfItsOwnSeries(t *testing.T) {
 	ws := laned(t, "v8.0.9", "v8.1.0", "v9.0.0", "v9.0.1-rc.1", "v7.0.0")
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr"})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"main", "release/v2.15"}, branchesOf(got), "the lines both have, in the producer's order")
@@ -560,7 +560,7 @@ func TestCheckALinedProducerWithNoReleaseGivesEachLineTheLatestOfItsOwnSeries(t 
 func TestCheckALinedProducerWithPrereleaseTakesEachSeriesLatestOfAnyKind(t *testing.T) {
 	ws := laned(t, "v8.1.0", "v9.0.0", "v9.0.1-rc.1")
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Prerelease: true})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Prerelease: true})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"v9.0.1-rc.1", "v8.1.0"}, releasesOf(got), "a series with no prerelease gets its stable one")
@@ -569,7 +569,7 @@ func TestCheckALinedProducerWithPrereleaseTakesEachSeriesLatestOfAnyKind(t *test
 func TestCheckALinedProducerWithNamedLinesGivesEachItsOwnRelease(t *testing.T) {
 	ws := laned(t, "v8.0.9", "v8.1.0", "v9.0.0")
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Lines: []string{"v2.15"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got))
@@ -580,13 +580,13 @@ func TestCheckALinedProducerWithNamedLinesGivesEachItsOwnRelease(t *testing.T) {
 func TestCheckALinedProducerSkipsALineWithNoReleaseButNamingItIsAnError(t *testing.T) {
 	ws := laned(t, "v8.1.0")
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got), "nothing to ship to v2.16")
 	require.Len(t, got.Notes, 1)
 	assert.Contains(t, got.Notes[0], "v2.16", "and it says so")
 
-	_, err = Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Lines: []string{"v2.16"}})
+	_, err = Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Lines: []string{"v2.16"}})
 	require.ErrorIs(t, err, ErrNoRelease)
 	assert.ErrorContains(t, err, "v2.16")
 }
@@ -594,11 +594,11 @@ func TestCheckALinedProducerSkipsALineWithNoReleaseButNamingItIsAnError(t *testi
 func TestCheckATagIsOnlyShippedToTheLineItIsIn(t *testing.T) {
 	ws := laned(t, "v8.1.0", "v9.0.0")
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0", Lines: []string{"v2.15"}})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Arg: "v8.1.0", Lines: []string{"v2.15"}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"release/v2.15"}, branchesOf(got))
 
-	_, err = Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v8.1.0", Lines: []string{"v2.16"}})
+	_, err = Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Arg: "v8.1.0", Lines: []string{"v2.16"}})
 	require.ErrorIs(t, err, ErrLineMismatch)
 	assert.ErrorContains(t, err, "v8.1.0 is in v2.15, not v2.16")
 }
@@ -606,13 +606,13 @@ func TestCheckATagIsOnlyShippedToTheLineItIsIn(t *testing.T) {
 func TestCheckALineOfTheProducerIsOnlyShippedToTheSameLine(t *testing.T) {
 	ws := laned(t, "v8.1.0", "v9.0.0")
 
-	_, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr", Arg: "v2.15", Lines: []string{"v2.16"}})
+	_, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Arg: "v2.15", Lines: []string{"v2.16"}})
 
 	require.ErrorIs(t, err, ErrLineMismatch)
 }
 
 func TestCheckAUniversalProducerShipsOneReleaseToWhateverLinesAreNamed(t *testing.T) {
-	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Project: "scc-operator", Arg: "v0.5.3", Lines: []string{"v2.14", "v2.15"}})
+	got, err := Check(ctx, loopFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.5.3", Lines: []string{"v2.14", "v2.15"}})
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"v0.5.3", "v0.5.3"}, releasesOf(got))
@@ -622,7 +622,7 @@ func TestCheckAUniversalProducerShipsOneReleaseToWhateverLinesAreNamed(t *testin
 func TestCheckEachTargetOfALinedProducerPreviewsItsOwnRelease(t *testing.T) {
 	ws := laned(t, "v8.1.0", "v9.0.0")
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "kuberlr"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr"})
 
 	require.NoError(t, err)
 	require.Len(t, got.Targets, 2)

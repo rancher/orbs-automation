@@ -21,7 +21,7 @@ func colored() *style.Renderer {
 
 func info(t *testing.T, c Clone, err error) Info {
 	t.Helper()
-	got, gerr := gather(fixture(t), opener(c, err), nil)
+	got, gerr := gather(fixture(t), "orbs", opener(c, err), nil)
 	require.NoError(t, gerr)
 	return got
 }

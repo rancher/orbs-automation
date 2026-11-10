@@ -40,7 +40,7 @@ func TestTheFixtureJoinsIntoTheReleaseChain(t *testing.T) {
 	require.Len(t, g.Projects(), 9)
 	rancher := g.Project("rancher")
 	require.NotNil(t, rancher)
-	assert.Equal(t, "shared", rancher.Steward())
+	assert.Equal(t, "shared", rancher.ManagedBy())
 	assert.Equal(t, "release/v2.15", mustBranch(t, rancher, "v2.15", ""))
 	assert.Equal(t, "dev-v2.16", mustBranch(t, g.Project("rancher-charts"), "v2.16", "dev"))
 	assert.Equal(t, "release-v2.16", mustBranch(t, g.Project("rancher-charts"), "v2.16", "stable"))

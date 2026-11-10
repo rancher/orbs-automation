@@ -47,10 +47,10 @@ func found(slug, path string) workspace.RepoPath {
 func newGraph(t *testing.T) *chain.Graph {
 	t.Helper()
 	return chaintest.Load(t,
-		chaintest.Doc("Project", "shell", "", "  repo: {name: rancher/shell, owned: true}\n"),
-		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, owned: true}\n"),
+		chaintest.Doc("Project", "shell", "", "  repo: {name: rancher/shell, managedBy: orbs}\n"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, managedBy: orbs}\n"),
 		chaintest.Doc("Project", "charts", "", "  repo: {name: rancher/charts}\n"),
-		chaintest.Doc("Project", "op", "", "  repo: {name: rancher/op, owned: true}\n"),
+		chaintest.Doc("Project", "op", "", "  repo: {name: rancher/op, managedBy: orbs}\n"),
 		chaintest.Doc("Project", "sdk", "", "  repo: {name: third-party/sdk, external: true}\n"),
 	)
 }

@@ -5,7 +5,7 @@ kind: Project
 name: kuberlr-kubectl
 spec:
   aliases: ["kuberlr"]
-  repo: {name: rancher/kuberlr-kubectl, owned: true}
+  repo: {name: rancher/kuberlr-kubectl, managedBy: orbs}
   branches:
     layout: perLine
     lines:

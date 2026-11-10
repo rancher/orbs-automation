@@ -21,7 +21,7 @@ func project(name string) string {
 kind: Project
 name: ` + name + `
 spec:
-  repo: {name: rancher/` + name + `, owned: true}
+  repo: {name: rancher/` + name + `, managedBy: orbs}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

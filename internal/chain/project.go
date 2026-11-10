@@ -28,20 +28,27 @@ func (p *Project) Slug() string { return p.Doc.Spec.Repo.Name }
 // Aliases returns the shorthand names the Project is also found by.
 func (p *Project) Aliases() []string { return p.Doc.Spec.Aliases }
 
-// Steward is the team responsible for the project: managedBy if given, else orbs
-// if the repo is owned, else none. A repo outside the organization has none.
-func (p *Project) Steward() string {
-	repo := p.Doc.Spec.Repo
-	switch {
-	case repo.External:
+// ManagedBy is the team responsible for the project, as written: none when it
+// names none, and always none for a repo outside the organization. It may be
+// shared (Shared).
+func (p *Project) ManagedBy() string {
+	if p.Doc.Spec.Repo.External {
 		return ""
-	case repo.ManagedBy != "":
-		return repo.ManagedBy
-	case repo.Owned:
-		return "orbs"
 	}
-	return ""
+	return p.Doc.Spec.Repo.ManagedBy
 }
+
+// Owned reports whether the team owns the project: it is the one that manages it,
+// and gero ships from what the active team owns. A project nobody manages, a
+// shared one and one outside the organization are owned by no team.
+func (p *Project) Owned(team string) bool {
+	by := p.ManagedBy()
+	return team != "" && by == team && by != v1alpha2.ManagedByShared
+}
+
+// Shared reports whether the project is managed by every team together: no team
+// owns it, and any may write into it.
+func (p *Project) Shared() bool { return p.ManagedBy() == v1alpha2.ManagedByShared }
 
 // DefaultBranch is the repo's default branch.
 func (p *Project) DefaultBranch() string { return p.Doc.Spec.Repo.DefaultBranch }
@@ -203,9 +210,6 @@ func (p *Project) ReleaseBranches() []string {
 	}
 	return out
 }
-
-// Owned reports whether gero ships from the project's repo.
-func (p *Project) Owned() bool { return p.Doc.Spec.Repo.Owned }
 
 // External reports whether the repo is outside the organization: gero never ships
 // into it.

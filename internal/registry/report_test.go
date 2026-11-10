@@ -148,7 +148,7 @@ const helmtoolsModule = "github.com/rancher/ob-charts-tool/helmtools"
 func helmtools(t *testing.T) *chain.Project {
 	t.Helper()
 	return chaintest.Load(t,
-		chaintest.Doc("Project", "ob-charts-tool", "", "  repo: {name: rancher/ob-charts-tool, owned: true}\n"),
+		chaintest.Doc("Project", "ob-charts-tool", "", "  repo: {name: rancher/ob-charts-tool, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "helmtools", "{project: ob-charts-tool}", "  tagPattern: \"helmtools/v*\"\n  universal: true\n"),
 		chaintest.Doc("Artifact", "helmtools-module", "{stream: helmtools}", "  kind: gomod\n  name: "+helmtoolsModule+"\n"),
 	).Project("ob-charts-tool")

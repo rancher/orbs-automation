@@ -36,8 +36,8 @@ func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 	if err != nil {
 		return resolution{}, err
 	}
-	if !producer.Owned() {
-		return resolution{}, notOwned(producer)
+	if !producer.Owned(in.Team) {
+		return resolution{}, notOwned(producer, in.Team)
 	}
 	engine, engineErr := ws.Bump()
 	if engine == nil {
@@ -278,11 +278,15 @@ func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Ro
 	return bump.Route{}, fmt.Errorf("%w for %s: %s takes several of its streams, which ship cannot tell apart yet: %s", ErrAmbiguousConsumer, producer.Name(), matches[0].Consumer.Name(), describe(matches))
 }
 
-// notOwned says why gero does not ship from an unowned project, naming the team
-// that does when the config does.
-func notOwned(p *chain.Project) error {
-	if team := p.Steward(); team != "" {
-		return fmt.Errorf("%w: %s is not owned, so gero only observes it, and %s ships its releases", ErrNotOwned, p.Name(), team)
+// notOwned says why gero does not ship from a project the active team does not
+// own, naming the team that manages it when the config does.
+func notOwned(p *chain.Project, team string) error {
+	active := "is not owned by " + team
+	if team == "" {
+		active = "is not owned by the active team"
 	}
-	return fmt.Errorf("%w: %s is not owned, so gero only observes it", ErrNotOwned, p.Name())
+	if by := p.ManagedBy(); by != "" {
+		return fmt.Errorf("%w: %s %s, so gero only observes it, and %s ships its releases", ErrNotOwned, p.Name(), active, by)
+	}
+	return fmt.Errorf("%w: %s %s, so gero only observes it", ErrNotOwned, p.Name(), active)
 }

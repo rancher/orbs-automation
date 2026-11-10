@@ -61,21 +61,20 @@ func TestAProjectKnowsItsOwnFacts(t *testing.T) {
 	assert.Equal(t, "master", g.Project("b").DefaultBranch())
 }
 
-func TestTheStewardOfAProject(t *testing.T) {
+func TestTheManagerOfAProject(t *testing.T) {
 	tests := []struct {
 		name, repo, want string
 	}{
 		{"managedBy as given", "{name: acme/a, managedBy: release-team}", "release-team"},
-		{"an owned repo is orbs'", "{name: acme/a, owned: true}", "orbs"},
-		{"an owned repo says who", "{name: acme/a, owned: true, managedBy: shared}", "shared"},
-		{"an unowned repo has none", "{name: acme/a}", ""},
+		{"orbs is not assumed", "{name: acme/a}", ""},
+		{"shared as given", "{name: acme/a, managedBy: shared}", "shared"},
 		{"an external repo has none", "{name: acme/a, external: true}", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := chaintest.Load(t, project("a", "  repo: "+tt.repo+"\n"))
 
-			assert.Equal(t, tt.want, g.Project("a").Steward())
+			assert.Equal(t, tt.want, g.Project("a").ManagedBy())
 		})
 	}
 }
@@ -156,19 +155,36 @@ func TestTheReleaseBranchesOfAProject(t *testing.T) {
 	assert.Equal(t, []string{"main"}, g.Project("s").ReleaseBranches())
 }
 
-func TestAProjectIsOwnedOrExternal(t *testing.T) {
+func TestAProjectIsOwnedByTheTeamThatManagesIt(t *testing.T) {
 	g := chaintest.Load(t,
-		project("mine", "  repo: {name: acme/mine, owned: true}\n"),
-		project("theirs", "  repo: {name: acme/theirs, external: true}\n"),
+		project("mine", "  repo: {name: acme/mine, managedBy: orbs}\n"),
+		project("theirs", "  repo: {name: acme/theirs, managedBy: release-team}\n"),
+		project("everyones", "  repo: {name: acme/everyones, managedBy: shared}\n"),
+		project("outside", "  repo: {name: acme/outside, external: true}\n"),
 		project("plain", "  repo: {name: acme/plain}\n"),
 	)
 
-	assert.True(t, g.Project("mine").Owned())
+	assert.True(t, g.Project("mine").Owned("orbs"))
+	assert.False(t, g.Project("mine").Owned("release-team"), "ownership follows the active team")
+	assert.True(t, g.Project("theirs").Owned("release-team"))
+	assert.False(t, g.Project("theirs").Owned("orbs"))
+	assert.False(t, g.Project("mine").Owned(""), "no active team owns nothing")
+	assert.False(t, g.Project("plain").Owned("orbs"), "a project that names no team is no team's")
+	assert.False(t, g.Project("outside").Owned("orbs"))
+	assert.True(t, g.Project("outside").External())
 	assert.False(t, g.Project("mine").External())
-	assert.False(t, g.Project("theirs").Owned())
-	assert.True(t, g.Project("theirs").External())
-	assert.False(t, g.Project("plain").Owned())
-	assert.False(t, g.Project("plain").External())
+}
+
+func TestASharedProjectIsNoTeamsButEveryones(t *testing.T) {
+	g := chaintest.Load(t,
+		project("everyones", "  repo: {name: acme/everyones, managedBy: shared}\n"),
+		project("mine", "  repo: {name: acme/mine, managedBy: orbs}\n"),
+	)
+
+	assert.True(t, g.Project("everyones").Shared())
+	assert.False(t, g.Project("everyones").Owned("shared"), "shared is not a team")
+	assert.False(t, g.Project("everyones").Owned("orbs"))
+	assert.False(t, g.Project("mine").Shared())
 }
 
 func TestTheLayoutAndStagesOfAProject(t *testing.T) {

@@ -69,7 +69,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: shell
 spec:
-  repo: {name: rancher/shell, owned: true}
+  repo: {name: rancher/shell, managedBy: orbs}
 `)
 
 	assert.Equal(t, APIVersion, p.GetAPIVersion())
@@ -84,7 +84,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: rancher-charts
 spec:
-  repo: {name: rancher/charts, owned: false, managedBy: release-team, defaultBranch: dev-v2.16}
+  repo: {name: rancher/charts, managedBy: release-team, defaultBranch: dev-v2.16}
   finalDestination: true
   pullRequests:
     title: "[{branch}] {package} {chartVersion} {action}"
@@ -138,7 +138,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: shell
 spec:
-  repo: {name: rancher/shell, owned: true}
+  repo: {name: rancher/shell, managedBy: orbs}
 `)
 
 	assert.False(t, p.Spec.Repo.External)
@@ -332,6 +332,7 @@ func TestDecodeErrors(t *testing.T) {
 		{"no kind", "apiVersion: gero/v1alpha2\nname: a\n", []string{"kind"}},
 		{"no name", "apiVersion: gero/v1alpha2\nkind: Project\n", []string{"name is required"}},
 		{"an unknown top level field", "apiVersion: gero/v1alpha2\nkind: Project\nname: a\nmetadata: {}\n", []string{"metadata"}},
+		{"the owned field, which is worked out from managedBy", "apiVersion: gero/v1alpha2\nkind: Project\nname: a\nspec:\n  repo: {name: a/b, owned: true}\n", []string{"owned"}},
 		{"an unknown spec field", "apiVersion: gero/v1alpha2\nkind: Stream\nname: a\nspec:\n  bogus: 1\n", []string{"bogus"}},
 		{"an unknown field in a location", "apiVersion: gero/v1alpha2\nkind: Holding\nname: a\nspec:\n  at: {file: f, key: k, bogus: 1}\n", []string{"bogus"}},
 		{"an unknown field in a location of a list", "apiVersion: gero/v1alpha2\nkind: Holding\nname: a\nspec:\n  at:\n    - {file: f, key: k}\n    - {file: g, key: k, bogus: 1}\n", []string{"bogus"}},
