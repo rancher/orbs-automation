@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -119,7 +120,7 @@ func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 // series is the version series of the project's line of that name.
 func (s semverScheme) series(line string) (string, bool) {
 	for _, l := range s.lines {
-		if l.line == line {
+		if lines.Normalize(l.line) == lines.Normalize(line) {
 			return l.series, true
 		}
 	}
