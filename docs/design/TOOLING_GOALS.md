@@ -86,6 +86,5 @@ Answer, for one line: does each hop hold a version of its own line?
 
 * A project's version series follows the line (kuberlr's major, shell's minor, BRO's major, a chart's major), so the line can be read back from a held version
 * A hop that holds a version of another line is a mismatch; today a branch can hold a dependency from the wrong line and nobody sees it
-* One found while writing the process docs: BRO on `main` holds kuberlr v8 for v2.16, which wants v9; it was caught by reading and is fixed by hand
 * Needs from config: how each project maps a version to a line; for kuberlr, shell, BRO and charts that is a function of the line, so it may be data, not a per-project rule
 * The verdict is a list of mismatches with the path to each, never a block on its own

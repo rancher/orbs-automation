@@ -96,12 +96,12 @@ Themes in rough dependency order, not promises. Only stable tags are released.
 * **The chain in CI**, tracked end to end, beside and then replacing today's scripts.
 * **Shared workflows and rendered ones:** reusable workflows pinned by `gero` tag or SHA, and rendered workflows from `WorkflowsConfig`, the release workflow last because signing makes it the most sensitive.
 * **`VERSION.md`** generated from `branches.lines` and `RancherLines`, and `gero lines sync` for the lifecycle dates.
-* **Release trains beyond tracking:** tag creation from the tracker, `repository_dispatch` where cron latency hurts, a stream's `requiresPrerelease` enforced for tags made outside `gero repo tag`, with a per-release override.
+* **Release trains beyond tracking:** tag creation from the tracker, `repository_dispatch` where cron latency hurts, a stream's `requiresPrerelease` enforced for tags made outside `gero repo tag`.
 * **"Branch for X"** automation, and hardening ahead of v2.
 
 **Parallelism.** CI and tracking, standardization, and release trains can run side by side. They meet at "branch for X".
 
-**Decides along the way:** whether the tracker builds a chain up front or reads it hop by hop; whether the reconciler reads repo config on every run or only central config; the override mechanism; which "branch for X" steps are automated and in what order.
+**Decides along the way:** whether the tracker builds a chain up front or reads it hop by hop; whether the reconciler reads repo config on every run or only central config; which "branch for X" steps are automated and in what order.
 
 ## v2.0.0: complete
 

@@ -24,8 +24,6 @@ Unmarked items are decisions or working agreements. **(leaning)** is a proposal 
 ## Release Rules
 
 * A stream's `requiresPrerelease` means a stable tag must come from a commit that already has an RC. It is a safety check that some repos do not need at all, so it is off unless a project opts in. `gero repo tag` enforces it for the tags it makes, and `gero repo status` shows what it allows; enforcing it for tags made by hand or by a workflow comes later (see [PHASES](PHASES.md)).
-* Even when the rule is on, it can be **overridden per release** (for example a single-commit CVE dependency bump that needs a new patch, not an RC retest).
-  * Mechanism: an explicit CLI flag or issue label, with the reason recorded in the tracking issue. **(leaning)** A flag follows the conventions in [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md).
 * **Tag classification** (semver, prerelease, build metadata) is one shared library function, `internal/platform/semver` ([CHECK_SEMVER](specs/CHECK_SEMVER.md)). Existing repos reimplement it in shell (see [projects/](projects/README.md)).
 * **Tag creation works both ways.** A human can tag and push in the target repo and the tracker is notified (for example via `repository_dispatch`), or a workflow run from the tracker creates the requested tag in the target repo. The reconciler observes either path. The dispatch path is added as needed.
 * Today humans create tags with git and verify QA sign-off before creating a stable tag. The tool fits that process first.

@@ -76,9 +76,9 @@ Global (persistent) flags:
 | `--no-color` | Shorthand for `--color never` |
 | `--version` | Prints the version and exits, with no shorthand. Root only, not persistent. The value comes from `cmd/version`, set by GoReleaser through `-ldflags -X` (`.goreleaser.yaml`); a plain `go build` prints `dev`. `gero version` is the primary form and prints the same text |
 
-**Network policy.** A command that needs the network to do its job reads it, and does not ask first: an opt-in flag on every read would make the commands tedious to use. `GERO_OFFLINE=true` makes the central config bundle come from the cache only ([CLI_CONFIG](CLI_CONFIG.md)). A command with a useful local-only mode saying in its output what it did not read, and a global `--offline` flag, are **(leaning)**. `gero repo info` is local-only by design, with no online mode to opt out of, and `gero repo status` is its networked counterpart. Reads that a public repository allows are made anonymously, and a token is sent only when the host asks for one. `gero doctor` is the exception, offline by default with `--online`, because it checks the workstation itself ([DOCTOR](DOCTOR.md)).
+**Network policy.** A command that needs the network to do its job reads it, and does not ask first: an opt-in flag on every read would make the commands tedious to use. `GERO_OFFLINE=true` makes the central config bundle come from the cache only ([CLI_CONFIG](CLI_CONFIG.md)). `gero repo info` is local-only by design, with no online mode to opt out of, and `gero repo status` is its networked counterpart. Reads that a public repository allows are made anonymously, and a token is sent only when the host asks for one. `gero doctor` is the exception, offline by default with `--online`, because it checks the workstation itself ([DOCTOR](DOCTOR.md)).
 
-Per-command flags, such as the per-release override of `requiresPrerelease` ([release rules](../IMPLEMENTATION.md#release-rules)), are defined with their command and follow `--kebab-case`.
+Per-command flags are defined with their command and follow `--kebab-case`.
 
 ## 3. Execution-context gating
 

@@ -65,7 +65,7 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 **What depends on a strategy or a format, in the update engine.** Building the engine finds an edit whose strategy does not exist or whose `with` it rejects, and a release holding in a format gero cannot write yet. It is the same construction a run uses; neither `gero config validate` nor `gero doctor` runs it yet.
 
 * **Roles belong to relationships, not projects.** A project can be a producer on one route and a consumer on another (for example a chart repo that consumes an operator and feeds Rancher). Project config has no `role` field; producer and consumer are derived from the holdings.
-* **Holdings are explicit.** A release holding is written by a run, and a commit or branch holding is only observed. A QA test edge is added later, because the QA repo is related to others by something other than a holding.
+* **Holdings are explicit.** A release holding is written by a run, and a commit or branch holding is only observed.
 
 **No hard limit on graph shape.** Real workflows are complex, and artificial limits (such as banning every cycle) could block legitimate setups. A circular dependency between two projects is a warning. Graph traversal must be cycle-safe regardless (track visited projects).
 

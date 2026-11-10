@@ -8,7 +8,7 @@ How `gero` talks to the user: command output, color, logging, and the seam for i
 
 * **Data to stdout, diagnostics to stderr.** A script can always pipe stdout.
 * Commands whose results feed shell or GitHub Actions (`gero semver check`, `gero repo build-tags`) also support `--output env`: `KEY=value` lines on stdout, one per line, safe to append to `$GITHUB_OUTPUT` or `$GITHUB_ENV`. Key names are documented next to the command.
-* Every command that emits data supports `--json` through `encoding/json`, with a stable field naming scheme documented next to the command. JSON output is never interleaved with human text.
+* Almost every command that emits data supports `--json` through `encoding/json`, with a stable field naming scheme documented next to the command. JSON output is never interleaved with human text.
 * Human output is plain lines and tables laid out by `ui.Align` (the layout `text/tabwriter` gives, measured by what a cell shows, so escapes do not shift a column), and styled by `internal/ui/style` when color is on ([Terminal capabilities](#terminal-capabilities)).
 * **Never styled:** `--json` and `--output env`, whatever the setting, and what a shell or a workflow consumes: `gero cd` and `gero shell init`, `gero repo build-tags` and `gero semver check`. `gero version` and cobra's own error line on stderr are plain too.
 
