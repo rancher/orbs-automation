@@ -3,7 +3,9 @@ package github
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"strings"
@@ -130,4 +132,12 @@ func TestRawFileIsBounded(t *testing.T) {
 	h := &rawHost{files: map[string]string{"/o/r/abc/big": strings.Repeat("x", maxRawFile+10)}}
 	_, err := RawFile(context.Background(), rawClient(h), "github.com", "", "o/r", "abc", "big")
 	assert.ErrorContains(t, err, "larger than")
+}
+
+func TestAFileThatIsNotThereIsAlsoNotExist(t *testing.T) {
+	err := fmt.Errorf("%w: go.mod at v1 in a/b", ErrFileNotFound)
+
+	assert.ErrorIs(t, err, ErrFileNotFound)
+	assert.ErrorIs(t, err, fs.ErrNotExist, "so a reader that does not know the host can tell it from a failed read")
+	assert.NotErrorIs(t, errors.New("read go.mod: 500"), fs.ErrNotExist)
 }
