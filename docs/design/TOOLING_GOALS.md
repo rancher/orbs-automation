@@ -93,4 +93,4 @@ Answer, for one line: does each hop hold a version of its own line?
 
 A release that pins another says which version of it goes with the release ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)): wrangler's `go.mod` requires a lasso. `gero repo status` should report a consumer whose pinned module is older than that, for the pinning release it holds, as "requires at least vX (wrangler vY)", and not compare it with the latest release of the module, which is what a virtual Holding would otherwise be read against. `gero lines resolve` should show the pin as an edge between the two projects.
 
-`gero ship` of the pinned Artifact alone is open with it: it would be allowed with a tag, with a warning when the tag is below what the consumer's pinning release requires.
+`gero ship` of the pinned Artifact alone works, as a floor. It should warn when the tag is below what the consumer's pinning release requires, which needs the go.mod of the wrangler the consumer holds.

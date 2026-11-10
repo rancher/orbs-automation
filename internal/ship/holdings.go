@@ -174,6 +174,10 @@ func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held
 		return v
 	}
 	c := chk[0]
+	if c.Absent {
+		v.Error = "no file of the pinning holding requires the module, so it holds nothing"
+		return v
+	}
 	v.File, v.Current = c.Locations[0].Place.File, c.Current
 	if len(c.Locations) > 1 {
 		for _, loc := range c.Locations {

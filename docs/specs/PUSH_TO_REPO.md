@@ -42,7 +42,8 @@ An Artifact can pin others: a wrangler release goes with the lasso its `go.mod` 
 * **A floor.** A consumer that holds an older version of the companion gets the required one. One that holds the same keeps it. One that holds a newer version keeps it too, with a warning on the target that it is newer than the one the pin resolves; that is never a downgrade and never a blocker.
 * **The files** are the ones of the wrangler Holding for the line, and a file that does not require the module is skipped.
 * **The ownership gate** is the one for the producer named. With `--to` naming a consumer the team owns or one that is shared, the companion, though another team's, ships with it.
-* **Not here yet:** shipping the pinned Artifact alone, and `gero repo status` saying that a consumer holds less than a pin requires, which are open ([TOOLING_GOALS](../design/TOOLING_GOALS.md)).
+* **The pinned Artifact alone** is shipped as any release: `gero ship lasso v0.2.7 --to bro` writes that tag in the files the pins make in the consumer, and as a floor, so it never lowers a version. It does not yet check the tag against what the consumer's wrangler requires.
+* **Not here yet:** a warning for a lasso below what the consumer's wrangler requires, and `gero repo status` saying so, which are open ([TOOLING_GOALS](../design/TOOLING_GOALS.md)).
 
 ## Shipping another team's release
 

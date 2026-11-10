@@ -101,16 +101,16 @@ spec:
   at: {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
   holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.13, until: v2.13}}
 ---
-# lasso is held in go.mod by every line (v2.16 holds v0.2.10, v2.12 holds v0.2.3).
+# lasso goes with wrangler: every wrangler Artifact pins it, so each Holding above makes a virtual Holding of lasso in the
+# same files for the same lines, and shipping a wrangler tag ships the lasso its go.mod requires. This one is for the
+# line no wrangler Holding covers: v2.12 holds wrangler 3.2.4, a minor with no Stream, and lasso v0.2.3.
 apiVersion: gero/v1alpha2
 kind: Holding
 name: bro-holds-lasso
 refs: {project: backup-restore-operator, artifact: lasso-v0-2-module}
 spec:
-  at:
-    - {file: go.mod, key: github.com/rancher/lasso, format: gomod}
-    - {file: cmd/tool/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.14}}
-  holds: {kind: release, form: "{bareTag}", accept: all}
+  at: {file: go.mod, key: github.com/rancher/lasso, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {until: v2.12}}
 ---
 # go.mod is not the whole change: go mod tidy follows in each module the require line was written in, as a commit of
 # its own. The Edit follows every Go module BRO holds of another team's library.

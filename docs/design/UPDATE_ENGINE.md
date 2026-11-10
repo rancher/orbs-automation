@@ -49,6 +49,7 @@ An Artifact that `pins` another ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-p
 * **The check is a floor.** A companion holds what it must when the consumer's value is the required version or newer. Older is written. Newer is left as it is, and the target has a warning that the consumer holds a newer version than the pin resolves. It is never a downgrade and never blocked
 * **The same targets.** A companion is for the lines of the Holding it comes from, in its files. A file that does not require the pinned module is skipped when it is read
 * **Edits.** A companion follows the Edits of the Holding it comes from, so a `goBump` Edit tidies once after both `require` lines are written, as one unit
+* **Shipping the pinned Artifact itself.** A virtual Holding of the route's own producer is a Holding of the route like any other: `gero ship lasso v0.2.7 --to bro` writes that tag in the files the pins make, as a floor, so it raises a lower version and keeps a higher one. Only the companions of another route's Holdings take their release from the pin
 * **The engine's part.** A Holding's release is worked out for it, and not taken as the one tag of the run: `ReleaseOf` takes the companion's own tag, and the check says whether a value is older, the same or newer than it. The caller gives the engine the tags it derived, as it gives the runner, so the engine reads no host
 
 ## Edits

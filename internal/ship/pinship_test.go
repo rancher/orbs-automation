@@ -188,3 +188,33 @@ func TestATargetOfAPlanTakesTheCompanionsAndTheirReleasesToTheEngine(t *testing.
 	assert.Equal(t, "v0.2.5", target.Pinned[pinned])
 	assert.Equal(t, "r15", target.Branch)
 }
+
+func TestHoldingsOfLassoTraceTheVirtualHoldingAsAnyOther(t *testing.T) {
+	w := newPinWorkspace(t)
+
+	got, err := Holdings(ctx, w, w.g.Project("la"))
+
+	require.NoError(t, err)
+	require.Len(t, got, 1, "the pin makes bro a consumer of lasso")
+	assert.Equal(t, "acme/bro", got[0].Consumer)
+	assert.Empty(t, got[0].Error)
+	require.NotEmpty(t, got[0].Targets)
+	held := got[0].Targets[0].Held[0]
+	assert.Equal(t, "bro-holds-wr+la-mod", held.Name)
+	assert.Equal(t, "v0.2.3", held.Current)
+	assert.Equal(t, "v0.2.6", held.Stable.Tag, "against the latest lasso, until status reads what the pin requires")
+}
+
+func TestHoldingsOfLassoSayWhenNoFileOfTheVirtualHoldingRequiresIt(t *testing.T) {
+	w := newPinWorkspace(t)
+	w.host.files["acme/bro@sha-main:go.mod"] = "module acme/bro\n\nrequire github.com/acme/wr v1.7.1\n"
+	w.host.files["acme/bro@sha-r15:go.mod"] = "module acme/bro\n\nrequire github.com/acme/wr v1.7.1\n"
+
+	got, err := Holdings(ctx, w, w.g.Project("la"))
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.NotEmpty(t, got[0].Targets)
+	held := got[0].Targets[0].Held[0]
+	assert.Contains(t, held.Error, "requires", "no panic, and the row says why it holds nothing")
+}

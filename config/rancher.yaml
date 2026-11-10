@@ -136,18 +136,9 @@ spec:
     - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
   holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.12, until: v2.13}}
 ---
-# lasso, in the root and in pkg/apis (indirect there) and pkg/plan. One minor, every line.
-apiVersion: gero/v1alpha2
-kind: Holding
-name: rancher-holds-lasso
-refs: {project: rancher, artifact: lasso-v0-2-module}
-spec:
-  at:
-    - {file: go.mod, key: github.com/rancher/lasso, format: gomod}
-    - {file: pkg/apis/go.mod, key: github.com/rancher/lasso, format: gomod}
-    - {file: pkg/plan/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.15}}
-  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.12}}
----
+# lasso has no Holding here: every wrangler Artifact pins it, so each Holding above makes a virtual Holding of lasso in
+# the same files for the same lines (the root and pkg/apis, where it is indirect, and pkg/plan from v2.15; pkg/client
+# is skipped where it does not require lasso). The wrangler Holdings cover v2.12 to v2.16, so lasso is covered on every line.
 # After any change to build.yaml, Rancher regenerates its build config (a step of the consumer, not of the producer).
 apiVersion: gero/v1alpha2
 kind: Edit
