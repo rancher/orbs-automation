@@ -36,13 +36,14 @@ const laStream = "  universal: true\n  tagPattern: \"v0.2.*\"\n"
 
 // pinHost is the host of the tests: files by "slug@ref:path" and the tags of each repository.
 type pinHost struct {
-	files map[string]string
-	tags  map[string][]git.Tag
-	err   error
+	files    map[string]string
+	tags     map[string][]git.Tag
+	branches map[string][]git.Branch
+	err      error
 }
 
 func (h pinHost) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
-	return git.Refs{Tags: h.tags[slug]}, h.err
+	return git.Refs{Tags: h.tags[slug], Branches: h.branches[slug]}, h.err
 }
 
 func (h pinHost) UpstreamFile(_ context.Context, slug, ref, path string) ([]byte, error) {

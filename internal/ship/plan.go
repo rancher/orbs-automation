@@ -258,6 +258,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	if err := res.route.Ready(); err != nil {
 		return Plan{}, resolution{}, err // an edit names a strategy gero does not have yet
 	}
+	specs, companions := res.withCompanions(ctx, ws, specs)
 	plan := Plan{
 		Producer: res.producer.Slug(), Consumer: res.route.Consumer.Slug(),
 		DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
@@ -266,6 +267,12 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		plan.Holdings = append(plan.Holdings, h.Name())
 	}
 	plan.Notes = sel.notes
+	plan.Companions = companions
+	for _, c := range companions {
+		if c.Error != "" {
+			plan.Blockers = append(plan.Blockers, "companion: "+c.Error)
+		}
+	}
 	if note := skippedNote(res, specs); note != "" {
 		plan.Notes = append(plan.Notes, note)
 	}
@@ -313,6 +320,15 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 			plan.Blockers = append(plan.Blockers, blocker)
 		}
 		emit(sink, Event{Kind: EventImagesChecked, Release: tag, Images: &images})
+	}
+	for _, c := range res.companionsToShip(plan) {
+		images := registry.CheckProject(ctx, c.holding.Producer(), prober, c.Tag)
+		plan.Images = append(plan.Images, ReleaseImages{Producer: c.Producer, Release: c.Tag, Report: images})
+		plan.Warnings = append(plan.Warnings, images.Warnings...)
+		if images.Failed() {
+			plan.Blockers = append(plan.Blockers, "images: "+c.Tag+" of "+c.Producer+" is not fully published")
+		}
+		emit(sink, Event{Kind: EventImagesChecked, Producer: c.Producer, Release: c.Tag, Images: &images})
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil

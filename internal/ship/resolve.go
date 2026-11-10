@@ -27,6 +27,10 @@ type resolution struct {
 	// to decide: the bot's, in CI. Empty leaves it to git.
 	committer    Identity
 	consumerRefs git.Refs
+	// derived is the companion each virtual Holding has for each release shipped,
+	// found once. It is shared by the copies of the resolution, so a run and its
+	// check agree on what was derived.
+	derived map[derivedKey]companion
 }
 
 // resolve finds the producer, picks the route to ship down, and resolves the
@@ -80,7 +84,7 @@ func resolveRoute(ctx context.Context, ws Reader, route bump.Route) (resolution,
 	if err != nil {
 		return resolution{}, err
 	}
-	res := resolution{producer: route.Producer, route: route, scheme: scheme, stream: stream}
+	res := resolution{producer: route.Producer, route: route, scheme: scheme, stream: stream, derived: map[derivedKey]companion{}}
 	producerRefs, err := ws.UpstreamRefs(ctx, route.Producer.Slug())
 	if err != nil {
 		return resolution{}, fmt.Errorf("read the tags of %s: %w", route.Producer.Slug(), err)
