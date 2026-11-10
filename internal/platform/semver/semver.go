@@ -18,8 +18,8 @@ type Info struct {
 	HasPrerelease bool
 	HasBuildMeta  bool
 
-	// Reserved for the SemVer grammar mode (docs/specs/CHECK_SEMVER.md
-	// section 6). Always zero until that option exists.
+	// Always zero: the SemVer grammar is read by Parse, not by Classify
+	// (docs/specs/CHECK_SEMVER.md).
 	IsSemver            bool
 	Major, Minor, Patch uint64
 	Prerelease          string

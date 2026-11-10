@@ -32,9 +32,8 @@ No gaps.
 
 ## Not built yet
 
-* Following the chain beyond one hop, such as `ob-team-charts` into `charts` into `rancher` (`also` lists the project and its own links today; it does not connect them back to the hub).
-* The answer for one producer and one line, "where does shell's `v2.15` go", which is a different command and not this map.
+* Following the chain beyond one hop, such as `ob-team-charts` into `charts` into `rancher` (`also` lists the project and its own links today; it does not connect them back to the hub). The walk follows each project's own holdings by line and assumes no fixed path, is safe on cycles, prints a tree and takes `--depth`; it is the walk of [CHAIN_TRACING](CHAIN_TRACING.md).
 
 ## Open questions
 
-* How the chain through `rancher/charts` connects back to the hub and leaves `also`: the holdings of Assets in Rancher and of charts in Assets are in the config, and following them is the walk of [CHAIN_TRACING](CHAIN_TRACING.md), which is not built.
+None yet.

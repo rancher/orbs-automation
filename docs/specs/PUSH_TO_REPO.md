@@ -38,7 +38,7 @@ The read half is shared with `gero repo status`, which traces what each consumer
 
 ## Applying a bump
 
-The update engine owns the lifecycle of one target branch. A **holding** says where the release is written (a file and a key, templates over the line, the stage and the branch, in a format) and in what form (`{image}:{tag}`, a URL, a bare tag), and the engine renders both for the release and the target; the read side (`Check`) never writes, and the write side (`Apply`) changes only that value and returns what it changed. An **edit** may add a **strategy**, Go code that claims a name (`chartsPackageBump`) and is listed in an explicit registry; the engine configures it once with the edit's `with` values, which it checks when the config loads.
+The update engine owns the lifecycle of one target branch. A **holding** says where the release is written (a file and a key, templates over the line, the stage and the branch, in a format) and in what form (`{image}:{tag}`, a URL, a bare tag), and the engine renders both for the release and the target; the read side (`Check`) never writes, and the write side (`Apply`) changes only that value and returns what it changed. An **edit** may add a **strategy**, Go code that claims a name (`chartsPackageBump`) and is listed in an explicit registry; the engine configures it once with the edit's `with` values, which it checks when the config loads. A strategy reports what it wrote through `Result.Changes`, as the write of a holding does.
 
 The lifecycle of a target is the edits' `preEdit` steps, the write of every holding, the strategies, and the edits' `postEdit` steps. The consumer's `postEdit` regenerates derived files, so it sees everything the write did. Only steps whose `since` and `until` range holds the branch's line run, and a branch in no line gets every step with no range. A step failure stops the run as an error naming the phase, the edit and the position, and a failed post-edit step still reports what the write changed. A strategy that is declared and not built stops the run before anything is written.
 
@@ -46,7 +46,7 @@ The lifecycle of a target is the edits' `preEdit` steps, the write of every hold
 
 **The preview names the step commits, and the report the files.** What a step will change is only known once it has run, so the preview lists the steps for the branch in the order they run, each with the commit message a run would give it (the same `stepMessage` a run uses) and where it fits around the edit, and says a step's commit is made only if it changes files. `--preview` prints them as "Step commits", and `--json` carries them as the preview's `steps`. Each commit a run makes, and one a rerun finds already on the branch, lists the paths it changed: one line under it in the report, the file for one, else the count and the first few, and all of them as `files` in the JSON and the count in the log.
 
-The engine decides which steps run and in what order, and builds each step's environment (`GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH` and `GERO_SOURCE_REPO`). A **step runner**, which `ship` supplies, runs the command: the process, its scrubbed environment through `execx`, and where the program comes from (`from`: the consumer's clone, the producer's repo at the release for an owned project, or the central bundle). The engine starts no process, so its lifecycle is tested with a runner that records calls.
+The engine decides which steps run and in what order, and builds each step's environment (`GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH` and `GERO_SOURCE_REPO`). A **step runner**, which `ship` supplies, runs the command: the process, its scrubbed environment through `execx`, and where the program comes from (`from`: the consumer's clone, the producer's repo at the release for an owned project, or the central bundle). The engine starts no process, so its lifecycle is tested with a runner that records calls. A step runs with the machine's own toolchain: `gero` selects none, so a workstation without `go` fails a `go generate` step with a `gero doctor` hint, and a repo that runs `gero` in its CI provides the tooling its steps need (orbs-automation uses the latest Go).
 
 ## What the scripts do today
 
@@ -98,7 +98,7 @@ go-git cannot create linked worktrees or switch a checkout the way `git` does, s
 
 ## The CI variant
 
-`gero ci:ship` is the same bump from a workflow, as the bot, over the same backends. What it shares, what CI adds and the setup that is still open are in [CI_SHIP](CI_SHIP.md), and the context differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
+`gero ci:ship` is the same bump from a workflow, as the bot, over the same backends. What it shares and what CI adds are in [CI_SHIP](CI_SHIP.md), and the context differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## What a run reports
 
@@ -172,7 +172,7 @@ Creating, finding and closing PRs, and commenting and labelling them, is one ser
 
 * **Templates are compiled in.** The commit message, body and trailers are generic templates in `internal/platform/templates`, written with `{name}` placeholders from a closed set (`templates.TextVars`). The body's `{changes}` is generated from what the strategy and the steps did, so it never claims a step that did not run. An unknown placeholder is a config error. Project-specific and bundle-shipped templates ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) are not designed until a project needs one.
 * **The run record** is one line in the body: the engineer's login locally, or the workflow run URL in CI.
-* **Labels, title and branch prefix** come from the consumer's `pullRequests` block. `labels` go on every PR, and `botLabels` only on a PR the bot opens, so a label that says a bot made it, such as `origin/bot`, is never on a PR an engineer opened from a workstation. A label the repository lacks is a warning, and the PR is still created. How labels are applied, and which are ever created, is in [METADATA](METADATA.md).
+* **Labels, title and branch prefix** come from the consumer's `pullRequests` block. The default title stays neutral and does not identify the tooling: identity is the marker, the author and, in shared repositories, a label such as `origin/bot`, and a title is a project's own convention. `labels` go on every PR, and `botLabels` only on a PR the bot opens, so a label that says a bot made it, such as `origin/bot`, is never on a PR an engineer opened from a workstation. A label the repository lacks is a warning, and the PR is still created. How labels are applied, and which are ever created, is in [METADATA](METADATA.md).
 * **Identity and signing** are the actor rules in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## Errors and exit codes
@@ -185,14 +185,12 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 ## Not built yet
 
-* A way to name a step's commit, or fold it into the previous one, which is the first knob to add if a project needs it.
+* A way to name a step's commit, or fold it into the previous one, which is the first knob to add if a project needs it; built only if someone asks.
 * `gero ci:ship` ([CI_SHIP](CI_SHIP.md)).
-* The sequence above as chained tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+* Closing superseded PRs, the plan and the publish steps as tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
+* Finding an existing bump PR by its marker without listing the newest 100 open PRs of the base (`pulls.DefaultMax`): on a busy base an older PR of the bump is missed.
 
 ## Open questions
 
-* Whether the default PR title should carry something that identifies the tooling. Identity is the marker, the author and, in shared repositories, a label such as `origin/bot`; a title is a project's own convention, and matching on it is fragile.
-* How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
-* The shape of `gero ci:ship`, in [CI_SHIP](CI_SHIP.md#open-questions).
-* How a strategy reads the value it wrote for the downgrade check. A holding reads its own value, and `chartsPackageBump` is not built.
+None yet.
