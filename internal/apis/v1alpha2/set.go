@@ -21,8 +21,11 @@ type refKey struct {
 
 // refKeys are the refs each kind has. A kind that is not here has none.
 var refKeys = map[string]map[string]refKey{
-	KindStream:   {"project": {target: KindProject, required: true}},
-	KindArtifact: {"stream": {target: KindStream, required: true}},
+	KindStream: {"project": {target: KindProject, required: true}},
+	KindArtifact: {
+		"stream": {target: KindStream, required: true},
+		"pins":   {target: KindArtifact, list: true},
+	},
 	KindHolding: {
 		"project":  {target: KindProject, required: true},
 		"artifact": {target: KindArtifact},
