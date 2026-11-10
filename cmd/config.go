@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/configresolve"
 	"github.com/rancher/orbs-automation/internal/cli/configshow"
 	"github.com/rancher/orbs-automation/internal/cli/configvalidate"
+	"github.com/rancher/orbs-automation/internal/cli/graphresolve"
 	"github.com/spf13/cobra"
 )
 
@@ -43,6 +44,32 @@ slug, or . for the project whose repository you are in) to look at only that.`,
 			if out != "" {
 				_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 			}
+			return err
+		},
+	})
+	resolveCmd.AddCommand(&cobra.Command{
+		Use:   "graph",
+		Short: "Draw the whole application config as a D2 diagram",
+		Long: `Draw every Project of the application config as a node, and every holding as
+a node between the Project that produces a release and the Project that holds
+it, so releases read as flowing one way from producers to consumers. A Project
+is marked managed, shared or external, the final destination is marked as the
+hub, and each holding's edge into its holder is labelled with the release lines
+it serves.
+
+The whole config is drawn, not one team's. The output is D2 source: render it
+with d2 graph.d2 graph.svg.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			out, err := graphresolve.Graph(settingsFrom(cmd), cwd)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprint(cmd.OutOrStdout(), out)
 			return err
 		},
 	})
