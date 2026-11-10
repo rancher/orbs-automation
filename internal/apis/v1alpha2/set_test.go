@@ -1,6 +1,7 @@
 package v1alpha2
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -631,4 +632,74 @@ func TestAnArtifactCannotPinItselfOrCircle(t *testing.T) {
 	rep = validateSet(t, world...)
 	assert.True(t, hasSetError(rep, `Artifact "wr-mod"`, "refs.pins", "cycle"), "%v", rep.Findings)
 	assert.True(t, hasSetError(rep, `Artifact "la-pin"`, "refs.pins", "cycle"), "%v", rep.Findings)
+}
+
+// pinned is a consumer that holds a Go module that pins another: bro holds
+// wr-mod for v2.15 and newer, and the pin makes a virtual Holding of la-mod there.
+func pinned(extra ...string) []string {
+	const gomodAt = "  at: {file: go.mod, key: github.com/acme/%s, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: %s}\n"
+	docs := []string{
+		doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n    - id: v2.15\n    - id: v2.14\n"),
+		doc("Project", "wr", "", "  repo: {name: acme/wr}\n"),
+		doc("Project", "la", "", "  repo: {name: acme/la}\n"),
+		doc("Project", "bro", "", "  repo: {name: acme/bro}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r15}, {line: v2.14, branch: r14}]\n"),
+		doc("Stream", "wr", "{project: wr}", streamSpec),
+		doc("Stream", "la", "{project: la}", streamSpec),
+		doc("Artifact", "la-mod", "{stream: la}", "  kind: gomod\n  name: github.com/acme/la\n"),
+		doc("Artifact", "wr-mod", "{stream: wr, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr\n"),
+		doc("Holding", "bro-holds-wr", "{project: bro, artifact: wr-mod}", fmt.Sprintf(gomodAt, "wr", "{since: v2.15}")),
+	}
+	return append(docs, extra...)
+}
+
+func explicitLasso(name, file, lines string) string {
+	return doc("Holding", name, "{project: bro, artifact: la-mod}",
+		"  at: {file: "+file+", key: github.com/acme/la, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: "+lines+"}\n")
+}
+
+func TestAPinWithNoExplicitHoldingOfThePinnedModuleIsValid(t *testing.T) {
+	rep := validateSet(t, pinned()...)
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestAnExplicitHoldingThatOverlapsAVirtualOneIsAnError(t *testing.T) {
+	rep := validateSet(t, pinned(explicitLasso("bro-holds-la", "go.mod", "{}"))...)
+
+	require.Error(t, rep.Err())
+	assert.True(t, hasSetError(rep, `Holding "bro-holds-la"`, "spec.at", "virtual"), "%v", rep.Findings)
+	assert.True(t, hasSetError(rep, `Holding "bro-holds-la"`, "spec.at", `"bro-holds-wr"`), "it names the Holding the pin comes from: %v", rep.Findings)
+}
+
+func TestAnExplicitHoldingForTheLinesNoPinCoversIsValid(t *testing.T) {
+	rep := validateSet(t, pinned(explicitLasso("bro-holds-la", "go.mod", "{until: v2.14}"))...)
+
+	assert.Empty(t, rep.Findings, "the wrangler Holding is for v2.15 and newer")
+}
+
+func TestAnExplicitHoldingOfAnotherFileIsValid(t *testing.T) {
+	rep := validateSet(t, pinned(explicitLasso("bro-holds-la", "tool/go.mod", "{}"))...)
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestTwoPinsOfOneModuleInOnePlaceOverlap(t *testing.T) {
+	rep := validateSet(t, pinned(
+		doc("Stream", "wr2", "{project: wr}", streamSpec),
+		doc("Artifact", "wr2-mod", "{stream: wr2, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr2\n"),
+		doc("Holding", "bro-holds-wr2", "{project: bro, artifact: wr2-mod}", "  at: {file: go.mod, key: github.com/acme/wr2, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {until: v2.15}}\n"),
+	)...)
+
+	require.Error(t, rep.Err())
+	assert.True(t, hasSetError(rep, `Holding "bro-holds-wr2"`, "refs.artifact", "virtual"), "%v", rep.Findings)
+}
+
+func TestTwoPinsOfOneModuleForDifferentLinesDoNotOverlap(t *testing.T) {
+	rep := validateSet(t, pinned(
+		doc("Stream", "wr2", "{project: wr}", streamSpec),
+		doc("Artifact", "wr2-mod", "{stream: wr2, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr2\n"),
+		doc("Holding", "bro-holds-wr2", "{project: bro, artifact: wr2-mod}", "  at: {file: go.mod, key: github.com/acme/wr2, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {until: v2.14}}\n"),
+	)...)
+
+	assert.Empty(t, rep.Findings)
 }
