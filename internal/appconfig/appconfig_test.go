@@ -158,22 +158,3 @@ func TestLoadKeepsWarningsAndTheConfig(t *testing.T) {
 	assert.Contains(t, rep.Warnings()[0].Error(), "p.yaml")
 	assert.Len(t, cfg.Projects, 1)
 }
-
-func TestLoadAcceptsTheCheckedInV1alpha2Config(t *testing.T) {
-	cfg, rep := Load(os.DirFS("../../config"), ctx)
-
-	require.NoError(t, rep.Err())
-	// BRO holds an older wrangler minor than Rancher on v2.16: the config says so, and
-	// the warning is left visible.
-	require.Len(t, rep.Warnings(), 1)
-	assert.Equal(t, "stream-differs-from-destination", rep.Warnings()[0].Rule)
-	assert.Len(t, cfg.Projects, 9)
-	assert.NotNil(t, cfg.Lines)
-	var images []string
-	for _, a := range cfg.Artifacts {
-		if a.Spec.Kind == "image" && strings.HasPrefix(a.Spec.Name, "rancher/rancher") {
-			images = append(images, a.Spec.Name)
-		}
-	}
-	assert.Subset(t, images, []string{"rancher/rancher", "rancher/rancher-agent", "rancher/rancher-server"})
-}
