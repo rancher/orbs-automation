@@ -96,6 +96,42 @@ func TestGraphNestsTheStreamsAndArtifactsInTheirProject(t *testing.T) {
 	shell := out[strings.Index(out, `"rancher/shell": {`):]
 	shell = shell[:strings.Index(shell, "\n}\n")]
 	assert.Contains(t, shell, `"stream:shell": {`)
-	assert.Contains(t, shell, `"artifact:shell-image": {class: [artifact]; label: "rancher/shell"}`)
+	assert.Contains(t, shell, `"artifact:shell-image": {class: [artifact]; label: "shell-image\nrancher/shell"}`)
 	assert.NotContains(t, out[:strings.Index(out, `"rancher/shell": {`)], "stream:shell")
+}
+
+// twoSeries is a producer with a stream for each of two series whose artifacts
+// publish under the same name, as a Go module does, held by one project twice.
+func twoSeries(t *testing.T) string {
+	t.Helper()
+	g := chaintest.Load(t,
+		project("lib", "  repo: {name: rancher/lib, managedBy: rancher}\n"),
+		project("app", "  repo: {name: rancher/app, managedBy: rancher}\n"),
+		chaintest.Doc("Stream", "lib-v1-1", "{project: lib}", "  tagPattern: \"v1.1.*\"\n  universal: true\n"),
+		chaintest.Doc("Artifact", "lib-v1-1-module", "{stream: lib-v1-1}", "  kind: gomod\n  name: github.com/rancher/lib\n"),
+		chaintest.Doc("Stream", "lib-v1-2", "{project: lib}", "  tagPattern: \"v1.2.*\"\n  universal: true\n"),
+		chaintest.Doc("Artifact", "lib-v1-2-module", "{stream: lib-v1-2}", "  kind: gomod\n  name: github.com/rancher/lib\n"),
+		chaintest.Doc("Holding", "app-holds-lib-1-1", "{project: app, artifact: lib-v1-1-module}",
+			"  at: {file: go.mod, key: github.com/rancher/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all}\n"),
+		chaintest.Doc("Holding", "app-holds-lib-1-2", "{project: app, artifact: lib-v1-2-module}",
+			"  at: {file: go.mod, key: github.com/rancher/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all}\n"),
+	)
+	out, err := graph(fakeWorkspace{g: g})
+	require.NoError(t, err)
+	return out
+}
+
+func TestGraphLabelsEachNodeApartFromOthersOfTheSameArtifactName(t *testing.T) {
+	out := twoSeries(t)
+	labels := map[string]bool{}
+	for _, line := range strings.Split(out, "\n") {
+		if i := strings.Index(line, "label: "); i >= 0 && (strings.Contains(line, "artifact") || strings.Contains(line, "holding") || strings.Contains(line, "stream")) {
+			label := line[i:]
+			assert.False(t, labels[label], "two nodes are labelled %s", label)
+			labels[label] = true
+		}
+	}
+	assert.Contains(t, out, `label: "stream lib-v1-1\nv1.1.*"`)
+	assert.Contains(t, out, `label: "lib-v1-2-module\ngithub.com/rancher/lib"`)
+	assert.Contains(t, out, `label: "app-holds-lib-1-1\nrelease"`)
 }
