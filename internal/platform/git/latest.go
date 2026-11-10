@@ -23,7 +23,12 @@ type Latest struct {
 // Newest is the newest tag of any kind: the prerelease when there is one, since
 // it is only reported when it is newer than the stable tag, else the stable tag.
 // It is nil when there is neither.
-func (l Latest) Newest() *Tag { return nil }
+func (l Latest) Newest() *Tag {
+	if l.Prerelease != nil {
+		return l.Prerelease
+	}
+	return l.Stable
+}
 
 // TODO(release-state): this answers "what is newest" for one line or project.
 // Telling how many releases a consumer is behind (see the TODO on ship.Holding and
