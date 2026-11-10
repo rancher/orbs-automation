@@ -45,6 +45,7 @@ type previewInput struct {
 	target     Target
 	checks     []bump.HoldingCheck // the holdings that change: the file, the old and new values and the change of each
 	steps      []bump.StepRef      // the steps that run around the write for this branch, in order, with their phase
+	skipped    []bump.StepRef      // the steps the producer's team does not let gero run, which the body lists
 	userPrefix string              // the user's branchPrefix setting, which replaces the project's whole
 }
 
@@ -223,7 +224,19 @@ func changes(in previewInput) string {
 	for _, ref := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")
 	}
+	for _, ref := range in.skipped {
+		lines = append(lines, "- Skipped `"+strings.Join(ref.Step.Run, " ")+"`: it runs from "+in.producer.Slug()+", "+managedByWords(in.producer)+", so this PR may be incomplete")
+	}
 	return strings.Join(lines, "\n")
+}
+
+// managedByWords says who manages a project, for the PR to read: managed by a
+// team, or by none that is named.
+func managedByWords(p *chain.Project) string {
+	if team := p.ManagedBy(); team != "" {
+		return "which " + team + " manages"
+	}
+	return "which no team names"
 }
 
 func firstNonEmpty(values ...string) string {

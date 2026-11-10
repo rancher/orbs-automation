@@ -67,7 +67,7 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 	pre, post := r.route.Steps(sp.target)
 	preview, err := renderPreview(previewInput{
 		producer: r.producer, consumer: r.route.Consumer, release: sp.release, target: target,
-		checks: stale, steps: append(pre, post...), userPrefix: in.BranchPrefix,
+		checks: stale, steps: append(pre, post...), skipped: r.route.SkippedSteps(sp.target), userPrefix: in.BranchPrefix,
 	})
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("render the PR: %w", err)
