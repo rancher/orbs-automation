@@ -96,7 +96,7 @@ func TestLoadTheCacheIsUsedAsOldAsItIsBecauseItIsOnlyReplacedByAFetch(t *testing
 
 	require.NoError(t, err)
 	assert.Equal(t, "v0.6.0", got.Source.Tag)
-	assert.False(t, got.Source.Stale, "an old cache is not stale: nothing is refreshing it")
+	assert.Equal(t, 90*24*time.Hour, got.Source.Age)
 }
 
 func TestLoadTheCacheMustBeOnTheLineTheGeroIsOn(t *testing.T) {

@@ -94,17 +94,17 @@ func TestConfigDirCheckSaysWhenTheConfigIsTheBundle(t *testing.T) {
 	assert.Equal(t, Result{Status: StatusOK, Message: "bundle v0.5.0, 3 hours old"}, got)
 }
 
-func TestConfigDirCheckWarnsWhenTheBundleIsAStaleCacheAndSaysWhy(t *testing.T) {
+func TestConfigDirCheckWarnsWhenTheBundleHasANoteAndSaysWhy(t *testing.T) {
 	ws := &fakeWorkspace{bundle: &bundlestore.Source{
-		Tag: "v0.3.0", Age: 72 * time.Hour, FromCache: true, Stale: true,
-		Note: "using the cached bundle of v0.3.0, 3 days old: the GitHub rate limit is used up",
+		Embedded: true, Tag: "v0.5.0",
+		Note: "the cached bundle of v0.6.0 is not readable (bad); using the embedded bundle",
 	}}
 
 	got := NewConfigDirCheck(ws).Run(context.Background())
 
 	assert.Equal(t, Result{
-		Status: StatusWarn, Message: "bundle v0.3.0, 3 days old",
-		Remediation: "using the cached bundle of v0.3.0, 3 days old: the GitHub rate limit is used up",
+		Status: StatusWarn, Message: "embedded bundle v0.5.0",
+		Remediation: "the cached bundle of v0.6.0 is not readable (bad); using the embedded bundle",
 	}, got)
 }
 

@@ -96,19 +96,17 @@ func (w *Workspace) loadBundle(lead error) (ConfigSource, error) {
 	return ConfigSource{Bundle: &l.Source}, nil
 }
 
-// bundleFor is the default bundle source for the settings: the release's bundle,
-// fetched, verified and cached. There is none without a gero version, which only
-// cmd/ sets, so no test or library caller reaches the network by accident, and
-// none in CI, which has a checkout of the central repo (docs/specs/CENTRAL_BUNDLE.md).
+// bundleFor is the default bundle source for the settings: a cached bundle newer than
+// this gero, else the bundle compiled into it, and never a request. There is none
+// without a gero version, which only cmd/ sets, so a test or library caller reads the
+// config it was given and nothing else; and none when the config is to come from a
+// directory. CI is no exception: a job with only the binary reads the bundle in it
+// (docs/specs/CENTRAL_BUNDLE.md).
 func bundleFor(s clicfg.Settings) BundleSource {
 	if s.GeroVersion == "" || s.ConfigSource == clicfg.ConfigSourceDir {
 		return nil
 	}
-	// CI has a checkout, unless the bundle is asked for by name.
-	if s.CI && s.ConfigSource != clicfg.ConfigSourceBundle {
-		return nil
-	}
-	return resolverSource{version: s.GeroVersion, offline: s.Offline, channel: channelOf(s)}
+	return resolverSource{version: s.GeroVersion, channel: channelOf(s)}
 }
 
 // channelOf is the bundle channel of the settings, as the resolver names it.
@@ -127,32 +125,49 @@ func channelOf(s clicfg.Settings) string {
 const (
 	releaseOwner = "rancher"
 	releaseRepo  = "orbs-automation"
-	loadTimeout  = 60 * time.Second
+	fetchTimeout = 60 * time.Second
 )
 
-// resolverSource is the BundleSource over the real cache and the real releases. The
-// token is looked up only when a request is to be made: a public repository needs
-// none, and the lookup can start gh.
+// resolverSource is the BundleSource over the real cache and the bundle in the
+// binary. It makes no request: a newer bundle gets into the cache by FetchBundle.
 type resolverSource struct {
 	version string
-	offline bool
 	channel string
 }
 
 func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
-	ctx, cancel := context.WithTimeout(ctx, loadTimeout)
-	defer cancel()
+	return resolverFor(nil).Load(ctx, bundlestore.Request{GeroVersion: r.version, Channel: r.channel})
+}
+
+// resolverFor is the resolver over the user's cache, and over the releases when
+// there are any to look at.
+func resolverFor(releases bundlestore.Releases) *bundlestore.Resolver {
 	home, _ := os.UserHomeDir()
-	res := bundlestore.Resolver{Cache: bundlestore.Cache{Dir: clicfg.CacheDir(os.Getenv, home)}}
-	if !r.offline {
-		// The signatures are checked against this repository's release workflow, so
-		// a bundle another repository, or a stolen token, published is refused.
-		verifier, err := releasesign.New(nil)
-		if err != nil {
-			return bundlestore.Loaded{}, err
-		}
-		_, token := defaultCredentials()
-		res.Releases = assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token, Verifier: verifier})
+	return &bundlestore.Resolver{Releases: releases, Cache: bundlestore.Cache{Dir: clicfg.CacheDir(os.Getenv, home)}}
+}
+
+// ErrOffline is returned by FetchBundle when the settings say no request is to be
+// made.
+var ErrOffline = errors.New("fetching the config bundle needs the network, and this run is offline")
+
+// FetchBundle is the one place the config bundle is looked for on the network, for
+// gero config fetch: it asks the releases of this repository for a bundle newer than
+// this gero's own on its channel, and keeps a verified one in the user's cache, where
+// every later run finds it. The result says what is now in use. The token is looked
+// up only here, since a public repository needs none and the lookup can start gh.
+func FetchBundle(ctx context.Context, s clicfg.Settings) (bundlestore.Loaded, error) {
+	if s.Offline {
+		return bundlestore.Loaded{}, ErrOffline
 	}
-	return res.Fetch(ctx, bundlestore.Request{GeroVersion: r.version, Offline: r.offline, Channel: r.channel})
+	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
+	defer cancel()
+	// The signatures are checked against this repository's release workflow, so
+	// a bundle another repository, or a stolen token, published is refused.
+	verifier, err := releasesign.New(nil)
+	if err != nil {
+		return bundlestore.Loaded{}, err
+	}
+	_, token := defaultCredentials()
+	releases := assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token, Verifier: verifier})
+	return resolverFor(releases).Fetch(ctx, bundlestore.Request{GeroVersion: s.GeroVersion, Channel: channelOf(s)})
 }

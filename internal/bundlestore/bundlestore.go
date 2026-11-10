@@ -1,6 +1,6 @@
 // Package bundlestore finds the central config bundle for a workstation that has
-// no local config: it chooses the release, downloads and verifies the bundle, keeps
-// it in the user's cache, and falls back to the cache when the network fails
+// no local config: the bundle compiled into the binary, or a newer release's that an
+// opt-in fetch downloaded, verified and kept in the user's cache
 // (docs/specs/CENTRAL_BUNDLE.md). It never looks at local config, which always wins
 // and is the workspace's business.
 package bundlestore
@@ -18,13 +18,10 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
 )
 
-// ErrUnavailable is returned when there is no bundle to use: none in the cache and
-// none fetched. The error wraps why.
-var ErrUnavailable = errors.New("no config bundle is available")
-
-// DefaultRefresh is how long a cached bundle is used before the release is
-// looked at again.
-const DefaultRefresh = 24 * time.Hour
+// ErrUnavailable is returned by Fetch when the release's bundle could not be got:
+// the releases were not reached, or what was downloaded was not verified. The error
+// wraps why.
+var ErrUnavailable = errors.New("no config bundle could be fetched")
 
 // Releases is where releases come from. It is defined here, where it is consumed;
 // assetfetch.Fetcher is the real one.
@@ -39,7 +36,6 @@ type Resolver struct {
 	Releases Releases
 	Cache    Cache
 	Now      func() time.Time // nil for time.Now
-	Refresh  time.Duration    // 0 for DefaultRefresh
 	// Embedded is the bundle compiled into the binary, in the format bundle.Parse
 	// reads. Nil is the real one, embedded.Bytes.
 	Embedded []byte
@@ -50,8 +46,6 @@ type Request struct {
 	// GeroVersion is the running gero's release, such as v0.5.0 or v0.6.0-rc.1, or
 	// "dev" for a build that is not a release.
 	GeroVersion string
-	// Offline reads the cache and nothing else: no request is made.
-	Offline bool
 	// Channel is which releases may be chosen: ChannelAuto, ChannelStable or
 	// ChannelPrerelease. Empty is ChannelAuto.
 	Channel string
@@ -76,11 +70,8 @@ type Source struct {
 	FetchedAt time.Time     // when it was downloaded, or last confirmed current
 	Age       time.Duration // how long ago that was
 	FromCache bool          // it came from the cache and not from this run's download
-	// Stale says the cached bundle is used because it could not be refreshed, or
-	// because the request was offline and it is past its refresh time.
-	Stale bool
-	// Note says why, when there is something to say: that the network failed, or
-	// that a newer bundle was not readable.
+	// Note says why, when there is something to say: that nothing newer is published,
+	// or that a newer bundle was not readable.
 	Note string
 }
 
@@ -91,63 +82,69 @@ type Loaded struct {
 	Source Source
 }
 
-// Fetch finds the bundle for the request on the network. The rules are the spec's:
+// Fetch is the opt-in network path: it looks at the releases and, when the newest on
+// the channel is newer than the gero's own, downloads its bundle into the cache,
+// where Load finds it from then on. The rules are the spec's:
 //
 //   - The channel says which releases are candidates. Auto follows the gero: a
-//     stable gero uses the newest stable release's bundle, and a build that is
-//     not a release the same; a prerelease gero uses the newest release's bundle,
-//     a prerelease or not, and its own when that is the newest or the newest is
-//     not readable. Stable takes the newest stable for any gero, and prerelease
-//     the newest of all for any gero.
-//   - A fresh cache is used only if its release is one the channel would choose.
-//   - A cached bundle under a day old is used with no request, unless it is older
-//     than the gero's own release. An older one is checked against the newest
-//     release, and downloaded only when that is a different one.
+//     stable gero looks at stable releases, and a prerelease gero at the newest
+//     release, a prerelease or not. Stable looks at stable releases only for any
+//     gero, and prerelease at the newest of all.
+//   - Only a release newer than the gero's own is downloaded. Its own bundle is the
+//     embedded one, so when nothing is newer the result is the embedded bundle, with
+//     a note that says so. A gero that is not a release has none to be newer than.
+//   - The release is always asked for, however fresh the cache is. A cached bundle of
+//     the same release is confirmed and not downloaded again.
 //   - A download is used only after it matches the published checksum, the
 //     fetcher has verified the signatures, and it parses, and only then replaces
 //     the cache.
-//   - When the release cannot be reached or verified, the cache is used and the
-//     source says so, with its release and age. With no cache that is an error.
-//   - Offline reads the cache only.
+//   - A newest bundle in a format this gero cannot read is passed over: for the
+//     newest stable release when the channel looked at pre-releases and that one is
+//     newer than the gero, and otherwise for what Load gives. The note names why.
+//   - When the release cannot be reached or verified that is an error, and the cache
+//     is as it was.
 func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
-	now := r.now()
-	cached, have, _ := r.Cache.Read() // an unreadable cache is the same as none
 	own := ownRelease(req.GeroVersion)
-	channel := req.Channel
-
-	if req.Offline {
-		if !have {
-			return Loaded{}, fmt.Errorf("%w: none is cached, and this run is offline", ErrUnavailable)
-		}
-		l, err := fromCache(cached, now)
-		if err != nil {
-			return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
-		}
-		if l.Source.Age >= r.refresh() {
-			l.Source.Stale = true
-			l.Source.Note = fmt.Sprintf("the cached bundle of %s is %s old, and this run is offline", cached.Tag, ageString(l.Source.Age))
-		}
-		return l, nil
+	if own == "" {
+		return r.loadNoting(ctx, req, "this build is not a release, so there is no newer release to fetch a bundle of")
 	}
-
-	if have && now.Sub(cached.FetchedAt) < r.refresh() && !olderThan(cached.Tag, guard(own, channel)) && fitsChannel(cached.Tag, own, channel) {
-		if l, err := fromCache(cached, now); err == nil {
-			return l, nil
-		}
+	cached, have, _ := r.Cache.Read() // an unreadable cache is the same as none
+	prereleases := wantsPrereleases(own, req.Channel)
+	latest, err := r.Releases.Latest(ctx, prereleases)
+	if err != nil {
+		return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
-
-	l, err := r.fetch(ctx, own, channel, cached, have, now)
+	if !newerThan(latest.Tag, own) {
+		return r.loadNoting(ctx, req, fmt.Sprintf("the newest release on this channel, %s, is not newer than this gero's own, %s", latest.Tag, own))
+	}
+	now := r.now()
+	l, err := r.use(ctx, latest.Tag, cached, have, now)
 	if err == nil {
 		return l, nil
 	}
-	if have {
-		if l, cerr := fromCache(cached, now); cerr == nil {
-			l.Source.Stale = true
-			l.Source.Note = fmt.Sprintf("using the cached bundle of %s, %s old: %s", cached.Tag, ageString(l.Source.Age), reason(err))
-			return l, nil
+	if !errors.Is(err, bundle.ErrUnsupported) {
+		return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	note := fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v)", latest.Tag, err)
+	if prereleases && isPrerelease(latest.Tag) {
+		if stable, serr := r.Releases.Latest(ctx, false); serr == nil && newerThan(stable.Tag, own) {
+			if l, ferr := r.use(ctx, stable.Tag, cached, have, now); ferr == nil {
+				l.Source.Note = note + "; using the bundle of " + stable.Tag
+				return l, nil
+			}
 		}
 	}
-	return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	return r.loadNoting(ctx, req, note)
+}
+
+// loadNoting is what Load gives, with the note said before any it has of its own.
+func (r *Resolver) loadNoting(ctx context.Context, req Request, note string) (Loaded, error) {
+	l, err := r.Load(ctx, req)
+	if l.Source.Note != "" {
+		note += "; " + l.Source.Note
+	}
+	l.Source.Note = note
+	return l, err
 }
 
 // Load is the bundle to use with no request made: a cached bundle when it is of a
@@ -201,46 +198,6 @@ func (r *Resolver) now() time.Time {
 	return time.Now()
 }
 
-func (r *Resolver) refresh() time.Duration {
-	if r.Refresh > 0 {
-		return r.Refresh
-	}
-	return DefaultRefresh
-}
-
-// fetch looks at the releases and takes the bundle that the rules choose.
-func (r *Resolver) fetch(ctx context.Context, own, channel string, cached Entry, have bool, now time.Time) (Loaded, error) {
-	prereleases := wantsPrereleases(own, channel)
-	latest, err := r.Releases.Latest(ctx, prereleases)
-	if err != nil {
-		return Loaded{}, err
-	}
-	target, fallback := latest.Tag, ""
-	if floor := floor(own, channel); floor != "" {
-		if cmp, ok := assetfetch.CompareVersions(latest.Tag, floor); !ok || cmp <= 0 {
-			target = floor
-		} else {
-			fallback = floor
-		}
-	}
-	l, err := r.use(ctx, target, cached, have, now)
-	if err != nil && errors.Is(err, bundle.ErrUnsupported) {
-		if fallback == "" && prereleases && isPrerelease(target) {
-			// Nothing of the gero's own to fall back to: the newest stable release.
-			if stable, serr := r.Releases.Latest(ctx, false); serr == nil {
-				fallback = stable.Tag
-			}
-		}
-		if fallback != "" && fallback != target {
-			if l, ferr := r.use(ctx, fallback, cached, have, now); ferr == nil {
-				l.Source.Note = fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v); using the bundle of %s", target, err, fallback)
-				return l, nil
-			}
-		}
-	}
-	return l, err
-}
-
 // wantsPrereleases is whether pre-releases are candidates: as the channel says, or,
 // left to auto, when the gero itself is a pre-release.
 func wantsPrereleases(own, channel string) bool {
@@ -251,26 +208,6 @@ func wantsPrereleases(own, channel string) bool {
 		return true
 	}
 	return own != "" && isPrerelease(own)
-}
-
-// floor is the oldest release the gero may run on: its own, when it is a
-// pre-release made with that bundle and the channel does not exclude it. A stable
-// channel has none, and so has a gero that is not a pre-release.
-func floor(own, channel string) string {
-	if own == "" || !isPrerelease(own) || channel == ChannelStable {
-		return ""
-	}
-	return own
-}
-
-// guard is the release a cached bundle must not be older than: the gero's own,
-// which an upgraded gero must not run behind, except where a stable channel asks a
-// pre-release gero for releases that are older than it.
-func guard(own, channel string) string {
-	if channel == ChannelStable && own != "" && isPrerelease(own) {
-		return ""
-	}
-	return own
 }
 
 // fitsChannel is whether a cached release is one the channel would choose: a
@@ -328,35 +265,6 @@ func ownRelease(version string) string {
 func isPrerelease(tag string) bool {
 	tag, _, _ = strings.Cut(tag, "+")
 	return strings.Contains(tag, "-")
-}
-
-// olderThan is whether the cached release is older than the gero's own, which a
-// gero that has been upgraded must not run on.
-func olderThan(tag, own string) bool {
-	if own == "" {
-		return false
-	}
-	cmp, ok := assetfetch.CompareVersions(tag, own)
-	return ok && cmp < 0
-}
-
-// reason says in a sentence why a release could not be used.
-func reason(err error) string {
-	switch {
-	case errors.Is(err, assetfetch.ErrRateLimited):
-		return "the GitHub rate limit is used up"
-	case errors.Is(err, assetfetch.ErrChecksumMismatch):
-		return "the download did not match its published checksum"
-	case errors.Is(err, assetfetch.ErrSignatureMissing):
-		return "the release carries no signature for the bundle: " + err.Error()
-	case errors.Is(err, assetfetch.ErrSignatureInvalid):
-		return "the signature of the bundle or of the checksums was refused: " + err.Error()
-	case errors.Is(err, assetfetch.ErrNoChecksum):
-		return "the release publishes no checksum for the bundle"
-	case errors.Is(err, bundle.ErrUnsupported):
-		return "this gero cannot read the newest bundle (" + err.Error() + ")"
-	}
-	return err.Error()
 }
 
 // ageString says how old something is, roughly.

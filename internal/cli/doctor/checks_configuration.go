@@ -49,7 +49,7 @@ func (c configDirCheck) Run(context.Context) Result {
 		return Result{Status: StatusFail, Message: "no central config directory found", Remediation: remediation}
 	case err != nil:
 		return Result{Status: StatusFail, Message: err.Error()}
-	case src.Bundle != nil && src.Bundle.Stale:
+	case src.Bundle != nil && src.Bundle.Note != "":
 		return Result{Status: StatusWarn, Message: src.Bundle.Describe(), Remediation: src.Bundle.Note}
 	case src.Bundle != nil:
 		return Result{Status: StatusOK, Message: src.Bundle.Describe()}
