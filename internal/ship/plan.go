@@ -267,7 +267,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	}
 	header := plan
 	emit(sink, Event{Kind: EventResolved, Plan: &header})
-	destinations, mismatches := res.destinations(ctx, ws, specs, in)
+	destinations, mismatches := res.destinations(ctx, ws, specs)
 	var needsPR []string // the tags of the releases that some target needs a PR for
 	for _, sp := range specs {
 		tp, err := res.checkTarget(ctx, ws, sp, in)

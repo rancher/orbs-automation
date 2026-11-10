@@ -7,13 +7,16 @@ import domain "github.com/rancher/orbs-automation/internal/ship"
 // that shows a run as it happens, so the two cannot differ.
 func replay(plan domain.Plan) []domain.Event {
 	header := plan
-	header.Targets, header.Images = nil, nil
+	header.Targets, header.Images, header.Destination = nil, nil, nil
 	events := []domain.Event{{Kind: domain.EventResolved, Plan: &header}}
 	for i := range plan.Targets {
 		t := plan.Targets[i]
 		events = append(events, domain.Event{Kind: domain.EventTargetChecked, Branch: t.Branch, Line: t.Line, Target: &t})
 	}
 	events = append(events, domain.Event{Kind: domain.EventTargetsChecked})
+	for i := range plan.Destination {
+		events = append(events, domain.Event{Kind: domain.EventDestination, Line: plan.Destination[i].Line, Destination: &plan.Destination[i]})
+	}
 	for i := range plan.Images {
 		events = append(events, domain.Event{Kind: domain.EventImagesChecked, Release: plan.Images[i].Release, Images: &plan.Images[i].Report})
 	}

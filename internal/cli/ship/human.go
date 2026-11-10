@@ -28,6 +28,7 @@ type humanSink struct {
 	prShown   bool
 	working   bool // the section for the work on branches has been started
 	deciding  bool // the section for the open PRs of each branch has been started
+	destShown bool // the section for the final destination has been started
 }
 
 var _ domain.Sink = (*humanSink)(nil)
@@ -88,6 +89,9 @@ func (h *humanSink) Event(e domain.Event) {
 		h.targetChecked(e.Target)
 	case domain.EventTargetsChecked:
 		h.endTargets()
+	case domain.EventDestination:
+		h.endTargets()
+		h.destination(e.Destination)
 	case domain.EventImagesChecked:
 		h.endTargets()
 		h.images(e.Release, e.Images)
@@ -190,6 +194,29 @@ func (h *humanSink) endTargets() {
 	for _, g := range groupTargets(h.targets, func(t domain.TargetPlan) []string { return t.Warnings }) {
 		h.out.Line("")
 		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("Warning (%s): %s", strings.Join(g.branches, ", "), g.text)))
+	}
+}
+
+// destination shows what the final destination holds on a line, under a heading of
+// its own: the reference the release is compared with.
+func (h *humanSink) destination(d *domain.Destination) {
+	if d == nil {
+		return
+	}
+	if !h.destShown {
+		h.destShown = true
+		h.out.Line("")
+		h.heading("Destination")
+	}
+	switch {
+	case d.Error != "":
+		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  %s: %s could not be read: %s", d.Line, d.Project, d.Error)))
+	default:
+		var held []string
+		for _, v := range d.Held {
+			held = append(held, v.Current)
+		}
+		h.out.Line(fmt.Sprintf("  %s: %s holds %s through %s, on %s", d.Line, d.Project, strings.Join(held, ", "), d.Stream, d.Branch))
 	}
 }
 

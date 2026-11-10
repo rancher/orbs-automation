@@ -27,6 +27,7 @@ type lineSpec struct{ Line, Branch string }
 type projectSpec struct {
 	Name, Repo, ManagedBy string
 	Aliases               []string      // shorthand names
+	FinalDestination      bool          // the project releases end in
 	Title                 string        // pullRequests.title
 	PushTo                string        // pullRequests.pushTo
 	Labels, BotLabels     []string      // pullRequests.labels and botLabels
@@ -176,6 +177,9 @@ func projectBody(p projectSpec) string {
 	}
 	repo += "}"
 	body := "  repo: " + repo + "\n"
+	if p.FinalDestination {
+		body += "  finalDestination: true\n"
+	}
 	if len(p.Aliases) > 0 {
 		body = "  aliases: [" + strings.Join(p.Aliases, ", ") + "]\n" + body
 	}
