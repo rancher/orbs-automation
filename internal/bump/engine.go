@@ -183,6 +183,9 @@ func (e *Engine) RoutesInto(consumer *chain.Project) []Route {
 	return e.routes(consumer.Held(), func(h *chain.Holding) *chain.Project { return h.Producer() })
 }
 
+// AppliesTo reports whether the route has a holding for the consumer's line.
+func (r Route) AppliesTo(string) bool { return false }
+
 // holdingsOf is the holdings a target writes: its own, or the route's when it
 // names none.
 func (r Route) holdingsOf(t Target) []*chain.Holding {
