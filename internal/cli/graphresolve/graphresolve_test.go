@@ -164,7 +164,7 @@ func withEdits(t *testing.T) string {
 
 func TestGraphDrawsAnEditOnceWithAnEdgeFromEachHoldingItFollows(t *testing.T) {
 	out := withEdits(t)
-	assert.Equal(t, 1, strings.Count(out, `"edit:app-steps": {`))
+	assert.Equal(t, 1, strings.Count(out, `"edit:app-steps": {class:`))
 	assert.Contains(t, out, `"holding:app-holds-lib-module" -> "edit:app-steps"`)
 	assert.Contains(t, out, `"holding:app-holds-lib-image" -> "edit:app-steps"`)
 	assert.Contains(t, out, `"holding:app-holds-lib-module" -> "edit:app-bump"`)

@@ -6,6 +6,7 @@ package graphresolve
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -36,6 +37,7 @@ const (
 	classHolding  = "holding"
 	classStream   = "stream"
 	classArtifact = "artifact"
+	classEdit     = "edit"
 )
 
 const header = `direction: right
@@ -52,6 +54,7 @@ classes: {
   holding: {shape: hexagon; style.font-size: 12}
   stream: {style.fill: "#ffffff"; style.stroke-dash: 2}
   artifact: {shape: cylinder}
+  edit: {style.fill: "#fde2e2"}
 }
 `
 
@@ -73,8 +76,22 @@ func graph(ws Workspace) (string, error) {
 	holdings := slices.Clone(g.Holdings())
 	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
 	b.WriteString("\n")
+	edits := map[string]*chain.Edit{}
 	for _, h := range holdings {
 		writeHolding(&b, g, h)
+		for _, e := range h.Edits() {
+			edits[e.Name()] = e
+		}
+	}
+
+	b.WriteString("\n")
+	for _, name := range slices.Sorted(maps.Keys(edits)) {
+		fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(editKey(edits[name])), classEdit, quote(editLabel(edits[name])))
+	}
+	for _, h := range holdings {
+		for _, e := range h.Edits() {
+			fmt.Fprintf(&b, "%s -> %s: {style.stroke-dash: 4}\n", quote("holding:"+h.Name()), quote(editKey(e)))
+		}
 	}
 	return b.String(), nil
 }
@@ -112,6 +129,34 @@ func streamLabel(s *chain.Stream) string {
 		return "stream " + s.Name()
 	}
 	return "stream " + s.Name() + "\n" + s.TagPattern()
+}
+
+func editKey(e *chain.Edit) string { return "edit:" + e.Name() }
+
+// editLabel names the edit and says what it does: the strategy that needs code,
+// and how many steps run before and after the write.
+func editLabel(e *chain.Edit) string {
+	var does []string
+	if e.Strategy() != "" {
+		does = append(does, "strategy "+e.Strategy())
+	}
+	if n := len(e.PreEdit()); n > 0 {
+		does = append(does, "pre "+steps(n))
+	}
+	if n := len(e.PostEdit()); n > 0 {
+		does = append(does, "post "+steps(n))
+	}
+	if len(does) == 0 {
+		return e.Name()
+	}
+	return e.Name() + "\n" + strings.Join(does, ", ")
+}
+
+func steps(n int) string {
+	if n == 1 {
+		return "1 step"
+	}
+	return fmt.Sprintf("%d steps", n)
 }
 
 func streamKey(s *chain.Stream) string     { return "stream:" + s.Name() }
