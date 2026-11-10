@@ -284,5 +284,12 @@ func ForProject(p *chain.Project) (Scheme, error) {
 // tells its tags from the rest of the repository's. It is nil when there is
 // none, and an error for a stream whose scheme is not built.
 func Newest(st *chain.Stream, tags []git.Tag, line string) (*git.Tag, error) {
-	return nil, nil
+	scheme, err := ForStream(st)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := st.Series(line); !ok {
+		line = ""
+	}
+	return scheme.Latest(tags, line).Newest(), nil
 }
