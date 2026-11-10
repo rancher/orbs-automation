@@ -122,7 +122,11 @@ type Route struct {
 	// artifact of each of its holdings.
 	Stream   *chain.Stream
 	Holdings []*chain.Holding
-	engine   *Engine
+	// SkipProducerSteps leaves out the steps that run from the producer's repo, for
+	// a producer the active team does not own: gero runs nothing out of a repo no
+	// team of its own owns. They are reported by SkippedSteps.
+	SkipProducerSteps bool
+	engine            *Engine
 }
 
 // routeKey is what a route is for: the project the key says, and the stream of
@@ -321,6 +325,11 @@ func (r Route) Steps(t Target) (pre, post []StepRef) {
 	}
 	return pre, post
 }
+
+// SkippedSteps returns the steps Steps leaves out of the run for a target because
+// they run from the producer's repo and the route skips those, in the order they
+// would have run.
+func (r Route) SkippedSteps(Target) []StepRef { return nil }
 
 // StepError is a step that failed, naming where it was.
 type StepError struct {
