@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
+	"github.com/rancher/orbs-automation/internal/cli/configfetch"
 	"github.com/rancher/orbs-automation/internal/cli/configresolve"
 	"github.com/rancher/orbs-automation/internal/cli/configshow"
 	"github.com/rancher/orbs-automation/internal/cli/configvalidate"
 	"github.com/rancher/orbs-automation/internal/cli/graphresolve"
+	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -84,6 +87,32 @@ with d2 graph.d2 graph.svg.`,
 					return err
 				}
 				out, err := configvalidate.Run(settingsFrom(cmd), cwd)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprint(cmd.OutOrStdout(), out)
+				return err
+			},
+		},
+		&cobra.Command{
+			Use:   "fetch",
+			Short: "Fetch a newer central config bundle than the one in this binary",
+			Long: `Look at the releases of the central repository and, when the newest on this
+binary's channel is newer than the binary itself, download its config bundle,
+verify its checksum and signature, and keep it in the user cache. Every later
+run reads that bundle in place of the one built into the binary, until a newer
+binary is installed. A local config directory still wins over both.
+
+This is the only command that fetches the bundle. It needs the network, so it
+fails under --offline. The channel is --bundle-channel: a stable binary looks at
+stable releases and a pre-release binary at pre-releases too.`,
+			Args: cobra.NoArgs,
+			RunE: func(cmd *cobra.Command, _ []string) error {
+				ctx := cmd.Context()
+				if ctx == nil {
+					ctx = context.Background()
+				}
+				out, err := configfetch.Run(ctx, settingsFrom(cmd), workspace.FetchBundle)
 				if err != nil {
 					return err
 				}

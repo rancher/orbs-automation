@@ -300,3 +300,12 @@ func TestConfigResolveReposWiring(t *testing.T) {
 		assert.Contains(t, err.Error(), "--central-config-dir")
 	})
 }
+
+func TestConfigFetchOfflineIsRefusedAndSaysSo(t *testing.T) {
+	isolateGero(t)
+
+	_, _, err := execRoot(t, "config", "fetch")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "offline")
+}
