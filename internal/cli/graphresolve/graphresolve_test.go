@@ -135,3 +135,44 @@ func TestGraphLabelsEachNodeApartFromOthersOfTheSameArtifactName(t *testing.T) {
 	assert.Contains(t, out, `label: "lib-v1-2-module\ngithub.com/rancher/lib"`)
 	assert.Contains(t, out, `label: "app-holds-lib-1-1\nrelease"`)
 }
+
+// withEdits is a project that holds two releases of one producer, with an edit
+// that follows both and a strategy edit that follows one.
+func withEdits(t *testing.T) string {
+	t.Helper()
+	hold := func(name, artifact string) string {
+		return chaintest.Doc("Holding", name, "{project: app, artifact: "+artifact+"}",
+			"  at: {file: go.mod, key: github.com/rancher/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all}\n")
+	}
+	g := chaintest.Load(t,
+		project("lib", "  repo: {name: rancher/lib, managedBy: rancher}\n"),
+		project("app", "  repo: {name: rancher/app, managedBy: rancher}\n"),
+		chaintest.Doc("Stream", "lib", "{project: lib}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "lib-module", "{stream: lib}", "  kind: gomod\n  name: github.com/rancher/lib\n"),
+		chaintest.Doc("Artifact", "lib-image", "{stream: lib}", "  kind: image\n  name: rancher/lib\n"),
+		hold("app-holds-lib-module", "lib-module"),
+		hold("app-holds-lib-image", "lib-image"),
+		chaintest.Doc("Edit", "app-steps", "{holding: [app-holds-lib-module, app-holds-lib-image]}",
+			"  preEdit:\n    - {run: scripts/prepare}\n  postEdit:\n    - {run: scripts/generate}\n    - {run: scripts/tidy}\n"),
+		chaintest.Doc("Edit", "app-bump", "{holding: [app-holds-lib-module]}",
+			"  strategy: chartsPackageBump\n  with: {package: lib}\n"),
+	)
+	out, err := graph(fakeWorkspace{g: g})
+	require.NoError(t, err)
+	return out
+}
+
+func TestGraphDrawsAnEditOnceWithAnEdgeFromEachHoldingItFollows(t *testing.T) {
+	out := withEdits(t)
+	assert.Equal(t, 1, strings.Count(out, `"edit:app-steps": {`))
+	assert.Contains(t, out, `"holding:app-holds-lib-module" -> "edit:app-steps"`)
+	assert.Contains(t, out, `"holding:app-holds-lib-image" -> "edit:app-steps"`)
+	assert.Contains(t, out, `"holding:app-holds-lib-module" -> "edit:app-bump"`)
+	assert.NotContains(t, out, `"holding:app-holds-lib-image" -> "edit:app-bump"`)
+}
+
+func TestGraphLabelsAnEditWithItsStrategyAndStepCounts(t *testing.T) {
+	out := withEdits(t)
+	assert.Contains(t, out, `"edit:app-steps": {class: [edit]; label: "app-steps\npre 1 step, post 2 steps"}`)
+	assert.Contains(t, out, `"edit:app-bump": {class: [edit]; label: "app-bump\nstrategy chartsPackageBump"}`)
+}
