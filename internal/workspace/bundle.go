@@ -154,5 +154,5 @@ func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
 		_, token := defaultCredentials()
 		res.Releases = assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token, Verifier: verifier})
 	}
-	return res.Load(ctx, bundlestore.Request{GeroVersion: r.version, Offline: r.offline, Channel: r.channel})
+	return res.Fetch(ctx, bundlestore.Request{GeroVersion: r.version, Offline: r.offline, Channel: r.channel})
 }

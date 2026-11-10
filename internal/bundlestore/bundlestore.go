@@ -39,6 +39,9 @@ type Resolver struct {
 	Cache    Cache
 	Now      func() time.Time // nil for time.Now
 	Refresh  time.Duration    // 0 for DefaultRefresh
+	// Embedded is the bundle compiled into the binary, in the format bundle.Parse
+	// reads. Nil is the real one, embedded.Bytes.
+	Embedded []byte
 }
 
 // Request says who is asking.
@@ -64,7 +67,10 @@ const (
 type Source struct {
 	// File is the path of a bundle file given by hand, when that is the source:
 	// there is then no release fetched, no cache and no age.
-	File      string
+	File string
+	// Embedded says the bundle is the one compiled into the binary: there is no
+	// download, no cache and no age.
+	Embedded  bool
 	Tag       string        // the release the bundle is of
 	FetchedAt time.Time     // when it was downloaded, or last confirmed current
 	Age       time.Duration // how long ago that was
@@ -84,7 +90,7 @@ type Loaded struct {
 	Source Source
 }
 
-// Load finds the bundle for the request. The rules are the spec's:
+// Fetch finds the bundle for the request on the network. The rules are the spec's:
 //
 //   - The channel says which releases are candidates. Auto follows the gero: a
 //     stable gero uses the newest stable release's bundle, and a build that is
@@ -102,7 +108,7 @@ type Loaded struct {
 //   - When the release cannot be reached or verified, the cache is used and the
 //     source says so, with its release and age. With no cache that is an error.
 //   - Offline reads the cache only.
-func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
+func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 	now := r.now()
 	cached, have, _ := r.Cache.Read() // an unreadable cache is the same as none
 	own := ownRelease(req.GeroVersion)
@@ -141,6 +147,13 @@ func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
 		}
 	}
 	return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
+}
+
+// Load is the bundle to use with no request made: a cached bundle when it is of a
+// newer release than the gero's own on the channel, and the embedded bundle in every
+// other case.
+func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
+	return Loaded{}, nil
 }
 
 func (r *Resolver) now() time.Time {

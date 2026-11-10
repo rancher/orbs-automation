@@ -47,12 +47,12 @@ func (g *rig) publish(tag string, names ...string) {
 
 func (g *rig) load(version string) (Loaded, error) {
 	g.t.Helper()
-	return g.r.Load(bg, Request{GeroVersion: version})
+	return g.r.Fetch(bg, Request{GeroVersion: version})
 }
 
 func (g *rig) offline(version string) (Loaded, error) {
 	g.t.Helper()
-	return g.r.Load(bg, Request{GeroVersion: version, Offline: true})
+	return g.r.Fetch(bg, Request{GeroVersion: version, Offline: true})
 }
 
 // cached puts a bundle of the release in the cache, fetched at the time.
@@ -475,7 +475,7 @@ func TestLoadABadSignatureIsRefusedAndTheCacheIsUsedAndSaysWhy(t *testing.T) {
 
 func (g *rig) loadOn(version, channel string) (Loaded, error) {
 	g.t.Helper()
-	return g.r.Load(bg, Request{GeroVersion: version, Channel: channel})
+	return g.r.Fetch(bg, Request{GeroVersion: version, Channel: channel})
 }
 
 func TestChannelStableMakesAPrereleaseGeroTakeTheNewestStableBundle(t *testing.T) {
