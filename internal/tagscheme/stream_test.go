@@ -146,3 +146,39 @@ func TestForProjectNeedsExactlyOneStream(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "2 streams")
 }
+
+func streamOf(t *testing.T, project string) *chain.Stream {
+	t.Helper()
+	return graph(t).Project(project).Streams()[0]
+}
+
+func TestNewestOfALine(t *testing.T) {
+	st := streamOf(t, "kuberlr")
+	all := tags("v8.0.9", "v8.1.0", "v8.2.0-rc.1", "v8.3.0-hotfix.1", "v9.0.0", "main-abc1234")
+
+	got, err := Newest(st, all, "2.15")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v8.2.0-rc.1", got.Name, "a prerelease newer than the stable tag, the line written without its v, and the excluded tag not counted")
+
+	got, err = Newest(st, all, "v2.16")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v9.0.0", got.Name)
+
+	got, err = Newest(st, tags("v7.0.0", "main-abc1234"), "v2.15")
+	require.NoError(t, err)
+	assert.Nil(t, got, "no tag in the line")
+}
+
+func TestNewestOfALineWithNoSeriesIsEveryTag(t *testing.T) {
+	got, err := Newest(streamOf(t, "scc"), tags("v0.5.2", "v0.5.3-rc.1", "v0.5.3", "v0.6.0-rc.1", "main-abc1234"), "v2.15")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "v0.6.0-rc.1", got.Name)
+}
+
+func TestNewestOfAStreamWithNoSchemeBuilt(t *testing.T) {
+	_, err := Newest(streamOf(t, "charts"), tags("v1.0.0"), "v2.16")
+	assert.Error(t, err)
+}
