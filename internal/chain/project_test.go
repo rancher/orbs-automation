@@ -242,3 +242,9 @@ func TestAProjectSaysWhetherItIsTheFinalDestination(t *testing.T) {
 	assert.True(t, g.Project("end").FinalDestination())
 	assert.False(t, g.Project("other").FinalDestination())
 }
+
+func TestAStepIsFromTheProducerWhenItSaysSo(t *testing.T) {
+	assert.True(t, chain.Step{Run: []string{"x"}, From: "producer"}.FromProducer())
+	assert.False(t, chain.Step{Run: []string{"x"}, From: "consumer"}.FromProducer())
+	assert.False(t, chain.Step{Run: []string{"x"}}.FromProducer(), "no from is the consumer")
+}

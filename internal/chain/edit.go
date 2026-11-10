@@ -32,6 +32,9 @@ type Step struct {
 	Until string
 }
 
+// FromProducer reports whether the step's program comes from the producer's repo.
+func (s Step) FromProducer() bool { return s.From == v1alpha2.FromProducer }
+
 // AppliesTo reports whether the step runs for a line.
 func (s Step) AppliesTo(line string) bool {
 	return (lines.Range{Since: s.Since, Until: s.Until}).Contains(line)

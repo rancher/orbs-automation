@@ -341,6 +341,56 @@ func TestStepsOfATargetAreTheEditsStepsForItsLine(t *testing.T) {
 	assert.Equal(t, 1, post[1].Index)
 }
 
+func TestStepsFromTheProducerAreSkippedWhenTheRouteSkipsThem(t *testing.T) {
+	e, g, err := buildEngine(t,
+		d("Edit", "regen", "{holding: [cons-image, cons-chart]}", "  preEdit:\n    - {run: pre-own}\n    - {run: pre-prod, from: producer}\n  postEdit:\n    - {run: post-prod, from: producer, until: v2.15}\n    - {run: post-own}\n"),
+	)
+	require.NoError(t, err)
+	route := e.RoutesFrom(g.Project("prod"))[0]
+	target := Target{Branch: "dev-v2.15", Line: "v2.15"}
+	cmds := func(refs []StepRef) []string {
+		var out []string
+		for _, ref := range refs {
+			out = append(out, ref.Step.Run[0])
+		}
+		return out
+	}
+
+	pre, post := route.Steps(target)
+	assert.Equal(t, []string{"pre-own", "pre-prod"}, cmds(pre), "a route that skips nothing runs them all")
+	assert.Equal(t, []string{"post-prod", "post-own"}, cmds(post))
+	assert.Empty(t, route.SkippedSteps(target))
+
+	route.SkipProducerSteps = true
+	pre, post = route.Steps(target)
+	assert.Equal(t, []string{"pre-own"}, cmds(pre))
+	assert.Equal(t, []string{"post-own"}, cmds(post))
+	skipped := route.SkippedSteps(target)
+	assert.Equal(t, []string{"pre-prod", "post-prod"}, cmds(skipped), "in the order they would have run")
+	assert.Equal(t, StepRef{Phase: PreEdit, Edit: "regen", Index: 1, Step: skipped[0].Step}, skipped[0])
+
+	_, post = route.Steps(Target{Branch: "dev-v2.16", Line: "v2.16"})
+	assert.Equal(t, []string{"post-own"}, cmds(post))
+	assert.Equal(t, []string{"pre-prod"}, cmds(route.SkippedSteps(Target{Branch: "dev-v2.16", Line: "v2.16"})), "a step that does not apply to the line is not a skipped one")
+}
+
+func TestRunDoesNotRunTheSkippedSteps(t *testing.T) {
+	e, g, err := buildEngine(t,
+		d("Edit", "regen", "{holding: cons-image}", "  postEdit:\n    - {run: from-prod, from: producer}\n    - {run: own}\n"),
+	)
+	require.NoError(t, err)
+	route := e.RoutesFrom(g.Project("prod"))[0]
+	route.SkipProducerSteps = true
+	var order []string
+	rec := &recorder{order: &order}
+	tree := files{"build.yaml": consFiles}
+
+	_, err = route.Run(bg, tree, rec, Target{Branch: "dev-v2.16", Line: "v2.16", Holdings: route.Holdings[:1]}, "v1.2.0", "abc", "/work", nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"run own"}, order, "the step from the producer never reached the runner")
+}
+
 func TestRunWritesAroundTheStepsAndCheckpointsEachUnit(t *testing.T) {
 	e, g, err := buildEngine(t,
 		d("Edit", "regen", "{holding: [cons-image, cons-chart]}", "  preEdit:\n    - {run: prep}\n  postEdit:\n    - {run: gen}\n"),
