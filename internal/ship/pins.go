@@ -149,13 +149,13 @@ func (r resolution) companionOf(h *chain.Holding, release string) companion {
 	return r.derived[derivedKey{h.Name(), release}]
 }
 
-// companionsToShip is the companions some target that needs a PR will write, each
-// once, in the order the targets are: the releases whose images and modules are to be
-// looked for.
-func (r resolution) companionsToShip(plan Plan) []companion {
+// companionsToShip is the companions some target that needs a PR for the release
+// will write, each once, in the order the targets are: the releases whose artifacts
+// are to be looked for with it.
+func (r resolution) companionsToShip(plan Plan, release string) []companion {
 	var out []companion
 	for _, tp := range plan.Targets {
-		if tp.Status != StatusReady {
+		if tp.Status != StatusReady || tp.Release != release {
 			continue
 		}
 		for _, hp := range tp.Holdings {

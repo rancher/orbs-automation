@@ -29,6 +29,8 @@ type humanSink struct {
 	working   bool // the section for the work on branches has been started
 	deciding  bool // the section for the open PRs of each branch has been started
 	destShown bool // the section for the final destination has been started
+	inImages  bool // the table of artifacts is open: a companion's rows go into it
+	imageWarn []string
 }
 
 var _ domain.Sink = (*humanSink)(nil)
@@ -82,6 +84,9 @@ func statusRole(status string) (style.Role, bool) {
 
 // Event shows one event.
 func (h *humanSink) Event(e domain.Event) {
+	if e.Kind != domain.EventImagesChecked {
+		h.endImages()
+	}
 	switch e.Kind {
 	case domain.EventResolved:
 		h.resolved(e.Plan)
@@ -95,7 +100,6 @@ func (h *humanSink) Event(e domain.Event) {
 	case domain.EventImagesChecked:
 		h.endTargets()
 		h.images(e.Producer, e.Release, e.Images)
-		h.pr()
 	case domain.EventActor:
 		h.endTargets()
 		h.pr()
@@ -227,21 +231,28 @@ func (h *humanSink) destination(d *domain.Destination) {
 	}
 }
 
+// images adds the artifacts of a release to the table of artifacts: its images in
+// their registries and its Go modules on the proxy. The table of a release is opened
+// by its own rows, and the rows of a companion, a release that goes with it because
+// its Artifact is pinned by the release's, join the table that is open, so what goes
+// out together is read together. The table is closed, and its warnings shown, by the
+// next event of another kind (endImages).
 func (h *humanSink) images(producer, release string, r *registry.Report) {
 	if r == nil {
 		return
 	}
 	if len(r.Rows) > 0 {
-		h.out.Line("")
-		switch {
-		case producer != "":
-			h.heading("Images (" + producer + " " + release + ")") // a companion's
-		case h.header.Uniform():
-			h.heading("Images")
-		default:
-			h.heading("Images (" + release + ")")
+		if producer == "" || !h.inImages {
+			h.endImages()
+			h.out.Line("")
+			if h.header.Uniform() {
+				h.heading("Artifacts")
+			} else {
+				h.heading("Artifacts (" + release + ")")
+			}
+			h.table("ARTIFACT", "REGISTRY", "STATUS", "REFERENCE")
+			h.inImages = true
 		}
-		h.table("IMAGE", "REGISTRY", "STATUS", "REFERENCE")
 		for _, row := range r.Rows {
 			status := h.status(row.Status)
 			if row.Detail != "" {
@@ -249,12 +260,26 @@ func (h *humanSink) images(producer, release string, r *registry.Report) {
 			}
 			h.out.Row(row.Image, row.Label, status, row.Reference)
 		}
-		h.out.EndTable()
 	}
-	for _, w := range r.Warnings {
+	h.imageWarn = append(h.imageWarn, r.Warnings...)
+}
+
+// endImages closes the table of artifacts, if one is open, and shows the warnings
+// of the checks that filled it, then the PR, which follows them.
+func (h *humanSink) endImages() {
+	if !h.inImages && len(h.imageWarn) == 0 {
+		return
+	}
+	if h.inImages {
+		h.out.EndTable()
+		h.inImages = false
+	}
+	for _, w := range h.imageWarn {
 		h.out.Line("")
 		h.out.Line(h.st.Style(style.Warn, "Warning: "+w))
 	}
+	h.imageWarn = nil
+	h.pr()
 }
 
 // actor says who the run acts as, before anything is written: the identity of

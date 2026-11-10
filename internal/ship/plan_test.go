@@ -64,7 +64,7 @@ func TestCheckBlockedByAMissingImage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, got.Status)
 	require.Len(t, got.Blockers, 1)
-	assert.Contains(t, got.Blockers[0], "images")
+	assert.Contains(t, got.Blockers[0], "artifacts")
 	require.Len(t, got.Images, 1)
 	assert.True(t, got.Images[0].Failed())
 }

@@ -126,7 +126,7 @@ func TestRunAlreadyUpToDate(t *testing.T) {
 	out, err := runWith(context.Background(), ws, fakeProber{}, nil, clicfg.OutputText, in)
 	require.NoError(t, err)
 	assert.Contains(t, out, "already up to date")
-	assert.NotContains(t, out, "Images", "the images were not checked")
+	assert.NotContains(t, out, "Artifacts", "the artifacts were not checked")
 }
 
 func TestRunBlockedKeepsTheReport(t *testing.T) {
@@ -274,7 +274,7 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 	assert.ErrorIs(t, err, ErrBlocked)
 	assert.Contains(t, out, "downgrade: the release is older")
 	assert.Contains(t, out, "--allow-downgrade")
-	assert.NotContains(t, out, "Images", "a blocked downgrade shows no preview or image check")
+	assert.NotContains(t, out, "Artifacts", "a blocked downgrade shows no preview or artifact check")
 	assert.NotContains(t, out, "\nPR\n")
 
 	allowed := in
@@ -282,7 +282,7 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 	out, err = runWith(context.Background(), ws, prober, nil, clicfg.OutputText, allowed)
 	require.NoError(t, err)
 	assert.Contains(t, out, "this is a downgrade")
-	assert.Contains(t, out, "Images", "allowed, the check goes on")
+	assert.Contains(t, out, "Artifacts", "allowed, the check goes on")
 }
 
 func TestRunWithNoBranchChecksTheBranchesTheReleaseGoesTo(t *testing.T) {
@@ -530,7 +530,7 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 	// images' with the images.
 	order := []string{
 		"Ship rancher/scc-operator", "Targets", "Warning (release/v2.15): this is a downgrade",
-		"Images", "Warning: image rancher/x", "\nPR\n", "Results", "Review:", "No push: the commits are on branches",
+		"Artifacts", "Warning: image rancher/x", "\nPR\n", "Results", "Review:", "No push: the commits are on branches",
 	}
 	last := -1
 	for _, section := range order {
@@ -593,8 +593,8 @@ func TestRunToShowsTheBranchesBeforeTheSlowImageCheck(t *testing.T) {
 	assert.Contains(t, seen, "Ship rancher/scc-operator", "the title was already written")
 	assert.Contains(t, seen, "Targets", "and the branches, while the images were being looked for")
 	assert.Contains(t, seen, "main", "and what each holds")
-	assert.NotContains(t, seen, "Images", "but not the images, which were not known yet")
-	assert.Contains(t, out.String(), "Images", "they come after")
+	assert.NotContains(t, seen, "Artifacts", "but not the artifacts, which were not known yet")
+	assert.Contains(t, out.String(), "Artifacts", "they come after")
 }
 
 func TestRunToTextIsTheReportRunWithReturns(t *testing.T) {
@@ -1219,8 +1219,8 @@ func TestRenderTextOfALinePerReleasePlanNamesTheReleaseAndValueOfEachTarget(t *t
 	for _, want := range []string{"RELEASE", "WANT", "v2.16", "v0.9.1-rc.2", "rancher/shell:v0.9.1-rc.2", "v2.15", "v0.8.3", "rancher/shell:v0.8.3"} {
 		assert.Contains(t, out, want)
 	}
-	assert.Contains(t, out, "Images (v0.9.1-rc.2)")
-	assert.Contains(t, out, "Images (v0.8.3)")
+	assert.Contains(t, out, "Artifacts (v0.9.1-rc.2)")
+	assert.Contains(t, out, "Artifacts (v0.8.3)")
 	assert.Contains(t, out, "left out  v2.14: no such release")
 }
 
@@ -1231,7 +1231,7 @@ func TestRenderTextOfASingleReleasePlanIsAsItWas(t *testing.T) {
 	assert.Contains(t, out, "  want    b")
 	assert.NotContains(t, out, "RELEASE")
 	assert.NotContains(t, out, "WANT")
-	assert.NotContains(t, out, "Images (")
+	assert.NotContains(t, out, "Artifacts (")
 }
 
 func actingPlan(signing bool, login string) domain.Plan {

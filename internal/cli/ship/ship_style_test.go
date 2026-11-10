@@ -93,9 +93,9 @@ func TestARunStylesTheImagesSectionAndItsStatuses(t *testing.T) {
 		fakeProber{result: ociregistry.Result{Status: ociregistry.Found}}, nil, clicfg.OutputText, in, false, st)
 
 	require.NoError(t, err)
-	assert.Contains(t, out.String(), st.Style(style.Heading, "Images"))
+	assert.Contains(t, out.String(), st.Style(style.Heading, "Artifacts"))
 	assert.Contains(t, out.String(), st.Style(style.OK, "found"))
-	assert.Contains(t, out.String(), st.Style(style.Dim, "IMAGE"), "column heads are secondary text")
+	assert.Contains(t, out.String(), st.Style(style.Dim, "ARTIFACT"), "column heads are secondary text")
 }
 
 func TestResultsAndTargetsTakeTheColorOfTheirStatus(t *testing.T) {

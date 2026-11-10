@@ -313,22 +313,24 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		plan.Images = append(plan.Images, ReleaseImages{Release: tag, Report: images})
 		plan.Warnings = append(plan.Warnings, images.Warnings...)
 		if images.Failed() {
-			blocker := "images: the release is not fully published"
+			blocker := "artifacts: the release is not fully published"
 			if !plan.Uniform() {
-				blocker = "images: " + tag + " is not fully published"
+				blocker = "artifacts: " + tag + " is not fully published"
 			}
 			plan.Blockers = append(plan.Blockers, blocker)
 		}
 		emit(sink, Event{Kind: EventImagesChecked, Release: tag, Images: &images})
-	}
-	for _, c := range res.companionsToShip(plan) {
-		images := registry.CheckProject(ctx, c.holding.Producer(), prober, c.Tag)
-		plan.Images = append(plan.Images, ReleaseImages{Producer: c.Producer, Release: c.Tag, Report: images})
-		plan.Warnings = append(plan.Warnings, images.Warnings...)
-		if images.Failed() {
-			plan.Blockers = append(plan.Blockers, "images: "+c.Tag+" of "+c.Producer+" is not fully published")
+		// The releases that go with this one are looked for right after it, so a
+		// report shows them together.
+		for _, c := range res.companionsToShip(plan, tag) {
+			images := registry.CheckProject(ctx, c.holding.Producer(), prober, c.Tag)
+			plan.Images = append(plan.Images, ReleaseImages{Producer: c.Producer, Release: c.Tag, Report: images})
+			plan.Warnings = append(plan.Warnings, images.Warnings...)
+			if images.Failed() {
+				plan.Blockers = append(plan.Blockers, "artifacts: "+c.Tag+" of "+c.Producer+" is not fully published")
+			}
+			emit(sink, Event{Kind: EventImagesChecked, Producer: c.Producer, Release: c.Tag, Images: &images})
 		}
-		emit(sink, Event{Kind: EventImagesChecked, Producer: c.Producer, Release: c.Tag, Images: &images})
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil

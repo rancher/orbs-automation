@@ -1,6 +1,7 @@
 package ship
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -86,11 +87,39 @@ func TestReplayCarriesTheProducerOfACompanionsImages(t *testing.T) {
 	assert.Equal(t, []string{"", "rancher/lasso"}, producers)
 }
 
-func TestRenderTextNamesTheProducerOfACompanionsImages(t *testing.T) {
+func TestRenderTextPutsACompanionsArtifactsInTheTableOfTheRelease(t *testing.T) {
 	p := withCompanion()
-	p.Images = []domain.ReleaseImages{{Producer: "rancher/lasso", Release: "v0.2.5", Report: registry.Report{Rows: []registry.Row{{Image: "github.com/rancher/lasso", Registry: "goproxy", Status: "found"}}}}}
+	p.Images = []domain.ReleaseImages{
+		{Release: "v0.5.3", Report: registry.Report{Rows: []registry.Row{{Image: "rancher/scc-operator", Label: "Docker Hub", Status: "found", Reference: "rancher/scc-operator:v0.5.3"}}}},
+		{Producer: "rancher/lasso", Release: "v0.2.5", Report: registry.Report{Rows: []registry.Row{{Image: "github.com/rancher/lasso", Label: "Go module proxy", Status: "found", Reference: "github.com/rancher/lasso@v0.2.5"}}}},
+	}
 
 	out := renderText(p, false)
 
-	assert.Contains(t, out, "Images (rancher/lasso v0.2.5)")
+	assert.Equal(t, 1, strings.Count(out, "Artifacts"), "one table, and no second heading for the companion")
+	assert.NotContains(t, out, "Images")
+	assert.Contains(t, out, "ARTIFACT")
+	assert.NotContains(t, out, "IMAGE ")
+	scc, lasso := strings.Index(out, "rancher/scc-operator:v0.5.3"), strings.Index(out, "github.com/rancher/lasso@v0.2.5")
+	assert.Greater(t, scc, 0)
+	assert.Greater(t, lasso, scc, "the companion's rows follow the release's, in the same table")
+}
+
+func TestAnArtifactTableThatIsNotACompanionsStartsItsOwn(t *testing.T) {
+	p := withCompanion()
+	p.Releases = []domain.Release{{Tag: "v0.9.1"}, {Tag: "v0.8.3"}}
+	row := func(image string) registry.Report {
+		return registry.Report{Rows: []registry.Row{{Image: image, Label: "Docker Hub", Status: "found"}}}
+	}
+	p.Images = []domain.ReleaseImages{
+		{Release: "v0.9.1", Report: row("a/new")},
+		{Producer: "rancher/lasso", Release: "v0.2.5", Report: row("github.com/rancher/lasso")},
+		{Release: "v0.8.3", Report: row("a/old")},
+	}
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "Artifacts (v0.9.1)")
+	assert.Contains(t, out, "Artifacts (v0.8.3)")
+	assert.Equal(t, 2, strings.Count(out, "Artifacts ("), "the companion joins the first release's table")
 }
