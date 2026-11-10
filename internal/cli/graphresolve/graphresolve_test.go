@@ -193,3 +193,9 @@ func TestRunRefusesTheOtherFormatsAndWritesNothing(t *testing.T) {
 		assert.Empty(t, out, format)
 	}
 }
+
+func TestGraphFlowsDownTheDiagram(t *testing.T) {
+	out, err := graph(fakeWorkspace{g: shipping(t)})
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(out, "direction: down\n"))
+}
