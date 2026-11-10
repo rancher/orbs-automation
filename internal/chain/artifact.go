@@ -28,6 +28,10 @@ func (a *Artifact) Name() string { return a.Doc.Name }
 // Stream is the stream whose releases produce the artifact.
 func (a *Artifact) Stream() *Stream { return a.stream }
 
+// Project is the project whose releases produce the artifact: the one that owns its
+// stream.
+func (a *Artifact) Project() *Project { return a.stream.project }
+
 // IsImage reports whether the artifact is a container image, and not a file.
 func (a *Artifact) IsImage() bool { return a.Doc.Spec.Kind == v1alpha2.ArtifactImage }
 

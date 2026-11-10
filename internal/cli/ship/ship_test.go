@@ -1016,7 +1016,7 @@ func onLines() domain.Plan {
 func TestRenderTextTargetsAreKeyedByLineWithTheBranchBesideIt(t *testing.T) {
 	out := renderText(onLines(), false)
 
-	assert.Regexp(t, `(?m)^  LINE\s+BRANCH\s+HEAD\s+NOW\s+STATUS$`, out)
+	assert.Regexp(t, `(?m)^  LINE\s+BRANCH\s+HEAD\s+ARTIFACT\s+NOW\s+STATUS$`, out)
 	assert.Regexp(t, `(?m)^  v2\.15\s+release/v2\.15\s+2222222`, out)
 }
 

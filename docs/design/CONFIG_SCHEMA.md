@@ -26,7 +26,7 @@ The repo as a place. `refs`: none.
 | `repo.managedBy` | slug | none: unspecified | the team responsible. A project is **owned** when this is the active team ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and gero ships from what it owns; there is no `owned` field. `shared` is a sentinel for every team: no team's context owns it, and any team may ship into it |
 | `repo.defaultBranch` | string | `main` | |
 | `finalDestination` | bool | `false` | at most one Project |
-| `pullRequests.title`, `.branchPrefix` | template | none | variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, … |
+| `pullRequests.title`, `.branchPrefix` | template | none | variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, `companions` (the releases that go with this one, such as `lasso to v0.2.10`, empty when none), … |
 | `pullRequests.labels`, `.botLabels` | list | none | |
 | `pullRequests.pushTo` | `fork` or `upstream` | none | |
 | `branches.layout` | `single` or `perLine` | `single` | `single`: every release is on the default branch, and `lines` is not given |

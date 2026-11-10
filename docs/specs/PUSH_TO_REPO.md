@@ -31,7 +31,7 @@ A producer such as wrangler has a stream for each minor, all `universal`, and a 
 
 `--line` with lines on different streams is refused: one run ships one stream.
 
-**The destination is the reference.** When the `finalDestination` holds the producer for the line, and is not the consumer, the plan has a **Destination** section: which stream Rancher's Holding for the line is of, and what Rancher's own file holds on the branch for that line, read from the host. The consumer's own Holding still decides the route. A warning on the target says so when Rancher's stream or the release it holds is not the one the consumer's Holding is for ("Rancher holds v3.7.1 on v2.15, and BRO would hold a v3.6 release"). A failed read of Rancher is a warning, never a blocker.
+**The destination is the reference.** When the `finalDestination` holds the producer for the line, and is not the consumer, the plan has a **Destination** section: which stream Rancher's Holding for the line is of, and what Rancher's own file holds on the branch for that line, read from the host. The consumer's own Holding still decides the route. A warning on the target says so when Rancher's stream or the release it holds is not the one the consumer's Holding is for ("Rancher holds v3.7.1 on v2.15, and BRO would hold a v3.6 release"). The destination is read for each release the target writes, so a release that goes with another (the lasso with a wrangler) has its own entry: each says whose release it holds ("rancher/rancher holds v0.2.10 of lasso through lasso-v0-2"). A failed read of Rancher is a warning, never a blocker.
 
 ## Shipping a release with the releases it pins
 
@@ -135,6 +135,10 @@ go-git cannot create linked worktrees or switch a checkout the way `git` does, s
 `gero ci:ship` is the same bump from a workflow, as the bot, over the same backends. What it shares and what CI adds are in [CI_SHIP](CI_SHIP.md), and the context differences are listed in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md).
 
 ## What a run reports
+
+The table of targets has **a row for each artifact** of a target, headed `ARTIFACT` with the name of the project whose release it is: the release asked for, and each companion that goes with it, so lasso's value is read beside wrangler's. The row repeats the line, branch and head, and its status is the target's, except that a ready target says of an artifact the branch holds already that it is **already up to date**. When the plan has several releases the table also has a `RELEASE` column, which for a companion is its own tag.
+
+The title and the commit of a bump that also raises a companion name it, "Update wrangler to v3.8.0 and lasso to v0.2.10", with `{companions}` for a title a project writes; when the companion is held already they are the plain ones. The branch is named for the release asked for either way, so it is the same whether one or both are bumped.
 
 A target is named in the report by its **Rancher line** (`v2.15`), which means the same in every project, and not by the consumer's branch (`release/v2.15`, or `main` for the development line), which does not. The branch is shown beside it in the tables, in the closing list of PRs as its base, and wherever it is a command to copy; a branch that is in no line is named by its branch. The same line is on every event and in the JSON (`line`). A push is reported with the branch it pushed, as `v2.15: pushed bot/scc-operator-v0.5.3-v2.15 to origin`.
 

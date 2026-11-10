@@ -171,19 +171,74 @@ func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 		h.out.Line("")
 		h.heading("Targets")
 		if h.header.Uniform() {
-			h.table("LINE", "BRANCH", "HEAD", "NOW", "STATUS")
+			h.table("LINE", "BRANCH", "HEAD", "ARTIFACT", "NOW", "STATUS")
 		} else {
-			h.table("LINE", "BRANCH", "RELEASE", "HEAD", "NOW", "WANT", "STATUS")
+			h.table("LINE", "BRANCH", "RELEASE", "HEAD", "ARTIFACT", "NOW", "WANT", "STATUS")
 		}
 		h.inTargets = true
 	}
-	if h.header.Uniform() {
-		h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Current }), h.status(string(t.Status)))
-	} else {
-		h.out.Row(t.Key(), t.Branch, t.Release, git.Short(t.Commit),
-			valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Current }), valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Want }), h.status(string(t.Status)))
+	// A row for each artifact of the target: the release asked for, and each
+	// companion that goes with it, so lasso's value is read beside wrangler's.
+	for _, a := range artifactsOf(*t) {
+		if h.header.Uniform() {
+			h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), a.project, a.now, h.status(a.status))
+		} else {
+			h.out.Row(t.Key(), t.Branch, a.release, git.Short(t.Commit), a.project, a.now, a.want, h.status(a.status))
+		}
 	}
 	h.targets = append(h.targets, *t)
+}
+
+// artifactRow is what the table of targets says of one artifact of a target: whose
+// release it is, what the branch holds of it, what it would, and where that stands.
+type artifactRow struct {
+	project, release, now, want, status string
+}
+
+// artifactsOf groups the holdings of a target by the project whose release they
+// hold, in the order they come, for the rows of the table of targets. The status of
+// a row is the target's, except that a ready target says of an artifact it holds
+// already that it is up to date.
+func artifactsOf(t domain.TargetPlan) []artifactRow {
+	if len(t.Holdings) == 0 {
+		return []artifactRow{{release: t.Release, status: string(t.Status)}}
+	}
+	var rows []artifactRow
+	for _, project := range projectsOf(t) {
+		in := domain.TargetPlan{Release: t.Release}
+		stale := false
+		for _, hp := range t.Holdings {
+			if hp.Project != project {
+				continue
+			}
+			in.Holdings = append(in.Holdings, hp)
+			stale = stale || !hp.UpToDate
+			if hp.Release != "" {
+				in.Release = hp.Release
+			}
+		}
+		status := string(t.Status)
+		if t.Status == domain.StatusReady && !stale {
+			status = string(domain.StatusUpToDate)
+		}
+		rows = append(rows, artifactRow{
+			project: project, release: in.Release, status: status,
+			now:  valuesOf(in, func(hp domain.HoldingPlan) string { return hp.Current }),
+			want: valuesOf(in, func(hp domain.HoldingPlan) string { return hp.Want }),
+		})
+	}
+	return rows
+}
+
+// projectsOf is the projects whose releases a target's holdings hold, each once.
+func projectsOf(t domain.TargetPlan) []string {
+	var out []string
+	for _, hp := range t.Holdings {
+		if !slices.Contains(out, hp.Project) {
+			out = append(out, hp.Project)
+		}
+	}
+	return out
 }
 
 // endTargets prints the table of branches, with what stands in the way of each
@@ -221,13 +276,21 @@ func (h *humanSink) destination(d *domain.Destination) {
 	}
 	switch {
 	case d.Error != "":
-		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  %s: %s could not be read: %s", d.Line, d.Project, d.Error)))
+		of := ""
+		if d.Producer != "" {
+			of = " (" + d.Producer + ")"
+		}
+		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  %s: %s%s could not be read: %s", d.Line, d.Project, of, d.Error)))
 	default:
 		var held []string
 		for _, v := range d.Held {
 			held = append(held, v.Current)
 		}
-		h.out.Line(fmt.Sprintf("  %s: %s holds %s through %s, on %s", d.Line, d.Project, strings.Join(held, ", "), d.Stream, d.Branch))
+		of := ""
+		if d.Producer != "" {
+			of = " of " + d.Producer
+		}
+		h.out.Line(fmt.Sprintf("  %s: %s holds %s%s through %s, on %s", d.Line, d.Project, strings.Join(held, ", "), of, d.Stream, d.Branch))
 	}
 }
 

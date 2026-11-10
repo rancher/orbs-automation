@@ -48,7 +48,7 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 		tp.Holdings = append(tp.Holdings, HoldingPlan{
 			Name: c.Holding.Name(), File: c.Change.Path, Current: c.Current, Want: c.Want,
 			UpToDate: c.UpToDate, Downgrade: !c.UpToDate && c.Relation == bump.RelationOlder,
-			Pinned: companionHolding, Project: c.Holding.Producer().Name(),
+			Pinned: companionHolding, Project: c.Holding.Artifact().Project().Name(),
 		})
 		if companionHolding {
 			comp := r.companionOf(c.Holding, sp.release.Tag)

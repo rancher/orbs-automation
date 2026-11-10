@@ -46,7 +46,7 @@ var pseudoVersion = regexp.MustCompile(`\d{14}-[0-9a-f]{12}(\+incompatible)?$`)
 // it the tag of the pinned Artifact's stream, which must exist.
 func derive(ctx context.Context, src pinSource, v *chain.Holding, pinnerTag string) Companion {
 	pinner, pinned := v.PinnedBy().Artifact(), v.Artifact()
-	pinnerSlug := pinner.Stream().Project().Slug()
+	pinnerSlug := pinner.Project().Slug()
 	c := Companion{
 		Name: v.Producer().Name(), Producer: v.Producer().Slug(), Module: pinned.Ref(),
 		RequiredBy: pinnerSlug + " " + pinnerTag, File: pinner.PinFile(),
