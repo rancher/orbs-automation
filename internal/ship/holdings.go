@@ -37,8 +37,9 @@ type ConsumerHoldings struct {
 //     version held (the version is in Current, which the holding reads as the
 //     value, so it needs the engine to hand back the version it found, as
 //     Check.Relation already compares them), using the tags resolveRoute has read
-//     (resolution.tags) and semver.InSeries. See the TODO on git.LatestReleases for
-//     the per-series index to build once a second caller needs it.
+//     (resolution.tags) and semver.InSeries. The per-series index to build once a
+//     second caller needs it belongs in internal/tagscheme (see the TODO on
+//     git.LatestReleases).
 //  2. The open PR that bumps the branch, so "behind" can say a bump is proposed.
 //     gero ship finds it with pulls.Service (OpenForBase and OpenForHead) and the
 //     marker (ParseMarker, decidePublish in publish.go); reuse those, as a tier of
