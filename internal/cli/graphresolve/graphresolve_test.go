@@ -2,6 +2,7 @@ package graphresolve
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,25 +42,25 @@ func TestGraphDrawsEachProjectAsANode(t *testing.T) {
 	out, err := graph(fakeWorkspace{g: shipping(t)})
 	require.NoError(t, err)
 	for _, slug := range []string{"rancher/rancher", "rancher/shell", "rancher/scc-operator", "kubernetes/upstream"} {
-		assert.Contains(t, out, `"`+slug+`": {`, slug)
+		assert.Contains(t, out, `"`+slug+`": {`+"\n", slug)
 	}
 }
 
 func TestGraphFlowsFromProducerThroughHoldingToHolder(t *testing.T) {
 	out, err := graph(fakeWorkspace{g: shipping(t)})
 	require.NoError(t, err)
-	assert.Contains(t, out, `"rancher/shell" -> "holding:rancher-holds-shell"`)
+	assert.Contains(t, out, `"rancher/shell"."stream:shell"."artifact:shell-image" -> "holding:rancher-holds-shell"`)
 	assert.Contains(t, out, `"holding:rancher-holds-shell" -> "rancher/rancher"`)
-	assert.NotContains(t, out, `"rancher/rancher" -> "holding:rancher-holds-shell"`, "the flow runs one way")
+	assert.NotContains(t, out, `-> "rancher/shell"`, "the flow runs one way")
 }
 
 func TestGraphMarksStewardshipAndTheFinalDestination(t *testing.T) {
 	out, err := graph(fakeWorkspace{g: shipping(t)})
 	require.NoError(t, err)
-	assert.Contains(t, out, `"rancher/shell": {class: [managed]`)
-	assert.Contains(t, out, `"rancher/rancher": {class: [managed; hub]`)
-	assert.Contains(t, out, `"rancher/scc-operator": {class: [shared]`)
-	assert.Contains(t, out, `"kubernetes/upstream": {class: [external]`)
+	assert.Contains(t, out, "\"rancher/shell\": {\n  class: [managed]")
+	assert.Contains(t, out, "\"rancher/rancher\": {\n  class: [managed; hub]")
+	assert.Contains(t, out, "\"rancher/scc-operator\": {\n  class: [shared]")
+	assert.Contains(t, out, "\"kubernetes/upstream\": {\n  class: [external]")
 }
 
 func TestGraphLabelsTheHolderEdgeWithTheLinesTheHoldingServes(t *testing.T) {
@@ -87,4 +88,14 @@ func TestGraphAsksForTheELKLayout(t *testing.T) {
 	out, err := graph(fakeWorkspace{g: shipping(t)})
 	require.NoError(t, err)
 	assert.Contains(t, out, "layout-engine: elk")
+}
+
+func TestGraphNestsTheStreamsAndArtifactsInTheirProject(t *testing.T) {
+	out, err := graph(fakeWorkspace{g: shipping(t)})
+	require.NoError(t, err)
+	shell := out[strings.Index(out, `"rancher/shell": {`):]
+	shell = shell[:strings.Index(shell, "\n}\n")]
+	assert.Contains(t, shell, `"stream:shell": {`)
+	assert.Contains(t, shell, `"artifact:shell-image": {class: [artifact]; label: "rancher/shell"}`)
+	assert.NotContains(t, out[:strings.Index(out, `"rancher/shell": {`)], "stream:shell")
 }
