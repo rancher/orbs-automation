@@ -24,7 +24,12 @@ type Workspace interface {
 // Graph draws the central config found from s and the working directory cwd as
 // D2 source.
 func Graph(s clicfg.Settings, cwd string) (string, error) {
-	return graph(workspace.Open(s, cwd))
+	return run(workspace.Open(s, cwd), s.Output)
+}
+
+// run draws the config as the output format asks for.
+func run(ws Workspace, format string) (string, error) {
+	return graph(ws)
 }
 
 // The classes of a node. A Project has one of managed, shared and external, and
