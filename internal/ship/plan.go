@@ -188,6 +188,10 @@ type Plan struct {
 	Blockers []string        `json:"blockers,omitempty"` // in the way of the whole release
 	Images   []ReleaseImages `json:"images,omitempty"`   // one check for each release that some target needs a PR for
 	Warnings []string        `json:"warnings,omitempty"`
+	// Destination is what the final destination holds of the producer on the lines
+	// shipped to, when it holds it and is not the consumer: the reference to compare
+	// the release with. A mismatch is a warning of the target.
+	Destination []Destination `json:"destination,omitempty"`
 	// Notes are lines that were left out of the run, and why, known before any
 	// target is read.
 	Notes []string `json:"notes,omitempty"`
@@ -263,6 +267,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	}
 	header := plan
 	emit(sink, Event{Kind: EventResolved, Plan: &header})
+	destinations, mismatches := res.destinations(ctx, ws, specs, in)
 	var needsPR []string // the tags of the releases that some target needs a PR for
 	for _, sp := range specs {
 		tp, err := res.checkTarget(ctx, ws, sp, in)
@@ -274,6 +279,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 			// others: it is reported as failed.
 			tp = TargetPlan{Target: Target{Branch: sp.branch()}, Line: sp.target.Line, Release: sp.release.Tag, Status: StatusFailed, Error: err.Error()}
 		}
+		tp.Warnings = append(tp.Warnings, mismatches[tp.Line]...)
 		if tp.Status == StatusReady && !slices.Contains(needsPR, sp.release.Tag) {
 			needsPR = append(needsPR, sp.release.Tag)
 		}
@@ -282,6 +288,10 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Line: tp.Line, Target: &checked})
 	}
 	emit(sink, Event{Kind: EventTargetsChecked})
+	plan.Destination = destinations
+	for i := range destinations {
+		emit(sink, Event{Kind: EventDestination, Line: destinations[i].Line, Destination: &destinations[i]})
+	}
 	for _, tag := range needsPR {
 		images := registry.CheckProject(ctx, res.producer, prober, tag)
 		plan.Images = append(plan.Images, ReleaseImages{Release: tag, Report: images})

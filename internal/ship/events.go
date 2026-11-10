@@ -15,6 +15,9 @@ const (
 	// EventTargetsChecked: every branch has been read, so what they hold can be
 	// shown before the slower checks that follow.
 	EventTargetsChecked EventKind = "targets checked"
+	// EventDestination: the final destination has been read for one line. Destination
+	// is it.
+	EventDestination EventKind = "destination"
 	// EventImagesChecked: the images of one release have been looked for, once.
 	EventImagesChecked EventKind = "images checked"
 	// EventTargetStarted: the work for one branch has begun, in Place.
@@ -51,18 +54,20 @@ type Event struct {
 	// NewBranch is the branch that was made, for Pushed.
 	NewBranch string
 
-	Plan     *Plan            // Resolved: the header. Done: everything
-	Target   *TargetPlan      // TargetChecked
-	Release  string           // ImagesChecked: the tag of the release
-	Images   *registry.Report // ImagesChecked
-	Place    Place            // TargetStarted: where the work is done
-	Reason   string           // TargetStarted: why that was a worktree
-	Commit   *CommitInfo      // Commit
-	Actor    *Actor           // Actor
-	Decision *Publish         // Decided
-	Remote   string           // Pushed: the remote's name
-	PR       *PRRef           // PROpened, Superseded
-	Result   *TargetResult    // TargetDone
+	Plan   *Plan       // Resolved: the header. Done: everything
+	Target *TargetPlan // TargetChecked
+	// Destination is what the destination holds, for EventDestination.
+	Destination *Destination
+	Release     string           // ImagesChecked: the tag of the release
+	Images      *registry.Report // ImagesChecked
+	Place       Place            // TargetStarted: where the work is done
+	Reason      string           // TargetStarted: why that was a worktree
+	Commit      *CommitInfo      // Commit
+	Actor       *Actor           // Actor
+	Decision    *Publish         // Decided
+	Remote      string           // Pushed: the remote's name
+	PR          *PRRef           // PROpened, Superseded
+	Result      *TargetResult    // TargetDone
 }
 
 // Sink receives the events of a run as they happen, on the goroutine that runs
