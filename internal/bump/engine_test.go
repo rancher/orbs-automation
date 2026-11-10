@@ -113,6 +113,20 @@ func TestRoutesAreOneForEachConsumerAndStreamOfTheProducer(t *testing.T) {
 	assert.Equal(t, []string{"lib > cons: cons-lib-1", "lib > cons: cons-lib-2"}, names(fromLib), "a consumer has a route for each stream it takes from")
 }
 
+func TestARouteAppliesToTheLinesItsHoldingsAreFor(t *testing.T) {
+	e, g, err := buildEngine(t, twoStreams()...)
+	require.NoError(t, err)
+	routes := e.RoutesFrom(g.Project("lib"))
+	newer, older := routes[0], routes[1] // lib-1 since v2.16, lib-2 until v2.15
+
+	assert.True(t, newer.AppliesTo("v2.16"))
+	assert.False(t, newer.AppliesTo("v2.15"))
+	assert.True(t, older.AppliesTo("v2.15"))
+	assert.True(t, older.AppliesTo("2.15"), "a line is written with or without its v")
+	assert.False(t, older.AppliesTo("v2.16"))
+	assert.False(t, older.AppliesTo("v2.99"), "a line the consumer does not list")
+}
+
 func TestARouteHasTheStreamOfItsHoldings(t *testing.T) {
 	e, g, err := buildEngine(t)
 	require.NoError(t, err)

@@ -142,8 +142,12 @@ type TargetPlan struct {
 	Downgrade bool          `json:"downgrade,omitempty"` // the release is older than what the consumer holds
 	Blockers  []string      `json:"blockers,omitempty"`
 	Warnings  []string      `json:"warnings,omitempty"`
-	Error     string        `json:"error,omitempty"`   // why a failed target could not be checked
-	Preview   *Preview      `json:"preview,omitempty"` // what a run would write; none when nothing would be
+	// Env is the environment the steps and strategies of the target's edits run in,
+	// worked out for the branch: the toolchain its go.mod pins, for one. It is only
+	// worked out for a target that needs a PR.
+	Env     map[string]string `json:"env,omitempty"`
+	Error   string            `json:"error,omitempty"`   // why a failed target could not be checked
+	Preview *Preview          `json:"preview,omitempty"` // what a run would write; none when nothing would be
 	// Result is what a run did for this target: set only by Ship, and only for a
 	// target that was ready.
 	Result *TargetResult `json:"result,omitempty"`
@@ -157,6 +161,15 @@ type HoldingPlan struct {
 	Want      string `json:"want"`    // what it should hold for the release
 	UpToDate  bool   `json:"upToDate"`
 	Downgrade bool   `json:"downgrade,omitempty"` // the release is older than what the file holds
+	// Pinned says the holding is a companion's: the virtual Holding a pin makes of
+	// another module, written with the release the pin resolved.
+	Pinned bool `json:"pinned,omitempty"`
+	// Project is the config name of the producer of the holding's artifact, so a
+	// report can say whose release a row is: wrangler's, or the lasso that goes with it.
+	Project string `json:"project,omitempty"`
+	// Release is the tag of the companion's release, for a holding that is one; the
+	// target's own release is the target's.
+	Release string `json:"release,omitempty"`
 }
 
 // Key is what a report calls the target: its Rancher line, which means the same
@@ -188,6 +201,13 @@ type Plan struct {
 	Blockers []string        `json:"blockers,omitempty"` // in the way of the whole release
 	Images   []ReleaseImages `json:"images,omitempty"`   // one check for each release that some target needs a PR for
 	Warnings []string        `json:"warnings,omitempty"`
+	// Companions are the releases that go with the release, because its Artifact
+	// pins theirs, each once, in the order the targets need them.
+	Companions []Companion `json:"companions,omitempty"`
+	// Destination is what the final destination holds of the producer on the lines
+	// shipped to, when it holds it and is not the consumer: the reference to compare
+	// the release with. A mismatch is a warning of the target.
+	Destination []Destination `json:"destination,omitempty"`
 	// Notes are lines that were left out of the run, and why, known before any
 	// target is read.
 	Notes []string `json:"notes,omitempty"`
@@ -205,7 +225,10 @@ type Plan struct {
 
 // ReleaseImages is the check of the images of one release.
 type ReleaseImages struct {
-	Release string `json:"release"` // the tag
+	// Producer is the repository of a companion whose release this is, and empty for
+	// the release asked for.
+	Producer string `json:"producer,omitempty"`
+	Release  string `json:"release"` // the tag
 	registry.Report
 }
 
@@ -237,6 +260,9 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	if err != nil {
 		return Plan{}, resolution{}, err
 	}
+	if releases, ok := prober.(bump.GoReleases); ok { // the real prober has the list of Go releases
+		res.route.GoReleases = releases
+	}
 	sel, err := res.specs(in)
 	if err != nil {
 		return Plan{}, resolution{}, err
@@ -245,6 +271,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	if err := res.route.Ready(); err != nil {
 		return Plan{}, resolution{}, err // an edit names a strategy gero does not have yet
 	}
+	specs, companions := res.withCompanions(ctx, ws, specs)
 	plan := Plan{
 		Producer: res.producer.Slug(), Consumer: res.route.Consumer.Slug(),
 		DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,
@@ -253,6 +280,12 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		plan.Holdings = append(plan.Holdings, h.Name())
 	}
 	plan.Notes = sel.notes
+	plan.Companions = companions
+	for _, c := range companions {
+		if c.Error != "" {
+			plan.Blockers = append(plan.Blockers, "companion: "+c.Error)
+		}
+	}
 	if note := skippedNote(res, specs); note != "" {
 		plan.Notes = append(plan.Notes, note)
 	}
@@ -263,6 +296,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	}
 	header := plan
 	emit(sink, Event{Kind: EventResolved, Plan: &header})
+	destinations, mismatches := res.destinations(ctx, ws, specs)
 	var needsPR []string // the tags of the releases that some target needs a PR for
 	for _, sp := range specs {
 		tp, err := res.checkTarget(ctx, ws, sp, in)
@@ -274,6 +308,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 			// others: it is reported as failed.
 			tp = TargetPlan{Target: Target{Branch: sp.branch()}, Line: sp.target.Line, Release: sp.release.Tag, Status: StatusFailed, Error: err.Error()}
 		}
+		tp.Warnings = append(tp.Warnings, mismatches[tp.Line]...)
 		if tp.Status == StatusReady && !slices.Contains(needsPR, sp.release.Tag) {
 			needsPR = append(needsPR, sp.release.Tag)
 		}
@@ -282,18 +317,33 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		emit(sink, Event{Kind: EventTargetChecked, Branch: tp.Branch, Line: tp.Line, Target: &checked})
 	}
 	emit(sink, Event{Kind: EventTargetsChecked})
+	plan.Destination = destinations
+	for i := range destinations {
+		emit(sink, Event{Kind: EventDestination, Line: destinations[i].Line, Destination: &destinations[i]})
+	}
 	for _, tag := range needsPR {
 		images := registry.CheckProject(ctx, res.producer, prober, tag)
 		plan.Images = append(plan.Images, ReleaseImages{Release: tag, Report: images})
 		plan.Warnings = append(plan.Warnings, images.Warnings...)
 		if images.Failed() {
-			blocker := "images: the release is not fully published"
+			blocker := "artifacts: the release is not fully published"
 			if !plan.Uniform() {
-				blocker = "images: " + tag + " is not fully published"
+				blocker = "artifacts: " + tag + " is not fully published"
 			}
 			plan.Blockers = append(plan.Blockers, blocker)
 		}
 		emit(sink, Event{Kind: EventImagesChecked, Release: tag, Images: &images})
+		// The releases that go with this one are looked for right after it, so a
+		// report shows them together.
+		for _, c := range res.companionsToShip(plan, tag) {
+			images := registry.CheckProject(ctx, c.holding.Producer(), prober, c.Tag)
+			plan.Images = append(plan.Images, ReleaseImages{Producer: c.Producer, Release: c.Tag, Report: images})
+			plan.Warnings = append(plan.Warnings, images.Warnings...)
+			if images.Failed() {
+				plan.Blockers = append(plan.Blockers, "artifacts: "+c.Tag+" of "+c.Producer+" is not fully published")
+			}
+			emit(sink, Event{Kind: EventImagesChecked, Producer: c.Producer, Release: c.Tag, Images: &images})
+		}
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil

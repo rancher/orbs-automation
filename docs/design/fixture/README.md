@@ -17,6 +17,7 @@
 | `examples/library.yaml` | a library, two services holding it in their Dockerfiles |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |
 | `examples/gomod.yaml` | a prefix-tagged Go module held by Assets' `go.mod` with a `goBump` Edit |
+| `examples/pinned.yaml` | two Go modules that go together: one Artifact pins another, a service holds one, and the pin makes a virtual Holding of the other in the same files |
 | `examples/external.yaml` | a third-party SDK as an external Project, tracked by a Holding in BRO's chart values |
 
 ## The questions the tools must answer

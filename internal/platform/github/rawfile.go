@@ -2,9 +2,9 @@ package github
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/url"
 )
@@ -12,7 +12,16 @@ import (
 // ErrFileNotFound is returned when the repository, the ref or the path does not
 // exist, or the repository is private and no token was given: the host answers
 // the same 404 for all of them.
-var ErrFileNotFound = errors.New("file not found")
+var ErrFileNotFound error = fileNotFound{}
+
+// fileNotFound is ErrFileNotFound, which is also fs.ErrNotExist, so a reader of a
+// tree that does not know the host can tell a file that is not there from a read that
+// failed.
+type fileNotFound struct{}
+
+func (fileNotFound) Error() string { return "file not found" }
+
+func (fileNotFound) Is(target error) bool { return target == fs.ErrNotExist }
 
 // maxRawFile bounds what RawFile reads; the files read this way are small
 // configuration files.

@@ -41,7 +41,20 @@ The variables of a form are `image` (the artifact's repository path), `tag`, `ve
 * **Check:** reads the value, renders the form for the release, and says what is held, what is wanted, whether they are the same, and how the versions in them compare (newer, same, older, or unknown when either has no version)
 * **Apply:** replaces the value when it differs, and says what changed, one change for each holding that changed
 
+## A release that pins another
+
+An Artifact that `pins` another ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)) makes a **virtual** Holding of the pinned Artifact for each of its Holdings in a consumer, the **companions** of the Holding. A route that ships the pinning Artifact writes its Holdings and their companions in one run:
+
+* **The release of a companion is not the latest of its stream.** It is the version the pinned module has in the file of the pinning release (`go.mod` at the tag, read from the host), written as the tag of the pinned Artifact's stream. It must be a release of that stream and exist, as a release of any gomod Artifact does; a version with no tag, a pseudo-version for one, is a blocker that says so
+* **The check is a floor.** A companion holds what it must when the consumer's value is the required version or newer. Older is written. Newer is left as it is, and the target has a warning that the consumer holds a newer version than the pin resolves. It is never a downgrade and never blocked
+* **The same targets.** A companion is for the lines of the Holding it comes from, in its files. A file that does not require the pinned module is skipped when it is read
+* **Edits.** A companion follows the Edits of the Holding it comes from, so a `goBump` Edit tidies once after both `require` lines are written, as one unit
+* **Shipping the pinned Artifact itself.** A virtual Holding of the route's own producer is a Holding of the route like any other: `gero ship lasso v0.2.7 --to bro` writes that tag in the files the pins make, as a floor, so it raises a lower version and keeps a higher one. Only the companions of another route's Holdings take their release from the pin
+* **The engine's part.** A Holding's release is worked out for it, and not taken as the one tag of the run: `ReleaseOf` takes the companion's own tag, and the check says whether a value is older, the same or newer than it. The caller gives the engine the tags it derived, as it gives the runner, so the engine reads no host
+
 ## Edits
+
+An edit's `env` is worked out **once for each target**, at the head of the target's branch, before any step or write ([CONFIG_SCHEMA](CONFIG_SCHEMA.md#edit-provisional-shape)): each value is rendered, a variable is read from the branch only when a value uses it, and an entry that renders empty is dropped. Every step of the edits of the target runs in it, and so does every strategy, through the runner it is given, so goBump's `go mod tidy` is run in it too. `{goToolchain}` reads `go.mod` of the tree (the host's at the head for the check, the clean worktree for a run), and for a `go` line with no patch asks a list of Go releases the caller gives the engine, as it gives the runner; a line it cannot resolve, a go.mod it cannot read and two edits that set one name differently are errors, which the check reports as blockers and a run reports before anything is written. A step the toolchain is too old for fails with Go's own message and nothing is committed. Only the root `go.mod` is read; other modules of a repo are sketched in [MULTI_MODULE](MULTI_MODULE.md).
 
 The edits that follow the holdings of a route run around the write, for the line of the target branch, each edit once:
 

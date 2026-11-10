@@ -105,3 +105,23 @@ func versionOffset(src []byte, req *modfile.Require, module string) (int, error)
 	}
 	return start + rest + version, nil
 }
+
+// Directives returns the Go version a go.mod asks for in its go line, and the
+// toolchain it names in its toolchain line, each empty when the file has none. The
+// toolchain is as written, such as go1.26.10, and the version without its go, such
+// as 1.26 or 1.26.3.
+func Directives(src []byte) (goVersion, toolchain string, err error) {
+	// The strict parser: the lax one, which Get and Set use so a require line it does
+	// not like is no obstacle, leaves the toolchain line out.
+	f, err := modfile.Parse("go.mod", src, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("parse go.mod: %w", err)
+	}
+	if f.Go != nil {
+		goVersion = f.Go.Version
+	}
+	if f.Toolchain != nil {
+		toolchain = f.Toolchain.Name
+	}
+	return goVersion, toolchain, nil
+}

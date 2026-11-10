@@ -73,6 +73,16 @@
       ],
       "description": "Artifact is one thing each release of a stream produces."
     },
+    "ArtifactPins": {
+      "properties": {
+        "file": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ArtifactPins is what a pin reads: the file of the pinning release that says which version of each pinned Artifact goes with it."
+    },
     "ArtifactSpec": {
       "properties": {
         "kind": {
@@ -101,6 +111,10 @@
             ]
           },
           "type": "array"
+        },
+        "pins": {
+          "$ref": "#/$defs/ArtifactPins",
+          "description": "Pins qualifies refs.pins, the Artifacts a release of this one pins."
         }
       },
       "additionalProperties": false,
@@ -282,6 +296,13 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Env is the environment every step and strategy of the Edit runs in for one\ntarget: names to templates (templates.EnvVars)."
         }
       },
       "additionalProperties": false,

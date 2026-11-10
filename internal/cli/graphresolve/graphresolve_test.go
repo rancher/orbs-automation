@@ -199,3 +199,40 @@ func TestGraphFlowsDownTheDiagram(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(out, "direction: down\n"))
 }
+
+// pinned is wrangler, whose Go module pins lasso's, and rancher, the final
+// destination, which holds wrangler and so lasso, though it says nothing of lasso.
+func pinned(t *testing.T) *chain.Graph {
+	t.Helper()
+	return chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		project("rancher", "  repo: {name: rancher/rancher, managedBy: rancher}\n  finalDestination: true\n"),
+		project("wrangler", "  repo: {name: rancher/wrangler, managedBy: frameworks}\n"),
+		project("lasso", "  repo: {name: rancher/lasso, managedBy: frameworks}\n"),
+		chaintest.Doc("Stream", "wrangler", "{project: wrangler}", "  universal: true\n"),
+		chaintest.Doc("Stream", "lasso", "{project: lasso}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "lasso-module", "{stream: lasso}", "  kind: gomod\n  name: github.com/rancher/lasso\n"),
+		chaintest.Doc("Artifact", "wrangler-module", "{stream: wrangler, pins: lasso-module}", "  kind: gomod\n  name: github.com/rancher/wrangler/v3\n"),
+		chaintest.Doc("Holding", "rancher-holds-wrangler", "{project: rancher, artifact: wrangler-module}",
+			"  at: {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.15}}\n"),
+		chaintest.Doc("Edit", "tidy", "{holding: rancher-holds-wrangler}", "  strategy: goBump\n"),
+	)
+}
+
+func TestGraphDrawsWhatAPinMakesAsAHoldingToo(t *testing.T) {
+	out, err := graph(fakeWorkspace{g: pinned(t)})
+	require.NoError(t, err)
+
+	assert.Contains(t, out, `"holding:rancher-holds-wrangler+lasso-module": {class: [holding]; label: "rancher-holds-wrangler+lasso-module\nrelease, pinned"}`)
+	assert.Contains(t, out, `"rancher/lasso"."stream:lasso"."artifact:lasso-module" -> "holding:rancher-holds-wrangler+lasso-module"`)
+	assert.Contains(t, out, `"holding:rancher-holds-wrangler+lasso-module" -> "rancher/rancher": "v2.16, v2.15"`, "lasso reaches rancher, for the lines the wrangler holding is for")
+}
+
+func TestGraphDrawsAnEditOnceWhenItFollowsAHoldingAndWhatItsPinMakes(t *testing.T) {
+	out, err := graph(fakeWorkspace{g: pinned(t)})
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, strings.Count(out, `"edit:tidy": {class:`), "the edit is one node")
+	assert.Contains(t, out, `"holding:rancher-holds-wrangler" -> "edit:tidy"`)
+	assert.Contains(t, out, `"holding:rancher-holds-wrangler+lasso-module" -> "edit:tidy"`)
+}

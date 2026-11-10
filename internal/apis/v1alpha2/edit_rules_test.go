@@ -78,3 +78,32 @@ func TestAStepSaysWhereItsProgramComesFrom(t *testing.T) {
 	assert.Nil(t, e)
 	assert.True(t, hasError(rep, "spec.postEdit[0].from", "consumer, producer or central"), "%v", rep.Findings)
 }
+
+func TestAnEditMayWriteItsEnvAsTemplates(t *testing.T) {
+	e, rep := loadEdit(t, "  env:\n    GOTOOLCHAIN: \"{goToolchain}\"\n    GOFLAGS: -mod=mod\n    BRANCH_NOTE: \"{line} on {branch}\"\n  postEdit:\n    - {run: [go, generate]}\n")
+
+	assert.Empty(t, rep.Findings)
+	require.NotNil(t, e)
+	assert.Equal(t, map[string]string{"GOTOOLCHAIN": "{goToolchain}", "GOFLAGS": "-mod=mod", "BRANCH_NOTE": "{line} on {branch}"}, e.Spec.Env)
+}
+
+func TestEditEnvRules(t *testing.T) {
+	steps := "  postEdit:\n    - {run: x}\n"
+	tests := []struct {
+		name, spec, path, want string
+	}{
+		{"a name that is not an environment variable", "  env:\n    go-toolchain: x\n" + steps, "spec.env.go-toolchain", "environment variable"},
+		{"a lowercase name", "  env:\n    gotoolchain: x\n" + steps, "spec.env.gotoolchain", "environment variable"},
+		{"a name of the engine's", "  env:\n    GERO_TAG: x\n" + steps, "spec.env.GERO_TAG", "GERO_"},
+		{"a template that names a variable it has not", "  env:\n    GOTOOLCHAIN: \"{nope}\"\n" + steps, "spec.env.GOTOOLCHAIN", "unknown placeholder {nope}"},
+		{"a template that is malformed", "  env:\n    GOTOOLCHAIN: \"{goToolchain\"\n" + steps, "spec.env.GOTOOLCHAIN", "unclosed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e, rep := loadEdit(t, tt.spec)
+
+			assert.Nil(t, e)
+			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+		})
+	}
+}

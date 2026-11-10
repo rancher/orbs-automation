@@ -171,3 +171,31 @@ func TestSetThenGetAgree(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "v1.1.2", other, "the module with no suffix is another module")
 }
+
+func TestDirectivesReadTheGoAndToolchainLines(t *testing.T) {
+	tests := []struct {
+		name, src, goVersion, toolchain string
+	}{
+		{"both", "module m\n\ngo 1.26\n\ntoolchain go1.26.10\n", "1.26", "go1.26.10"},
+		{"a go line with a patch", "module m\n\ngo 1.26.3\n", "1.26.3", ""},
+		{"a go line with no patch", "module m\n\ngo 1.26\n", "1.26", ""},
+		{"a prerelease", "module m\n\ngo 1.27rc1\n", "1.27rc1", ""},
+		{"neither", "module m\n", "", ""},
+		{"the lines among others", "module m\n\nrequire github.com/a/b v1.2.3\n\ngo 1.25.0 // the language\n\ntoolchain go1.26.2\n", "1.25.0", "go1.26.2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			goVersion, toolchain, err := Directives([]byte(tt.src))
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.goVersion, goVersion)
+			assert.Equal(t, tt.toolchain, toolchain)
+		})
+	}
+}
+
+func TestDirectivesOfAFileThatDoesNotParse(t *testing.T) {
+	_, _, err := Directives([]byte("module m\n\ngo\n"))
+
+	require.Error(t, err)
+}

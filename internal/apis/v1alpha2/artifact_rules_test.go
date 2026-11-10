@@ -81,3 +81,53 @@ func TestAnImageNameHasNoSpaces(t *testing.T) {
 	assert.Nil(t, a)
 	assert.True(t, hasError(rep, "spec.name", "space"), "%v", rep.Findings)
 }
+
+func pinningDoc(kind, refs, spec string) string {
+	return "apiVersion: gero/v1alpha2\nkind: Artifact\nname: a\nrefs: " + refs + "\nspec:\n  kind: " + kind + "\n  name: github.com/rancher/wrangler/v3\n" + spec
+}
+
+func loadPinning(t *testing.T, kind, refs, spec string) (*Artifact, config.Report) {
+	t.Helper()
+	objs, rep := decodeReport(t, pinningDoc(kind, refs, spec))
+	if len(objs) == 0 {
+		return nil, rep
+	}
+	require.Len(t, objs, 1)
+	return objs[0].(*Artifact), rep
+}
+
+func TestAnArtifactThatPinsReadsGoModUnlessItNamesAFile(t *testing.T) {
+	a, rep := loadPinning(t, "gomod", "{stream: s, pins: lasso}", "")
+	require.Empty(t, rep.Findings)
+	assert.Equal(t, "go.mod", a.Spec.Pins.File, "the default is filled")
+
+	a, rep = loadPinning(t, "gomod", "{stream: s, pins: [lasso, other]}", "  pins: {file: sub/go.mod}\n")
+	require.Empty(t, rep.Findings)
+	assert.Equal(t, "sub/go.mod", a.Spec.Pins.File)
+	assert.Equal(t, []string{"lasso", "other"}, a.Refs["pins"])
+
+	a, rep = loadPinning(t, "gomod", "{stream: s}", "")
+	require.Empty(t, rep.Findings)
+	assert.Empty(t, a.Spec.Pins.File, "an Artifact that pins nothing reads no file")
+}
+
+func TestArtifactPinRules(t *testing.T) {
+	tests := []struct {
+		name, kind, refs, spec, path, want string
+	}{
+		{"an image that pins", "image", "{stream: s, pins: lasso}", "", "refs.pins", "gomod"},
+		{"a file that pins", "file", "{stream: s, pins: lasso}", "", "refs.pins", "gomod"},
+		{"a file named and nothing pinned", "gomod", "{stream: s}", "  pins: {file: go.mod}\n", "spec.pins", "nothing is pinned"},
+		{"an absolute file", "gomod", "{stream: s, pins: lasso}", "  pins: {file: /etc/go.mod}\n", "spec.pins.file", "relative"},
+		{"a file that leaves the repo", "gomod", "{stream: s, pins: lasso}", "  pins: {file: ../go.mod}\n", "spec.pins.file", "inside the repo"},
+		{"a file with a variable", "gomod", "{stream: s, pins: lasso}", "  pins: {file: \"{tag}/go.mod\"}\n", "spec.pins.file", "variables"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, rep := loadPinning(t, tt.kind, tt.refs, tt.spec)
+
+			assert.Nil(t, a)
+			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+		})
+	}
+}

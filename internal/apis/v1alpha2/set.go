@@ -21,8 +21,11 @@ type refKey struct {
 
 // refKeys are the refs each kind has. A kind that is not here has none.
 var refKeys = map[string]map[string]refKey{
-	KindStream:   {"project": {target: KindProject, required: true}},
-	KindArtifact: {"stream": {target: KindStream, required: true}},
+	KindStream: {"project": {target: KindProject, required: true}},
+	KindArtifact: {
+		"stream": {target: KindStream, required: true},
+		"pins":   {target: KindArtifact, list: true},
+	},
 	KindHolding: {
 		"project":  {target: KindProject, required: true},
 		"artifact": {target: KindArtifact},
@@ -82,6 +85,8 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.rancherLines()
 	s.knownLines()
 	s.artifacts()
+	s.pins()
+	s.pinOverlaps()
 	s.streams()
 	s.holdingRefs()
 	s.holdingStages()
@@ -705,6 +710,136 @@ func listsLine(p *Project, line string) bool {
 		}
 	}
 	return false
+}
+
+// pins checks what each pin points at: an Artifact that is a Go module, and not the
+// one that pins it, and pins that do not circle back to the Artifact they start from.
+func (s *set) pins() {
+	pinned := map[string][]string{} // an Artifact to the Go modules it pins
+	for _, o := range s.objs {
+		a, ok := o.(*Artifact)
+		if !ok {
+			continue
+		}
+		r := s.at(o)
+		for i, name := range a.Refs["pins"] {
+			target, _ := s.index[KindArtifact][name].(*Artifact)
+			switch {
+			case target == nil:
+				continue // refs says so
+			case name == a.Name:
+				r.Errorf(fmt.Sprintf("refs.pins[%d]", i), "an Artifact cannot pin itself")
+			case target.Spec.Kind != ArtifactGoMod:
+				r.Errorf(fmt.Sprintf("refs.pins[%d]", i), "Artifact %q is %s, and only a %s Artifact is pinned", name, target.Spec.Kind, ArtifactGoMod)
+			default:
+				pinned[a.Name] = append(pinned[a.Name], name)
+			}
+		}
+		s.add(r)
+	}
+	for _, o := range s.objs {
+		a, ok := o.(*Artifact)
+		if !ok || !circles(pinned, a.Name) {
+			continue
+		}
+		r := s.at(o)
+		r.Errorf("refs.pins", "the pins of %q have a cycle: its pins pin it back", a.Name)
+		s.add(r)
+	}
+}
+
+// pinOverlaps reports a place written for lines that a pin writes it for. A pin
+// makes a virtual Holding of the pinned module for each Holding of the pinning
+// Artifact, at its files, with the module's own path as the key and for the lines of
+// the Holding, so an explicit Holding at one of those places for lines that overlap
+// has two writers; so does a second pin. The pin owns the place, and the Holding is
+// to be removed or narrowed to the lines no pin covers.
+func (s *set) pinOverlaps() {
+	type place struct {
+		holder, file, key string
+		lines             lines.Range
+	}
+	type virtual struct {
+		place
+		from   *Holding
+		pinner string
+		pinned string
+	}
+	var virt []virtual
+	for _, o := range s.objs {
+		h, ok := o.(*Holding)
+		if !ok || h.Spec.Holds.Kind != HoldsRelease || len(h.Refs["artifact"]) != 1 || len(h.Refs["project"]) != 1 {
+			continue
+		}
+		a, _ := s.index[KindArtifact][h.Refs["artifact"][0]].(*Artifact)
+		if a == nil {
+			continue
+		}
+		for _, name := range a.Refs["pins"] {
+			b, _ := s.index[KindArtifact][name].(*Artifact)
+			if b == nil || b.Spec.Kind != ArtifactGoMod || b == a {
+				continue
+			}
+			for _, at := range h.Spec.At {
+				virt = append(virt, virtual{place{h.Refs["project"][0], at.File, b.Spec.Name, at.Lines.Intersect(h.Spec.Holds.Lines)}, h, a.Name, b.Name})
+			}
+		}
+	}
+	if len(virt) == 0 {
+		return
+	}
+	for i, v := range virt {
+		for _, w := range virt[:i] {
+			if w.holder != v.holder || w.file != v.file || w.key != v.key || w.from == v.from || !w.lines.Overlaps(v.lines) {
+				continue
+			}
+			r := s.at(v.from)
+			r.Errorf("refs.artifact", "the pin of Artifact %q on %q makes a virtual Holding at %s, %s for lines that overlap the one Holding %q makes (the pin of %q): the pin owns a place once",
+				v.pinner, v.pinned, v.file, v.key, w.from.Name, w.pinner)
+			s.add(r)
+			break
+		}
+	}
+	for _, o := range s.objs {
+		g, ok := o.(*Holding)
+		if !ok || len(g.Refs["project"]) != 1 {
+			continue
+		}
+		r := s.at(o)
+		for i, at := range g.Spec.At {
+			mine := place{g.Refs["project"][0], at.File, at.Key, at.Lines.Intersect(g.Spec.Holds.Lines)}
+			for _, v := range virt {
+				if v.from == g || v.holder != mine.holder || v.file != mine.file || v.key != mine.key || !v.lines.Overlaps(mine.lines) {
+					continue
+				}
+				r.Errorf(atPath(i, len(g.Spec.At)), "is the same place (%s, %s) as the virtual Holding of Artifact %q that the pin of Artifact %q makes for Holding %q, for lines that overlap: narrow the lines to the ones no pin covers, or remove it",
+					at.File, at.Key, v.pinned, v.pinner, v.from.Name)
+				break
+			}
+		}
+		s.add(r)
+	}
+}
+
+// circles reports whether following the pins from an Artifact comes back to it.
+func circles(pinned map[string][]string, from string) bool {
+	seen := map[string]bool{}
+	var walk func(name string) bool
+	walk = func(name string) bool {
+		for _, next := range pinned[name] {
+			if next == from {
+				return true
+			}
+			if !seen[next] {
+				seen[next] = true
+				if walk(next) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return walk(from)
 }
 
 // goBumpHoldings reports an Edit with the strategy goBump, which tidies go.mod

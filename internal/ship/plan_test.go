@@ -30,7 +30,7 @@ func TestCheckReady(t *testing.T) {
 	assert.Equal(t, []string{"rancher-h0"}, got.Holdings)
 	assert.Equal(t, Target{Branch: "release/v2.15", Commit: "sha-215"}, got.Targets[0].Target)
 	require.Len(t, got.Targets[0].Holdings, 1)
-	assert.Equal(t, HoldingPlan{Name: "rancher-h0", File: "build.yaml", Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3"}, got.Targets[0].Holdings[0])
+	assert.Equal(t, HoldingPlan{Name: "rancher-h0", Project: "scc-operator", File: "build.yaml", Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3"}, got.Targets[0].Holdings[0])
 	assert.Equal(t, StatusReady, got.Status)
 	assert.Empty(t, got.Blockers)
 	require.Len(t, got.Images, 1)
@@ -64,7 +64,7 @@ func TestCheckBlockedByAMissingImage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, StatusBlocked, got.Status)
 	require.Len(t, got.Blockers, 1)
-	assert.Contains(t, got.Blockers[0], "images")
+	assert.Contains(t, got.Blockers[0], "artifacts")
 	require.Len(t, got.Images, 1)
 	assert.True(t, got.Images[0].Failed())
 }
@@ -112,10 +112,10 @@ func TestCheckConsumers(t *testing.T) {
 		assert.ErrorContains(t, err, "rancher")
 	})
 	t.Run("chosen by name or slug", func(t *testing.T) {
-		for _, to := range []string{"charts", "rancher/charts", "Rancher/Charts"} {
+		for _, to := range []string{"charts", "rancher/charts", "Rancher/Charts", "ch", "CH"} {
 			ws := withDevLine(fixture(t))
 			other := riLink()
-			other.Consumer.Name, other.Consumer.Repo = "charts", "rancher/charts"
+			other.Consumer.Name, other.Consumer.Repo, other.Consumer.Aliases = "charts", "rancher/charts", []string{"ch"}
 			other.Consumer.Lines = ws.links[0].Consumer.Lines
 			ws.links = append(ws.links, other)
 			ws.refs["rancher/charts"] = ws.refs["rancher/rancher"]

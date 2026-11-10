@@ -15,6 +15,8 @@ spec:
 # A major version is a different module path (/v3), not a tag prefix: the tags are plain (v3.8.0).
 # Both minors below are the same module, so their Artifacts have the same name; a consumer's Holding picks one
 # by `lines`. v2 (release/v2) is not tracked. Each minor has a release branch (v3.8 is main).
+# Every wrangler release goes with the lasso its own go.mod requires, so each Artifact pins lasso: a consumer that holds
+# wrangler holds that lasso too, and shipping a wrangler tag ships it (docs/design/CONFIG_UNITS.md, O12).
 # Release candidates are v3.8.0-rc.3 (older tags: v3.0.0-rc1) and are published as GitHub prereleases.
 apiVersion: gero/v1alpha2
 kind: Stream
@@ -25,7 +27,7 @@ spec: {scheme: semver, tagPattern: "v3.8.*", universal: true}
 apiVersion: gero/v1alpha2
 kind: Artifact
 name: wrangler-v3-8-module
-refs: {stream: wrangler-v3-8}
+refs: {stream: wrangler-v3-8, pins: lasso-v0-2-module}
 spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
 ---
 apiVersion: gero/v1alpha2
@@ -37,7 +39,7 @@ spec: {scheme: semver, tagPattern: "v3.7.*", universal: true}
 apiVersion: gero/v1alpha2
 kind: Artifact
 name: wrangler-v3-7-module
-refs: {stream: wrangler-v3-7}
+refs: {stream: wrangler-v3-7, pins: lasso-v0-2-module}
 spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
 ---
 apiVersion: gero/v1alpha2
@@ -49,7 +51,7 @@ spec: {scheme: semver, tagPattern: "v3.6.*", universal: true}
 apiVersion: gero/v1alpha2
 kind: Artifact
 name: wrangler-v3-6-module
-refs: {stream: wrangler-v3-6}
+refs: {stream: wrangler-v3-6, pins: lasso-v0-2-module}
 spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
 ---
 apiVersion: gero/v1alpha2
@@ -61,5 +63,5 @@ spec: {scheme: semver, tagPattern: "v3.3.*", universal: true}
 apiVersion: gero/v1alpha2
 kind: Artifact
 name: wrangler-v3-3-module
-refs: {stream: wrangler-v3-3}
+refs: {stream: wrangler-v3-3, pins: lasso-v0-2-module}
 spec: {kind: gomod, name: github.com/rancher/wrangler/v3}

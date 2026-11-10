@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
+	"io/fs"
+	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/gomodedit"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
 // ErrNotBuilt is returned by a run that needs a strategy gero names and does not
@@ -94,6 +98,11 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 			}
 		}
 	}
+	for _, v := range g.Virtual() {
+		if e.unusable[v.PinnedBy()] {
+			e.unusable[v] = true // it is written with the Holding it comes from, and with its edits
+		}
+	}
 	return e, errors.Join(errs...)
 }
 
@@ -126,7 +135,119 @@ type Route struct {
 	// a producer the active team does not own: gero runs nothing out of a repo no
 	// team of its own owns. They are reported by SkippedSteps.
 	SkipProducerSteps bool
-	engine            *Engine
+	// GoReleases names the newest patch of a Go minor, for a go.mod that pins no
+	// more than go 1.26 (the Edit's {goToolchain}). The caller gives it, as it gives the
+	// runner, so the engine reads no host. Nil means no list: such a go.mod is an error.
+	GoReleases GoReleases
+	engine     *Engine
+}
+
+// GoReleases is the list of Go releases, as far as the engine needs it.
+type GoReleases interface {
+	// NewestPatch returns the toolchain of the newest stable patch of a minor given as
+	// 1.26, such as go1.26.10.
+	NewestPatch(ctx context.Context, minor string) (string, error)
+}
+
+// EnvOf is the environment the steps and strategies of the target's edits run in:
+// the edits' env values rendered for the target, each variable read from the tree
+// only when a value uses it. An entry that renders empty is left out. Two edits that
+// set one name to different values are an error.
+func (r Route) EnvOf(ctx context.Context, tree Tree, t Target) (map[string]string, error) {
+	vars := map[string]string{"line": t.Line, "branch": t.Branch}
+	haveToolchain := false
+	out, setBy := map[string]string{}, map[string]string{}
+	for _, ed := range editsOf(r.holdingsOf(t)) {
+		env := ed.Env()
+		for _, name := range slices.Sorted(maps.Keys(env)) {
+			uses, err := templates.Placeholders(env[name])
+			if err != nil {
+				return nil, fmt.Errorf("Edit %q: env %s: %w", ed.Name(), name, err)
+			}
+			if slices.Contains(uses, "goToolchain") && !haveToolchain {
+				if vars["goToolchain"], err = r.goToolchain(ctx, tree); err != nil {
+					return nil, fmt.Errorf("Edit %q: env %s: %w", ed.Name(), name, err)
+				}
+				haveToolchain = true
+			}
+			value, err := templates.Render(env[name], vars)
+			if err != nil {
+				return nil, fmt.Errorf("Edit %q: env %s: %w", ed.Name(), name, err)
+			}
+			if value == "" {
+				continue // nothing to say: a variable set to empty is not one left unset
+			}
+			if prev, ok := out[name]; ok && prev != value {
+				return nil, fmt.Errorf("Edits %q and %q set %s to different values for %s: %q and %q", setBy[name], ed.Name(), name, t.Branch, prev, value)
+			}
+			out[name], setBy[name] = value, ed.Name()
+		}
+	}
+	return out, nil
+}
+
+var (
+	goPatch      = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)        // 1.26.3
+	goPrerelease = regexp.MustCompile(`^[0-9]+\.[0-9]+(rc|beta)[0-9]+$`) // 1.27rc1
+	goMinor      = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)                // 1.26
+)
+
+// goToolchain is the Go toolchain the tree pins, from the go.mod at its root: the
+// toolchain line, else the go line when it names a patch, else the newest patch of
+// its minor from the list of releases. It is empty when there is no go.mod or no go
+// line, and an error when the file cannot be read or parsed, or a minor has no list
+// to find its patch in.
+func (r Route) goToolchain(ctx context.Context, tree Tree) (string, error) {
+	data, err := tree.ReadFile(ctx, "go.mod")
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("read go.mod: %w", err)
+	}
+	goVersion, toolchain, err := gomodedit.Directives(data)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case toolchain != "" && toolchain != "default":
+		return toolchain, nil
+	case goPatch.MatchString(goVersion) || goPrerelease.MatchString(goVersion):
+		return "go" + goVersion, nil
+	case !goMinor.MatchString(goVersion):
+		return "", nil // no go line, or one that is not a version
+	case r.GoReleases == nil:
+		return "", fmt.Errorf("go.mod says go %s with no toolchain line, and there is no list of Go releases to find its patch in: add a toolchain line to it", goVersion)
+	}
+	newest, err := r.GoReleases.NewestPatch(ctx, goVersion)
+	if err != nil {
+		return "", fmt.Errorf("go.mod says go %s with no toolchain line, and its newest patch could not be found (%w): add a toolchain line to it", goVersion, err)
+	}
+	return newest, nil
+}
+
+// envAdding runs steps with an environment added to the one each step has, which a
+// step's own values win over.
+type envAdding struct {
+	StepRunner
+	env map[string]string
+}
+
+func (a envAdding) Run(ctx context.Context, step chain.Step, env StepEnv) error {
+	merged := maps.Clone(a.env)
+	maps.Copy(merged, env.Env)
+	env.Env = merged
+	return a.StepRunner.Run(ctx, step, env)
+}
+
+// withEnv is the runner with the edits' env added to every run of it, so a strategy
+// that runs a program, such as goBump's go mod tidy, runs it in the same environment
+// as the steps.
+func withEnv(runner StepRunner, env map[string]string) StepRunner {
+	if len(env) == 0 || runner == nil {
+		return runner
+	}
+	return envAdding{StepRunner: runner, env: env}
 }
 
 // routeKey is what a route is for: the project the key says, and the stream of
@@ -183,6 +304,12 @@ func (e *Engine) RoutesInto(consumer *chain.Project) []Route {
 	return e.routes(consumer.Held(), func(h *chain.Holding) *chain.Project { return h.Producer() })
 }
 
+// AppliesTo reports whether the route has a holding for the consumer's line: one
+// whose lines hold it, that the consumer lists, and whose stream serves it.
+func (r Route) AppliesTo(line string) bool {
+	return slices.ContainsFunc(r.Holdings, func(h *chain.Holding) bool { return h.AppliesTo(line) })
+}
+
 // holdingsOf is the holdings a target writes: its own, or the route's when it
 // names none.
 func (r Route) holdingsOf(t Target) []*chain.Holding {
@@ -224,6 +351,43 @@ type Target struct {
 	Branch   string
 	Line     string // the Rancher line of the branch, empty for a branch of none
 	Holdings []*chain.Holding
+	// Pinned is the tag of each virtual Holding among Holdings: the release of the
+	// pinned module that the pinning release requires, which the caller derived from
+	// its file. The engine reads no host. A virtual Holding with no entry is an error.
+	Pinned map[*chain.Holding]string
+}
+
+// releaseOf is the release a holding of the target holds: the tag of the run for a
+// holding of the route, and for a companion, a virtual one of another producer's
+// Artifact that follows the route's holding, the tag that was derived for it. A
+// virtual holding of the route's own producer is shipped as any other: when lasso is
+// shipped, what its pins make in a consumer is written with the tag of the run.
+func (t Target) releaseOf(producer *chain.Project, h *chain.Holding, tag, commit string) (Release, error) {
+	if !h.Virtual() || h.Producer() == producer {
+		return ReleaseOf(h, tag, commit)
+	}
+	pinned, ok := t.Pinned[h]
+	if !ok {
+		return Release{}, fmt.Errorf("Holding %q is virtual and no release was derived for it", h.Name())
+	}
+	return ReleaseOf(h, pinned, "")
+}
+
+// Companions returns the virtual Holdings that follow the target's holdings: what
+// the pins of their Artifacts make in the consumer, for the target's line, each once,
+// in the order of the holdings they come from. A run that ships the release also
+// writes these, with the releases the pins resolve; the caller gives them to the
+// target in Holdings and Pinned.
+func (r Route) Companions(t Target) []*chain.Holding {
+	var out []*chain.Holding
+	for _, h := range r.holdingsOf(t) {
+		for _, v := range h.Pinned() {
+			if (t.Line == "" || v.AppliesTo(t.Line)) && !slices.Contains(out, v) {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
 
 // TargetsFor returns the targets a release goes to, in order. line is the
@@ -422,7 +586,7 @@ type HoldingCheck struct {
 func (r Route) Check(ctx context.Context, src Tree, t Target, tag, commit string) ([]HoldingCheck, error) {
 	var out []HoldingCheck
 	for _, h := range r.holdingsOf(t) {
-		rel, err := ReleaseOf(h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, h, tag, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -451,10 +615,16 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	if len(holdings) > 0 {
 		pattern = tagPatternOf(holdings[0])
 	}
-	env := StepEnv{Dir: dir, Env: map[string]string{
+	edits, err := r.EnvOf(ctx, tree, t) // before anything is written: a toolchain it cannot name stops the run
+	if err != nil {
+		return Result{}, err
+	}
+	env := StepEnv{Dir: dir, Env: map[string]string{}}
+	maps.Copy(env.Env, edits)
+	maps.Copy(env.Env, map[string]string{
 		"GERO_TAG": tag, "GERO_VERSION": newRelease(tag, pattern, "", "").Version, "GERO_TARGET_BRANCH": t.Branch,
 		"GERO_SOURCE_REPO": r.Producer.Slug(),
-	}}
+	})
 	checkpoint := func(u Unit) error {
 		if after == nil {
 			return nil
@@ -475,7 +645,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	var res Result
 	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
-		rel, err := ReleaseOf(h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, h, tag, commit)
 		if err != nil {
 			return res, err
 		}
@@ -499,7 +669,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
 			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
 			Line:    t.Line, Branch: t.Branch,
-			Dir: dir, Runner: runner, Changes: changesOf(ed, written),
+			Dir: dir, Runner: withEnv(runner, edits), Changes: changesOf(ed, written),
 		})
 		if err != nil {
 			return res, fmt.Errorf("Edit %q: %w", ed.Name(), err)

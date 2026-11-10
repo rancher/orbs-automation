@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -28,6 +29,9 @@ type humanSink struct {
 	prShown   bool
 	working   bool // the section for the work on branches has been started
 	deciding  bool // the section for the open PRs of each branch has been started
+	destShown bool // the section for the final destination has been started
+	inImages  bool // the table of artifacts is open: a companion's rows go into it
+	imageWarn []string
 }
 
 var _ domain.Sink = (*humanSink)(nil)
@@ -81,6 +85,9 @@ func statusRole(status string) (style.Role, bool) {
 
 // Event shows one event.
 func (h *humanSink) Event(e domain.Event) {
+	if e.Kind != domain.EventImagesChecked {
+		h.endImages()
+	}
 	switch e.Kind {
 	case domain.EventResolved:
 		h.resolved(e.Plan)
@@ -88,10 +95,12 @@ func (h *humanSink) Event(e domain.Event) {
 		h.targetChecked(e.Target)
 	case domain.EventTargetsChecked:
 		h.endTargets()
+	case domain.EventDestination:
+		h.endTargets()
+		h.destination(e.Destination)
 	case domain.EventImagesChecked:
 		h.endTargets()
-		h.images(e.Release, e.Images)
-		h.pr()
+		h.images(e.Producer, e.Release, e.Images)
 	case domain.EventActor:
 		h.endTargets()
 		h.pr()
@@ -141,6 +150,13 @@ func (h *humanSink) resolved(p *domain.Plan) {
 	for _, note := range p.Notes {
 		h.out.Line("  " + h.label("left out") + "  " + note)
 	}
+	for _, c := range p.Companions {
+		if c.Error != "" {
+			h.out.Line("  " + h.label("with") + "  " + h.st.Style(style.Warn, c.Module+": "+c.Error))
+			continue
+		}
+		h.out.Line(fmt.Sprintf("  %s  %s %s of %s, which %s requires", h.label("with"), c.Module, c.Tag, c.Producer, c.RequiredBy))
+	}
 	h.out.Line("")
 	h.header = *p
 }
@@ -156,19 +172,87 @@ func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 		h.out.Line("")
 		h.heading("Targets")
 		if h.header.Uniform() {
-			h.table("LINE", "BRANCH", "HEAD", "NOW", "STATUS")
+			h.table("LINE", "BRANCH", "HEAD", "ARTIFACT", "NOW", "STATUS")
 		} else {
-			h.table("LINE", "BRANCH", "RELEASE", "HEAD", "NOW", "WANT", "STATUS")
+			h.table("LINE", "BRANCH", "RELEASE", "HEAD", "ARTIFACT", "NOW", "WANT", "STATUS")
 		}
 		h.inTargets = true
 	}
-	if h.header.Uniform() {
-		h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Current }), h.status(string(t.Status)))
-	} else {
-		h.out.Row(t.Key(), t.Branch, t.Release, git.Short(t.Commit),
-			valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Current }), valuesOf(*t, func(hp domain.HoldingPlan) string { return hp.Want }), h.status(string(t.Status)))
+	// A row for each artifact of the target: the release asked for, and each
+	// companion that goes with it, so lasso's value is read beside wrangler's.
+	for _, a := range artifactsOf(*t) {
+		if h.header.Uniform() {
+			h.out.Row(t.Key(), t.Branch, git.Short(t.Commit), a.project, a.now, h.status(a.status))
+		} else {
+			h.out.Row(t.Key(), t.Branch, a.release, git.Short(t.Commit), a.project, a.now, a.want, h.status(a.status))
+		}
 	}
 	h.targets = append(h.targets, *t)
+}
+
+// envText is the env of a target as one text, "A=b, C=d" in the order of the names,
+// as a list of one so branches that have the same are grouped; none for no env.
+func envText(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	pairs := make([]string, 0, len(env))
+	for _, name := range slices.Sorted(maps.Keys(env)) {
+		pairs = append(pairs, name+"="+env[name])
+	}
+	return []string{strings.Join(pairs, ", ")}
+}
+
+// artifactRow is what the table of targets says of one artifact of a target: whose
+// release it is, what the branch holds of it, what it would, and where that stands.
+type artifactRow struct {
+	project, release, now, want, status string
+}
+
+// artifactsOf groups the holdings of a target by the project whose release they
+// hold, in the order they come, for the rows of the table of targets. The status of
+// a row is the target's, except that a ready target says of an artifact it holds
+// already that it is up to date.
+func artifactsOf(t domain.TargetPlan) []artifactRow {
+	if len(t.Holdings) == 0 {
+		return []artifactRow{{release: t.Release, status: string(t.Status)}}
+	}
+	var rows []artifactRow
+	for _, project := range projectsOf(t) {
+		in := domain.TargetPlan{Release: t.Release}
+		stale := false
+		for _, hp := range t.Holdings {
+			if hp.Project != project {
+				continue
+			}
+			in.Holdings = append(in.Holdings, hp)
+			stale = stale || !hp.UpToDate
+			if hp.Release != "" {
+				in.Release = hp.Release
+			}
+		}
+		status := string(t.Status)
+		if t.Status == domain.StatusReady && !stale {
+			status = string(domain.StatusUpToDate)
+		}
+		rows = append(rows, artifactRow{
+			project: project, release: in.Release, status: status,
+			now:  valuesOf(in, func(hp domain.HoldingPlan) string { return hp.Current }),
+			want: valuesOf(in, func(hp domain.HoldingPlan) string { return hp.Want }),
+		})
+	}
+	return rows
+}
+
+// projectsOf is the projects whose releases a target's holdings hold, each once.
+func projectsOf(t domain.TargetPlan) []string {
+	var out []string
+	for _, hp := range t.Holdings {
+		if !slices.Contains(out, hp.Project) {
+			out = append(out, hp.Project)
+		}
+	}
+	return out
 }
 
 // endTargets prints the table of branches, with what stands in the way of each
@@ -179,6 +263,10 @@ func (h *humanSink) endTargets() {
 	}
 	h.out.EndTable()
 	h.inTargets = false
+	// What the steps run in, for the branches that it is the same for.
+	for _, g := range groupTargets(h.targets, func(t domain.TargetPlan) []string { return envText(t.Env) }) {
+		h.out.Line(fmt.Sprintf("  %s (%s): %s", h.label("env"), strings.Join(g.branches, ", "), g.text))
+	}
 	for _, g := range groupTargets(h.targets, func(t domain.TargetPlan) []string { return t.Blockers }) {
 		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  blocked (%s): %s", strings.Join(g.branches, ", "), g.text)))
 	}
@@ -193,18 +281,59 @@ func (h *humanSink) endTargets() {
 	}
 }
 
-func (h *humanSink) images(release string, r *registry.Report) {
+// destination shows what the final destination holds on a line, under a heading of
+// its own: the reference the release is compared with.
+func (h *humanSink) destination(d *domain.Destination) {
+	if d == nil {
+		return
+	}
+	if !h.destShown {
+		h.destShown = true
+		h.out.Line("")
+		h.heading("Destination")
+	}
+	switch {
+	case d.Error != "":
+		of := ""
+		if d.Producer != "" {
+			of = " (" + d.Producer + ")"
+		}
+		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  %s: %s%s could not be read: %s", d.Line, d.Project, of, d.Error)))
+	default:
+		var held []string
+		for _, v := range d.Held {
+			held = append(held, v.Current)
+		}
+		of := ""
+		if d.Producer != "" {
+			of = " of " + d.Producer
+		}
+		h.out.Line(fmt.Sprintf("  %s: %s holds %s%s through %s, on %s", d.Line, d.Project, strings.Join(held, ", "), of, d.Stream, d.Branch))
+	}
+}
+
+// images adds the artifacts of a release to the table of artifacts: its images in
+// their registries and its Go modules on the proxy. The table of a release is opened
+// by its own rows, and the rows of a companion, a release that goes with it because
+// its Artifact is pinned by the release's, join the table that is open, so what goes
+// out together is read together. The table is closed, and its warnings shown, by the
+// next event of another kind (endImages).
+func (h *humanSink) images(producer, release string, r *registry.Report) {
 	if r == nil {
 		return
 	}
 	if len(r.Rows) > 0 {
-		h.out.Line("")
-		if h.header.Uniform() {
-			h.heading("Images")
-		} else {
-			h.heading("Images (" + release + ")")
+		if producer == "" || !h.inImages {
+			h.endImages()
+			h.out.Line("")
+			if h.header.Uniform() {
+				h.heading("Artifacts")
+			} else {
+				h.heading("Artifacts (" + release + ")")
+			}
+			h.table("ARTIFACT", "REGISTRY", "STATUS", "REFERENCE")
+			h.inImages = true
 		}
-		h.table("IMAGE", "REGISTRY", "STATUS", "REFERENCE")
 		for _, row := range r.Rows {
 			status := h.status(row.Status)
 			if row.Detail != "" {
@@ -212,12 +341,26 @@ func (h *humanSink) images(release string, r *registry.Report) {
 			}
 			h.out.Row(row.Image, row.Label, status, row.Reference)
 		}
-		h.out.EndTable()
 	}
-	for _, w := range r.Warnings {
+	h.imageWarn = append(h.imageWarn, r.Warnings...)
+}
+
+// endImages closes the table of artifacts, if one is open, and shows the warnings
+// of the checks that filled it, then the PR, which follows them.
+func (h *humanSink) endImages() {
+	if !h.inImages && len(h.imageWarn) == 0 {
+		return
+	}
+	if h.inImages {
+		h.out.EndTable()
+		h.inImages = false
+	}
+	for _, w := range h.imageWarn {
 		h.out.Line("")
 		h.out.Line(h.st.Style(style.Warn, "Warning: "+w))
 	}
+	h.imageWarn = nil
+	h.pr()
 }
 
 // actor says who the run acts as, before anything is written: the identity of

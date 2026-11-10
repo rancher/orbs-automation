@@ -35,7 +35,19 @@ func (l logSink) Event(e domain.Event) {
 		if failed {
 			level = slog.LevelWarn
 		}
-		l.log.LogAttrs(ctx, level, "images checked", slog.String("release", e.Release), slog.Int("rows", len(e.Images.Rows)), slog.Bool("failed", failed))
+		attrs := []slog.Attr{slog.String("release", e.Release), slog.Int("rows", len(e.Images.Rows)), slog.Bool("failed", failed)}
+		if e.Producer != "" {
+			attrs = append(attrs, slog.String("producer", e.Producer))
+		}
+		l.log.LogAttrs(ctx, level, "images checked", attrs...)
+	case domain.EventDestination:
+		level := slog.LevelInfo
+		attrs := []slog.Attr{slog.String("project", e.Destination.Project), slog.String("line", e.Destination.Line), slog.String("stream", e.Destination.Stream)}
+		if e.Destination.Error != "" {
+			level = slog.LevelWarn
+			attrs = append(attrs, slog.String("error", e.Destination.Error))
+		}
+		l.log.LogAttrs(ctx, level, "destination read", attrs...)
 	case domain.EventTargetStarted:
 		attrs := about(e, slog.String("place", string(e.Place)))
 		if e.Reason != "" {

@@ -25,6 +25,11 @@ func text(name string) string {
 // DefaultTitle is the PR title when pullRequests.title is not set.
 func DefaultTitle() string { return text("title.txt") }
 
+// DefaultTitleWith is the PR title when the bump also takes releases that go with
+// the one asked for, such as the lasso a wrangler release requires, and
+// pullRequests.title is not set. It may use {companions}, as "lasso to v0.2.10".
+func DefaultTitleWith() string { return text("title_with.txt") }
+
 // DefaultBranchPrefix is the start of the branch name when neither the user nor
 // the project sets one. The rest of the name is the tag and the target branch.
 func DefaultBranchPrefix() string { return text("branch_prefix.txt") }
@@ -32,6 +37,10 @@ func DefaultBranchPrefix() string { return text("branch_prefix.txt") }
 // CommitMessage is the commit message of a bump: a subject, a short account of
 // where it came from, and the trailers.
 func CommitMessage() string { return text("commit.txt") + "\n" }
+
+// CommitMessageWith is CommitMessage for a bump that also takes releases that go
+// with the one asked for.
+func CommitMessageWith() string { return text("commit_with.txt") + "\n" }
 
 // Body is the PR body of a bump.
 func Body() string { return text("body.md") + "\n" }

@@ -10,7 +10,22 @@ type Holding struct {
 	producer *Project
 	artifact *Artifact
 	edits    []*Edit
+
+	virtual  bool
+	pinnedBy *Holding   // for a virtual Holding: the Holding whose Artifact pins its Artifact
+	pinned   []*Holding // for a Holding: the virtual Holdings its Artifact's pins make
 }
+
+// Virtual reports whether the Holding is one a pin makes, and no document says: the
+// pinned Artifact in the files of the Holding it comes from (PinnedBy).
+func (h *Holding) Virtual() bool { return h.virtual }
+
+// PinnedBy is the Holding a virtual Holding comes from, and nil for any other.
+func (h *Holding) PinnedBy() *Holding { return h.pinnedBy }
+
+// Pinned returns the virtual Holdings the pins of the Holding's Artifact make: what a
+// run that ships the Artifact writes beside it, in the same files.
+func (h *Holding) Pinned() []*Holding { return h.pinned }
 
 // Acknowledgement says whether the holding's document acknowledges a warning of a
 // rule, about a line when it has one, and the reason when it does.

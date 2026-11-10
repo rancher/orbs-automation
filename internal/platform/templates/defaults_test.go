@@ -75,3 +75,13 @@ func TestStepCommitMessageNamesTheCommandAndKeepsTheTrailers(t *testing.T) {
 	assert.Contains(t, StepCommitMessage(), "{source} to {tag}")
 	assert.Equal(t, "Automation: gero ship", lines[len(lines)-1], "the same trailers as the edit's commit")
 }
+
+func TestTheTextsForABumpWithCompanionsUseOnlyTheVariablesOfTheTexts(t *testing.T) {
+	assert.Equal(t, "[{branch}] Update {source} to {tag} and {companions}", DefaultTitleWith())
+	assert.NotContains(t, DefaultTitleWith(), "\n", "a title is one line")
+	assert.True(t, strings.HasPrefix(CommitMessageWith(), "Update {source} to {tag} and {companions}\n"))
+	assert.Contains(t, CommitMessageWith(), "Automation: gero ship")
+	for name, text := range map[string]string{"title": DefaultTitleWith(), "commit message": CommitMessageWith()} {
+		assert.NoError(t, Validate(text, TextVars), name)
+	}
+}

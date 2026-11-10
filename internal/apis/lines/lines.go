@@ -125,6 +125,32 @@ func (r Range) Overlaps(o Range) bool {
 	return true
 }
 
+// Intersect is the lines both ranges hold: the later of the two starts and the
+// earlier of the two ends. An end that is left out, or does not read as a Rancher
+// line, is open, so it takes the other's. The result is empty (Overlaps is false)
+// when they share no line.
+func (r Range) Intersect(o Range) Range {
+	return Range{Since: pick(r.Since, o.Since, true), Until: pick(r.Until, o.Until, false)}
+}
+
+// pick is the later of two ends that are starts, or the earlier of two that are
+// ends, as written. An end that does not read as a line is open and loses.
+func pick(a, b string, later bool) string {
+	x, okA := Parse(a)
+	y, okB := Parse(b)
+	switch {
+	case !okA && !okB:
+		return ""
+	case !okA:
+		return b
+	case !okB:
+		return a
+	case x.Before(y) == later:
+		return b
+	}
+	return a
+}
+
 // Line is one Rancher line.
 type Line struct {
 	ID         string          `yaml:"id"`

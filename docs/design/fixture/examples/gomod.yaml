@@ -21,7 +21,7 @@ name: helmtools-module
 refs: {stream: ob-charts-tool-helmtools}
 spec: {kind: gomod, name: github.com/rancher/ob-charts-tool/helmtools}
 ---
-# rancher-assets (unowned, release team; see ../rancher-assets.yaml) requires helmtools in its go.mod.
+# rancher-assets (managed by the release team; see ../rancher-assets.yaml) requires helmtools in its go.mod.
 # The tag is helmtools/v0.1.2 and go.mod needs v0.1.2, which is {bareTag}.
 apiVersion: gero/v1alpha2
 kind: Holding
@@ -37,4 +37,7 @@ apiVersion: gero/v1alpha2
 kind: Edit
 name: assets-bump-helmtools
 refs: {holding: assets-holds-helmtools}
-spec: {strategy: goBump}
+spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"   # go mod tidy runs in the Go the branch pins, whatever the engineer's own is
+  strategy: goBump

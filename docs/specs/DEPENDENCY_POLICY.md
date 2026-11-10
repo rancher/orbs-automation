@@ -4,6 +4,7 @@
 
 * **Standard library first.** Fewer dependencies means a smaller supply-chain surface and less to audit.
 * A new dependency needs an entry here saying what the standard library would cost us. It is enforced by a `depguard` allow-list in `.golangci.yml`, so an unlisted import fails lint. Narrower rules there keep each module behind one package ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
+* **Network reads that are not modules:** the Go release list (`https://go.dev/dl/?mode=json`), read anonymously by `internal/platform/goreleases` to name the newest patch of a Go minor, and cached for a day. It is a plain HTTP read of JSON with the standard library.
 * Approved now:
 
 | Module | For |

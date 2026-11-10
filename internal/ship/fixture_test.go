@@ -26,6 +26,8 @@ type lineSpec struct{ Line, Branch string }
 // projectSpec is a project as the tests write it, before it is made into documents.
 type projectSpec struct {
 	Name, Repo, ManagedBy string
+	Aliases               []string      // shorthand names
+	FinalDestination      bool          // the project releases end in
 	Title                 string        // pullRequests.title
 	PushTo                string        // pullRequests.pushTo
 	Labels, BotLabels     []string      // pullRequests.labels and botLabels
@@ -51,6 +53,7 @@ type link struct {
 	HoldsLines        string // holds.lines, as flow YAML
 	Strategy          string // the strategy of an edit that follows the holding
 	Pre, Post         []stepSpec
+	Env               string // the lines of an env map on the edit, as "    NAME: value\n"
 	PackageForTheEdit string
 	Artifact          string // the artifact the holding holds, when not the producer's first image
 	Locations         string // the at block as YAML, for a holding with several locations; File and Key otherwise
@@ -152,6 +155,9 @@ func (f *fakeWorkspace) docs() []string {
 			if l.Strategy != "" {
 				spec += "  strategy: " + l.Strategy + "\n  with: {package: " + orDefault(l.PackageForTheEdit, "x") + "}\n"
 			}
+			if l.Env != "" {
+				spec += "  env:\n" + l.Env
+			}
 			spec += stepsYAML("preEdit", l.Pre) + stepsYAML("postEdit", l.Post)
 			docs = append(docs, chaintest.Doc("Edit", name+"-edit", "{holding: "+name+"}", spec))
 		}
@@ -175,6 +181,12 @@ func projectBody(p projectSpec) string {
 	}
 	repo += "}"
 	body := "  repo: " + repo + "\n"
+	if p.FinalDestination {
+		body += "  finalDestination: true\n"
+	}
+	if len(p.Aliases) > 0 {
+		body = "  aliases: [" + strings.Join(p.Aliases, ", ") + "]\n" + body
+	}
 	var pr []string
 	if p.Title != "" {
 		pr = append(pr, fmt.Sprintf("title: %q", p.Title))

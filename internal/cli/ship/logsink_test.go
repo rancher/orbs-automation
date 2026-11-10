@@ -101,6 +101,18 @@ func TestLogSinkAFailedImageCheckIsAWarning(t *testing.T) {
 	assert.Equal(t, true, recs[0]["failed"])
 }
 
+func TestLogSinkRecordsTheDestinationAndWarnsWhenItCouldNotBeRead(t *testing.T) {
+	ok := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventDestination, Destination: &domain.Destination{Project: "rancher/rancher", Line: "v2.15", Stream: "wrangler-v3-7"}})
+	bad := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventDestination, Destination: &domain.Destination{Project: "rancher/rancher", Line: "v2.15", Error: "no branch"}})
+
+	require.Len(t, ok, 1)
+	assert.Equal(t, "INFO", ok[0]["level"])
+	assert.Equal(t, "wrangler-v3-7", ok[0]["stream"])
+	require.Len(t, bad, 1)
+	assert.Equal(t, "WARN", bad[0]["level"])
+	assert.Equal(t, "no branch", bad[0]["error"])
+}
+
 func TestLogSinkHasNoRecordForTheEventThatOnlyEndsATable(t *testing.T) {
 	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventTargetsChecked})
 

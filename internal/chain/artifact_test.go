@@ -66,3 +66,9 @@ func TestAnArtifactAppliesToTheLinesItIsProducedFor(t *testing.T) {
 	assert.True(t, arts[1].AppliesTo("v2.16"))
 	assert.True(t, arts[1].AppliesTo("2.17"))
 }
+
+func TestAnArtifactKnowsTheProjectWhoseReleasesProduceIt(t *testing.T) {
+	g := chaintest.Load(t, pair()...)
+
+	assert.Equal(t, "prod", g.Project("prod").Artifacts()[0].Project().Name())
+}

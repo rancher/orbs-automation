@@ -47,6 +47,12 @@ type Check struct {
 	Relation  Relation
 	Change    Change          // what a bump would change; meaningful when not up to date
 	Locations []LocationCheck // each location, in the order the holding lists them
+	// HeldNewer says a location of a virtual holding holds a newer version than the
+	// release wants. A pin is a floor, so that is up to date, and a caller says it.
+	HeldNewer bool
+	// Absent says a virtual holding has no location left to hold anything: no file
+	// of the holding requires the pinned module, so there is nothing to write.
+	Absent bool
 }
 
 // LocationCheck is what one location of a holding holds.
@@ -56,6 +62,9 @@ type LocationCheck struct {
 	UpToDate bool
 	Relation Relation
 	Change   Change
+	// HeldNewer says the location holds a newer version than the release wants, which
+	// a virtual holding takes as up to date.
+	HeldNewer bool
 }
 
 // Differ reports whether the locations of the holding hold different values.

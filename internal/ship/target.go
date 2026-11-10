@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 )
 
 // head is the consumer's branch as the host has it, and its files at that
@@ -38,11 +39,28 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 	tp := TargetPlan{Target: target, Line: sp.target.Line, Release: sp.release.Tag, Status: StatusReady}
 	var stale []bump.HoldingCheck // the holdings that are not up to date
 	var downgrade bool
+	var pins []Companion // what the stale virtual holdings are for
 	for _, c := range checks {
+		if c.Absent {
+			continue // no file of the pinning holding requires the module: nothing to hold
+		}
+		companionHolding := c.Holding.Virtual() && c.Holding.Producer() != r.producer // another release's, not the route's own
 		tp.Holdings = append(tp.Holdings, HoldingPlan{
 			Name: c.Holding.Name(), File: c.Change.Path, Current: c.Current, Want: c.Want,
 			UpToDate: c.UpToDate, Downgrade: !c.UpToDate && c.Relation == bump.RelationOlder,
+			Pinned: companionHolding, Project: c.Holding.Artifact().Project().Name(),
 		})
+		if companionHolding {
+			comp := r.companionOf(c.Holding, sp.release.Tag)
+			tp.Holdings[len(tp.Holdings)-1].Release = comp.Tag
+			if c.HeldNewer {
+				tp.Warnings = append(tp.Warnings, fmt.Sprintf("%s holds %s %s, newer than %s, which %s requires: it is kept",
+					consumerSlug, comp.Module, c.Current, comp.Tag, comp.RequiredBy))
+			}
+			if !c.UpToDate {
+				pins = append(pins, comp.Companion)
+			}
+		}
 		if !c.UpToDate {
 			stale = append(stale, c)
 			downgrade = downgrade || c.Relation == bump.RelationOlder
@@ -64,10 +82,19 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 		}
 		tp.Warnings = append(tp.Warnings, "this is a downgrade: "+message)
 	}
+	// What the steps run in is only worked out for a target that has a PR to make:
+	// one that holds what it should has nothing to run, whatever its go.mod says.
+	env, err := r.route.EnvOf(ctx, tree, sp.target)
+	if err != nil {
+		tp.Status = StatusBlocked
+		tp.Blockers = append(tp.Blockers, "toolchain: "+err.Error())
+		return tp, nil
+	}
+	tp.Env = env
 	pre, post := r.route.Steps(sp.target)
 	preview, err := renderPreview(previewInput{
 		producer: r.producer, consumer: r.route.Consumer, release: sp.release, target: target,
-		checks: stale, steps: append(pre, post...), skipped: r.route.SkippedSteps(sp.target), userPrefix: in.BranchPrefix,
+		checks: stale, steps: append(pre, post...), skipped: r.route.SkippedSteps(sp.target), pins: pins, env: env, userPrefix: in.BranchPrefix,
 	})
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("render the PR: %w", err)
@@ -84,6 +111,15 @@ func (r resolution) targetOf(tp TargetPlan) bump.Target {
 		for _, h := range r.route.Holdings {
 			if h.Name() == hp.Name {
 				t.Holdings = append(t.Holdings, h)
+			}
+			for _, v := range h.Pinned() { // a companion, written with the release its pin resolved
+				if v.Name() == hp.Name {
+					if t.Pinned == nil {
+						t.Pinned = map[*chain.Holding]string{}
+					}
+					t.Holdings = append(t.Holdings, v)
+					t.Pinned[v] = r.companionOf(v, tp.Release).Tag
+				}
 			}
 		}
 	}

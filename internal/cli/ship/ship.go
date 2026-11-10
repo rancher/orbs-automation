@@ -17,6 +17,7 @@ import (
 	"slices"
 
 	"github.com/rancher/orbs-automation/internal/platform/goproxy"
+	"github.com/rancher/orbs-automation/internal/platform/goreleases"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
 	"github.com/rancher/orbs-automation/internal/cli/identity"
@@ -118,7 +119,18 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
 		}
 	}
-	return runToStyled(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, registry.Probers{Images: ociregistry.Checker{}, Modules: goproxy.Checker{}}, ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
+	return runToStyled(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, probers(), ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
+}
+
+// probers is what a run looks things up with: the registries for images, the proxy
+// for Go modules, and the list of Go releases for a go.mod that pins no more than
+// go 1.26, kept in the cache directory so it is read once a day.
+func probers() registry.Probers {
+	home, _ := os.UserHomeDir()
+	return registry.Probers{
+		Images: ociregistry.Checker{}, Modules: goproxy.Checker{},
+		Go: goreleases.Client{CacheDir: clicfg.CacheDir(os.Getenv, home)},
+	}
 }
 
 // inputFrom is what the user asked for, from the flags and the settings. The

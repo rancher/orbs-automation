@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -46,6 +47,8 @@ type previewInput struct {
 	checks     []bump.HoldingCheck // the holdings that change: the file, the old and new values and the change of each
 	steps      []bump.StepRef      // the steps that run around the write for this branch, in order, with their phase
 	skipped    []bump.StepRef      // the steps the producer's team does not let gero run, which the body lists
+	pins       []Companion         // the releases of pinned modules this bump takes with it, which the body says why
+	env        map[string]string   // what the steps run in, which the body says
 	userPrefix string              // the user's branchPrefix setting, which replaces the project's whole
 }
 
@@ -63,6 +66,7 @@ func renderPreview(in previewInput) (Preview, error) {
 		Target: in.target.Branch, Version: tag,
 	}
 	vars := textVars(in)
+	vars["companions"] = companionsText(in.pins)
 	vars["changes"] = changes(in)
 	vars["marker"] = marker.String()
 
@@ -71,12 +75,16 @@ func renderPreview(in previewInput) (Preview, error) {
 	if err != nil {
 		return Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
 	}
-	titleTemplate := firstNonEmpty(prs.Title, templates.DefaultTitle())
+	defaultTitle, defaultCommit := templates.DefaultTitle(), templates.CommitMessage()
+	if len(in.pins) > 0 { // lasso goes with wrangler: the title and the commit say so
+		defaultTitle, defaultCommit = templates.DefaultTitleWith(), templates.CommitMessageWith()
+	}
+	titleTemplate := firstNonEmpty(prs.Title, defaultTitle)
 	title, err := templates.Render(titleTemplate, vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("title %q: %w", titleTemplate, err)
 	}
-	commit, err := templates.Render(templates.CommitMessage(), vars)
+	commit, err := templates.Render(defaultCommit, vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("commit message: %w", err)
 	}
@@ -109,6 +117,20 @@ func stepPreviews(in previewInput) ([]StepPreview, error) {
 		})
 	}
 	return out, nil
+}
+
+// companionsText says what goes with the release as a title does: "lasso to
+// v0.2.10", and for more than one "a to v1, b to v2 and c to v3".
+func companionsText(pins []Companion) string {
+	parts := make([]string, len(pins))
+	for i, c := range pins {
+		parts[i] = c.Name + " to " + c.Tag
+	}
+	switch len(parts) {
+	case 0, 1:
+		return strings.Join(parts, "")
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
 }
 
 // textVars are the variables of the texts that only need to know what the bump
@@ -223,6 +245,16 @@ func changes(in previewInput) string {
 	}
 	for _, ref := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")
+	}
+	if len(in.env) > 0 {
+		pairs := make([]string, 0, len(in.env))
+		for _, name := range slices.Sorted(maps.Keys(in.env)) {
+			pairs = append(pairs, "`"+name+"="+in.env[name]+"`")
+		}
+		lines = append(lines, "- The steps ran with "+strings.Join(pairs, ", "))
+	}
+	for _, c := range in.pins {
+		lines = append(lines, "- `"+c.Module+"` goes to "+c.Tag+", which "+c.RequiredBy+" requires")
 	}
 	for _, ref := range in.skipped {
 		lines = append(lines, "- Skipped `"+strings.Join(ref.Step.Run, " ")+"`: it runs from "+in.producer.Slug()+", "+managedByWords(in.producer)+", so this PR may be incomplete")
