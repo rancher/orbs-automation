@@ -95,3 +95,11 @@ func TestSemverCompare(t *testing.T) {
 	assert.Zero(t, s.Compare("v8.1.0", "v8.1.0"))
 	assert.Zero(t, s.Compare("v8.1.0", "main-abc1234"), "a name that is not a release has no order")
 }
+
+func TestSemverLatestOfALineWrittenWithoutTheV(t *testing.T) {
+	s := streamScheme(t, "kuberlr")
+	all := tags("v8.0.9", "v8.1.0", "v9.0.0")
+
+	assert.Equal(t, s.Latest(all, "v2.15"), s.Latest(all, "2.15"), "a line is the same line with or without its v, as everywhere in config")
+	assert.NotNil(t, s.Latest(all, "2.15").Stable)
+}
