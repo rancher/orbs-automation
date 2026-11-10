@@ -12,7 +12,7 @@ The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which
 * **Every node is labelled apart from the others.** Several streams of one thing, such as the series of a Go module, have artifacts that publish under one name, so a stream is labelled with its name and tag pattern, an artifact with its name and the name it publishes, and a holding with its name.
 * **The output is deterministic.** Projects are written by slug and holdings by name, so the same config always gives the same text, whatever order the documents were read in.
 * **Names are quoted.** A slug has dots and slashes that D2 reads as nesting, so every key and label is a quoted string.
-* **Only D2 is written.** A format-neutral diagram is not built; another format adds its own writer beside this one.
+* **Only D2 is written.** `--json` and any other output format are refused with an error that says so, and nothing is written. A format-neutral diagram is not built; another format adds its own writer beside this one.
 
 ## Tests
 

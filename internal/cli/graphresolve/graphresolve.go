@@ -29,6 +29,9 @@ func Graph(s clicfg.Settings, cwd string) (string, error) {
 
 // run draws the config as the output format asks for.
 func run(ws Workspace, format string) (string, error) {
+	if format != clicfg.OutputText {
+		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2", format)
+	}
 	return graph(ws)
 }
 
