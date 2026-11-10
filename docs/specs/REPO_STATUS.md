@@ -53,6 +53,7 @@ Each has a `TODO(release-state)` at the code where it goes.
 * How many releases a branch is behind: the tags of the line's series newer than the version held. It needs the version the update engine found (`ship.Holding`) and a per-series index of tags, which belongs in `internal/tagscheme`, where each scheme reads its own series.
 * The open PR for a branch, so a consumer that is behind can say a bump is already proposed (`ship.Holding`). It would be a tier of its own, with its cost, using the PR lookup and the marker `ship` uses.
 * The images a release publishes, as `repo images exist` checks them (`repostatus.Options`).
+* A virtual Holding that a pin makes (BRO's lasso, held through its wrangler) read against what its pin requires, "at least v0.2.5, which wrangler v3.7.4 requires", and not against the latest release of the module; and `lines resolve` showing the pin as an edge ([TOOLING_GOALS](../design/TOOLING_GOALS.md)).
 
 ## Open questions
 
