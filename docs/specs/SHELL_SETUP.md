@@ -45,6 +45,7 @@ The shell is the one in `$SHELL`. An unset or unsupported value is an error that
 * PowerShell 7: `Microsoft.PowerShell_profile.ps1` in `powershell` under the same config directory, and on Windows in `Documents\PowerShell` of the user profile directory. Windows PowerShell 5 is not covered.
 
 A profile whose directory does not exist is created along with it.
+
 ## Approval and writing
 
 The block is shown and `Continue? [y/N]` is asked before anything is written; only `y` or `yes` counts, and anything else leaves the profile untouched. Without a terminal on stdin the command fails and says to pass `--yes`, rather than guessing. The write goes through a temporary file beside the profile and a rename, so a failure leaves the old content. A symlinked profile, such as one kept in a dotfiles repository, is followed so the link stays a link, and the file's mode is kept.

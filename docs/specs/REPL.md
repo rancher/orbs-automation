@@ -1,6 +1,6 @@
 # REPL
 
-**Status:** implemented, with the items under [Not built yet](#not-built-yet) waiting for v1 and the team's use. The editor and the prompt are tested without a terminal; what a real terminal does with them is checked by hand.
+**Status:** implemented, except the items under [Not built yet](#not-built-yet). The editor and the prompt are tested without a terminal; what a real terminal does with them is checked by hand.
 
 `gero repl` is an interactive prompt that runs `gero` commands one line at a time, with a few shell-like commands of its own so a user has less reason to leave it. It is not a shell: it is started from one, and exiting returns to it. The goal is fewer trips out, not a replacement for the user's shell.
 
@@ -21,7 +21,7 @@ These exist only inside the REPL and are not in the command tree, so `gero pwd` 
 | `clear` | Clears the screen and the scrollback and returns to the prompt. No argument |
 | `ls [target]` | Lists a directory: names only, sorted, a trailing `/` on directories. No flags. The target is described below |
 | `cd <project>` | The existing `gero cd` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), below |
-| `!<command line>` | **Deferred until after v1** ([Deferred ideas](#deferred-ideas)). Would run the rest of the line in the user's shell (`$SHELL -c`), in the working directory, with the terminal attached, then returns to the prompt |
+| `!<command line>` | Not built ([Deferred ideas](#deferred-ideas)). Would run the rest of the line in the user's shell (`$SHELL -c`), in the working directory, with the terminal attached, then returns to the prompt |
 | `shell` | Starts the user's `$SHELL` as an interactive child process with `GERO_REPL=1` in its environment. Exiting it returns to the prompt. The bare word only: `shell` with any argument is an error, and the `gero shell` setup commands are not reachable inside the REPL until `!` is built |
 | `help` | The command tree's help, plus these commands (not built: today it is cobra's help) |
 | `exit`, Ctrl-D | Leaves the REPL |
@@ -31,7 +31,7 @@ These exist only inside the REPL and are not in the command tree, so `gero pwd` 
 **`ls`.** With no argument it lists the working directory. The target is one of:
 
 * `.`, the working directory, which is also the project's root when that is where the user is.
-* A path under the working directory, such as `docs` or `./test/integration`. Its resolved location must be inside the working directory, so `..` and absolute paths that leave it are refused. A path that is not a directory is an error; a file is not listed.
+* A path under the working directory, such as `docs` or `./internal/ui`. Its resolved location must be inside the working directory, so `..` and absolute paths that leave it are refused. A path that is not a directory is an error; a file is not listed.
 * A project, by the config `name` or the `owner/name` slug, case-insensitive, as in the project arguments of [CLI_FRAMEWORK](CLI_FRAMEWORK.md#2-command-tree-and-global-flags). It lists that project's clone root, found through the same `ConfiguredRepoPath` as `cd`, and is an error when the project is unknown or has no unique clone. Unlike `cd`, a project is looked at without moving, and `.` is the working directory, not the project it is in.
 * A project, written explicitly with a leading `@`: `ls @scc-operator` or `ls @rancher/scc-operator`. It takes both spellings a project argument takes, the config `name` (`name:` in the project file) and the repository slug (`spec.repo.name`), case-insensitive, by the same lookup (`Workspace.Project`). The `@` says the word is a project and never a path, so it is how a user gets the project when a bare word would mean a directory, and it is accepted whenever a project is meant, ambiguous or not.
 
@@ -41,7 +41,7 @@ A path below a project, such as `ls <project>/docs`, is not accepted: the user c
 
 **`!` and `shell`.** The child gets the REPL's working directory and environment, so a `cd` done in the REPL is seen by `!` and `shell`. The reverse does not hold: a `cd` inside `shell` or `!` ends with that child and does not move the REPL, as with any subprocess. The `gero` function from [SHELL_SETUP](SHELL_SETUP.md) works in the child as it does in any shell. `GERO_REPL=1` is there so a user can mark their prompt and so a nested `gero repl` is refused.
 
-**`shell` in detail** (decided). The child is `$SHELL` run as is, with no arguments: with the terminal attached it is interactive on its own and reads the user's usual startup files, as one started from a terminal does. No `-i` and no `-l`.
+**`shell` in detail.** The child is `$SHELL` run as is, with no arguments: with the terminal attached it is interactive on its own and reads the user's usual startup files, as one started from a terminal does. No `-i` and no `-l`.
 
 * **Shadows the tree.** The REPL-only `shell` takes the name from the tree's `gero shell` (`init`, `install`, `uninstall`). A line whose first word is `shell` is the child, and with any other word after it is an error saying `shell` takes no arguments, never a pass-through to the tree. The setup commands are for a real shell, where `gero shell install` works as before, and they are reachable from the REPL by starting `shell` and running them there, where the user's own `gero` is on the path.
 * **`$SHELL` unset or not an executable file is an error** naming `$SHELL`. The REPL does not guess `/bin/sh`: it is the user's shell or no shell, as the REPL itself is the user's REPL or none.
@@ -106,23 +106,23 @@ The REPL loop, the REPL-only commands and the shell hand-off are in `internal/cl
 
 ## Not built yet
 
-The REPL is complete enough for v1. What is left waits for v1 and the team's use, and each item is taken up if the team asks for it, so what gets built is what they run into.
+The REPL is complete enough for v1. The items below are wishlist, with no date, except the last, which is built only if someone asks.
 
 * **`help`.** It is cobra's help, which does not list `pwd`, `ls`, `clear` or `exit`, and describes the tree's `gero shell` (completion setup) where the REPL's `shell` is the child shell. A short block of the REPL's own commands before cobra's help, with `help <command>` left to cobra, is the first thing to try; a REPL-only help is the larger option.
 * **An unknown name** gets cobra's unknown-command error. The intended version is one line that points to `help` and `shell`, not a full help screen.
-* **The prompt** has no way to show that the last line failed, and only the placeholders `{project}`, `{dir}` and `{path}`; more come when a user asks for something it cannot say.
 * **`!<command line>`** and **marking the prompt of the child `shell`** ([Deferred ideas](#deferred-ideas)).
+* **More prompt placeholders**, such as one that shows that the last line failed. The prompt has only `{project}`, `{dir}` and `{path}`; more are built only if someone asks for something it cannot say.
 
 ## Deferred ideas
 
-**Marking the prompt of the child `shell`.** A user in a `shell` started from the REPL may want its prompt to say so. Deferred until after v1, and revisited only if the team asks for it once they are using the REPL. Nothing forces it out of the box without cost, so until then it stays an idea, and users have the hook below. What is known:
+**Marking the prompt of the child `shell`.** A user in a `shell` started from the REPL may want its prompt to say so. A wishlist item with no date. Nothing forces it out of the box without cost, so until it is built users have the hook below. What is known:
 
 * **`GERO_REPL=1` is the hook.** It is in the child's environment for this. A user can put `${GERO_REPL:+(gero) }` in their own `PS1` today.
 * **Setting `PS1` on the child does not work.** `PS1` is normally a shell variable and not exported, and `~/.bashrc` or `~/.zshrc` (and oh-my-zsh, starship, powerlevel10k) set it after the shell starts, so a value from the environment is overwritten for most users. Fish and PowerShell have no `PS1`.
 * **Option, preferred if it is ever done: an opt-in snippet in the block `gero shell install` manages** ([SHELL_SETUP](SHELL_SETUP.md)), prefixing the prompt for bash and zsh, with a fish equivalent, only when `GERO_REPL` is set. A prompt framework that redraws the prompt later can still overwrite it, and for those the documented route is the framework's own environment-variable module keyed on `GERO_REPL`.
 * **Option, advised against: start the child with an rc file of ours** (`bash --rcfile`, a temporary `ZDOTDIR` for zsh). It would force the marker, but it is shell-specific, changes how the user's shell starts, rewrites a prompt without being asked, and breaks the rule that `shell` runs the user's `$SHELL` as is.
 
-**`!<command line>`.** Deferred until after v1, and built only if someone asks for a one-line way to run a shell command without opening `shell`. Nothing is decided beyond what `shell` already settled, and it would build on that: the `execx.Passthrough` entry point, the whole environment passed through, and the `$SHELL` rules. What it would add is the `$SHELL -c` line, a rule for its exit status (a line that fails is closer to a command than an interactive shell is, so showing the status is likely), and its tests. Until then nothing in the REPL passes a typed line to a shell as a string, which keeps the REPL further from being a shell.
+**`!<command line>`.** A wishlist item with no date. It would build on what `shell` already has: the `execx.Passthrough` entry point, the whole environment passed through, and the `$SHELL` rules. What it would add is the `$SHELL -c` line, a rule for its exit status (a line that fails is closer to a command than an interactive shell is, so showing the status is likely), and its tests. Until then nothing in the REPL passes a typed line to a shell as a string, which keeps the REPL further from being a shell.
 
 ## Open questions
 

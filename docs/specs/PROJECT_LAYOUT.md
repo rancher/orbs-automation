@@ -156,7 +156,8 @@ Package names beyond these are decided with the code that needs them. A package 
 ## Not built yet
 
 * A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag`, `shell install` and `doctor self-update` each ask their own `[y/N]` through the style renderer ([CLI_OUTPUT](CLI_OUTPUT.md)).
-* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and commands for `pushbranch`, `createpr` and `bumpcommit`, which are use cases without names ([TASK_COMMANDS](TASK_COMMANDS.md#use-cases-not-yet-commands)). `gero repo branch` and `gero repo tag` run `createbranch` and `createtag` alone.
+* A task for closing superseded PRs, with the plan and the publish steps, moved out of `internal/ship`.
+* Commands for `pushbranch`, `createpr` and `bumpcommit`, which are use cases without names ([TASK_COMMANDS](TASK_COMMANDS.md#use-cases-not-yet-commands)): built only if someone asks. `gero repo branch` and `gero repo tag` run `createbranch` and `createtag` alone.
 * Narrowing `ship.Git` and `ship.Remote` now that the tasks define what they call: both still carry every method any task needs.
 
 ## Open questions

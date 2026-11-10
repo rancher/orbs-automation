@@ -46,7 +46,7 @@ Each one reuses the package that already does the work (see [Reuse](#reuse)).
 | `gh` | dependencies | no | never; `warn` when `gh` is not on `PATH`, since the keyring token fallback and `gh auth login` depend on it; reports the version and path when found; bounds `gh --version` so a hung `gh` cannot hang the run | `internal/platform/ghcli`, which finds `gh` the way go-gh does (`GH_PATH`, then `PATH`) |
 | `user-file` | configuration | no | the user file exists and a command would refuse it: it does not parse, or holds a value such as a relative path. A key it does not know is a `warn`, naming the line, since commands ignore it. It is judged on its own, with the `GERO_*` variables masked, so a bad environment value is not blamed on the file. With no file it is `ok`, saying where one would go | `internal/platform/clicfg` (`OpenUserFile`, `Load`) |
 | `central-config-dir` | configuration | no | no central config is found, neither a local directory nor a cached bundle; the fix is the advice in `workspace.NotFoundHint`, or `--online` to fetch the bundle. Says which it found: a directory and how it was chosen, or the bundle with its release and age; `warn` when the cached bundle is stale ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) | `internal/workspace` (`ConfigSource`) |
-| `config` | configuration | no | the application config does not validate, counting the problems the validator found; needs `central-config-dir` | `internal/workspace` (`Config`) |
+| `config` | configuration | no | the application config does not validate, counting the problems the validator found; needs `central-config-dir` | `internal/workspace` (`Chain`) |
 | `repos` | configuration | no | never; `warn` when a project has no local clone or several equally good ones, with the fix for each kind; needs `config` | `internal/workspace` (`RepoPaths`), and the fix text from `internal/cli/configresolve` |
 | `auth-token` | authentication | no | no token is found for the default host; names the variables to set; reports where the token came from and never the token. It runs the same resolver as every command, so it may call `gh auth token` | `internal/platform/github` (`Resolve`, `NoTokenError`, `DescribeTokenSource`) |
 | `auth-api` | authentication | yes | GitHub rejects the token, with advice that depends on where the token came from (replace an environment variable, or `gh auth login` again); `warn` on a timeout or any other error, since a network problem says nothing about the token; needs `auth-token` | `internal/cli/authstatus` (`Check`) |
@@ -129,8 +129,12 @@ Follows [TESTING](TESTING.md).
 
 * The exit-code helper: until it exists a usage error, such as an unknown check name, exits 1, not 2.
 * Checks for what later features need: token permissions for opening pull requests, access to the tracker repo, push access to each fork, and clones far behind upstream.
+* A check that builds the update engine and reports its errors, so a strategy that cannot run is reported by `gero doctor` as it is by `gero config validate`.
+* A warning under `--online` when a newer `gero` release exists.
+* A check that the shell block of [SHELL_SETUP](SHELL_SETUP.md) is installed and current.
+* A paste-safe mode that leaves out local paths. The output never contains a token, but it does contain local paths.
+* Running the checks in parallel: built only if someone asks.
 
 ## Open questions
 
-* Whether checks should run in parallel, and when. Sequential until it hurts.
-* Whether a redacted, paste-friendly support mode is wanted (paths shortened, host names kept) or the default output is already safe enough. The output never contains a token, but it does contain local paths. Undecided; revisit when someone pastes it into an issue.
+None yet.

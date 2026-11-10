@@ -20,6 +20,7 @@ How the CLI layer is tested.
 ## Not built yet
 
 * Golden files under `testdata/` for command output, which tests compare as strings today.
+* A pty harness to test the REPL and prompts in a terminal, which needs a dependency decision in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md).
 
 ## Open questions
 

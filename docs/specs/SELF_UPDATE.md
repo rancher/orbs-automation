@@ -23,23 +23,24 @@ The level is the highest `binup` offers, and there is no flag that lowers it.
 * It **fails closed.** A release without the bundles fails with `ErrSignatureMissing`, a bundle that does not verify with `ErrSignatureInvalid`; the binary on disk is left as it was. Nothing falls back to the checksum alone.
 * The public-good Sigstore root is fetched over TUF unless one is supplied, so verifying needs the network beyond GitHub.
 
-The same GitHub build-provenance attestation the release workflow already makes (`actions/attest-build-provenance`) is not checked by `binup`; it is for people who verify by hand with `gh attestation verify`.
+The same GitHub build-provenance attestation the release workflow makes (`actions/attest-build-provenance`) is not checked by `binup`; it is for people who verify by hand with `gh attestation verify`.
 
 ## What the release must publish
 
-The release workflow uses the `cosign` and `gh` that the container image provides, and after GoReleaser has built the draft it signs each archive, `checksums.txt` and the config bundle with `cosign sign-blob --yes --bundle=<file>.sigstore.json`, uploads the bundles to the draft, and fails the release before it is published if one is missing. The signing is in the workflow and not in `.goreleaser.yaml` because GoReleaser has no way to skip it on a snapshot, and a snapshot run (locally, or the dry run in CI) would then ask for a Sigstore login. The assets are `gero_<os>_<arch>.tar.gz`, `checksums.txt` and `gero-config-bundle.yaml`, and a `.sigstore.json` beside each. `id-token: write`, which keyless signing needs, was already granted. The archive name has no version in it (`{name}_{os}_{arch}.{ext}`), so `selfupdate.AssetTemplate` says that; a change to `name_template` has to change both.
+The release workflow uses the `cosign` and `gh` that the container image provides, and after GoReleaser has built the draft it signs each archive, `checksums.txt` and the config bundle with `cosign sign-blob --yes --bundle=<file>.sigstore.json`, uploads the bundles to the draft, and fails the release before it is published if one is missing. The signing is in the workflow and not in `.goreleaser.yaml` because GoReleaser has no way to skip it on a snapshot, and a snapshot run (locally, or the dry run in CI) would then ask for a Sigstore login. The assets are `gero_<os>_<arch>.tar.gz`, `checksums.txt` and `gero-config-bundle.yaml`, and a `.sigstore.json` beside each. The workflow grants `id-token: write`, which keyless signing needs. The archive name has no version in it (`{name}_{os}_{arch}.{ext}`), so `selfupdate.AssetTemplate` says that; a change to `name_template` has to change both.
 
 ## Cost
 
-Sigstore verification is the largest dependency gero has: **roughly 17 MB** of stripped binary when it was measured. It is accepted for this command alone, because a wrong answer here installs attacker code on an engineer's machine.
+Sigstore verification is the largest dependency gero has, by size of binary. It is accepted for this command alone, because a wrong answer here installs attacker code on an engineer's machine.
 
 ## Not built yet
 
 * Tests of the signature itself against a real release: the tests drive the real `binup` and `ghreleases` code and the real signer pattern, with a stand-in verifier for the signature, in memory and with no network.
-* `--version`, to install a named release or roll back.
-* An offline path (a `trusted_root.json` supplied by file), though `selfupdate.Config.TrustedRoot` takes one.
-* Windows: gero is released for macOS and Linux only.
+* `gero doctor --online` warning that a newer release exists.
+* `--version`, to install a named release or roll back: built only if someone asks.
+* An offline path (a `trusted_root.json` supplied by file), though `selfupdate.Config.TrustedRoot` takes one: built only if someone asks.
+* Windows: gero is released for macOS and Linux only, and a build is made only if someone asks.
 
 ## Open questions
 
-* Whether `gero doctor` should report that a newer release exists, as a warning on `--online`.
+None yet.

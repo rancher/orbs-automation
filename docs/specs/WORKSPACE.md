@@ -55,7 +55,7 @@ The upstream remote, the fork, `githubUser` and the release line are set by the 
 
 ## Not built yet
 
-* `config resolve repos --verbose` **(leaning)**: log the scanned directories, the remotes read from each clone, and why each candidate matched or not.
+* `config resolve repos -v`: log the scanned directories, the remotes read from each clone, and why each candidate matched or not.
 
 ## Wishlist
 
