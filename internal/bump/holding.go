@@ -159,12 +159,22 @@ func CheckHolding(ctx context.Context, src Tree, h *chain.Holding, line, branch 
 		}
 		current, err := formats[place.Format].get(data, place.Key)
 		if err != nil {
+			if h.Virtual() && errors.Is(err, gomodedit.ErrNotRequired) {
+				continue // a file of the pinning Holding that does not need the pinned module has nothing to hold
+			}
 			return Check{}, fmt.Errorf("read %s: %w", place.File, err)
 		}
+		rel := relation(current, want)
+		newer := h.Virtual() && rel == RelationOlder // a pin is a floor: a newer version holds it
 		check.Locations = append(check.Locations, LocationCheck{
-			Place: place, Current: current, UpToDate: current == want,
-			Relation: relation(current, want), Change: change(place, current, want),
+			Place: place, Current: current, UpToDate: current == want || newer, HeldNewer: newer,
+			Relation: rel, Change: change(place, current, want),
 		})
+		check.HeldNewer = check.HeldNewer || newer
+	}
+	if len(check.Locations) == 0 {
+		check.Absent = true
+		return check, nil
 	}
 	first := check.Locations[0]
 	check.Current, check.Relation, check.Change = first.Current, first.Relation, first.Change
@@ -199,11 +209,15 @@ func ApplyHolding(ctx context.Context, dst WritableTree, h *chain.Holding, line,
 		}
 		out, old, err := formats[place.Format].set(data, place.Key, want)
 		if err != nil {
+			if h.Virtual() && errors.Is(err, gomodedit.ErrNotRequired) {
+				pending[place.File] = data
+				continue // nothing to hold in a file that does not need the pinned module
+			}
 			return Result{}, fmt.Errorf("set %s in %s: %w", place.Key, place.File, err)
 		}
 		pending[place.File] = data
-		if old == want {
-			continue
+		if old == want || (h.Virtual() && relation(old, want) == RelationOlder) {
+			continue // up to date, or a pin's floor already met by a newer version
 		}
 		pending[place.File] = out
 		if !slices.Contains(order, place.File) {
