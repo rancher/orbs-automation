@@ -170,6 +170,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A holding's `from` or `artifact` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
 * A selector's `since` is not after its `until`
 * A project that holds something of another, which holds something of it, is a warning: the dependency is circular
+* A repo that is `external` has no `managedBy`: no team manages a repo outside the organization
 * Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
 * A calver stream is on a project whose layout is `single`; a project holds nothing of itself
 * A holding's `stage` is a stage of its holder's `branches.stages`, and its `stages` are stages of the producer's streams
