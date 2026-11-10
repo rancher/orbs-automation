@@ -65,13 +65,33 @@ spec:
 # (cmd/tool replaces BRO with ../../) are not modelled.
 apiVersion: gero/v1alpha2
 kind: Holding
+name: bro-holds-wrangler-3-8
+refs: {project: backup-restore-operator, artifact: wrangler-v3-8-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
 name: bro-holds-wrangler-3-7
 refs: {project: backup-restore-operator, artifact: wrangler-v3-7-module}
 spec:
   at:
     - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
     - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
-  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.15, until: v2.16}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.15, until: v2.15}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-6
+refs: {project: backup-restore-operator, artifact: wrangler-v3-6-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.14, until: v2.14}}
 ---
 apiVersion: gero/v1alpha2
 kind: Holding

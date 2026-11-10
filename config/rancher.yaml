@@ -11,7 +11,8 @@ spec:
   branches:
     layout: perLine
     lines:
-      - {line: v2.16}
+      - {line: v2.17}
+      - {line: v2.16, branch: release/v2.16}
       - {line: v2.15, branch: release/v2.15}
       - {line: v2.14, branch: release/v2.14}
       - {line: v2.13, branch: release/v2.13}
@@ -24,6 +25,7 @@ refs: {project: rancher}
 spec:
   scheme: semver
   lines:
+    - {line: v2.17, series: "2.17.x"}
     - {line: v2.16, series: "2.16.x"}
     - {line: v2.15, series: "2.15.x"}
     - {line: v2.14, series: "2.14.x"}

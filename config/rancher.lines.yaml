@@ -12,6 +12,14 @@ kind: RancherLines
 name: rancher
 spec:
   lines:
+    - id: v2.18 # Tentative future version - added as a buffer
+      kubernetes:
+        min: "1.37"
+        max: "1.39"
+    - id: v2.17 # Current Dev
+      kubernetes:
+        min: "1.36"
+        max: "1.38"
     - id: v2.16
       kubernetes:
         min: "1.35"

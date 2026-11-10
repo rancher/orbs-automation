@@ -161,9 +161,9 @@ func isolateGero(t *testing.T) {
 	}
 }
 
-func TestConfigValidateAcceptsTheCheckedInConfig(t *testing.T) {
+func TestConfigValidateAcceptsTheDesignFixture(t *testing.T) {
 	isolateGero(t)
-	dir, err := filepath.Abs("../config")
+	dir, err := filepath.Abs("../docs/design/fixture")
 	require.NoError(t, err)
 
 	stdout, _, err := execRoot(t, "config", "validate", "--central-config-dir", dir)
