@@ -586,3 +586,49 @@ func TestAGoBumpEditNeedsAHoldingInTheGoModFormat(t *testing.T) {
 		assert.Empty(t, rep.Findings)
 	})
 }
+
+// pinWorld is a producer with a stream and two Go modules, the first of which pins
+// the second, and one more producer a Go module of its own.
+func pinWorld(extra ...string) []string {
+	const gomod = "  kind: gomod\n  name: github.com/acme/"
+	docs := []string{
+		doc("Project", "wr", "", "  repo: {name: acme/wr}\n"),
+		doc("Project", "la", "", "  repo: {name: acme/la}\n"),
+		doc("Stream", "wr", "{project: wr}", streamSpec),
+		doc("Stream", "la", "{project: la}", streamSpec),
+		doc("Artifact", "la-mod", "{stream: la}", gomod+"la\n"),
+		doc("Artifact", "la-img", "{stream: la}", artifactSpec),
+	}
+	return append(docs, extra...)
+}
+
+func TestAPinOfAGoModuleOnAGoModuleIsValid(t *testing.T) {
+	rep := validateSet(t, pinWorld(doc("Artifact", "wr-mod", "{stream: wr, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr\n"))...)
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestAPinNeedsAnArtifactThatExistsAndIsAGoModule(t *testing.T) {
+	const wr = "  kind: gomod\n  name: github.com/acme/wr\n"
+
+	rep := validateSet(t, pinWorld(doc("Artifact", "wr-mod", "{stream: wr, pins: la-img}", wr))...)
+	assert.True(t, hasSetError(rep, `Artifact "wr-mod"`, "refs.pins[0]", "gomod"), "%v", rep.Findings)
+
+	rep = validateSet(t, pinWorld(doc("Artifact", "wr-mod", "{stream: wr, pins: nope}", wr))...)
+	assert.True(t, hasSetError(rep, `Artifact "wr-mod"`, "refs.pins[0]", `no Artifact named "nope"`), "%v", rep.Findings)
+}
+
+func TestAnArtifactCannotPinItselfOrCircle(t *testing.T) {
+	const wr = "  kind: gomod\n  name: github.com/acme/wr\n"
+
+	rep := validateSet(t, pinWorld(doc("Artifact", "wr-mod", "{stream: wr, pins: wr-mod}", wr))...)
+	assert.True(t, hasSetError(rep, `Artifact "wr-mod"`, "refs.pins[0]", "itself"), "%v", rep.Findings)
+
+	world := pinWorld(
+		doc("Artifact", "wr-mod", "{stream: wr, pins: la-pin}", wr),
+		doc("Artifact", "la-pin", "{stream: la, pins: wr-mod}", "  kind: gomod\n  name: github.com/acme/lb\n"),
+	)
+	rep = validateSet(t, world...)
+	assert.True(t, hasSetError(rep, `Artifact "wr-mod"`, "refs.pins", "cycle"), "%v", rep.Findings)
+	assert.True(t, hasSetError(rep, `Artifact "la-pin"`, "refs.pins", "cycle"), "%v", rep.Findings)
+}

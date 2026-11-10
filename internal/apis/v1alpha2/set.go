@@ -85,6 +85,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.rancherLines()
 	s.knownLines()
 	s.artifacts()
+	s.pins()
 	s.streams()
 	s.holdingRefs()
 	s.holdingStages()
@@ -708,6 +709,63 @@ func listsLine(p *Project, line string) bool {
 		}
 	}
 	return false
+}
+
+// pins checks what each pin points at: an Artifact that is a Go module, and not the
+// one that pins it, and pins that do not circle back to the Artifact they start from.
+func (s *set) pins() {
+	pinned := map[string][]string{} // an Artifact to the Go modules it pins
+	for _, o := range s.objs {
+		a, ok := o.(*Artifact)
+		if !ok {
+			continue
+		}
+		r := s.at(o)
+		for i, name := range a.Refs["pins"] {
+			target, _ := s.index[KindArtifact][name].(*Artifact)
+			switch {
+			case target == nil:
+				continue // refs says so
+			case name == a.Name:
+				r.Errorf(fmt.Sprintf("refs.pins[%d]", i), "an Artifact cannot pin itself")
+			case target.Spec.Kind != ArtifactGoMod:
+				r.Errorf(fmt.Sprintf("refs.pins[%d]", i), "Artifact %q is %s, and only a %s Artifact is pinned", name, target.Spec.Kind, ArtifactGoMod)
+			default:
+				pinned[a.Name] = append(pinned[a.Name], name)
+			}
+		}
+		s.add(r)
+	}
+	for _, o := range s.objs {
+		a, ok := o.(*Artifact)
+		if !ok || !circles(pinned, a.Name) {
+			continue
+		}
+		r := s.at(o)
+		r.Errorf("refs.pins", "the pins of %q have a cycle: its pins pin it back", a.Name)
+		s.add(r)
+	}
+}
+
+// circles reports whether following the pins from an Artifact comes back to it.
+func circles(pinned map[string][]string, from string) bool {
+	seen := map[string]bool{}
+	var walk func(name string) bool
+	walk = func(name string) bool {
+		for _, next := range pinned[name] {
+			if next == from {
+				return true
+			}
+			if !seen[next] {
+				seen[next] = true
+				if walk(next) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return walk(from)
 }
 
 // goBumpHoldings reports an Edit with the strategy goBump, which tidies go.mod
