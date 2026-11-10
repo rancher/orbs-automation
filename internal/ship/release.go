@@ -70,8 +70,8 @@ func ResolveRelease(scheme tagscheme.Scheme, slug string, tags []git.Tag, arg st
 
 // newest picks the latest stable tag, or with prerelease the latest of any kind.
 func newest(l git.Latest, prerelease bool) *git.Tag {
-	if prerelease && l.Prerelease != nil {
-		return l.Prerelease
+	if prerelease {
+		return l.Newest()
 	}
 	return l.Stable
 }

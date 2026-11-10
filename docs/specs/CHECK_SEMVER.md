@@ -2,9 +2,9 @@
 
 The command is `gero semver check`. `check` is the lenient script port described here. Strict SemVer operations, if they come, are separate verbs under `gero semver` and do not change `check` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md) section 2).
 
-**Status:** implemented for the faithful port (sections 1 to 4), except the opt-in improvements in section 6 and the parity test.
+**Status:** implemented.
 
-Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by the [release rules](../IMPLEMENTATION.md#release-rules).
+Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The behavior is a **faithful port**: same input, same output keys and order, same results. Tag classification as a shared library is also called for by the [release rules](../IMPLEMENTATION.md#release-rules).
 
 ## 1. What the script does today
 
@@ -22,7 +22,7 @@ HAS_BUILD_META=<true|false>
 
 Quirks of that regex: `1.2.3-` counts as a prerelease, `01.2.3-rc` is accepted despite the leading zero, `V1.2.3` is not stripped and `vv1.2.3` loses only one `v`, and `+` anywhere counts as build metadata even in text that is not a version.
 
-## 2. Faithful port (the default)
+## 2. Faithful port
 
 What makes `gero semver check` a faithful port. Each point matches the script exactly:
 
@@ -40,7 +40,7 @@ gero semver check [tag]
 
 * **Context:** either (read-only, no credentials).
 * The command reads the environment and passes the string down. The library never reads it.
-* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/semver.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/platform/semver`, so `checksemver.Classify` is the only place the command calls the library, and where flag-derived options (such as `WithGrammar`) will be mapped. `Render` is a pure formatter over `Info`, so the opt-in formats (extra env keys, `--json`) are further renderers over the same value.
+* **Layering** ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)). `cmd/semver.go` holds the cobra command and a short `RunE`. The logic is in `internal/cli/checksemver`, with no cobra: `ResolveTag(args, getenv) (string, error)` picks the tag (argument, else `GITHUB_REF_NAME`, else `ErrNoTag`), `Classify(tag) semver.Info` wraps the library call, and `Render(info semver.Info) string` formats it as the two `KEY=value` lines. `cmd/` cannot import `internal/platform/semver`, so `checksemver.Classify` is the only place the command calls the library, and `Render` is a pure formatter over `Info`.
 
 ## 3. Library
 
@@ -53,7 +53,7 @@ type Info struct {
     HasPrerelease bool
     HasBuildMeta  bool
 
-    // Reserved for the SemVer grammar option (section 6): always zero today.
+    // Always zero: the SemVer grammar is read by Parse, not by Classify.
     IsSemver            bool
     Major, Minor, Patch uint64
     Prerelease          string
@@ -63,72 +63,48 @@ type Info struct {
 func Classify(tag string) Info
 ```
 
-* The call reproduces the script (section 2). A `WithGrammar` option that switches it to the SemVer 2.0.0 grammar (section 6) is not built; `Parse` already reads that grammar and is what it would use.
+* The call reproduces the script (section 2). `Parse` reads the SemVer 2.0.0 grammar.
 * No I/O, no environment, no error return: non-SemVer is a result, not a failure.
-* Implemented with the stdlib `regexp`, with no dependency **(leaning)**. The script's regex must be reproduced exactly, which a strict SemVer library would not do. A library can be adopted later for the grammar mode if [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) allows it and the tests still hold.
+* Implemented with the stdlib `regexp`, with no dependency. The script's regex must be reproduced exactly, which a strict SemVer library would not do.
 * It is the one place the script's classification lives. Self-update uses it to tell a pre-release `gero`, and the commands that order or choose tags use `Parse` instead of reimplementing the shell check.
 
 ## 4. Test plan
 
 Test first, per [TESTING](TESTING.md) and [`contributing/red-green-commits.md`](../contributing/red-green-commits.md).
 
-**`internal/platform/semver`, table test of `Classify`.** The first two result columns are the default (the script's results). The last three are the result with `WithGrammar()`. Rows where the two differ are the improvements from section 6:
+**`internal/platform/semver`, table test of `Classify`.** The results are the script's, including the ones the SemVer grammar would reject (in bold):
 
-| Input | Pre | Build | | IsSemver | Pre | Build |
-|---|---|---|---|---|---|---|
-| `1.2.3` | false | false | | true | false | false |
-| `v1.2.3` | false | false | | true | false | false |
-| `1.2.3-rc.1` | true | false | | true | true | false |
-| `v1.2.3-beta` | true | false | | true | true | false |
-| `1.2.3+build.1` | false | true | | true | false | true |
-| `1.2.3-rc.1+build.1` | true | true | | true | true | true |
-| `1.2.3+build-5` | false | true | | true | false | true |
-| `1.2.3-hotfix-1` | true | false | | true | true | false |
-| `1.2.3-` | **true** | false | | false | **false** | false |
-| `01.2.3-rc` | **true** | false | | false | **false** | false |
-| `1.2.3-rc..1` | **true** | false | | false | **false** | false |
-| `hotfix+urgent` | false | **true** | | false | false | **false** |
-| `1.2-rc.1` | false | false | | false | false | false |
-| `1.2.3.4-rc` | false | false | | false | false | false |
-| `V1.2.3-rc` | false | false | | false | false | false |
-| `vv1.2.3-rc` | false | false | | false | false | false |
-| `qa-build-42` | false | false | | false | false | false |
-| `` (empty) | false | false | | false | false | false |
-
-Also assert `Major`, `Minor`, `Patch`, `Prerelease` and `BuildMeta` on the grammar-mode SemVer rows.
+| Input | Pre | Build |
+|---|---|---|
+| `1.2.3` | false | false |
+| `v1.2.3` | false | false |
+| `1.2.3-rc.1` | true | false |
+| `v1.2.3-beta` | true | false |
+| `1.2.3+build.1` | false | true |
+| `1.2.3-rc.1+build.1` | true | true |
+| `1.2.3+build-5` | false | true |
+| `1.2.3-hotfix-1` | true | false |
+| `1.2.3-` | **true** | false |
+| `01.2.3-rc` | **true** | false |
+| `1.2.3-rc..1` | **true** | false |
+| `hotfix+urgent` | false | **true** |
+| `1.2-rc.1` | false | false |
+| `1.2.3.4-rc` | false | false |
+| `V1.2.3-rc` | false | false |
+| `vv1.2.3-rc` | false | false |
+| `qa-build-42` | false | false |
+| `` (empty) | false | false |
 
 **`internal/cli/checksemver`, plain table tests (a fake `getenv`, no cobra, no `t.Setenv`):**
 
 * `ResolveTag`: no argument with `GITHUB_REF_NAME` set uses it. Both set: argument wins. Empty argument with the variable set: uses the variable. Extra arguments are ignored. Neither set: `ErrNoTag`.
-* `Render`: given an `Info`, exactly the two default lines, key order included, and nothing else. The extra `Info` fields never reach the default output. A non-SemVer tag gets the two lines too.
-* Each improvement flag changes only its own behavior, and leaves the default output untouched.
+* `Render`: given an `Info`, exactly the two lines, key order included, and nothing else. The extra `Info` fields never reach the output. A non-SemVer tag gets the two lines too.
 
 **`cmd`, wiring only, through the root command (captured stdout, error):**
 
 * Argument given: the two lines on stdout, and extra arguments are accepted.
 * Neither argument nor `GITHUB_REF_NAME`: empty stdout and an error, which `Execute` turns into exit 1.
 
-**Parity (`test/integration/`):** run the original script and the built `gero` over every row above in default mode and compare stdout and exit code. All rows must match, including the ones that are quirks. The original script lives there as a fixture, not in the root module.
-
 ## 5. Open questions
 
-* **Opt-in flag names and grouping.** One flag per improvement in section 6, or one flag (for example for the SemVer grammar) that turns on the related ones together.
-* **Extra env format name.** `--output env-full` or `env-extra`. Decided with the CLI output work, since it adds a value to `--output`.
-* **Strict mode.** Whether `--strict` is worth adding (section 6).
-* **Non-SemVer `+`.** Whether the grammar mode should keep the script's "any `+`" meaning for non-SemVer text. Deferred until a real workflow depends on it.
-
-## 6. Breaking changes that will improve the script after port
-
-Approved improvements. None of them is part of the faithful port. During the port each is opt-in behind a flag, so the default output never changes. Making any of them the default later is a deliberate breaking change, planned with a release, since workflows read these results. The same section exists in [BRANCH_TAGS](BRANCH_TAGS.md).
-
-| Improvement | Script and default | Improved | Breaking if made default |
-|---|---|---|---|
-| **SemVer grammar** | Regex only. `1.2.3-`, `01.2.3-rc` and `1.2.3-rc..1` count as prereleases | Input valid under SemVer 2.0.0 is classified by the real grammar, and anything else is non-SemVer. Non-SemVer tags stay legal | Yes: `HAS_PRERELEASE` flips for those inputs |
-| **Non-SemVer `+`** | `hotfix+urgent` has `HAS_BUILD_META=true` | Build metadata is a SemVer concept, so non-SemVer text reports `false` | Yes: `HAS_BUILD_META` flips |
-| **`IS_SEMVER` key** | Two keys only | A third env line, `IS_SEMVER=true\|false`, after the two original keys | Yes for strict consumers of the file, otherwise additive |
-| **Missing-tag exit code** | Exit 1 | Exit 2, a usage error ([exit codes](CLI_FRAMEWORK.md#4-exit-codes)) | Yes: scripts checking for exactly 1 |
-| **`--json`** | Not available | Full detail: `input`, `version`, `isSemver`, `hasPrerelease`, `hasBuildMeta`, `major`, `minor`, `patch`, `prerelease`, `buildMeta` (`major`, `minor`, `patch` omitted when not SemVer) | No: new format, default unchanged |
-| **Extra env keys** | Not available | Opt-in env format with `VERSION`, `MAJOR`, `MINOR`, `PATCH`, `PRERELEASE`, `BUILD_META` | No: new format |
-| **`--strict`** (open) | Never fails on bad input | Exit 2 on non-SemVer input, for release-only workflows | No: purely additive |
-
-`--json` field names are stable once released ([CLI_OUTPUT](CLI_OUTPUT.md)). `--output env` is the explicit name of the default format.
+None yet.

@@ -21,7 +21,7 @@ The script's rule, kept as it is: Docker Hub and Prime staging always, and Prime
 
 ### Go modules
 
-A release is also checked for the Go modules it publishes: the `gomod` artifacts of the streams the tag is a release of (a stream whose `tagPattern` matches it, and an artifact whose `lines` include the tag's line). A module has a row after the images, with the registry `goproxy`, the label `Go module proxy` and the reference `module@version`, where the version is the tag without the prefix of its stream (`helmtools/v0.1.2` is looked for as `v0.1.2`). It is a plain HTTP request to the public Go module proxy for the version's `.info` (`internal/platform/goproxy`): `found` when the proxy has that version, `not found` for a 404 or a 410, and `unreachable` for anything else, an answer that is not that version included. The proxy fetches a tag it has not seen the first time it is asked, so asking is also what makes a new tag available. A prerelease is looked for too, since the proxy has them. A project whose check has no way to ask about modules shows the row as `skipped`. `gero ship` runs the same check, so a release the proxy cannot serve blocks a bump that `go mod tidy` would fail on. The proxy is not configurable yet: `Checker.BaseURL` is the place for another.
+A release is also checked for the Go modules it publishes: the `gomod` artifacts of the streams the tag is a release of (a stream whose `tagPattern` matches it, and an artifact whose `lines` include the tag's line). A module has a row after the images, with the registry `goproxy`, the label `Go module proxy` and the reference `module@version`, where the version is the tag without the prefix of its stream (`helmtools/v0.1.2` is looked for as `v0.1.2`). It is a plain HTTP request to the public Go module proxy for the version's `.info` (`internal/platform/goproxy`): `found` when the proxy has that version, `not found` for a 404 or a 410, and `unreachable` for anything else, an answer that is not that version included. The proxy fetches a tag it has not seen the first time it is asked, so asking is also what makes a new tag available. A prerelease is looked for too, since the proxy has them. A project whose check has no way to ask about modules shows the row as `skipped`. `gero ship` runs the same check, so a release the proxy cannot serve blocks a bump that `go mod tidy` would fail on. The proxy is not configurable by the user: `goproxy.Checker.BaseURL` is the place for another.
 
 ## Config
 
@@ -52,7 +52,7 @@ spec: {kind: image, name: rancher/rancher-server, lines: {since: v2.16}}
 
 It is `internal/platform/ociregistry`, which knows nothing of which registries gero uses; `internal/registry` has the three roles (their hosts and when each applies) and the report.
 
-Standard `net/http`, no module, and no `docker` binary: `docker manifest inspect` is a manifest request, so the client makes one. It sends `HEAD /v2/<name>/manifests/<tag>` with the `Accept` types for image manifests and indexes. On a 401 with a bearer challenge it asks the named realm for an anonymous token and retries once. A 200 is found, a 404 is not found, and anything else, including a 401 after the retry, is unreachable with the status.
+Standard `net/http`, no module, and no `docker` binary: `docker manifest inspect` is a manifest request, so the client makes one. It sends `HEAD /v2/<name>/manifests/<tag>` with the `Accept` types for image manifests and indexes. On a 401 with a bearer challenge it asks the named realm for an anonymous token and retries once. A 200 is found, a 404 is not found, and anything else, including a 401 after the retry, is unreachable with the status. The check is HEAD only, with no `GET` fallback, and existence only: it compares no digests across registries. The timeout is a fixed 20 seconds and nothing is retried beyond the token request, and none of these is a setting.
 
 Reads are anonymous in every registry the script checks, so no credentials are used. Authentication for publishing stays in Vault and in the release workflow, never here. A registry that needs a login to read is reported as unreachable, not worked around.
 
@@ -60,10 +60,8 @@ Tests run the client against an `httptest` registry, including the token challen
 
 ## Not built yet
 
-None.
+* Exit 2 for a usage or config error, which waits for the exit-code helper ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
 
 ## Open questions
 
-* Whether a registry that ignores `HEAD` needs a `GET` fallback. The three here are expected to answer `HEAD`.
-* Whether the check should compare digests across registries, which the script does not do.
-* Whether a mirror's timeout and retry policy needs to be a setting.
+None yet.

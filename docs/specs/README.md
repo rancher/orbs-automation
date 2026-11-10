@@ -9,17 +9,17 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [CLI_CONFIG](CLI_CONFIG.md) | CLI config versus application config, sources and precedence, user file, locating central config |
 | [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md) | Workstation versus CI for commands that run in both: detection, the actor (PR author, commit identity), push and signing, the write-command contract |
 | [LINES_RESOLVE](LINES_RESOLVE.md) | `gero lines resolve`: the release-line map, each Rancher line joined to the projects that feed it and follow it, and the gaps |
-| [CHAIN_TRACING](CHAIN_TRACING.md) | Following a release chain through every hop, including the charts and Assets hops the release team runs: `managedBy` with `owned`, observed edges, tag schemes and the shared release scheme, stages (later); Assets and Rancher implemented |
+| [CHAIN_TRACING](CHAIN_TRACING.md) | Following a release chain through every hop, including the charts and Assets hops the release team runs: `managedBy` with `owned`, observed edges, tag schemes and the shared release scheme, stages; the hop between Assets and Rancher is implemented, and the walk through several hops, the stage check of a held tag and the charts bump are not |
 | [REPO_STATUS](REPO_STATUS.md) | `gero repo status`: the sections of the report and what each answers, the state and next tags of a line, and who holds each release |
 | [TASK_COMMANDS](TASK_COMMANDS.md) | The steps of `ship` as commands of their own: `repo branch` and `repo tag`, the use cases for the other steps, and the rules they share |
 | [PUSH_TO_REPO](PUSH_TO_REPO.md) | The write half of a downstream bump: the work branch in the engineer's clone, remotes, branch and PR identity, per-target outcomes, what changes from today's scripts |
 | [CI_SHIP](CI_SHIP.md) | `gero ci:ship`: the same bump as `gero ship` run by a workflow as the bot, what it shares and what CI adds |
-| [METADATA](METADATA.md) | Labels and hidden markers (draft, not built): the marker as the record, label classes, owned versus shared repos, control labels |
+| [METADATA](METADATA.md) | Labels and hidden markers (draft; only a PR's configured labels are built): the marker as the record, label classes, owned versus shared repos, control labels |
 | [WORKSPACE](WORKSPACE.md) | The one door from settings to the world: the central config source, current repo, resolving repo paths |
 | [APP_CONFIG](APP_CONFIG.md) | Application config: document shape, kinds, placement, validation |
 | [CLI_OUTPUT](CLI_OUTPUT.md) | stdout and stderr, `--json`, terminal capabilities and color, styling (`internal/ui/style`), logging, the interactive boundary |
 | [GITHUB_ACCESS](GITHUB_ACCESS.md) | Token and host, REST, local git, subprocesses, consumer-side interfaces |
-| [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md) | Shipping the central config and templates as one release file: compile command, verified fetch, cache, source precedence |
+| [CENTRAL_BUNDLE](CENTRAL_BUNDLE.md) | Shipping the central config and templates as one release file: compile command, verified fetch, cache, source precedence, the bundle in CI |
 | [IMAGES_EXIST](IMAGES_EXIST.md) | Port of `validate_image_exists`: `gero repo images exist`, the `images` config, the registry client |
 | [SHELL_SETUP](SHELL_SETUP.md) | `gero shell install`: the marked profile block, completion, and the wrapper that lets `gero cd` change directory |
 | [REPL](REPL.md) | `gero repl`: an interactive prompt over the same commands, its few shell-like commands (`pwd`, `ls`, `cd`, `clear`, `shell`, `exit`), the working directory as state, the line editor with history and completion, the prompt template (`repl.prompt`) |
@@ -36,5 +36,5 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 * A spec records what is decided and why, in the present tense. It does not repeat [PHASES](../PHASES.md), narrate history or log progress.
 * **Write a spec once the shape settles**, not while it is moving ([docs rules](../README.md)). Most of these were written after the code.
 * Once a spec is `implemented`, the code and tests are the source of truth. Trim the spec to the rationale the code cannot carry, or delete it.
-* A spec for a ported script describes a **faithful port** as the default, and lists approved improvements in a closing section, "Breaking changes that will improve the script after port". Improvements are opt-in until a release deliberately makes one the default.
+* A spec for a ported script describes a **faithful port**.
 * Each spec ends with an **Open questions** section, which is the only place open items live.

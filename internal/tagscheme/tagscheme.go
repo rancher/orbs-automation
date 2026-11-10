@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -119,7 +120,7 @@ func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 // series is the version series of the project's line of that name.
 func (s semverScheme) series(line string) (string, bool) {
 	for _, l := range s.lines {
-		if l.line == line {
+		if lines.Normalize(l.line) == lines.Normalize(line) {
 			return l.series, true
 		}
 	}
@@ -275,4 +276,20 @@ func ForProject(p *chain.Project) (Scheme, error) {
 	default:
 		return nil, fmt.Errorf("project %s has %d streams: name the one to use", p.Name(), len(streams))
 	}
+}
+
+// Newest is the newest tag of a line of any kind, a prerelease or a stable tag,
+// for the one who asks what a line could have next. A line the stream gives no
+// series, as for a universal stream, has every tag the stream accepts: nothing
+// tells its tags from the rest of the repository's. It is nil when there is
+// none, and an error for a stream whose scheme is not built.
+func Newest(st *chain.Stream, tags []git.Tag, line string) (*git.Tag, error) {
+	scheme, err := ForStream(st)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := st.Series(line); !ok {
+		line = ""
+	}
+	return scheme.Latest(tags, line).Newest(), nil
 }

@@ -37,8 +37,6 @@ $ gero repo branch v2.15 my-fix --dry-run
 Would create my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
 ```
 
-An optional `--from <ref>` for cutting the branch off something other than the head of the line, a branch or a tag, is **(leaning)** and not decided.
-
 ## `gero repo tag [project] <line> [tag]`
 
 Makes the tag `<tag>` **in the engineer's clone**, on the head of the upstream branch of the release line `<line>`, found as `repo branch` finds it: a line (`v2.15` or `2.15`), or a branch of the project (`release/v2.15`, or `main` for a project with no lines), which has the series of the line it is the branch of. The head is read from the host when the command runs and fetched, so the tag is on what is live there and not on what the clone last saw, and the checkout is left where it is. A tag is a full version and a project or a line never is, which tells two arguments apart: with a version second they are the line and the tag, else the project and the line.
@@ -47,7 +45,7 @@ Makes the tag `<tag>` **in the engineer's clone**, on the head of the upstream b
 
 **A given tag is checked, not trusted.** It matches the project's `tagPattern`, is a version in the line's series (`0.8.x` for shell's `v2.15`), is newer than the line's newest tag, and does not exist. The host's tags and the clone's own are both looked at. A tag the host has on the same commit is "already tagged" and the command succeeds, so a rerun is safe; a tag only the clone has, on that commit, is not made again and is pushed with `--push`; a tag on another commit, in either place, is an error. A tag is never moved, deleted or forced.
 
-**An omitted tag is chosen** (`--stable`, `--minor` and `--major` only apply then, and a tag with one of them is an error) from the newest tag of the line's series, whichever kind it is, and a commit that already has that tag gets no new one. With no tag in the line yet, the first is the start of its series (`v0.8.0-rc.1` for `0.8.x`), and a project with no series has to name it. The version is written with the `v` the line's tags have, else the project's pattern says, by `Version.NextPrerelease` and `NextStable` ([`internal/platform/semver`](../../internal/platform/semver/next.go)), which know nothing of projects or lines. What a line may have next is the policy of [`internal/releasetag`](../../internal/releasetag/releasetag.go), which is pure and is asked by this command, by the `createtag` task (which only makes the tag) and by `repo status`, so what the status says is what the command does. It passes semver the version, the bump and the label:
+**An omitted tag is chosen** (`--stable`, `--minor` and `--major` only apply then, and a tag with one of them is an error) from the newest tag of the line's series, whichever kind it is, as `tagscheme.Newest` finds it for `repo status` too, so a tag the stream excludes is not the one followed, and a commit that already has that tag gets no new one. With no tag in the line yet, the first is the start of its series (`v0.8.0-rc.1` for `0.8.x`), and a project with no series has to name it. The version is written with the `v` the line's tags have, else the project's pattern says, by `Version.NextPrerelease` and `NextStable` ([`internal/platform/semver`](../../internal/platform/semver/next.go)), which know nothing of projects or lines. What a line may have next is the policy of [`internal/releasetag`](../../internal/releasetag/releasetag.go), which is pure and is asked by this command, by the `createtag` task (which only makes the tag) and by `repo status`, so what the status says is what the command does. It passes semver the version, the bump and the label:
 
 | Newest tag | Default | `--stable` |
 |---|---|---|
@@ -74,7 +72,7 @@ Tagged and pushed v0.8.4 on release/v2.15 at 8c61398 ... to upstream
 
 ## Use cases not yet commands
 
-Each is a goal an engineer may have of one step of `ship`, with the task that already does it. They have no command names on purpose: the name, and whether the goal is wanted as a command at all, wait until one is built. Each takes the project as every command does (the working directory's, or named), and the rules above apply.
+Each is a goal an engineer may have of one step of `ship`, with the task that already does it. They have no command names on purpose: the name, and whether the goal is wanted as a command at all, wait until a second caller needs one. Each takes the project as every command does (the working directory's, or named), and the rules above apply.
 
 * **Send a branch.** Push a branch of the engineer's to the push target, the checked-out one unless one is named, with the checks `ship` makes: nothing on the remote is the ordinary push, the same commit sends nothing, a branch that grew from the remote's is a fast forward, and one that has gone another way is an earlier attempt's, which is replaced only when every commit on it is ours and `--refresh` was given. The error for one that is not ours says whose commit it is. Task: `pushbranch`. It leaves the machine, so it asks once.
 * **Open a PR for a pushed branch.** From a head branch (the checked-out one unless one is named) into a base (a line such as `v2.15` means `release/v2.15`, else the repository's default branch). The head is `owner:branch` for a branch on the fork and the bare branch for the upstream. It does not push: a branch that is not on the remote is an error that says to send it first. A head equal to the base is refused. The title and body default to the subject and the rest of the message of the branch's tip commit, and may be given. The labels to apply may be named; a label the repository does not have, or a failure to read or apply labels, is a warning and never fails the PR. It does not close the PRs it replaces; that is `ship`'s. Task: `createpr`.
@@ -87,12 +85,12 @@ Each command is a `cmd/` file and a package `internal/cli/<name>/` that builds t
 
 ## Not built yet
 
-* The use cases above as commands, under names not chosen.
+Each is built only if someone asks.
+
+* The use cases above as commands, under names not chosen, when a second caller needs one.
+* `gero repo branch --from <ref>`, for cutting the branch off something other than the head of the line, a branch or a tag.
+* A branch shorthand with `@`, sharing `resolvePushTarget` between the push and PR use cases, and a config setting for a step's commit.
 
 ## Open questions
 
-* Whether each use case is wanted as a command of its own, and under what name.
-* Whether `repo branch` gets `--from <ref>`.
-* For `repo tag`: whether the default bump after a stable is always a patch with `--minor` and `--major` for the rest, and the name `--stable` for the promotion. Whether an annotated or signed tag is ever wanted, which the API does not make.
-* Whether a later token such as `@` should stand for the checked-out branch where a branch is a positional, which none is now.
-* Whether the push and PR use cases share one push-target resolution call or each repeats it. A shared one belongs in `internal/ship` with `resolvePushTarget` until a task needs it, then in a domain package.
+None yet.

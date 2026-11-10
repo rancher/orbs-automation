@@ -62,3 +62,11 @@ func TestLatestReleasesOnlyStable(t *testing.T) {
 func TestLatestReleasesOnlyPrerelease(t *testing.T) {
 	assert.Equal(t, Latest{Prerelease: tagNamed("v0.1.0-rc.2")}, LatestReleases(tags("v0.1.0-rc.1", "v0.1.0-rc.2"), "v*"))
 }
+
+func TestLatestNewest(t *testing.T) {
+	stable, pre := tagNamed("v1.0.0"), tagNamed("v1.1.0-rc.1")
+	assert.Equal(t, pre, Latest{Stable: stable, Prerelease: pre}.Newest(), "a prerelease is reported only when it is newer")
+	assert.Equal(t, stable, Latest{Stable: stable}.Newest())
+	assert.Equal(t, pre, Latest{Prerelease: pre}.Newest())
+	assert.Nil(t, Latest{}.Newest())
+}

@@ -601,3 +601,36 @@ func TestRunNeedsExactlyOneStream(t *testing.T) {
 		})
 	}
 }
+
+func TestRunWithNoTagANewerTagTheStreamExcludesIsNotTheOneItFollows(t *testing.T) {
+	var g tagging
+	ws := shell(t)
+	ws.project = chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", "shell", "", "  repo: {name: rancher/shell}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.16}\n      - {line: v2.15, branch: release/v2.15}\n"),
+		chaintest.Doc("Stream", "shell", "{project: shell}", "  tagExclude: [\"*-hotfix*\"]\n  lines:\n    - {line: v2.16, series: \"0.9.x\"}\n    - {line: v2.15, series: \"0.8.x\"}\n"),
+	).Project("shell")
+	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-hotfix.1", Commit: "4444"})
+	opts := plain()
+	opts.Tag = ""
+
+	err := g.run(ws, "text", false, opts)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/work v0.8.4-rc.1 " + head215}, g.git.made, "it follows v0.8.3, as repo status says")
+}
+
+func TestRunATagOfAStreamWhoseTagsItsCIMakesIsRefused(t *testing.T) {
+	var g tagging
+	ws := shell(t)
+	ws.project = chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", "assets", "", "  repo: {name: rancher/rancher-assets}\n"),
+		chaintest.Doc("Stream", "assets", "{project: assets}", "  scheme: calverLineStage\n  lines: [{line: v2.16}, {line: v2.15}]\n"),
+	).Project("assets")
+
+	err := g.run(ws, "text", false, plain())
+
+	require.ErrorContains(t, err, "semver tags only")
+	assert.Empty(t, g.git.made)
+}

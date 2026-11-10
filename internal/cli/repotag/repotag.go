@@ -21,6 +21,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/releasetag"
 	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -177,7 +178,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if err != nil {
 		return fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
 	}
-	branch, series, err := lineBranch(project, stream, opts.Line)
+	branch, line, series, err := lineBranch(project, stream, opts.Line)
 	if err != nil {
 		return err
 	}
@@ -196,10 +197,14 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if fetched != head.Commit {
 		return fmt.Errorf("%s of %s moved while it was read, from %s to %s: run it again", branch, slug, short(head.Commit), short(fetched))
 	}
+	newest, err := tagscheme.Newest(stream, refs.Tags, line)
+	if err != nil {
+		return err
+	}
 	tag, promotes := opts.Tag, ""
 	if tag == "" {
 		chosen, err := releasetag.Choose(releasetag.Choice{
-			Tags: refs.Tags, Pattern: stream.TagPattern(), Series: series, Commit: head.Commit,
+			Newest: newest, Pattern: stream.TagPattern(), Series: series, Commit: head.Commit,
 			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: stream.RequiresPrerelease(),
 		})
 		if err != nil {
@@ -221,7 +226,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 		tags = append(slices.Clone(tags), git.Tag{Name: tag, Commit: local})
 	}
 	in := createtag.Input{CloneDir: clone.Path, Input: releasetag.Input{
-		Repo: slug, Tag: tag, Commit: head.Commit, Tags: tags,
+		Repo: slug, Tag: tag, Commit: head.Commit, Tags: tags, Newest: newest,
 		Pattern: stream.TagPattern(), Series: series, RequiresPrerelease: stream.RequiresPrerelease(),
 	}}
 	decision, err := releasetag.Check(in.Input)
@@ -347,6 +352,9 @@ func oneStream(p *chain.Project) (*chain.Stream, error) {
 	case 0:
 		return nil, fmt.Errorf("%s has no stream, so no release to tag", p.Slug())
 	case 1:
+		if streams[0].Scheme() != tagscheme.Semver {
+			return nil, fmt.Errorf("%s has tags of the %s scheme, which its own CI makes: repo tag makes semver tags only", p.Slug(), streams[0].Scheme())
+		}
 		return streams[0], nil
 	default:
 		return nil, fmt.Errorf("%s has %d streams, and repo tag does not yet name one", p.Slug(), len(streams))
@@ -355,28 +363,27 @@ func oneStream(p *chain.Project) (*chain.Stream, error) {
 
 // lineBranch finds the branch a release line lives on, and the series of
 // versions the line has in the stream. The line may be written without the v, or
-// be a branch of the project, which has the series of the line it is the branch
-// of, or none when it is in no line.
-func lineBranch(p *chain.Project, st *chain.Stream, arg string) (branch, series string, err error) {
+// be a branch of the project, which has the line it is the branch of, or none
+// when it is in no line.
+func lineBranch(p *chain.Project, st *chain.Stream, arg string) (branch, line, series string, err error) {
 	if b, ok := p.BranchOfLine(arg, ""); ok {
 		if series, ok := st.Series(arg); ok {
-			return b, series, nil
+			return b, arg, series, nil
 		}
 		if slices.ContainsFunc(p.Lines(), func(l string) bool { return strings.EqualFold(l, lines.Normalize(arg)) }) {
-			return b, "", nil
+			return b, arg, "", nil
 		}
 	}
 	if slices.Contains(p.ReleaseBranches(), arg) {
-		if series, ok := st.Series(p.LineOfBranch(arg)); ok {
-			return arg, series, nil
-		}
-		return arg, "", nil
+		line := p.LineOfBranch(arg)
+		series, _ := st.Series(line)
+		return arg, line, series, nil
 	}
 	have := p.Lines()
 	if len(have) == 0 {
 		have = p.ReleaseBranches()
 	}
-	return "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), arg, strings.Join(have, ", "))
+	return "", "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), arg, strings.Join(have, ", "))
 }
 
 // short abbreviates a commit for a message.

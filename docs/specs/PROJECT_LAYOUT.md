@@ -37,7 +37,7 @@ internal/steprun/      runs the pre-edit and post-edit steps of an update
 internal/registry/     image existence checks in the registries a project publishes to: the registries gero uses and the report over a project's image artifacts   (IMAGES_EXIST)
 internal/tagscheme/    what readers ask of a project's tags: its lines, its newest release, the order of two tags
 internal/calver/       the tag format of projects whose lines are in their tags, such as rancher-assets
-internal/releasetag/   the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
+internal/releasetag/   the policy of a release line's tags: what it could have next, which tags it may not have, and the line's state, told the line's newest tag by `tagscheme` and not finding it; pure, asked by the tag task, `repo tag` and `repo status`
 internal/lifecycle/    reads Rancher's lifecycle dates from the SUSE lifecycle page; the only importer of golang.org/x/net/html
 internal/...           domain packages as they arrive, such as the reconciler's
 
@@ -73,7 +73,6 @@ internal/platform/selfupdate/ replaces the running binary with a verified releas
 internal/platform/atomicfile/ writes a file by a temporary file and a rename, shared by shell install and init
 internal/platform/shellenv/   the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
 
-test/integration/      separate Go module (own go.mod) for integration tests     (TESTING)
 ```
 
 **Decision: cobra lives only in `cmd/`, command logic lives in `internal/cli/`.** `cmd/` (package `cmd`, with `main.go` at the repo root, as `cobra-cli init` generates) is the one place that knows about cobra. It holds the root command, the global flags, the command tree, each command's `Use`, help text, flags and annotations, the help groups, the context gating, and a short `RunE` per command. That `RunE` only translates: it turns args, flags and the environment into plain values, calls a function in `internal/cli/<cmd>/`, writes the result to `cmd.OutOrStdout()` and returns the error. It may import the standard library, cobra, its own subpackages (`cmd/...`), `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs` (exit-code errors, needed to wire `Execute`). It may **not** import any other `internal/` package. Its use of `internal/platform/clicfg` is narrow: it builds a `clicfg.FlagLookup` over the parsed flags, calls `clicfg.Load` once in the root `PersistentPreRunE`, and passes the resulting `Settings` down by value.
@@ -136,17 +135,7 @@ Package names beyond these are decided with the code that needs them. A package 
 | Test helpers | `_test.go` files, or a `internal/<pkg>/<pkg>test` package if several packages share them |
 | Golden files and fixtures | `testdata/` beside the package that uses them |
 
-## 5. Integration tests live in a sub-module
-
-Integration tests may need heavy dependencies (a container runner, a fake GitHub server, a Kubernetes test environment). Those must not enter the root `go.mod`, which `gero` users and the supply-chain audit see ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
-
-* `test/integration/` has its own `go.mod` (module `github.com/rancher/orbs-automation/test/integration`). Its dependencies, and their transitive tree, stay out of the root module. `go build ./...` and `go test ./...` at the root do not see it.
-* **Black box by default.** The tests build and run the `gero` binary and assert on stdout, stderr, exit code and side effects. They do not import `internal/`, so the sub-module needs no `replace` directive on the root and no `go.work`. If a test truly needs to import root packages, record the reason here and add a `replace ../..` in the sub-module's `go.mod`, not a `go.work` checked in.
-* Unit tests stay beside their package and use only the root module's dependencies. The sub-module is for tests that need processes, the network or containers.
-* The sub-module is run by its own CI job (`cd test/integration && go test ./...`), separate from the fast unit job, and is not part of the pre-commit loop.
-* It is linted and vetted separately (`golangci-lint run` from inside it), with its own `.golangci.yml` or a shared config. Its dependencies are recorded in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md), since the root depguard allow-list does not cover it.
-
-## 6. Enforcement
+## 5. Enforcement
 
 * The `internal/` rule is compiler-enforced.
 * Imports of third-party modules are checked by the depguard allow-list ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
@@ -167,10 +156,10 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 ## Not built yet
 
 * A shared yes/no confirmation in `internal/ui`: `ship`, `repo tag`, `shell install` and `doctor self-update` each ask their own `[y/N]` through the style renderer ([CLI_OUTPUT](CLI_OUTPUT.md)).
-* A task for closing superseded PRs, extracted from `internal/ship` when it is needed, and commands for `pushbranch`, `createpr` and `bumpcommit`, which are use cases without names ([TASK_COMMANDS](TASK_COMMANDS.md#use-cases-not-yet-commands)). `gero repo branch` and `gero repo tag` run `createbranch` and `createtag` alone.
+* A task for closing superseded PRs, with the plan and the publish steps, moved out of `internal/ship`.
+* Commands for `pushbranch`, `createpr` and `bumpcommit`, which are use cases without names ([TASK_COMMANDS](TASK_COMMANDS.md#use-cases-not-yet-commands)): built only if someone asks. `gero repo branch` and `gero repo tag` run `createbranch` and `createtag` alone.
 * Narrowing `ship.Git` and `ship.Remote` now that the tasks define what they call: both still carry every method any task needs.
-* `test/integration/` ([TESTING](TESTING.md)).
 
 ## Open questions
 
-* Whether generated code (for example JSON schema from config types) gets its own directory.
+None yet.

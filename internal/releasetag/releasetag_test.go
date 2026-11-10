@@ -17,9 +17,21 @@ func tagsAt(commit string, names ...string) []git.Tag {
 	return out
 }
 
+// newestOf is what tagscheme.Newest tells the policy: the newest tag of the
+// series, of any kind. releasetag is told it and does not work it out.
+func newestOf(pattern, series string, tags []git.Tag) *git.Tag {
+	var inSeries []git.Tag
+	for _, t := range tags {
+		if series == "" || semver.InSeries(t.Name, series) {
+			inSeries = append(inSeries, t)
+		}
+	}
+	return git.LatestReleases(inSeries, pattern).Newest()
+}
+
 // shell is the producer of the examples: 0.8.x is the series of v2.15.
 func shell(tag string, existing ...git.Tag) Input {
-	return Input{Repo: "rancher/shell", Tag: tag, Commit: "head1234", Tags: existing, Pattern: "v*", Series: "0.8.x"}
+	return Input{Repo: "rancher/shell", Tag: tag, Commit: "head1234", Tags: existing, Newest: newestOf("v*", "0.8.x", existing), Pattern: "v*", Series: "0.8.x"}
 }
 
 func TestCheckATagTheLineCanHaveIsCreatedAndSaysWhatItFollows(t *testing.T) {
@@ -78,14 +90,15 @@ func TestCheckRefusesWhatTheLineCannotHave(t *testing.T) {
 }
 
 func TestCheckAProjectWithNoSeriesIsNewerThanAnyTagOfItsPattern(t *testing.T) {
+	existing := tagsAt("a", "v0.5.3", "main-abc1234", "v0.0.0-pr.112.b3")
 	in := Input{Repo: "rancher/scc-operator", Tag: "v0.5.4-rc.1", Commit: "h", Pattern: "v*",
-		Tags: tagsAt("a", "v0.5.3", "main-abc1234", "v0.0.0-pr.112.b3")}
+		Tags: existing, Newest: newestOf("v*", "", existing)}
 
 	got, err := Check(in)
 
 	require.NoError(t, err)
 	require.NotNil(t, got.Newest)
-	assert.Equal(t, "v0.5.3", got.Newest.Name, "tags that are not releases of the pattern do not count")
+	assert.Equal(t, "v0.5.3", got.Newest.Name)
 
 	in.Tag = "v0.5.2"
 	_, err = Check(in)
@@ -104,7 +117,7 @@ func at(commit string, names ...string) []git.Tag { return tagsAt(commit, names.
 
 // line is the Choice of shell's v2.15: the series 0.8.x, the head at head1234.
 func line(tags ...git.Tag) Choice {
-	return Choice{Tags: tags, Pattern: "v*", Series: "0.8.x", Commit: "head1234"}
+	return Choice{Newest: newestOf("v*", "0.8.x", tags), Pattern: "v*", Series: "0.8.x", Commit: "head1234"}
 }
 
 func TestChooseAfterAStableTagTheDefaultIsThePrereleaseOfThenextPatch(t *testing.T) {
@@ -145,7 +158,7 @@ func TestChooseAfterAStableTagTheBumpRaisesTheVersion(t *testing.T) {
 
 func TestChooseStablePromotesThePrereleaseOnTheHeadWithNoCommitsSince(t *testing.T) {
 	c := line(at("old", "v0.8.3")...)
-	c.Tags = append(c.Tags, git.Tag{Name: "v0.8.4-rc.2", Commit: "head1234"})
+	c.Newest = &git.Tag{Name: "v0.8.4-rc.2", Commit: "head1234"}
 	c.Stable = true
 
 	got, err := Choose(c)
@@ -237,7 +250,7 @@ func TestChooseWithNoTagAndNoSeriesHasNothingToStartFrom(t *testing.T) {
 }
 
 func TestChooseWritesTheVPrefixOnlyWhenTheTagsHaveIt(t *testing.T) {
-	c := Choice{Tags: at("old", "0.8.3"), Pattern: "*", Series: "0.8.x", Commit: "head1234"}
+	c := Choice{Newest: newestOf("*", "0.8.x", at("old", "0.8.3")), Pattern: "*", Series: "0.8.x", Commit: "head1234"}
 
 	got, err := Choose(c)
 
@@ -268,15 +281,18 @@ func TestCheckAStableTagOfAProjectThatRequiresAPrereleaseNeedsOneOnTheCommit(t *
 	assert.Equal(t, Create, got.Action)
 
 	in.Tags = at("old", "v0.8.3", "v0.8.4-rc.2")
+	in.Newest = newestOf("v*", "0.8.x", in.Tags)
 	_, err = Check(in)
 	require.ErrorIs(t, err, ErrNeedsPrerelease, "the prerelease is on another commit")
 
 	in.Tags = at("head1234", "v0.8.3-rc.1")
+	in.Newest = newestOf("v*", "0.8.x", in.Tags)
 	_, err = Check(in)
 	require.ErrorIs(t, err, ErrNeedsPrerelease, "and one of another version does not count")
 
 	in.RequiresPrerelease = false
 	in.Tags = at("old", "v0.8.3")
+	in.Newest = newestOf("v*", "0.8.x", in.Tags)
 	_, err = Check(in)
 	require.NoError(t, err, "a project that does not require one is not asked")
 }

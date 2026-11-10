@@ -1,11 +1,12 @@
 // Package releasetag is the policy of the tags of a release line: which tag a
-// line can have next, which tags it may not have, and what its newest is. It is
-// pure, with no I/O and no knowledge of how a tag is made, and it knows the
+// line can have next, which tags it may not have, and the state the line is in.
+// It is pure, with no I/O and no knowledge of how a tag is made, and it knows the
 // project's settings only as arguments (the tag pattern, the line's series and
-// requiresPrerelease). Version arithmetic is in internal/platform/semver, which knows
-// nothing of lines; the tag task, gero repo tag and gero repo status all ask
-// here, so what the status says is what the tag command does
-// (docs/specs/TASK_COMMANDS.md).
+// requiresPrerelease). Which tag is the line's newest it is told, from
+// internal/tagscheme, which is the one place that says so. Version arithmetic is
+// in internal/platform/semver, which knows nothing of lines; the tag task, gero
+// repo tag and gero repo status all ask here, so what the status says is what the
+// tag command does (docs/specs/TASK_COMMANDS.md).
 package releasetag
 
 import (
@@ -54,7 +55,10 @@ type Input struct {
 	// Tags are the repository's tags as the host has them, and the local tag of the
 	// name if there is one, with the commit each is on (an annotated tag at the
 	// commit it peels to).
-	Tags    []git.Tag
+	Tags []git.Tag
+	// Newest is the newest tag of the line, of any kind, or nil when it has none:
+	// what tagscheme.Newest says.
+	Newest  *git.Tag
 	Pattern string // the project's tagPattern, such as "v*"; "" matches every tag
 	Series  string // the line's series, such as "0.8.x" or "v2.15"; "" for no series
 	// RequiresPrerelease is the project's release.requiresPrerelease: a stable tag
@@ -111,41 +115,12 @@ func Check(in Input) (Decision, error) {
 	if in.RequiresPrerelease && !v.IsPrerelease() && !hasPrereleaseOf(v, in) {
 		return Decision{}, fmt.Errorf("%w: %s has none of %s on %s", ErrNeedsPrerelease, in.Tag, base(v), short(in.Commit))
 	}
-	newest := Newest(in)
-	if newest != nil {
+	if newest := in.Newest; newest != nil {
 		if nv, _ := semver.Parse(newest.Name); semver.Compare(v, nv) <= 0 {
 			return Decision{}, fmt.Errorf("%w: %s is not newer than %s", ErrNotNewer, in.Tag, newest.Name)
 		}
 	}
-	return Decision{Action: Create, Newest: newest}, nil
-}
-
-// Newest is the newest tag of the line, of any kind: of the series when there
-// is one, else of every tag the pattern matches. A tag that is not a version, such
-// as the rolling main-<sha> ones, does not count.
-func Newest(in Input) *git.Tag {
-	var best *git.Tag
-	var bestV semver.Version
-	series, seriesOK := semver.ParseSeries(in.Series) // read once, not for each tag
-	for i := range in.Tags {
-		t := in.Tags[i]
-		if in.Pattern != "" {
-			if ok, err := path.Match(in.Pattern, t.Name); err != nil || !ok {
-				continue
-			}
-		}
-		v, ok := semver.Parse(t.Name)
-		if !ok {
-			continue
-		}
-		if in.Series != "" && !(seriesOK && series.Contains(v)) {
-			continue
-		}
-		if best == nil || semver.Compare(v, bestV) > 0 {
-			best, bestV = &t, v
-		}
-	}
-	return best
+	return Decision{Action: Create, Newest: in.Newest}, nil
 }
 
 // short abbreviates a commit for a message.
@@ -153,7 +128,9 @@ func short(commit string) string { return commit[:min(len(commit), 8)] }
 
 // Choice is what Choose needs to pick the tag to make when none was named.
 type Choice struct {
-	Tags    []git.Tag
+	// Newest is the newest tag of the line, of any kind, or nil when it has none:
+	// what tagscheme.Newest says.
+	Newest  *git.Tag
 	Pattern string
 	Series  string
 	Commit  string // the head of the line's branch
@@ -243,7 +220,7 @@ func vPrefix(c Choice, newest *git.Tag) string {
 
 func prereleaseCandidate(c Choice) Candidate {
 	cand := Candidate{Kind: KindPrerelease}
-	newest := Newest(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	newest := c.Newest
 	if newest == nil {
 		start, ok := seriesStart(c.Series)
 		if !ok {
@@ -273,7 +250,7 @@ func prereleaseCandidate(c Choice) Candidate {
 
 func stableCandidate(c Choice) Candidate {
 	cand := Candidate{Kind: KindStable}
-	newest := Newest(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	newest := c.Newest
 	if newest == nil {
 		start, ok := seriesStart(c.Series)
 		if !ok {
@@ -371,7 +348,7 @@ func StateOf(c Choice) State {
 	if c.Commit == "" {
 		return ""
 	}
-	newest := Newest(Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	newest := c.Newest
 	if newest == nil {
 		return StateNoRelease
 	}

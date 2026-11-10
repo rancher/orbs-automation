@@ -1,6 +1,6 @@
 # Application Config
 
-**Status:** implemented, except what [Not built yet](#not-built-yet) lists. The kind and field names are not final until the team's review before v1.0.0 ([PHASES](../PHASES.md)). The files in `config/` are the real configs.
+**Status:** implemented, except what [Not built yet](#not-built-yet) lists. The kind and field names are not final: they are frozen, and `gero/v1alpha2` becomes `gero/v1`, before v1.0.0 ([PHASES](../PHASES.md)). The files in `config/` are the real configs.
 
 The shape of the YAML that describes the world `gero` operates on, where it lives, and what validation guarantees. How a single invocation finds it is in [CLI_CONFIG](CLI_CONFIG.md) and [WORKSPACE](WORKSPACE.md). The field reference is [CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md), the reasons for the kinds are in [CONFIG_UNITS](../design/CONFIG_UNITS.md), and the real files and defaults are in [`config/README.md`](../../config/README.md); illustrative mocks are in [`mock-repos/`](../../mock-repos/). The types and their rules are `internal/apis/v1alpha2`, the provider that reads a directory is `internal/appconfig`, the graph commands read is `internal/chain` ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), and the engine that ships into the holdings is `internal/bump` ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)). Config is reachable only through `internal/workspace`.
 
@@ -34,7 +34,7 @@ A bump has two halves, and each is configured by the project that knows it. The 
 
 * A **holding** has `at` (a file and a key, both templates over `{line}`, `{stage}` and `{branch}`, and a format: `yaml`, `gomod` and `regex` are written, and `dockerfile` is accepted and refused by the engine; or a list of such locations, each with the `lines` its file exists for, so one release held in several files is written in all of them) and `holds` (a `kind` of release, commit or branch, the `form`, the `lines` it is for, a `stage`, and `accept`: `stable`, the default, or `all`). A consumer that wants both has two holdings.
 * **A route** is a producer and a consumer that holds releases of it. One run of `gero ship` writes every release holding of the route, in one pull request for each target branch ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)), so a consumer that holds two files of one release is never left half updated. The reverse view, "who holds X" and "what does Y take", is derived from the holdings and can be compiled into the bundle ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
-* **An edit** follows one or more holdings. It has `preEdit` and `postEdit` steps (`run` is a program or script path, or an argument list; never a shell string) with optional `since` and `until`, a range of the consumer's lines for the target branch, and `from`, where the program comes from (the consumer's clone, the producer's repo for an owned project, or the central bundle). It may name a `strategy`, a rule in code with its own `with` values. A strategy is checked when the config loads, so `config validate` and `gero ship` agree. `goBump` is built; `chartsPackageBump` is named in the config and not built, and a run that needs it stops before anything is written.
+* **An edit** follows one or more holdings. It has `preEdit` and `postEdit` steps (`run` is a program or script path, or an argument list; never a shell string) with optional `since` and `until`, a range of the consumer's lines for the target branch, and `from`, where the program comes from (the consumer's clone, the producer's repo for an owned project, or the central bundle). It may name a `strategy`, a rule in code with its own `with` values. A strategy's name is checked when the config loads; that it exists and accepts its `with` is checked when the update engine is built ([Validation](#validation)). `goBump` is built; `chartsPackageBump` is named in the config and not built, and a run that needs it stops before anything is written. A step with `from: producer` or `from: central` is refused when it runs.
 * The order of a run is the edits' `preEdit` steps, the write of every holding, the strategies, and the edits' `postEdit` steps. Only steps whose range holds the branch's line run, and one with no range always does.
 
 **One project is the final destination.** A project may set `finalDestination: true`: the project that releases end in, `rancher/rancher`, which the others ship to and which ships to none. At most one project sets it, and it is what a view of how the lines connect starts from ([LINES_RESOLVE](LINES_RESOLVE.md)).
@@ -45,11 +45,11 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 * **Release workflows are rendered into the real branch.** Keyless signing and attestation depend on the OIDC token's workflow source, so the release workflow has to live on the tagged branch itself. (Confirmed by team experience from debugging.)
 * **Central repo:** the project list, topology, where things flow between repos, the Rancher line facts, and the configs of projects we do not own (`rancher/charts`, `rancher/rancher`).
-* **Target repo:** `gero.yaml` holds **only `WorkflowsConfig`** for now (toolchain, test matrix, enabled workflows, `gero` version pin). Any other kind in a repo's `gero.yaml` is an error until we decide to allow more. Moving owned `Project` config into repos is a possible later step.
+* **Target repo:** `gero.yaml` holds **only `WorkflowsConfig`** (toolchain, test matrix, enabled workflows, `gero` version pin). Any other kind in a repo's `gero.yaml` is an error.
 * **Per-repo lookup:** the repo's `automation-core` branch if it exists, otherwise the default branch.
 * **The reconciler reads central config**, and fetches a repo's `gero.yaml` only when it is about to act on that repo. Facts needed just to observe (tag patterns, whether stable requires an RC) stay central.
-* **Standardize shared workflows across repos** where inputs can cover the differences (for example CI test workflows as published reusable workflows or actions in the central repo). Workflows still hand-copied per branch today (backport, stale, renovate, unrc) are candidates later.
-* **Rendered files carry a generated header** with template and CLI version and a content hash. A `verify` command detects drift, and a dry-run diff is shown before any deploy PR is opened.
+* **Workflows are rendered from templates and configs the repos provide**, with the RancherLines variables injected, so inputs cover the differences between branches. How a repo's CI jobs run comes from the templates that repo provides.
+* **Rendered files carry a generated header** with template and CLI version and a content hash. `gero workflows verify` detects drift and exits 3 when a copy has drifted, and a dry-run diff is shown before any deploy PR is opened.
 * **Avoid:** runtime fetching of config from another branch, branch-to-branch maps hardcoded in shell scripts, and per-branch copies of workflows that could be shared.
 
 ## Validation
@@ -62,10 +62,10 @@ Repo shapes, branch policy, line mapping and the bump model these fields express
 
 **Warnings, never errors.** Each has a stable rule id, and a document can acknowledge a warning of its own with a reason ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#warnings) lists them). A line with no `branch` once it is past development (an omitted branch means the default branch, which is for the line in development), two projects that hold something of each other (the dependency is circular), a project with a branch for each line that holds another stream of an artifact than the final destination does, the locations of a holding that hold different versions (found when a command reads a repo, so `gero repo status` shows it and `config validate` does not), and an acknowledgement that matches nothing. A lifecycle date is meant to be one too ([CONSTRAINTS](../design/CONSTRAINTS.md)), and is not built.
 
-**What depends on a strategy or a format, in the update engine.** Building the engine finds an edit whose strategy does not exist or whose `with` it rejects, and a release holding in a format gero cannot write yet. It is the same construction a run uses; `gero doctor` does not run it yet.
+**What depends on a strategy or a format, in the update engine.** Building the engine finds an edit whose strategy does not exist or whose `with` it rejects, and a release holding in a format gero cannot write yet. It is the same construction a run uses; neither `gero config validate` nor `gero doctor` runs it yet.
 
 * **Roles belong to relationships, not projects.** A project can be a producer on one route and a consumer on another (for example a chart repo that consumes an operator and feeds Rancher). Project config has no `role` field; producer and consumer are derived from the holdings.
-* **Holdings are explicit.** A release holding is written by a run, and a commit or branch holding is only observed. A QA test edge is added later, because the QA repo is related to others by something other than a holding.
+* **Holdings are explicit.** A release holding is written by a run, and a commit or branch holding is only observed.
 
 **No hard limit on graph shape.** Real workflows are complex, and artificial limits (such as banning every cycle) could block legitimate setups. A circular dependency between two projects is a warning. Graph traversal must be cycle-safe regardless (track visited projects).
 
@@ -86,15 +86,16 @@ The kinds are described as JSON Schema (draft 2020-12) so an editor can validate
 
 ## Not built yet
 
-* A schema for `WorkflowsConfig`, which has no Go type yet.
-* Validation of a repo's `gero.yaml` (the allowed-kinds check) and of `WorkflowsConfig`.
+* The `WorkflowsConfig` Go type and schema, and the loader of a repo's `gero.yaml` with its allowed-kinds check and the validation of `WorkflowsConfig`.
 * Cycle warnings across more than two projects.
 * `gero config show --resolved`.
-* `gero doctor` checking the engine's findings as `config validate` does not yet either.
+* `gero config validate` and `gero doctor` building the update engine and reporting its errors.
+* Freezing the kind and field names and renaming `gero/v1alpha2` to `gero/v1`.
+* A Go test that validates every file of `config/` against the JSON Schemas.
 * The `chartsPackageBump` strategy, which the real config names, and writing the `dockerfile` format.
 * The `lifecycle-date` warning.
+* Steps with `from: producer` and `from: central`, in `ci:ship` only.
 
 ## Open questions
 
-* Final kind and field names.
-* Whether any config other than `WorkflowsConfig` ever moves into target repos.
+None yet.

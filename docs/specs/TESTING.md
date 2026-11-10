@@ -1,6 +1,6 @@
 # Testing
 
-**Status:** implemented for the unit tier. The integration tier is agreed, not built.
+**Status:** implemented.
 
 How the CLI layer is tested.
 
@@ -11,7 +11,7 @@ How the CLI layer is tested.
 * `internal/platform/clicfg` is table-tested: each source alone, each pairwise precedence, unknown key in the user file, malformed file, missing file, CI ignoring the user file ([CLI_CONFIG](CLI_CONFIG.md)).
 * Styling is tested without a terminal: each command has a test that holds the styled output, with the escapes taken out, equal to the plain output, and that `--json` and no color carry none. `ui.Align` is checked against `text/tabwriter`, and `internal/cli/termfacts` against a pipe, a file and `/dev/null`. The REPL and the editor are driven with a fake reader or a pipe, and never need a pty. What a real terminal does (the color depth, the prompt, the editing keys) is checked by hand.
 * Gating is tested by running a CI-only command with and without `GITHUB_ACTIONS` and a token ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)).
-* **Two tiers.** Unit tests (root module, fast, no network, run on every commit) and integration tests (the `test/integration` sub-module, black box against the built `gero` binary, own CI job). Heavy test dependencies go only in the sub-module ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 5). If a test needs the network, a container or a real process, it belongs in the second tier.
+* **One tier.** Unit tests in the root module, fast, with no network, run on every commit. A test that needs the network, a container or a real process is not written.
 * Follows the commit workflow in [`contributing/red-green-commits.md`](../contributing/red-green-commits.md).
 * **Mutation testing is optional, with [gremlins](https://github.com/go-gremlins/gremlins).** To check how strong the tests are, run `gremlins unleash` from the repository root. It mutates a temporary copy, so the working tree is untouched, and it is quick on a repository this size. It is a developer tool each person installs globally (package manager, or `go install github.com/go-gremlins/gremlins/cmd/gremlins@latest`). It is **not** in `go.mod`, since it brings dependencies (viper, among others) that the [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md) keeps out of the root module, and it is not a CI gate. Do not mutate code by hand to check a test.
   * Fix **lived** mutants with a test, or with simpler code when the mutant is equivalent (for example `len(s) > 7` to `>=` before `s[:7]`: `min(len(s), 7)` has nothing to mutate).
@@ -19,9 +19,8 @@ How the CLI layer is tested.
 
 ## Not built yet
 
-* The `test/integration` sub-module and its CI job.
 * Golden files under `testdata/` for command output, which tests compare as strings today.
-* A CI run of `go test ./...` in a deliberately hostile environment, to catch a test that reads the machine.
+* A pty harness to test the REPL and prompts in a terminal, which needs a dependency decision in [DEPENDENCY_POLICY](DEPENDENCY_POLICY.md).
 
 ## Open questions
 
