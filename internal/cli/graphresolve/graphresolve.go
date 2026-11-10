@@ -34,6 +34,8 @@ const (
 	classExternal = "external"
 	classHub      = "hub"
 	classHolding  = "holding"
+	classStream   = "stream"
+	classArtifact = "artifact"
 )
 
 const header = `direction: right
@@ -48,6 +50,8 @@ classes: {
   external: {style.fill: "#eeeeee"; style.stroke-dash: 3}
   hub: {style.stroke-width: 4}
   holding: {shape: hexagon; style.font-size: 12}
+  stream: {style.fill: "#ffffff"; style.stroke-dash: 2}
+  artifact: {shape: cylinder}
 }
 `
 
@@ -89,7 +93,28 @@ func writeProject(b *strings.Builder, p *chain.Project) {
 	if p.Doc.Spec.FinalDestination {
 		classes += "; " + classHub
 	}
-	fmt.Fprintf(b, "%s: {class: [%s]; label: %s}\n", quote(p.Slug()), classes, quote(label))
+	fmt.Fprintf(b, "%s: {\n  class: [%s]\n  label: %s\n", quote(p.Slug()), classes, quote(label))
+	for _, st := range p.Streams() {
+		fmt.Fprintf(b, "  %s: {\n    class: [%s]\n    label: %s\n", quote(streamKey(st)), classStream, quote("stream "+st.Name()))
+		for _, a := range st.Artifacts() {
+			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(artifactKey(a)), classArtifact, quote(a.Ref()))
+		}
+		b.WriteString("  }\n")
+	}
+	b.WriteString("}\n")
+}
+
+func streamKey(s *chain.Stream) string     { return "stream:" + s.Name() }
+func artifactKey(a *chain.Artifact) string { return "artifact:" + a.Name() }
+
+// producerPath is where a holding's flow starts: the artifact, inside its stream
+// and project, for a release, and the project for a commit or a branch.
+func producerPath(h *chain.Holding) string {
+	p := quote(h.Producer().Slug())
+	if a := h.Artifact(); a != nil {
+		return p + "." + quote(streamKey(a.Stream())) + "." + quote(artifactKey(a))
+	}
+	return p
 }
 
 func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
@@ -99,7 +124,7 @@ func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
 		label += "\n" + a.Ref()
 	}
 	fmt.Fprintf(b, "%s: {class: [%s]; label: %s}\n", id, classHolding, quote(label))
-	fmt.Fprintf(b, "%s -> %s\n", quote(h.Producer().Slug()), id)
+	fmt.Fprintf(b, "%s -> %s\n", producerPath(h), id)
 	var served []string
 	for _, l := range g.Lines() {
 		if h.AppliesTo(l.ID) {
