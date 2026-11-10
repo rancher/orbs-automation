@@ -53,6 +53,7 @@ type link struct {
 	HoldsLines        string // holds.lines, as flow YAML
 	Strategy          string // the strategy of an edit that follows the holding
 	Pre, Post         []stepSpec
+	Env               string // the lines of an env map on the edit, as "    NAME: value\n"
 	PackageForTheEdit string
 	Artifact          string // the artifact the holding holds, when not the producer's first image
 	Locations         string // the at block as YAML, for a holding with several locations; File and Key otherwise
@@ -153,6 +154,9 @@ func (f *fakeWorkspace) docs() []string {
 			spec := ""
 			if l.Strategy != "" {
 				spec += "  strategy: " + l.Strategy + "\n  with: {package: " + orDefault(l.PackageForTheEdit, "x") + "}\n"
+			}
+			if l.Env != "" {
+				spec += "  env:\n" + l.Env
 			}
 			spec += stepsYAML("preEdit", l.Pre) + stepsYAML("postEdit", l.Post)
 			docs = append(docs, chaintest.Doc("Edit", name+"-edit", "{holding: "+name+"}", spec))

@@ -42,9 +42,9 @@ func broGoMod(la string) string {
 	return "module acme/bro\n\nrequire (\n\tgithub.com/acme/la " + la + "\n\tgithub.com/acme/wr v1.7.1\n)\n"
 }
 
-func newPinWorkspace(t *testing.T) pinWorkspace {
+func newPinWorkspace(t *testing.T, extra ...string) pinWorkspace {
 	t.Helper()
-	g, _ := pinGraph(t, laStream)
+	g, _ := pinGraph(t, laStream, extra...)
 	return pinWorkspace{g: g, host: pinHost{
 		files: map[string]string{
 			"acme/wr@sha-v1.7.4:go.mod": "", // not read: the tag's commit is not a ref

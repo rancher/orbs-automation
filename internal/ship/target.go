@@ -82,10 +82,19 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 		}
 		tp.Warnings = append(tp.Warnings, "this is a downgrade: "+message)
 	}
+	// What the steps run in is only worked out for a target that has a PR to make:
+	// one that holds what it should has nothing to run, whatever its go.mod says.
+	env, err := r.route.EnvOf(ctx, tree, sp.target)
+	if err != nil {
+		tp.Status = StatusBlocked
+		tp.Blockers = append(tp.Blockers, "toolchain: "+err.Error())
+		return tp, nil
+	}
+	tp.Env = env
 	pre, post := r.route.Steps(sp.target)
 	preview, err := renderPreview(previewInput{
 		producer: r.producer, consumer: r.route.Consumer, release: sp.release, target: target,
-		checks: stale, steps: append(pre, post...), skipped: r.route.SkippedSteps(sp.target), pins: pins, userPrefix: in.BranchPrefix,
+		checks: stale, steps: append(pre, post...), skipped: r.route.SkippedSteps(sp.target), pins: pins, env: env, userPrefix: in.BranchPrefix,
 	})
 	if err != nil {
 		return TargetPlan{}, fmt.Errorf("render the PR: %w", err)

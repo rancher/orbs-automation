@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -47,6 +48,7 @@ type previewInput struct {
 	steps      []bump.StepRef      // the steps that run around the write for this branch, in order, with their phase
 	skipped    []bump.StepRef      // the steps the producer's team does not let gero run, which the body lists
 	pins       []Companion         // the releases of pinned modules this bump takes with it, which the body says why
+	env        map[string]string   // what the steps run in, which the body says
 	userPrefix string              // the user's branchPrefix setting, which replaces the project's whole
 }
 
@@ -243,6 +245,13 @@ func changes(in previewInput) string {
 	}
 	for _, ref := range in.steps {
 		lines = append(lines, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")
+	}
+	if len(in.env) > 0 {
+		pairs := make([]string, 0, len(in.env))
+		for _, name := range slices.Sorted(maps.Keys(in.env)) {
+			pairs = append(pairs, "`"+name+"="+in.env[name]+"`")
+		}
+		lines = append(lines, "- The steps ran with "+strings.Join(pairs, ", "))
 	}
 	for _, c := range in.pins {
 		lines = append(lines, "- `"+c.Module+"` goes to "+c.Tag+", which "+c.RequiredBy+" requires")

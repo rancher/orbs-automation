@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"sync"
@@ -34,6 +35,23 @@ type ModuleProber interface {
 type Probers struct {
 	Images  Prober
 	Modules Modules
+	// Go is the list of Go releases, which names the newest patch of a minor for a
+	// go.mod that pins no more than go 1.26 (bump.GoReleases). Nil means none.
+	Go GoReleases
+}
+
+// GoReleases is the list of Go releases.
+type GoReleases interface {
+	NewestPatch(ctx context.Context, minor string) (string, error)
+}
+
+// NewestPatch names the newest stable patch of a Go minor, such as go1.26.10, from
+// the list of Go releases.
+func (p Probers) NewestPatch(ctx context.Context, minor string) (string, error) {
+	if p.Go == nil {
+		return "", errors.New("there is no list of Go releases")
+	}
+	return p.Go.NewestPatch(ctx, minor)
 }
 
 // Exists looks for an image in a registry.

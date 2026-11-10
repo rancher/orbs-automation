@@ -142,8 +142,12 @@ type TargetPlan struct {
 	Downgrade bool          `json:"downgrade,omitempty"` // the release is older than what the consumer holds
 	Blockers  []string      `json:"blockers,omitempty"`
 	Warnings  []string      `json:"warnings,omitempty"`
-	Error     string        `json:"error,omitempty"`   // why a failed target could not be checked
-	Preview   *Preview      `json:"preview,omitempty"` // what a run would write; none when nothing would be
+	// Env is the environment the steps and strategies of the target's edits run in,
+	// worked out for the branch: the toolchain its go.mod pins, for one. It is only
+	// worked out for a target that needs a PR.
+	Env     map[string]string `json:"env,omitempty"`
+	Error   string            `json:"error,omitempty"`   // why a failed target could not be checked
+	Preview *Preview          `json:"preview,omitempty"` // what a run would write; none when nothing would be
 	// Result is what a run did for this target: set only by Ship, and only for a
 	// target that was ready.
 	Result *TargetResult `json:"result,omitempty"`
@@ -255,6 +259,9 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	res, err := resolve(ctx, ws, in)
 	if err != nil {
 		return Plan{}, resolution{}, err
+	}
+	if releases, ok := prober.(bump.GoReleases); ok { // the real prober has the list of Go releases
+		res.route.GoReleases = releases
 	}
 	sel, err := res.specs(in)
 	if err != nil {

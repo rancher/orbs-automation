@@ -2,6 +2,7 @@ package ship
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -189,6 +190,19 @@ func (h *humanSink) targetChecked(t *domain.TargetPlan) {
 	h.targets = append(h.targets, *t)
 }
 
+// envText is the env of a target as one text, "A=b, C=d" in the order of the names,
+// as a list of one so branches that have the same are grouped; none for no env.
+func envText(env map[string]string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	pairs := make([]string, 0, len(env))
+	for _, name := range slices.Sorted(maps.Keys(env)) {
+		pairs = append(pairs, name+"="+env[name])
+	}
+	return []string{strings.Join(pairs, ", ")}
+}
+
 // artifactRow is what the table of targets says of one artifact of a target: whose
 // release it is, what the branch holds of it, what it would, and where that stands.
 type artifactRow struct {
@@ -249,6 +263,10 @@ func (h *humanSink) endTargets() {
 	}
 	h.out.EndTable()
 	h.inTargets = false
+	// What the steps run in, for the branches that it is the same for.
+	for _, g := range groupTargets(h.targets, func(t domain.TargetPlan) []string { return envText(t.Env) }) {
+		h.out.Line(fmt.Sprintf("  %s (%s): %s", h.label("env"), strings.Join(g.branches, ", "), g.text))
+	}
 	for _, g := range groupTargets(h.targets, func(t domain.TargetPlan) []string { return t.Blockers }) {
 		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  blocked (%s): %s", strings.Join(g.branches, ", "), g.text)))
 	}

@@ -190,3 +190,25 @@ func TestRenderTextTheDestinationSaysWhoseReleaseEachEntryHolds(t *testing.T) {
 	assert.Contains(t, out, "v2.14: rancher/rancher (lasso) could not be read: no such file")
 	assert.Equal(t, 1, strings.Count(out, "Destination"), "one heading")
 }
+
+func TestRenderTextSaysWhatTheStepsRunInForEachGroupOfBranches(t *testing.T) {
+	p := previewPlan()
+	second := p.Targets[0]
+	second.Branch, second.Line = "release/v2.14", "v2.14"
+	third := p.Targets[0]
+	third.Branch, third.Line = "main", "v2.16"
+	p.Targets[0].Line = "v2.15"
+	p.Targets[0].Env = map[string]string{"GOTOOLCHAIN": "go1.26.10", "GOFLAGS": "-mod=mod"}
+	second.Env = map[string]string{"GOTOOLCHAIN": "go1.26.10", "GOFLAGS": "-mod=mod"}
+	third.Env = map[string]string{"GOTOOLCHAIN": "go1.27.1"}
+	p.Targets = append(p.Targets, second, third)
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "env (v2.15, v2.14): GOFLAGS=-mod=mod, GOTOOLCHAIN=go1.26.10", "the branches that run in one are one line, with the names in order")
+	assert.Contains(t, out, "env (v2.16): GOTOOLCHAIN=go1.27.1")
+}
+
+func TestRenderTextHasNoEnvLineWhenNoTargetHasAnEnv(t *testing.T) {
+	assert.NotContains(t, renderText(previewPlan(), false), "env (")
+}
