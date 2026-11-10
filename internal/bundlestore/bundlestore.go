@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundle"
+	"github.com/rancher/orbs-automation/internal/bundle/embedded"
 	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
 )
 
@@ -151,9 +152,46 @@ func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 
 // Load is the bundle to use with no request made: a cached bundle when it is of a
 // newer release than the gero's own on the channel, and the embedded bundle in every
-// other case.
+// other case. The cache is the result of an earlier Fetch, and is never refreshed
+// here, so it is used however old it is. A gero that is not a release has no release
+// to be newer than, and takes the embedded bundle.
 func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
-	return Loaded{}, nil
+	now := r.now()
+	own := ownRelease(req.GeroVersion)
+	note := ""
+	if cached, have, _ := r.Cache.Read(); have && newerThan(cached.Tag, own) && fitsChannel(cached.Tag, own, req.Channel) {
+		l, err := fromCache(cached, now)
+		if err == nil {
+			return l, nil
+		}
+		note = fmt.Sprintf("the cached bundle of %s is not readable (%v); using the embedded bundle", cached.Tag, err)
+	}
+	l, err := r.embedded(own)
+	l.Source.Note = note
+	return l, err
+}
+
+// embedded is the bundle compiled into the binary, for the gero of release own.
+func (r *Resolver) embedded(own string) (Loaded, error) {
+	data := r.Embedded
+	if data == nil {
+		data = embedded.Bytes()
+	}
+	h, fsys, err := bundle.Parse(data)
+	if err != nil {
+		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+	}
+	return Loaded{Header: h, FS: fsys, Source: Source{Embedded: true, Tag: own}}, nil
+}
+
+// newerThan is whether the release tag is newer than the gero's own. A gero with no
+// release of its own has nothing a cached bundle could be newer than.
+func newerThan(tag, own string) bool {
+	if own == "" {
+		return false
+	}
+	cmp, ok := assetfetch.CompareVersions(tag, own)
+	return ok && cmp > 0
 }
 
 func (r *Resolver) now() time.Time {
@@ -338,6 +376,12 @@ func ageString(d time.Duration) string {
 // and gero doctor: the release and how old the copy is, such as "bundle v0.5.0, 3
 // hours old".
 func (s Source) Describe() string {
+	if s.Embedded {
+		if s.Tag == "" {
+			return "embedded bundle (a build that is not a release)"
+		}
+		return "embedded bundle " + s.Tag
+	}
 	if s.File != "" {
 		return fmt.Sprintf("bundle file %s (%s)", s.File, s.Tag)
 	}
