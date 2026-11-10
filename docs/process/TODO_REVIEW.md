@@ -66,25 +66,25 @@ I would also fix these in place, with no list entry: the `TODO(release-state)` c
 
 ### Domain 2. Chain tracing: read what a repo holds, walk the hops
 
-**Proposed: BV1 for the reads and the walk; AV1 for the stage check.** PHASES puts "reading a commit or branch holding" and the multi-hop walk in the v1.0.0 chain stream. The stage check is a v1.x check over the chain.
+**Proposed: BV1 for the reads and the walk; AV1 for the stage check.** (Decided: Pre-V1 for all of it.) PHASES puts "reading a commit or branch holding" and the multi-hop walk in the v1.0.0 chain stream. The stage check is a v1.x check over the chain.
 
 | IDs | Work | Size |
 |---|---|---|
 | D01, T09 | Read a commit or branch holding at a ref (the engine skips both kinds today) | M |
 | D06 | Read the `lock.yaml` pin at a ref and compare it with the head of the stage's branch | M |
 | A06, T10 | `dockerfile` format for the update engine (`ErrFormatNotBuilt`) | M |
-| D02, C20, T11 | Cycle-safe multi-hop walk, tree output and `--depth` in `lines resolve` and `repo status` | L |
-| D03, T13 | Check a held tag's stage against the release team's rule (**AV1**) | M |
+| D02, C20, T11 | Cycle-safe multi-hop walk, tree output and `--depth` in `lines resolve` and `repo status`. Reshaped by DEC-8: the walk follows each project's own holdings by line and never assumes Assets and Charts. Before v2.16 Rancher holds a charts branch directly, from v2.16 the commit comes through the Assets image, and some components touch neither | L |
+| D03, T13 | Check a held tag's stage against the release team's rule (Pre-V1, by your call; PHASES had it in v1.x) | M |
 | D05 | Confirm the pre-v2.16 key is `CHART_DEFAULT_BRANCH` in `package/Dockerfile` and find the file for v2.16 and later | S |
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-7 | D07: is a `{since, until}` range enough to say which lines a holding covers? | Yes, keep it | |
-| DEC-8 | D09: does the commit alone answer "is this chart version in this Assets tag"? | Commit alone is the cheap check; reading `release.yaml` at it is the precise one, later | |
+| DEC-7 | D07: is a `{since, until}` range enough to say which lines a holding covers? | Yes, keep it | Yep |
+| DEC-8 | D09: does the commit alone answer "is this chart version in this Assets tag"? | Commit alone is the cheap check; reading `release.yaml` at it is the precise one, later | If you mean the commit hash that we trace from the Assets image tag back to the Charts repo, YES. Not all chains go thru Assets image (pre 2.16) and not all chains go thru Assets+Charts (non- chart things). |
 
 For the release team, not for you (T08): how the Rancher key and `lock.yaml` pin are read, and how a BRO tag maps to a chart version (D08).
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Pre-V1
 
 ---
 
@@ -95,14 +95,18 @@ For the release team, not for you (T08): how the Rancher key and `lock.yaml` pin
 | IDs | Work | Size |
 |---|---|---|
 | E01 ★ | A `chartVersion` scheme in `tagscheme` (Valid, LineOf, Latest, IsStable, Compare), reading the part after `+up` | M |
-| D04, A06, T12 | Real `chartsPackageBump` Apply (edits packages in `rancher/charts`) and BRO tag to chart version | L |
+| New ★ | Read the team's existing bash tooling for charts PRs and write down what it does and per line (no code). Where it lives is not in this repo | S, no code |
+| D04, A06, T12 | Real `chartsPackageBump` Apply: an abstraction of that tooling that replicates the team's process and can serve others through `with:` config; plus BRO tag to chart version. Dry run beside the bash first (PHASES) | L |
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-9 | C33: how does a strategy report the value it wrote? | Add a field to `bump.Result` when the strategy is built | |
-| DEC-10 | D10: does the charts bump differ by line? | Answer when D04 is built | |
+| DEC-9 | C33: how does a strategy report the value it wrote? | Add a field to `bump.Result` when the strategy is built | Match other strategy patterns to report the value(s) wrote. (The others report through `Result.Changes`, each a `Change{Path, Description, From, To}`, so no new field is needed.) |
+| DEC-10 | D10: does the charts bump differ by line? | Answer when D04 is built | Yes and no. Our team uses it a very specific way - and we can "port from bash" the existing behaviour potentially. |
 
-**Domain milestone, your call:** ______
+Overall what is important for this item is that our team has tooling to handle Charts PR generation in bash already.
+So the strategy will be an abstraction of that process/tooling which can replicate our process and hopefully support others via config.
+
+**Domain milestone, your call:** Pre-V1
 
 ---
 
