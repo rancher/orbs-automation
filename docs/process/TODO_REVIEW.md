@@ -179,9 +179,9 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-19 | E10: is a new line added by hand or by a command? | By hand; the Kubernetes range is manual either way | |
+| DEC-19 | E10: is a new line added by hand or by a command? | By hand; the Kubernetes range is manual either way | By-hand. Maybe a moonshoot goal to automate new lines and branching stuff. |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Post-V1
 
 ---
 
@@ -201,15 +201,15 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-20 | C10, C11, T62: which steps of `ship` are used alone, as commands (push-branch, open-PR, bump-commit, close-superseded) | None until a second caller needs them | |
-| DEC-21 | C12, T63: `repo branch --from <ref>` | Add when asked; WISH | |
-| DEC-22 | C13: annotated or signed tags | Stay lightweight | |
-| DEC-23 | C22: a "where does shell's v2.15 go" command | Drop; `ship` covers it | |
-| DEC-24 | C14, C15, C25: `@` shorthand, sharing `resolvePushTarget`, a config knob for a step's commit | Defer all three until something needs them | |
-| DEC-35 | C29, C30: should the default PR title identify the tooling, and should steps pick a toolchain (they use the machine's own) | Neutral title stays; no toolchain selection | |
-| DEC-36 | D19, D20, D21: the image check (`repo images exist`) is HEAD-only, existence-only, with a fixed 20 s timeout and no retry | Leave as is; revisit if a registry ignores HEAD or flakes | |
+| DEC-20 | C10, C11, T62: which steps of `ship` are used alone, as commands (push-branch, open-PR, bump-commit, close-superseded) | None until a second caller needs them | Defer until second caller |
+| DEC-21 | C12, T63: `repo branch --from <ref>` | Add when asked; WISH | WISH; when asked |
+| DEC-22 | C13: annotated or signed tags | Stay lightweight | Drop; revisit later if asked |
+| DEC-23 | C22: a "where does shell's v2.15 go" command | Drop; `ship` covers it | Drop - feels not-needed. |
+| DEC-24 | C14, C15, C25: `@` shorthand, sharing `resolvePushTarget`, a config knob for a step's commit | Defer all three until something needs them | yes, defer. Only if asked.  |
+| DEC-35 | C29, C30: should the default PR title identify the tooling, and should steps pick a toolchain (they use the machine's own) | Neutral title stays; no toolchain selection | Nope. We'll assume each repo running gero in their CI provides go tooling. Or if running in our main repo we will us latest go. |
+| DEC-36 | D19, D20, D21: the image check (`repo images exist`) is HEAD-only, existence-only, with a fixed 20 s timeout and no retry | Leave as is; revisit if a registry ignores HEAD or flakes | Leave as is. |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** AV1
 
 ---
 
@@ -224,7 +224,7 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-25 | E02: how a view names a component with no tracing config | Decide when the view is designed | |
+| DEC-25 | E02: how a view names a component with no tracing config | Decide when the view is designed | Agreed - decide as building |
 
 **Domain milestone, your call:** ______
 
@@ -245,9 +245,9 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-26 | A08, A11: when to freeze names | Once WorkflowsConfig (Domain 5) and the Charts shapes (Domain 3) are done, since both add kinds | |
+| DEC-26 | A08, A11: when to freeze names | Once WorkflowsConfig (Domain 5) and the Charts shapes (Domain 3) are done, since both add kinds | Agreed - tho not sure D3 will add new shapes/kinds.  |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** he v1.0.0 gate needs the names settled as `gero/v1` and the real configs validated in CI (BV1). The rest is AV1.
 
 ---
 
@@ -265,9 +265,9 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-27 | B04: run doctor checks in parallel | No; drop unless it gets slow | |
+| DEC-27 | B04: run doctor checks in parallel | No; drop unless it gets slow | Only if asked |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** the exit-code helper BV1 (the gate names it); the rest AV1
 
 ---
 
@@ -284,10 +284,10 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-28 | B05: a paste-safe `doctor` mode | WISH | |
-| DEC-29 | B14, T26: an online newer-release check | Yes, behind `--online` | |
+| DEC-28 | B05: a paste-safe `doctor` mode | WISH | WISH |
+| DEC-29 | B14, T26: an online newer-release check | Yes, behind `--online` | Agreed |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** AV1
 
 ---
 
@@ -297,16 +297,16 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | IDs | Work | Milestone |
 |---|---|---|
-| B08, T29 | Complete the project argument of `gero cd` | AV1 |
+| B08, T29 | Auto-complete the project argument of `gero cd` | AV1 |
 | B15 ★, B16 ★, B18 ★ | REPL `help`, a one-line unknown-command hint, `!<cmd>` | WISH |
 | B21 ★ | Opt-in prompt prefix when `GERO_REPL` is set | WISH |
 | B06 ★, B07 ★ | Nushell, elvish, Windows PowerShell 5; tests that run the scripts in real fish and pwsh | WISH |
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-30 | B17: more REPL prompt placeholders | Only if asked | |
+| DEC-30 | B17: more REPL prompt placeholders | Only if asked | Only if asked |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Mix
 
 ---
 
@@ -316,14 +316,14 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | IDs | Work | Milestone |
 |---|---|---|
-| T23 | Confirm a release end to end: `cosign` in the CI image, bundles on the release, `doctor self-update` installs it (needs a real run) | BV1 |
-| T24 | Confirm a pushed tag starts the release workflow of a real repo (needs a real run) | BV1 |
+| T23 | Confirm a release end to end: `cosign` in the CI image, bundles on the release, `doctor self-update` installs it (needs a real run) | DONE |
+| T24 | Confirm a pushed tag starts the release workflow of a real repo (needs a real run) | DONE |
 | B10 ★ | A test or CI step that verifies a real `.sigstore.json` bundle | AV1 |
-| B11, T71 | `self-update --version` to install or roll back | WISH |
-| B12, T72 | Give `self-update` a `trusted_root.json` by file | WISH |
-| B13 ★ | Windows build | WISH, or reword as a non-goal |
+| B11, T71 | `self-update --version` to install or roll back | Only if ASKED |
+| B12, T72 | Give `self-update` a `trusted_root.json` by file | Only if ASKED |
+| B13 ★ | Windows build | DROP (unless asked) |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Mix
 
 ---
 
@@ -333,17 +333,17 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 
 | IDs | Work | Milestone |
 |---|---|---|
-| B24, T19 | `test/integration` module that runs the built binary, plus a CI job | BV1 |
-| B26, T21 | One CI run of `go test ./...` with a hostile environment | BV1 |
-| C24, T20 | Integration test that pushes to a scratch repo (needs the tier) | AV1 |
+| B24, T19 | `test/integration` module that runs the built binary, plus a CI job | DROP |
+| B26, T21 | One CI run of `go test ./...` with a hostile environment | DROP |
+| C24, T20 | Integration test that pushes to a scratch repo (needs the tier) | DROP |
 | B25, T64 | Golden files for command output | WISH |
 | A20 ★ | A pty harness for the REPL and prompts (needs a dependency decision) | WISH |
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-31 | A21: a fake GitHub server library or hand-rolled `httptest` handlers | Hand-rolled, as the unit tests already do; decide when T19 is built | |
+| DEC-31 | A21: a fake GitHub server library or hand-rolled `httptest` handlers | Hand-rolled, as the unit tests already do; decide when T19 is built | Only build as needed. |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Mix
 
 ---
 
@@ -360,7 +360,7 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 |---|---|---|---|
 | DEC-32 | D11, T54: should `auto` prefer a newer bundle to a local copy? | No; `--config-source` already picks one | |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** DROP - this becomes moot when we compile in the bundle matching the build. Fetching is only for updated bundles or using old bundle with newer build.
 
 ---
 
@@ -377,7 +377,7 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 |---|---|---|---|
 | DEC-33 | A29: supported, or only tolerated | Only tolerated, which is why the work is WISH | |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Only upon Request (Like half way between wish and drop)
 
 ---
 
@@ -393,7 +393,7 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 |---|---|---|---|
 | DEC-34 | Do any of the C01–C09 improvements get built? | None, until a repo needs one; close the questions as "not planned" | |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** DROP
 
 ---
 
@@ -408,7 +408,7 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 | T25 | Correct the specs that no longer match the code | S, no code |
 | E04 | Who adds a line in `rancher-assets` (the config says `managedBy: release-team`) | for the release team |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Drop this item.
 
 ---
 
@@ -424,9 +424,18 @@ Only the first one relates to this Domain - the second one is a "DX Improvmenet 
 | T74 | Let a clone's fork have a repository name other than the upstream's |
 | F01, T68 | A go-git client for the work that runs `git` |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** WISH
 
 ---
+
+## Recorded after the review
+
+* **Domain 8:** After V1. **Domain 18:** T16, T15 and E04 are dropped; T25 is kept in the sense that its examples are fixed by this rebuild and it needs no list entry.
+* **Domains 14, 15, 17:** dropped as marked (integration tier, hostile-environment job, scratch-repo push test; the bundle refresh setting, the rate-limit question and "newer bundle wins" once the bundle is embedded; the `build-tags` and `semver check` improvements). Domain 15's drop holds only if the embedded-bundle item in Domain 1 is built.
+* **T23 and T24** are done, by the maintainer's word, and are not on the new TODO.
+* **"Only if asked"** items form their own list after the wishlist, named **On request**.
+* **The docs follow the drops:** PHASES, TESTING, PROJECT_LAYOUT, DEPENDENCY_POLICY, PUSH_TO_REPO, BRANCH_TAGS and CHECK_SEMVER no longer promise the integration tier, the parity tests, the process-docs review or the opt-in improvements as planned work.
+* **Not yet done, for you to approve:** fold the answered decisions into the specs (the Open questions of CI_SHIP, APP_CONFIG, CENTRAL_BUNDLE, IMAGES_EXIST, PUSH_TO_REPO and LINES_RESOLVE still list questions this review answered), and clear the `Not built yet` bullets of the dropped bundle items.
 
 ## Counts
 

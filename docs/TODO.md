@@ -1,149 +1,167 @@
 # TODO
 
-What is open, in pieces you can pick up. Each item is checked against the code and the specs' **Not built yet** lists, and is written to become one issue: it starts with a verb, names one result, and says what makes it done. An item that is too big for one issue says so and is split before it is taken. The plan by milestone is [PHASES](PHASES.md), the detail of each part is in its [spec](specs/README.md), and [contributing](contributing/README.md) says how to work on the code and docs.
+The work that is accepted, by milestone. Nothing is here that has not been checked against the code and decided. The milestones are those of [PHASES](PHASES.md); the detail of each part is in its [spec](specs/README.md).
 
-When an item is built, delete it here and delete its line from the spec's **Not built yet** list, in the same change.
+**Reading an item.** It starts with a verb, names one result, and says what makes it done. The letter is its size: **S** is hours, **M** a day or two, **L** includes design and may need a spec first. *(no code)* needs knowledge of the repos or the release process, and *(needs a real run)* cannot be shown by a test. To take one, open an issue that names it so we do not collide.
 
-Each item has a size: **S** is a few hours with the spec, **M** a day or two, **L** is design as well as code, and starts with a spec if there is none. *(no code)* needs knowledge of the repos or the release process, not Go. *(needs a real run)* cannot be shown by a test. To take one, open an issue naming it so we do not collide.
+**Keeping it true.** When an item is built, delete it here and delete its line from the spec's **Not built yet** list, in the same change.
 
-## Needed for v1.0.0
+| Milestone | Means |
+|---|---|
+| [Before V1](#before-v1) | Needed for v1.0.0 |
+| [After V1](#after-v1) | The v1.x releases, soon after |
+| [Before V2](#before-v2) | Needed for the v2.0.0 gate |
+| [Moonshot and wishlist](#moonshot-and-wishlist) | Wanted, with no date |
+| [On request](#on-request) | Built only if someone asks |
+
+---
+
+## Before V1
 
 ### Ship from CI
 
-Replace the `push-to-rancher` scripts of `scc-operator` and `shell` with `gero`. [CI_SHIP](specs/CI_SHIP.md)
+`gero ci:ship` replaces the push scripts of `scc-operator` and `shell`. It runs for one release event, as the final step of that repo's release workflow, over the checkouts the workflow provides. [CI_SHIP](specs/CI_SHIP.md)
 
-* **L: Build the `gero ci:ship` command.** Register it as CI-only and run the bump loop of `gero ship` as the bot: the bot identity from `GERO_BOT_USER`, and `cigate.RequireCrossRepoToken` called before work. Done when a test drives it end to end against fakes.
-* **M: Push with the workflow's token from a temporary clone.** The clone is a `Workspace` and the token is a one-shot credential for `gitcli.Push` and `PushTag`. Done when `ci:ship` pushes without the engineer's own credentials.
-* **S: Write the markdown step summary and put the workflow run URL in the PR body** of a `ci:ship` run.
-* **M: Run steps `from: producer` and `from: central`.** `steprun` refuses both. Done when a step can run a script of the producer's checkout or one from the bundle, in `ci:ship` only. [APP_CONFIG](specs/APP_CONFIG.md)
-* **M: Let `ci:*` commands run without a checkout of the central config.** Both CI workflows point `GERO_CENTRAL_CONFIG_DIR` at a checkout. Decide whether a job may use the bundle of the installed release, and build it. [CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)
+* **L: Build `gero ci:ship`.** Register it as CI-only. For one release event it runs the bump loop of `gero ship` as the bot on every active consumer branch of that release, and calls `cigate.RequireCrossRepoToken` before any write. A push that is rejected because the branch moved fails the run, with no retry. Done when a test drives a release event through it against fakes, including the rejected push.
+* **M: Make `ci:ship` work in the checkouts the workflow gives it, and push without the engineer's credentials.** Repositories come from `repos.paths.<slug>`. Settle at the build whether the push needs a credential of ours or the checkout's cross-repo token is enough; if a workflow step uses `gero repo clone` instead of a checkout, that command needs an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only). Done when a test workflow pushes a bump branch with no credentials of an engineer.
+* **S: Write the step summary and put the workflow run URL in the PR body.** One report model with two renderings: a fuller one for the job log and a shorter one for comments. Done when a run writes `GITHUB_STEP_SUMMARY` and the PR body names the run.
+* **M: Run steps `from: producer` and `from: central`.** `steprun` refuses both. Done when a step runs a script from the producer's checkout or from the bundle, in `ci:ship` only. [APP_CONFIG](specs/APP_CONFIG.md)
+* **M: Let a `ci:*` command load the bundle that matches its own version.** From orbs-automation a job uses the local `config/`. From any other repo it uses the bundle of the `gero` version it runs, not the newest release. Done when a `ci:*` command with no config directory loads the bundle of its own version. [CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)
+* **M: Embed the default config bundle in the binary, and keep it as a release asset too,** so a CI job needs only the binary. Starts with a short design: its size, which config goes in, and how a newer or older fetched bundle overrides it. Done when `gero` with no checkout and no network loads the embedded bundle.
+* **S: Print the preflight line that names workstation signs under a forced CI context,** in `gero ship` and `ci:ship`. It only warns. `clicfg.WorkstationSigns` has no caller. Done when forcing the CI context on a workstation prints the line. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 * **M: Add a workflow to `scc-operator` and `shell` that installs a pinned, signed `gero` and runs `ci:ship`,** beside the bash script, then in place of it. Needs `ci:ship`.
-* **S (needs a real run): Verify the `auth status` 403 path against a real installation token.** It is tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
+* **S (needs a real run): Check the `auth status` 403 path against a real installation token.** It is tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
-### The chain
+### Tracing the chain
 
-`kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`, one `gero ship` for each hop.
+One chain runs `kuberlr-kubectl`, BRO, `rancher/charts`, `rancher/rancher`. Chains differ by line: before v2.16 Rancher holds a charts branch directly, from v2.16 the commit comes through the Assets image, and some components touch neither. Every item below follows each project's own holdings by line and assumes no fixed path. [CHAIN_TRACING](specs/CHAIN_TRACING.md)
 
-* **S (no code): Answer the open questions of [CHAIN_TRACING](specs/CHAIN_TRACING.md)** with the release team: the Rancher key for the charts branch before v2.16, how to read the commit pinned in `lock.yaml`, and how a BRO tag maps to a chart version. Done when each answer is in the spec. The two items below need them.
-* **M: Read a commit or a branch that a repo holds at a ref.** The config models both kinds and validates them; `resolveHolding` handles only releases. Includes the `lock.yaml` read. Done when `gero repo status` and `gero lines resolve` report what such a holding holds. [CHAIN_TRACING](specs/CHAIN_TRACING.md), [UPDATE_ENGINE](design/UPDATE_ENGINE.md)
-* **S: Let the update engine read and write the `dockerfile` format.** It returns `ErrFormatNotBuilt`. Done when the refusal test is replaced by a read and write test. [UPDATE_ENGINE](design/UPDATE_ENGINE.md)
-* **L: Walk several hops in `gero lines resolve`,** with the tree and `--depth`. Needs the reader above. [LINES_RESOLVE](specs/LINES_RESOLVE.md)
-* **L: Build the `chartsPackageBump` strategy,** so BRO's tag becomes a charts bump. It is registered as a stub that stops a run before it writes. Done when the stub test is replaced by a test of a real bump. [CHAIN_TRACING](specs/CHAIN_TRACING.md)
-* **M: Check a held tag's stage against the release team's rule.** Done when a mismatch is reported by `gero repo status` or the walk. [CHAIN_TRACING](specs/CHAIN_TRACING.md)
-* **S: Make `gero config validate` and `gero doctor` build the update engine and report its errors,** so a strategy that cannot run fails there and not at `ship`. [APP_CONFIG](specs/APP_CONFIG.md)
-* **S (no code): Check the config against the repos.** Confirm charts' stable branch names (`release-v2.X`) and find the package of `ob-team-charts`, which is left out until it is known.
+* **M: Read a commit or a branch that a repo holds, at a ref.** The config models and validates both kinds; the engine skips them. Done when `gero repo status` and `gero lines resolve` report what such a holding holds. [UPDATE_ENGINE](design/UPDATE_ENGINE.md)
+* **M: Read the commit pinned in `lock.yaml` at a ref and compare it with the head of the stage's branch.** Done when `repo status` says whether the newest Assets tag was built from today's charts branch.
+* **M: Let the update engine read and write the `dockerfile` format.** It returns `ErrFormatNotBuilt`, and the pre-v2.16 Rancher holding uses it. Done when the refusal test is replaced by a read and a write test.
+* **S: Confirm where Rancher holds the charts branch.** Before v2.16 it is `CHART_DEFAULT_BRANCH` in `package/Dockerfile`; find the file and key for v2.16 and later. Done when each line's holding names the right file and key and a test reads it.
+* **L: Walk several hops in `gero lines resolve` and `gero repo status`.** The walk is safe on cycles, prints a tree, and takes `--depth`. Done when `ob-team-charts`, `charts` and `rancher` appear as one connected path for a line. [LINES_RESOLVE](specs/LINES_RESOLVE.md)
+* **M: Check a held tag's stage against the release team's rule.** The rule comes from the release team. Done when a mismatch is reported by `repo status` or the walk.
 
-### Confidence in the foundation
+### Charts automation
 
-* **M (no code): Get the process docs reviewed by the release team.** All of them are still drafts. Done when each says reviewed, with a date and the reviewer. [process](process/README.md)
-* **M: Rename the config kind from `gero/v1alpha2` to `gero/v1`** once the field names are settled. Done when the schemas, `config/`, the tests and [APP_CONFIG](specs/APP_CONFIG.md) agree.
-* **S: Add the exit-code helper,** so a usage or validation error exits 2. Done when a typed error maps to 2 in `Execute` and each command class has a test. [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md), [DOCTOR](specs/DOCTOR.md)
-* **M: Add the integration test tier,** a `test/integration` module that runs the built binary, and a CI job for it. Done when one black-box test runs and the module adds nothing to the root `go.mod`. [TESTING](specs/TESTING.md)
-* **M: Add an integration test that pushes to a scratch repository.** Needs the tier. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
-* **S: Run `go test ./...` once in CI with a hostile environment** (a junk `HOME`, `GERO_*`, `GITHUB_TOKEN`, `XDG_*`). Done when a test that reads the machine fails the job. [TESTING](specs/TESTING.md)
-* **S: Add a Go test that validates every file of `config/` against the JSON Schemas.** Needs a validator module. [APP_CONFIG](specs/APP_CONFIG.md#json-schemas)
-* **S (needs a real run): Confirm a release end to end:** `cosign` runs in the `ci-image/go1.27` container, the bundles land on the release, and `gero doctor self-update` installs it. [SELF_UPDATE](specs/SELF_UPDATE.md)
-* **S (needs a real run): Confirm a pushed tag starts the release workflow** of a real repo, for `gero repo tag --push`. [TASK_COMMANDS](specs/TASK_COMMANDS.md)
-* **S (no code): Correct the specs that no longer match the code.** `REPO_STATUS` names a `TODO(releasetag)` marker that does not exist. `BRANCH_TAGS` lists the default short commit as open, and the code settles it. `PROJECT_LAYOUT` asks where generated code goes, and `generated/` and `tools/` answer it. `CENTRAL_BUNDLE` asks about rate limits, and `bundlestore` reports `ErrRateLimited`.
+BRO's release becomes a PR in `rancher/charts`. The team has bash tooling for this today, and the strategy is an abstraction of it. [CHAIN_TRACING](specs/CHAIN_TRACING.md)
 
-## Good places to start
+* **M: Add the `chartVersion` scheme to `internal/tagscheme`.** It reads the part after `+up` and answers Valid, LineOf, Latest, IsStable and Compare. Done when the `rancher-charts` stream resolves its newest tag instead of failing with "scheme chartVersion is not built".
+* **S (no code): Read the team's bash tooling for charts PRs and write down what it does, by line.** The maintainer provides it when this starts. Done when each behaviour it has is in a spec section or a test case.
+* **L: Build the `chartsPackageBump` strategy.** It replicates the team's process, takes its settings from `with:` so others can use it, turns BRO's tag into a charts bump, and reports what it wrote through `Result.Changes` like the other strategies. Done when the stub test is replaced by a test of a real bump and a dry run beside the bash tooling agrees with it.
 
-Small and bounded. None blocks anything else.
+### The config contract and the foundation
 
-### Commands
+* **M: Freeze the field names of the kinds that exist, and rename `gero/v1alpha2` to `gero/v1`.** Done when the schemas, `config/`, the tests and [APP_CONFIG](specs/APP_CONFIG.md) agree.
+* **S: Validate every file of `config/` against the JSON Schemas in a Go test.** Needs a validator module, which needs an entry in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md). Done when an invalid file in `config/` fails `go test`.
+* **S: Make `gero config validate` and `gero doctor` build the update engine and report its errors,** so a strategy that cannot run fails there and not at `ship`. Done when an unbuilt strategy named in config is reported by both.
+* **S: Add the exit-code helper.** A usage or validation error exits 2. Done when a typed error maps to 2 in `Execute` and each command class has a test. [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md), [DOCTOR](specs/DOCTOR.md)
 
-* **S: Make `gero doctor --online` warn when a newer `gero` release exists.** Done when a stand-in releases source drives a test. [SELF_UPDATE](specs/SELF_UPDATE.md)
-* **S: Add `--json` to `gero config validate`,** a list of problems with the same exit code as text. [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md)
-* **S: Make `gero config resolve repos -v` log the scanned directories, the remotes read and why each candidate matched or not.** [WORKSPACE](specs/WORKSPACE.md)
-* **S: Complete the project argument of `gero cd` from the config.** [SHELL_SETUP](specs/SHELL_SETUP.md)
-* **S: Add a `gero doctor` check that the shell block is installed and current.** [SHELL_SETUP](specs/SHELL_SETUP.md)
+---
 
-### `ship` and `repo status`
+## After V1
 
-* **S: Find an existing bump PR by its marker in `gero ship`,** not by listing the newest 100 open PRs. On a busy base such as `main` of `rancher/rancher` an older PR of the bump is missed, and `ship` only warns. Done when a test with more than 100 open PRs finds it. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
-* **S: Print the preflight line that names workstation signs under a forced CI context** in `gero ship`. `clicfg.WorkstationSigns` has no caller. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
-* **S: Print the preflight line in `gero repo branch` and `gero repo tag`,** which follow the other rules and do not print it. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
-* **M: Show in `gero repo status` how many releases a consumer is behind.** Needs the tags between two releases (`TODO(release-state)`). [REPO_STATUS](specs/REPO_STATUS.md)
-* **M: Show in `gero repo status` the open bump PR of a consumer that is behind,** as a tier of its own using the marker lookup. [REPO_STATUS](specs/REPO_STATUS.md)
-* **S: Show in `gero repo status` the images a release publishes,** using `internal/registry.CheckProject`. [REPO_STATUS](specs/REPO_STATUS.md)
+### Tracking and the reconciler
 
-### Config
+Tracking issues show where each release stands, and `gero ci:reconcile` keeps them true. It runs on a cron, which catches periodic work and drift from people editing issues and PRs across repos, and on `repository_dispatch`, which is nearer to real time. Both are planned together. [METADATA](specs/METADATA.md)
 
-* **S: Raise the `lifecycle-date` warning** when a release is shipped to a line past a lifecycle date. Done when the rule is in `rules.go` and the [CONFIG_SCHEMA](design/CONFIG_SCHEMA.md#warnings) table says so.
-* **S: Warn on holding cycles longer than two projects.** Done when a three-project cycle raises `circular-holding`. [APP_CONFIG](specs/APP_CONFIG.md)
-* **L: Design the opt-in flags of `gero semver check` and `gero repo build-tags`,** such as a SemVer grammar mode and literal prefix matching, then build them with parity tests. The open questions of both specs come first. [CHECK_SEMVER](specs/CHECK_SEMVER.md), [BRANCH_TAGS](specs/BRANCH_TAGS.md)
+* **L: Write and render the state block of a tracking issue:** the part a machine reads and the view a person reads. Done when a fixture issue round-trips and renders.
+* **L: Build `gero ci:reconcile`.** It brings the tracking issues in line with what the repos hold, with its reads and writes of issues, check runs and releases behind an interface of its own, and runs from both triggers. It is a stub today. Done when a fixture-driven test reconciles drift in either direction.
+* **M: Create the `gero/stale` and `gero/superseded` labels on demand and reconcile them.** Done when a superseded PR gains the label and a current one loses it.
+* **M: Honor `gero/hold`.** Check for it before work, so a held line is skipped, with a warning on workstation commands. Done when a held line is skipped and says why.
+* **S: Define the `gero/*` label names once,** as constants the whole tool shares. Done when no label name is written twice.
 
-### Internals
+### Workflow rendering and `VERSION.md`
 
-* **S: Extract one `ui.Confirm`** for `ship`, `repo tag`, `shell install` and `doctor self-update`, which each draw their own `[y/N]`. Done when the four use it. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
-* **M: Hand the logger to every command through the context.** `ship` builds its own in `cmd/`, and the others do not log. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
-* **M: Narrow `ship.Git` and `ship.Remote` to what the tasks call.** Both carry every method any task needs. [PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md)
+A repo provides workflow templates and configs, and `gero` renders them with the RancherLines variables injected, replacing the `automation-core` branch tooling. [APP_CONFIG](specs/APP_CONFIG.md), [CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)
 
-## Later (v1.x and beyond)
-
-Each is a draft or not designed yet. See [PHASES](PHASES.md).
-
-### Tracking issues and the reconciler
-
-[METADATA](specs/METADATA.md), [GITHUB_ACCESS](specs/GITHUB_ACCESS.md), [ARCHITECTURE_DESIGN](ARCHITECTURE_DESIGN.md)
-
-* **L: Write and render the state block of a tracking issue,** the part a machine reads and the view a person reads.
-* **M: Create the `gero/stale` and `gero/superseded` labels on demand and reconcile them.**
-* **M: Honor `gero/hold`:** check for it before work, so a held line is skipped.
-* **L: Build `gero ci:reconcile`,** which brings the tracking issues in line with what the repos hold. It is a stub. Needs the items above and the reconciler's reads and writes of issues, check runs and releases.
-
-### Checks over the chain
-
-[TOOLING_GOALS](design/TOOLING_GOALS.md)
-
-* **L: Check stable readiness:** would a stable Rancher build be valid with what Rancher holds? Needs the multi-hop walk.
-* **M: Check line consistency:** does each hop hold a version of its own line?
-
-### The central bundle and workflows
-
-[CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)
-
-* **M: Add the `WorkflowsConfig` type and schema,** and validate a repo's `gero.yaml` against the allowed kinds. [APP_CONFIG](specs/APP_CONFIG.md)
-* **L: Build `gero workflows sync` and `gero workflows verify`.** Both are stubs. Sync brings the templates and generated chunks into a repo, and verify fails when a copy has drifted. Needs the type above.
-* **M: Generate `VERSION.md` from config.**
-* **S: Send conditional requests when refreshing the bundle,** so an unchanged bundle is not downloaded again.
-* **S: Add a setting for the bundle refresh interval.** `bundlestore.Resolver` takes one; no setting supplies it.
-* **S: Decide whether `auto` should ever prefer a newer bundle to a local copy,** and record the answer in the spec.
+* **M: Add the `WorkflowsConfig` type and schema, and a loader for a repo's `gero.yaml`.** It rejects every other kind, since `WorkflowsConfig` is the only one a target repo holds. Done when a repo's `gero.yaml` loads, and any other kind in it is an error.
+* **L: Build `gero workflows sync` and `gero workflows verify`.** Sync renders a repo's templates and configs with the RancherLines variables, from template and generated chunks in the bundle; verify exits 3 when a copy has drifted. When templates ship, settle the name of `centralConfigDir`. Both are stubs today. Done when sync writes a repo's workflows and verify fails on a changed copy.
+* **M: Generate `VERSION.md` from `branches.lines` and `RancherLines`.** The columns and format are chosen per repo: a `Project` config opts into the ones it wants. Done when a config with two different choices produces two different files, and `verify` detects drift.
 
 ### Lines and lifecycle
 
-* **M: Build `gero lines sync`,** which fetches the SUSE lifecycle page and updates the dates in the lines file, showing the diff first. `internal/lifecycle` already parses the page; nothing calls it. [IMPLEMENTATION](IMPLEMENTATION.md)
+* **M: Build `gero lines sync`.** It fetches the SUSE lifecycle page, updates the dates in the lines file and shows the diff first. `internal/lifecycle` parses the page and nothing calls it. A new line is still added by hand. Done when a changed date on a fixture page produces a reviewed diff.
 * **S: Make `gero doctor` flag drift between the lifecycle dates and the page.** Needs `lines sync`.
-* **M: Enforce `requiresPrerelease` for tags made by hand or by a workflow.** `gero repo tag` enforces it only for its own tags. [IMPLEMENTATION](IMPLEMENTATION.md)
+* **S: Raise the `lifecycle-date` warning** when a release is shipped to a line past a lifecycle date. Done when the rule is in `rules.go` and the [CONFIG_SCHEMA](design/CONFIG_SCHEMA.md#warnings) table says so.
 
-### Doctor
+### Release status and the task commands
 
-Each is one issue. [DOCTOR](specs/DOCTOR.md)
+* **M: Show in `gero repo status` how many releases a consumer is behind.** Count the tags in the line's series newer than the version held. The per-series index belongs in `internal/tagscheme`, and the engine has to hand back the version it found (`TODO(release-state)`). [REPO_STATUS](specs/REPO_STATUS.md)
+* **M: Show in `gero repo status` the open bump PR of a consumer that is behind,** as a tier of its own, reusing `pulls.Service` and the marker lookup. Done when a behind consumer with an open bump PR shows it.
+* **S: Show in `gero repo status` the images a release publishes,** from `registry.CheckProject`, behind an option.
+* **S: Find an existing bump PR by its marker in `gero ship`,** not by listing the newest 100 open PRs (`pulls.DefaultMax`). On a busy base an older PR of the bump is missed. Done when a test with more than 100 open PRs finds it. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
+* **M: Enforce `requiresPrerelease` for tags made by hand or by a workflow.** `gero repo tag` enforces it only for its own tags. Done when a stable tag without a prior prerelease is reported wherever it was made. [IMPLEMENTATION](IMPLEMENTATION.md)
+* **M: Move closing superseded PRs, the plan and the publish steps out of `internal/ship` into `internal/task`.** Behaviour does not change. Done when `ship` calls tasks for each step and its tests still pass. [PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md)
+* **S: Print the preflight line in `gero repo branch` and `gero repo tag`,** which do not print one. Done when both name the acting identity and how it signs. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
-* **S: Check that the token can open pull requests.**
-* **S: Check access to the tracker repo.**
-* **S: Check push access to each fork.**
-* **S: Warn of a clone far behind its upstream.**
+### Checks over the chain
 
-### Other
+Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 
-* **M: Decide which steps of `gero ship` are used alone, and name them.** The candidates are goals, not command names: send a branch, open a PR for a pushed branch, apply a release to one branch and commit it, and close superseded PRs. Decide whether each is needed when one is built. [TASK_COMMANDS](specs/TASK_COMMANDS.md#use-cases-not-yet-commands)
-* **S: Add `--from <ref>` to `gero repo branch`.** [TASK_COMMANDS](specs/TASK_COMMANDS.md)
-* **M: Add golden files under `testdata/` for command output,** which tests compare as strings. Optional. [TESTING](specs/TESTING.md)
+* **L: Check stable readiness:** would a stable Rancher build be valid with what Rancher holds? Needs the multi-hop walk. Done when the answer names what blocks it and how many projects were traced.
+* **M: Check line consistency:** does each hop hold a version of its own line? Done when a hop holding another line's version is reported with its path.
+
+### Config and CLI
+
+* **M: Add `gero config show --resolved`,** which prints the graph with defaults applied. [APP_CONFIG](specs/APP_CONFIG.md)
+* **S: Warn of holding cycles longer than two projects.** Done when a three-project cycle raises `circular-holding`.
+* **M: Add one `ui.Confirm`** for `ship`, `repo tag`, `shell install` and `doctor self-update`, which each draw their own `[y/N]`. Done when all four use it. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
+* **M: Give every command the logger through the context.** `ship` builds its own in `cmd/` and no other command logs. Done when one logger is built and handed down. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
+* **M: Narrow `ship.Git` and `ship.Remote` to what each task calls.** Both carry every method any task needs. Done when each task takes an interface of its own.
+* **S: Add `--json` to `gero config validate` and `--output env` to `gero auth status`.** Done when each renders and exits as the text form does. [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md)
+
+### Doctor and the workstation
+
+* **M: Add the online checks to `gero doctor`:** the token can open PRs, access to the tracker repo, push access to each fork, and a clone far behind its upstream. [DOCTOR](specs/DOCTOR.md)
+* **S: Make `gero doctor --online` warn when a newer `gero` release exists.** Done when a stand-in releases source drives a test. [SELF_UPDATE](specs/SELF_UPDATE.md)
+* **S: Add a `gero doctor` check that the shell block is installed and current.** [SHELL_SETUP](specs/SHELL_SETUP.md)
+* **M: Make `gero config resolve repos -v` log the scanned directories, the remotes read and why each candidate matched or not.** [WORKSPACE](specs/WORKSPACE.md)
+* **S: Complete the project argument of `gero cd` from the config.** [SHELL_SETUP](specs/SHELL_SETUP.md)
+* **M: Verify a real signed release bundle in a test or CI step.** Today the self-update tests use a stand-in verifier. Done when a captured `.sigstore.json` is verified by the real verifier against the real signer identity. [SELF_UPDATE](specs/SELF_UPDATE.md)
+
+---
+
+## Before V2
+
+* **L: Automate "branch for X".** Compose `gero repo branch`, the update of `branches.lines`, `VERSION.md` and the workflow render, in an order settled first. Done when a real Rancher line cut runs through `gero`, which is a gate of v2.0.0. Needs the rendering work above. [IMPLEMENTATION](IMPLEMENTATION.md)
+
+---
+
+## Moonshot and wishlist
+
+**Moonshot**
+
+* **L: Automate adding a new Rancher line and its branches,** end to end. A new line is added by hand until then, since its Kubernetes range is not on the lifecycle page.
+* **L: Write the spec for the dashboard** (its command is `dashboard` or `triage`, still to name), then build it. [PHASES](PHASES.md)
 * **L: Write the spec for the QA bridge.** [PHASES](PHASES.md)
-* **L: Write the spec for the dashboard.** [PHASES](PHASES.md)
 
-The REPL items ([REPL](specs/REPL.md): `help`, the unknown-name message, a failed-line prompt marker, `!<command>`) wait for the team's use and are taken up when someone asks.
+**Wishlist**
 
-## Wishlist
-
-Not goals today; each could help a use case later.
-
-* **L: Infer the upstream, fork, `githubUser` and release line from the working directory,** with an `inferred` source in `gero config show`. [WORKSPACE](specs/WORKSPACE.md#wishlist)
+* **S: Offer a few Actions that make using `gero` easier in CI,** such as one that calls `gero ci:ship` from a shipping repo. Where they live and what kind they are is decided with the first repo that uses one.
+* **S: Publish the JSON Schemas at a stable URL,** then wire them into the team's editors (no code). [APP_CONFIG](specs/APP_CONFIG.md#json-schemas)
+* **S: Add a paste-safe mode to `gero doctor`** that leaves out local paths. [DOCTOR](specs/DOCTOR.md)
+* **M: Improve the REPL:** a short `help` of its own commands, a one-line hint for an unknown name, `!<command>` for a shell line, and an opt-in prompt prefix when `GERO_REPL` is set. [REPL](specs/REPL.md)
+* **M: Support more shells and test the scripts for real:** Windows PowerShell 5, nushell and elvish, and tests that run the generated scripts in real fish and `pwsh`. [SHELL_SETUP](specs/SHELL_SETUP.md)
+* **M: Add golden files under `testdata/` for command output,** which tests compare as strings today. [TESTING](specs/TESTING.md)
+* **M: Add a pty harness** to test the REPL and prompts in a terminal. Needs a dependency decision in [DEPENDENCY_POLICY](specs/DEPENDENCY_POLICY.md).
+* **L: Infer the upstream, fork, `githubUser` and release line from the working directory,** with an `inferred` source in `gero config show`. [WORKSPACE](specs/WORKSPACE.md)
+* **S: Let a clone's fork have a repository name other than the upstream's** under `githubUser`. [CLI_CONFIG](specs/CLI_CONFIG.md)
 * **L: Add a go-git client** for the git work that runs the `git` binary. The seam is there (`TODO(go-git)`). [GITHUB_ACCESS](specs/GITHUB_ACCESS.md)
-* **S: Publish the JSON Schemas at a stable URL.** [APP_CONFIG](specs/APP_CONFIG.md#json-schemas)
-* **S (no code): Wire the published schemas into the team's editors.** Needs the stable URL.
-* **S: Add `gero doctor self-update --version`** to install a named release or roll back. [SELF_UPDATE](specs/SELF_UPDATE.md)
-* **S: Add a way to give `gero doctor self-update` a `trusted_root.json` by file** for offline use. `selfupdate.Config.TrustedRoot` takes one; no flag or setting supplies it. [SELF_UPDATE](specs/SELF_UPDATE.md)
-* **M: Add a `host` setting (`GERO_HOST`, `--host`) and read it in `gero repo clone`,** so the SSH URL is not github.com only (`TODO(host)`). [CLI_CONFIG](specs/CLI_CONFIG.md), [GITHUB_ACCESS](specs/GITHUB_ACCESS.md)
-* **S: Let a `repo clone`'s fork have a repository name other than the upstream's** under `githubUser`. [CLI_CONFIG](specs/CLI_CONFIG.md)
+
+---
+
+## On request
+
+Not planned. Each is built if someone asks, and not before.
+
+* **GitHub hosts beyond github.com:** a `host` setting (`GERO_HOST`, `--host`) used by credentials and by the SSH URL of `gero repo clone`, and API base URLs for `*.ghe.com` and `github.localhost`. [GITHUB_ACCESS](specs/GITHUB_ACCESS.md)
+* **Commands for the steps of `ship` used alone:** push a branch, open a PR, make a bump commit, close superseded PRs. Wait for a second caller. [TASK_COMMANDS](specs/TASK_COMMANDS.md)
+* **`gero repo branch --from <ref>`.** [TASK_COMMANDS](specs/TASK_COMMANDS.md)
+* **A branch shorthand with `@`, sharing `resolvePushTarget`, and a config setting for a step's commit.**
+* **`gero doctor self-update --version`** to install a named release or roll back. [SELF_UPDATE](specs/SELF_UPDATE.md)
+* **A `trusted_root.json` given to `gero doctor self-update` by file,** for offline use. [SELF_UPDATE](specs/SELF_UPDATE.md)
+* **A Windows build.** [SELF_UPDATE](specs/SELF_UPDATE.md)
+* **More REPL prompt placeholders,** such as the status of the last line. [REPL](specs/REPL.md)
+* **Running the checks of `gero doctor` in parallel.** [DOCTOR](specs/DOCTOR.md)
