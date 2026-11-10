@@ -53,6 +53,10 @@ func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 	if len(routes) == 0 && engineErr != nil {
 		return resolution{}, engineErr // a holding or an edit of the route is not usable; say why
 	}
+	routes, err = narrowStreams(producer, routes, in)
+	if err != nil {
+		return resolution{}, err
+	}
 	route, err := pickRoute(producer, routes, in.To)
 	if err != nil {
 		return resolution{}, err
@@ -146,6 +150,7 @@ func (r resolution) consumerLine(line string) (string, bool) {
 // to name a line. A release that follows lines is only shipped to the line it is
 // in (ErrLineMismatch).
 func (r resolution) specs(in Input) (selection, error) {
+	in = r.lineArgument(in)
 	if in.Arg == "" && r.followsLines() {
 		return r.eachLine(in)
 	}
@@ -186,6 +191,26 @@ func (r resolution) specs(in Input) (selection, error) {
 		sel.add(t, release)
 	}
 	return sel, nil
+}
+
+// lineArgument reads an argument that is a line of the consumer, and no tag the
+// producer has, as --line: a stream that is universal has no lines of its own, so
+// a Rancher line given as the release can only be the consumer's. The release is
+// then the latest of the stream the route is for. A stream that lists its lines
+// reads the argument as its own.
+func (r resolution) lineArgument(in Input) Input {
+	if in.Arg == "" || r.followsLines() || slices.ContainsFunc(r.tags, func(t git.Tag) bool { return t.Name == in.Arg }) {
+		return in
+	}
+	canonical, ok := r.consumerLine(in.Arg)
+	if !ok {
+		return in
+	}
+	in.Arg = ""
+	if !slices.Contains(in.Lines, canonical) {
+		in.Lines = append(slices.Clone(in.Lines), canonical)
+	}
+	return in
 }
 
 // add makes a target of the branch, unless it already is one.
@@ -254,6 +279,100 @@ func (r resolution) noSuchLine(line string) error {
 		return fmt.Errorf("%w: %s has no release lines, so there is no line %s to ship to", ErrNoTargets, consumer.Slug(), line)
 	}
 	return fmt.Errorf("%w: %s has no release line %s; it has %s", ErrNoTargets, consumer.Slug(), line, strings.Join(have, ", "))
+}
+
+// narrowStreams chooses between the routes of one consumer that holds several
+// streams of the producer, one for each minor of a library for instance, which the
+// line decides: the consumer's Holding for the line is of one stream. It leaves
+// the routes as they are when the user named no consumer with several, and when the
+// consumer has one route, and gives the routes of the stream otherwise:
+//
+//   - a tag given as the argument picks the routes whose stream it is a release of;
+//   - the lines (--line, or the argument when it names a line of the consumer that
+//     no stream of the producer lists itself) pick the routes with a holding for
+//     every one of them.
+//
+// Without a tag or a line it stops, saying what the consumer holds each stream for.
+func narrowStreams(producer *chain.Project, routes []bump.Route, in Input) ([]bump.Route, error) {
+	var of []bump.Route // the routes of the consumer the user named
+	for _, r := range routes {
+		if in.To == "" || named(r.Consumer, in.To) {
+			of = append(of, r)
+		}
+	}
+	if len(of) < 2 || slices.ContainsFunc(of, func(r bump.Route) bool { return r.Consumer != of[0].Consumer }) {
+		return routes, nil // one route, or several consumers, which --to chooses between
+	}
+	consumer := of[0].Consumer
+	narrowed, tagged := of, false
+	if in.Arg != "" {
+		byTag := slices.DeleteFunc(slices.Clone(of), func(r bump.Route) bool { return r.Stream == nil || !r.Stream.TagMatches(in.Arg) })
+		narrowed, tagged = byTag, len(byTag) > 0
+		if !tagged {
+			narrowed = of
+		}
+	}
+	lines := slices.Clone(in.Lines)
+	if in.Arg != "" && !tagged && hasLine(consumer, in.Arg) && !listsLine(producer, in.Arg) {
+		lines = append(lines, in.Arg)
+	}
+	if len(lines) == 0 && !tagged {
+		return nil, fmt.Errorf("%w for %s: %s holds it as %s; name a line of %s (gero ship %s <line> --to %s) or a tag",
+			ErrAmbiguousConsumer, producer.Name(), consumer.Name(), describeStreams(of), consumer.Name(), producer.Name(), consumer.Name())
+	}
+	for _, line := range lines {
+		narrowed = slices.DeleteFunc(slices.Clone(narrowed), func(r bump.Route) bool { return !r.AppliesTo(line) })
+	}
+	switch len(narrowed) {
+	case 1:
+		return narrowed, nil
+	case 0:
+		if len(lines) > 1 && len(of) > 1 {
+			for _, line := range lines {
+				if slices.ContainsFunc(of, func(r bump.Route) bool { return r.AppliesTo(line) }) {
+					continue
+				}
+				return nil, fmt.Errorf("%w: %s holds no stream of %s for %s; it holds %s", ErrNoTargets, consumer.Name(), producer.Name(), line, describeStreams(of))
+			}
+			return nil, fmt.Errorf("%w for %s: %s holds %s on different streams, and one run ships one stream: %s",
+				ErrAmbiguousConsumer, producer.Name(), strings.Join(lines, " and "), consumer.Name(), describeStreams(of))
+		}
+		return nil, fmt.Errorf("%w: %s holds no stream of %s for %s; it holds %s", ErrNoTargets, consumer.Name(), producer.Name(), strings.Join(lines, ", "), describeStreams(of))
+	}
+	return nil, fmt.Errorf("%w for %s: %s holds more than one stream for %s: %s", ErrAmbiguousConsumer, producer.Name(), consumer.Name(), strings.Join(lines, ", "), describeStreams(narrowed))
+}
+
+// describeStreams says what a consumer holds each stream of its routes for: the
+// stream and the lines of the consumer that a holding of it is for.
+func describeStreams(routes []bump.Route) string {
+	out := make([]string, len(routes))
+	for i, r := range routes {
+		name := r.Stream.Name()
+		var held []string
+		for _, line := range r.Consumer.Lines() {
+			if r.AppliesTo(line) {
+				held = append(held, line)
+			}
+		}
+		if len(held) > 0 {
+			name += " (" + strings.Join(held, ", ") + ")"
+		}
+		out[i] = name
+	}
+	return strings.Join(out, ", ")
+}
+
+// hasLine reports whether a project lists the line, written with or without its v.
+func hasLine(p *chain.Project, line string) bool {
+	return slices.ContainsFunc(p.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
+}
+
+// listsLine reports whether a stream of the project lists the line itself, which a
+// universal stream does not: its releases belong to no line.
+func listsLine(p *chain.Project, line string) bool {
+	return slices.ContainsFunc(p.Streams(), func(s *chain.Stream) bool {
+		return slices.ContainsFunc(s.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
+	})
 }
 
 // named reports whether a project is what the user called it: its config name, its
