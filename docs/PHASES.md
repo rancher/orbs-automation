@@ -53,20 +53,20 @@ v1.0.0 is about **automation we trust**: `gero` does real work in place of scrip
 `gero ship` already opens bump PRs for an engineer. A CI variant, `gero ci:ship`, runs the same bump as the bot from a workflow, so the `push-to-rancher` scripts of `scc-operator` and `shell` can go ([CI_SHIP](specs/CI_SHIP.md)).
 
 * `gero ci:ship`: a temporary clone, the bot identity from `GERO_BOT_USER`, a push with a token that starts workflows, a step summary and the workflow run URL in the PR body.
-* How a `ci:*` command gets the central config in a repo with no checkout: the bundle of the installed release, or a checkout ([CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)).
+* How a `ci:*` command gets the central config in a repo with no checkout: the bundle that matches its own version, with the default bundle embedded in the binary ([CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)).
 * A workflow that installs a pinned, signed release of `gero`, run beside the bash script, then in place of it, and the script removed from `scc-operator` and `shell`.
 
 ### The chain: a whole release chain from a workstation
 
 The chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`, one `gero ship` for each hop, with the tag step between hops by hand ([CHAIN_TRACING](specs/CHAIN_TRACING.md)).
 
-* Reading what a commit or branch holding holds, the charts hop through the Assets image, and the walk through several hops in `lines resolve` and `repo status`.
+* Reading what a commit or branch holding holds, the charts hop through the Assets image, the walk through several hops in `lines resolve` and `repo status`, and the check of a held tag's stage.
 * `chartsPackageBump` and BRO's tag into a charts bump, run in dry-run beside today's scripts first.
 
 ### Confidence in the foundation
 
-* The process docs reviewed by the release team, and the config kinds and field names settled, so `gero/v1alpha2` becomes `gero/v1`.
-* The exit-code helper, the integration test tier, and a release that is signed, installed and self-updated by the team in practice.
+* The config kinds and field names settled, so `gero/v1alpha2` becomes `gero/v1`.
+* The exit-code helper, and a release that is signed, installed and self-updated by the team in practice.
 * A contribution guide and a backlog of well-sized issues someone else can pick up without the author ([TODO](TODO.md)).
 * A review with the team: show the CI bump and the chain from a workstation, review the config shapes and the direction, and fold feedback in.
 
@@ -81,7 +81,7 @@ The chain `kuberlr-kubectl` to BRO to `rancher/charts` to `rancher/rancher`, one
 
 ### Decides before v1.0.0
 
-Final kind and field names; how a `ci:*` command gets config without a checkout; who makes the clone for `gero ci:ship` (the tool or the workflow's checkout, [CI_SHIP](specs/CI_SHIP.md#open-questions)); how the path through `rancher/charts` into `rancher/rancher` is walked; how producers align on consumer PR conventions.
+Final kind and field names; how the path through `rancher/charts` into `rancher/rancher` is walked; how producers align on consumer PR conventions.
 
 ---
 
@@ -92,7 +92,7 @@ Themes in rough dependency order, not promises. Only stable tags are released.
 * **More repos off their scripts.** The same `ci:ship` for other producers, and `gero repo tag` as a workflow step behind a sign-off.
 * **Checks over the chain** ([TOOLING_GOALS](design/TOOLING_GOALS.md)): stable readiness and line consistency, read-only, on the walk.
 * **Tracking issues:** a versioned state block, a read-only rendered view and labels including stale, with fixture-driven tests ([METADATA](specs/METADATA.md)).
-* **The reconciler:** `gero ci:reconcile` on cron, per-operation locks and backoff, observing human-pushed tags first.
+* **The reconciler:** `gero ci:reconcile` on a cron and on `repository_dispatch`, per-operation locks and backoff, observing human-pushed tags first.
 * **The chain in CI**, tracked end to end, beside and then replacing today's scripts.
 * **Shared workflows and rendered ones:** reusable workflows pinned by `gero` tag or SHA, and rendered workflows from `WorkflowsConfig`, the release workflow last because signing makes it the most sensitive.
 * **`VERSION.md`** generated from `branches.lines` and `RancherLines`, and `gero lines sync` for the lifecycle dates.
@@ -101,7 +101,7 @@ Themes in rough dependency order, not promises. Only stable tags are released.
 
 **Parallelism.** CI and tracking, standardization, and release trains can run side by side. They meet at "branch for X".
 
-**Decides along the way:** whether the tracker builds a chain up front or reads it hop by hop; how the reconciler is triggered; the standard `VERSION.md` layout and whether older readers need the old formats; how stubs pin workflow versions; whether the reconciler reads repo config on every run or only central config; the override mechanism; which "branch for X" steps are automated and in what order.
+**Decides along the way:** whether the tracker builds a chain up front or reads it hop by hop; whether the reconciler reads repo config on every run or only central config; the override mechanism; which "branch for X" steps are automated and in what order.
 
 ## v2.0.0: complete
 
