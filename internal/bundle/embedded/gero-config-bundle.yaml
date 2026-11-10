@@ -1,0 +1,633 @@
+apiVersion: gero-bundle/v1
+kind: Bundle
+formatVersion: 1
+geroVersion: dev
+sourceCommit: none
+compiledAt: 1970-01-01T00:00:00Z
+---
+# source: backup-restore-operator.yaml
+# backup-restore-operator: owned, one stream for each line, an image and two chart packages.
+# It holds the kuberlr image in its chart values, and its chart packages are held by rancher-charts.
+apiVersion: gero/v1alpha2
+kind: Project
+name: backup-restore-operator
+spec:
+  aliases: ["bro"]
+  repo: {name: rancher/backup-restore-operator, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v11.x}
+      - {line: v2.14, branch: release/v10.x}
+      - {line: v2.13, branch: release/v9.x}
+      - {line: v2.12, branch: release/v8.x}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: backup-restore-operator
+refs: {project: backup-restore-operator}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  lines:
+    - {line: v2.16, series: "12.x"}
+    - {line: v2.15, series: "11.x"}
+    - {line: v2.14, series: "10.x"}
+    - {line: v2.13, series: "9.x"}
+    - {line: v2.12, series: "8.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: bro-image
+refs: {stream: backup-restore-operator}
+spec: {kind: image, name: rancher/backup-restore-operator}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: bro-chart
+refs: {stream: backup-restore-operator}
+spec: {kind: file, name: "rancher-backup-{version}.tgz"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: bro-crd-chart
+refs: {stream: backup-restore-operator}
+spec: {kind: file, name: "rancher-backup-crd-{version}.tgz"}
+---
+# What BRO holds: the kuberlr image tag in its chart values.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-kuberlr
+refs: {project: backup-restore-operator, artifact: kuberlr-kubectl-image}
+spec:
+  at: {file: charts/rancher-backup/values.yaml, key: global.kubectl.tag, format: yaml}
+  holds: {kind: release, form: "{tag}"}
+---
+# What BRO holds of wrangler, in go.mod. The module is the same for every minor; each line stays on one minor,
+# so a Holding for each minor and the lines that hold it. Shipping a wrangler or lasso release into BRO writes the require line and then tidies, which is the Edit below.
+# v2.14 holds 3.4.0 and v2.12 holds 3.2.4: minors with no Stream, because BRO is out of step with Rancher there
+# (Rancher holds 3.6 and 3.3). Those lines stay unresolved until BRO moves or a Stream is added.
+# cmd/tool is a nested module (v2.14 and later) that requires wrangler and lasso indirectly; `replace` directives
+# (cmd/tool replaces BRO with ../../) are not modelled.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-8
+refs: {project: backup-restore-operator, artifact: wrangler-v3-8-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-7
+refs: {project: backup-restore-operator, artifact: wrangler-v3-7-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.15, until: v2.15}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-6
+refs: {project: backup-restore-operator, artifact: wrangler-v3-6-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: cmd/tool/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.14}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.14, until: v2.14}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-wrangler-3-3
+refs: {project: backup-restore-operator, artifact: wrangler-v3-3-module}
+spec:
+  at: {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.13, until: v2.13}}
+---
+# lasso goes with wrangler: every wrangler Artifact pins it, so each Holding above makes a virtual Holding of lasso in the
+# same files for the same lines, and shipping a wrangler tag ships the lasso its go.mod requires. This one is for the
+# line no wrangler Holding covers: v2.12 holds wrangler 3.2.4, a minor with no Stream, and lasso v0.2.3.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: bro-holds-lasso
+refs: {project: backup-restore-operator, artifact: lasso-v0-2-module}
+spec:
+  at: {file: go.mod, key: github.com/rancher/lasso, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {until: v2.12}}
+---
+# go.mod is not the whole change: go mod tidy follows in each module the require line was written in, as a commit of
+# its own. The Edit follows every Go module BRO holds of another team's library.
+apiVersion: gero/v1alpha2
+kind: Edit
+name: bro-bump-go-modules
+refs: {holding: [bro-holds-wrangler-3-8, bro-holds-wrangler-3-7, bro-holds-wrangler-3-6, bro-holds-wrangler-3-3, bro-holds-lasso]}
+# Every step and goBump's tidy run with the Go toolchain the branch pins in its go.mod, whatever the engineer's own is:
+# generated files made by a newer Go can come out incomplete on an older line (wrangler's code does not run on a newer one).
+spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"
+  strategy: goBump
+  postEdit:
+    - {run: [go, generate]}
+---
+# source: kuberlr-kubectl.yaml
+# kuberlr-kubectl: owned, one release stream for each line, one image, takes nothing in.
+apiVersion: gero/v1alpha2
+kind: Project
+name: kuberlr-kubectl
+spec:
+  aliases: ["kuberlr"]
+  repo: {name: rancher/kuberlr-kubectl, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}                                  # branch omitted: the default branch, while the line is in development
+      - {line: v2.15, branch: release/v8.x}
+      - {line: v2.14, branch: release/v7.x}
+      - {line: v2.13, branch: release/v6.x}
+      - {line: v2.12, branch: release/v5.x}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: kuberlr-kubectl
+refs: {project: kuberlr-kubectl}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.16, series: "9.x"}
+    - {line: v2.15, series: "8.x"}
+    - {line: v2.14, series: "7.x"}
+    - {line: v2.13, series: "6.x"}
+    - {line: v2.12, series: "5.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: kuberlr-kubectl-image
+refs: {stream: kuberlr-kubectl}
+spec: {kind: image, name: rancher/kuberlr-kubectl}
+---
+# source: lasso.yaml
+# lasso: a Go library of the frameworks team (CODEOWNERS: rancher-squad-frameworks), held by Rancher and BRO
+# in their go.mod files. Unowned, so gero only observes what is held of it.
+# One Stream: a consumer holds a v0.2.* patch, and which one goes with a wrangler release is the version in that
+# release's own go.mod: every wrangler Artifact pins this one (config/wrangler.yaml). A v0.3 would be a new Stream and
+# Artifact. The module path has no major suffix below v2.
+apiVersion: gero/v1alpha2
+kind: Project
+name: lasso
+spec:
+  repo: {name: rancher/lasso, managedBy: frameworks-team}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: lasso-v0-2
+refs: {project: lasso}
+spec: {scheme: semver, tagPattern: "v0.2.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: lasso-v0-2-module
+refs: {stream: lasso-v0-2}
+spec: {kind: gomod, name: github.com/rancher/lasso}
+---
+# source: rancher-assets.yaml
+# rancher-assets: unowned (release team), one branch, lines and stages in the tags.
+# It holds a charts commit for each line and stage in its lock file.
+apiVersion: gero/v1alpha2
+kind: Project
+name: rancher-assets
+spec:
+  aliases: ["assets"]
+  repo: {name: rancher/rancher-assets, managedBy: release-team}
+  pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/release-team]}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: rancher-assets
+refs: {project: rancher-assets}
+spec:
+  scheme: calverLineStage      # gives the stages dev and stable, and the line in the tag
+  lines:
+    - {line: v2.16}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: assets-image
+refs: {stream: rancher-assets}
+spec: {kind: image, name: rancher/rancher-assets}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: assets-pins-charts
+refs: {project: rancher-assets, from: rancher-charts}
+spec:
+  at:
+    file: lock.yaml
+    format: yaml
+    key: '.chart-versions."{line|trimprefix:v}".upstream-refs.{stage|replace:stable=prod}.charts.commit'
+  holds: {kind: commit, stages: [dev, stable]}
+---
+# source: rancher-charts.yaml
+# rancher-charts: unowned (release team), two branches for each line, no tags.
+# A chart's releases are versions in a list; one stream for each chart. rancher-backup shown.
+apiVersion: gero/v1alpha2
+kind: Project
+name: rancher-charts
+spec:
+  aliases: ["charts"]
+  repo: {name: rancher/charts, managedBy: release-team}
+  pullRequests: {title: "[{branch}] {package} {chartVersion} {action}", branchPrefix: "bot/{source}-"}
+  branches:
+    layout: perLine
+    stages: [dev, stable]
+    lines:
+      - {line: v2.16, branch: {dev: dev-v2.16, stable: release-v2.16}}
+      - {line: v2.15, branch: {dev: dev-v2.15, stable: release-v2.15}}
+      - {line: v2.14, branch: {dev: dev-v2.14, stable: release-v2.14}}
+      - {line: v2.13, branch: {dev: dev-v2.13, stable: release-v2.13}}
+      - {line: v2.12, branch: {dev: dev-v2.12, stable: release-v2.12}}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: charts-rancher-backup
+refs: {project: rancher-charts}
+spec:
+  scheme: chartVersion         # CHART+upUPSTREAM; prerelease is read from the part after +up
+  lines:
+    - {line: v2.16, series: "111.x"}
+    - {line: v2.15, series: "110.x"}
+    - {line: v2.14, series: "109.x"}
+    - {line: v2.13, series: "108.x"}
+    - {line: v2.12, series: "107.x"}
+---
+# What charts holds of BRO: the two chart URLs in the package file, on the dev branch.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: charts-holds-bro-chart
+refs: {project: rancher-charts, artifact: bro-chart}
+spec:
+  at: {file: packages/rancher-backup/package.yaml, key: url, format: yaml}
+  holds: {kind: release, form: "{url}", stage: dev, accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: charts-holds-bro-crd-chart
+refs: {project: rancher-charts, artifact: bro-crd-chart}
+spec:
+  at: {file: packages/rancher-backup/package.yaml, key: '.additionalCharts[0].upstreamOptions.url', format: yaml}
+  holds: {kind: release, form: "{url}", stage: dev, accept: all}
+---
+# What shipping a BRO release into charts also does beyond writing the two URLs.
+apiVersion: gero/v1alpha2
+kind: Edit
+name: charts-bump-rancher-backup
+refs: {holding: [charts-holds-bro-chart, charts-holds-bro-crd-chart]}
+spec: {strategy: chartsPackageBump, with: {package: rancher-backup}}
+---
+# source: rancher.lines.yaml
+# The Rancher lines.
+# One document holding the whole set of Rancher lines, newest first.
+# Facts about the lines themselves only; no branches (each project maps its own).
+# Kubernetes ranges come from the table in the rancher-shell README (April 2026).
+# Dates come from https://www.suse.com/lifecycle/#suse-rancher-prime. The phase
+# of a line (development | ga | eom | eol) is worked out from them and the
+# current time, so it is not written here. A line with no dates is in
+# development. An optional `phase:` on a line overrides the dates.
+apiVersion: gero/v1alpha2
+kind: RancherLines
+name: rancher
+spec:
+  lines:
+    - id: v2.18 # Tentative future version - added as a buffer
+      kubernetes:
+        min: "1.37"
+        max: "1.39"
+    - id: v2.17 # Current Dev
+      kubernetes:
+        min: "1.36"
+        max: "1.38"
+    - id: v2.16
+      kubernetes:
+        min: "1.35"
+        max: "1.37"
+    - id: v2.15
+      dates:
+        ga: 2026-08-27
+        eom: 2027-02-27
+        eol: 2028-02-27
+      kubernetes:
+        min: "1.34"
+        max: "1.36"
+    - id: v2.14
+      dates:
+        ga: 2026-04-30
+        eom: 2026-10-30
+        eol: 2027-10-10
+      kubernetes:
+        min: "1.33"
+        max: "1.35"
+    - id: v2.13
+      dates:
+        ga: 2025-12-17
+        eom: 2026-06-17
+        eol: 2027-06-17
+      kubernetes:
+        min: "1.32"
+        max: "1.34"
+    - id: v2.12
+      dates:
+        ga: 2025-08-29
+        eom: 2026-02-28
+        eol: 2027-02-28
+      kubernetes:
+        min: "1.31"
+        max: "1.33"
+---
+# source: rancher.yaml
+# rancher: the destination, owned by every team. It holds components in one build file;
+# an older line also keeps a charts branch in its Dockerfile.
+apiVersion: gero/v1alpha2
+kind: Project
+name: rancher
+spec:
+  repo: {name: rancher/rancher, managedBy: shared}
+  finalDestination: true
+  pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/orbs]}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.17}
+      - {line: v2.16, branch: release/v2.16}
+      - {line: v2.15, branch: release/v2.15}
+      - {line: v2.14, branch: release/v2.14}
+      - {line: v2.13, branch: release/v2.13}
+      - {line: v2.12, branch: release/v2.12}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: rancher
+refs: {project: rancher}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.17, series: "2.17.x"}
+    - {line: v2.16, series: "2.16.x"}
+    - {line: v2.15, series: "2.15.x"}
+    - {line: v2.14, series: "2.14.x"}
+    - {line: v2.13, series: "2.13.x"}
+    - {line: v2.12, series: "2.12.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: rancher-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: rancher-agent-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher-agent}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: rancher-server-image
+refs: {stream: rancher}
+spec: {kind: image, name: rancher/rancher-server, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-shell
+refs: {project: rancher, artifact: shell-image}
+spec:
+  at: {file: build.yaml, key: defaultShellVersion, format: yaml}
+  holds: {kind: release, form: "{image}:{tag}", accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-scc-operator
+refs: {project: rancher, artifact: scc-operator-image}
+spec:
+  at: {file: build.yaml, key: defaultSccOperatorImage, format: yaml}
+  holds: {kind: release, form: "{image}:{tag}", accept: all}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-assets
+refs: {project: rancher, artifact: assets-image}
+spec:
+  at: {file: build.yaml, key: defaultAssetsImage, format: yaml}
+  holds: {kind: release, form: "{image}:{tag}", accept: all, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-follows-charts-branch
+refs: {project: rancher, from: rancher-charts}
+spec:
+  at: {file: package/Dockerfile, key: CHART_DEFAULT_BRANCH, format: dockerfile}
+  holds: {kind: branch, lines: {until: v2.15}}
+---
+# What Rancher holds of wrangler and lasso, in go.mod: the root and its nested modules (pkg/apis, pkg/client,
+# pkg/plan, which exists from v2.15). Each line stays on one wrangler minor, so a Holding for each minor and the
+# lines that hold it; the locations of one Holding should hold the same version. Observed only: both are unowned.
+# `replace` directives (v2.12's pkg/client pins wrangler v3.2.2) are not modelled.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-8
+acknowledge:
+  - rule: locations-differ
+    lines: {since: v2.16, until: v2.16}
+    reason: on main, pkg/client and pkg/plan are on rc.2 while the root and pkg/apis are on rc.3, and are synced by hand
+refs: {project: rancher, artifact: wrangler-v3-8-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/plan/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.15}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-7
+refs: {project: rancher, artifact: wrangler-v3-7-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/plan/go.mod, key: github.com/rancher/wrangler/v3, format: gomod, lines: {since: v2.15}}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.15, until: v2.15}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-6
+refs: {project: rancher, artifact: wrangler-v3-6-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.14, until: v2.14}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: rancher-holds-wrangler-3-3
+refs: {project: rancher, artifact: wrangler-v3-3-module}
+spec:
+  at:
+    - {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/apis/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+    - {file: pkg/client/go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
+  holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.12, until: v2.13}}
+---
+# lasso has no Holding here: every wrangler Artifact pins it, so each Holding above makes a virtual Holding of lasso in
+# the same files for the same lines (the root and pkg/apis, where it is indirect, and pkg/plan from v2.15; pkg/client
+# is skipped where it does not require lasso). The wrangler Holdings cover v2.12 to v2.16, so lasso is covered on every line.
+# After any change to build.yaml, Rancher regenerates its build config (a step of the consumer, not of the producer).
+apiVersion: gero/v1alpha2
+kind: Edit
+name: rancher-build-yaml-steps
+refs: {holding: [rancher-holds-shell, rancher-holds-scc-operator, rancher-holds-assets]}
+# The script runs go generate, so it runs in the Go toolchain the branch pins, as the by-hand process forces GOTOOLCHAIN
+# to the downstream's pinned toolchain so generated files do not drift between lines.
+spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"
+  postEdit:
+    - {run: scripts/generate-buildconfig}
+---
+# source: scc-operator.yaml
+# scc-operator: owned, one stream for every line (universal), one image.
+apiVersion: gero/v1alpha2
+kind: Project
+name: scc-operator
+spec:
+  aliases: ["scc"]
+  repo: {name: rancher/scc-operator, managedBy: orbs}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: scc-operator
+refs: {project: scc-operator}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  universal: true            # no series; any release serves every line
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: scc-operator-image
+refs: {stream: scc-operator}
+spec: {kind: image, name: rancher/scc-operator}
+---
+# source: shell.yaml
+# shell: owned, one stream for each line, one image; Rancher holds it.
+apiVersion: gero/v1alpha2
+kind: Project
+name: shell
+spec:
+  repo: {name: rancher/shell, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}
+      - {line: v2.15, branch: release/v2.15}
+      - {line: v2.14, branch: release/v2.14}
+      - {line: v2.13, branch: release/v2.13}
+      - {line: v2.12, branch: release/v2.12}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: shell
+refs: {project: shell}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  lines:
+    - {line: v2.16, series: "0.9.x"}
+    - {line: v2.15, series: "0.8.x"}
+    - {line: v2.14, series: "0.7.x"}
+    - {line: v2.13, series: "0.6.x"}
+    - {line: v2.12, series: "0.5.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: shell-image
+refs: {stream: shell}
+spec: {kind: image, name: rancher/shell}
+---
+# source: wrangler.yaml
+# wrangler: a Go library of the frameworks team (CODEOWNERS: rancher-squad-frameworks), held by Rancher
+# and others in their go.mod files. Unowned, so gero only observes what is held of it.
+# Its branches follow its own minors (main is v3.8; release/v3.7, release/v3.6, release/v3.3), not Rancher
+# lines, so `branches` stays `single`. A consumer's line stays on one minor and takes only its patches, so each
+# minor is its own Stream. Which lines hold which minor differs by consumer (BRO and Rancher disagree), so it is
+# written on the consumer's Holdings with `lines`, not here.
+apiVersion: gero/v1alpha2
+kind: Project
+name: wrangler
+spec:
+  repo: {name: rancher/wrangler, managedBy: frameworks-team}
+  branches: {layout: single}
+---
+# A major version is a different module path (/v3), not a tag prefix: the tags are plain (v3.8.0).
+# Both minors below are the same module, so their Artifacts have the same name; a consumer's Holding picks one
+# by `lines`. v2 (release/v2) is not tracked. Each minor has a release branch (v3.8 is main).
+# Every wrangler release goes with the lasso its own go.mod requires, so each Artifact pins lasso: a consumer that holds
+# wrangler holds that lasso too, and shipping a wrangler tag ships it (docs/design/CONFIG_UNITS.md, O12).
+# Release candidates are v3.8.0-rc.3 (older tags: v3.0.0-rc1) and are published as GitHub prereleases.
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-8
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.8.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-8-module
+refs: {stream: wrangler-v3-8, pins: lasso-v0-2-module}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-7
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.7.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-7-module
+refs: {stream: wrangler-v3-7, pins: lasso-v0-2-module}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-6
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.6.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-6-module
+refs: {stream: wrangler-v3-6, pins: lasso-v0-2-module}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: wrangler-v3-3
+refs: {project: wrangler}
+spec: {scheme: semver, tagPattern: "v3.3.*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: wrangler-v3-3-module
+refs: {stream: wrangler-v3-3, pins: lasso-v0-2-module}
+spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
