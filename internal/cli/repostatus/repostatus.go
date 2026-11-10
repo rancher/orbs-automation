@@ -337,8 +337,12 @@ func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
 	// What tag could be made next is for tags a person makes. A project whose tags
 	// its own CI makes has no next one.
 	if t.Head != "" && stream.Scheme() != tagscheme.CalverLineStage {
+		newest, err := tagscheme.Newest(stream, refs.Tags, t.Line)
+		if err != nil {
+			return
+		}
 		c := releasetag.Choice{
-			Tags: refs.Tags, Pattern: stream.TagPattern(), Series: t.Series, Commit: t.Head,
+			Newest: newest, Pattern: stream.TagPattern(), Series: t.Series, Commit: t.Head,
 			RequiresPrerelease: stream.RequiresPrerelease(),
 		}
 		t.State, t.Next = string(releasetag.StateOf(c)), nextOf(c)
@@ -360,7 +364,7 @@ func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
 // the engineer sees why and not a missing option. Otherwise it is the next
 // prerelease when that may be made now, and none when it may not.
 func nextOf(c releasetag.Choice) []Next {
-	newest := releasetag.Newest(releasetag.Input{Tags: c.Tags, Pattern: c.Pattern, Series: c.Series})
+	newest := c.Newest
 	open := false
 	if newest != nil {
 		v, _ := semver.Parse(newest.Name)
