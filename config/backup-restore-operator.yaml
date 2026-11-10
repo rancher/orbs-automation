@@ -58,7 +58,7 @@ spec:
   holds: {kind: release, form: "{tag}"}
 ---
 # What BRO holds of wrangler, in go.mod. The module is the same for every minor; each line stays on one minor,
-# so a Holding for each minor and the lines that hold it. Observed only: wrangler is unowned, so there is no Edit.
+# so a Holding for each minor and the lines that hold it. Shipping a wrangler or lasso release into BRO writes the require line and then tidies, which is the Edit below.
 # v2.14 holds 3.4.0 and v2.12 holds 3.2.4: minors with no Stream, because BRO is out of step with Rancher there
 # (Rancher holds 3.6 and 3.3). Those lines stay unresolved until BRO moves or a Stream is added.
 # cmd/tool is a nested module (v2.14 and later) that requires wrangler and lasso indirectly; `replace` directives
@@ -101,7 +101,7 @@ spec:
   at: {file: go.mod, key: github.com/rancher/wrangler/v3, format: gomod}
   holds: {kind: release, form: "{bareTag}", accept: all, lines: {since: v2.13, until: v2.13}}
 ---
-# lasso is held in go.mod by every line (v2.16 holds v0.2.10, v2.12 holds v0.2.3). Observed only.
+# lasso is held in go.mod by every line (v2.16 holds v0.2.10, v2.12 holds v0.2.3).
 apiVersion: gero/v1alpha2
 kind: Holding
 name: bro-holds-lasso
@@ -111,3 +111,11 @@ spec:
     - {file: go.mod, key: github.com/rancher/lasso, format: gomod}
     - {file: cmd/tool/go.mod, key: github.com/rancher/lasso, format: gomod, lines: {since: v2.14}}
   holds: {kind: release, form: "{bareTag}", accept: all}
+---
+# go.mod is not the whole change: go mod tidy follows in each module the require line was written in, as a commit of
+# its own. The Edit follows every Go module BRO holds of another team's library.
+apiVersion: gero/v1alpha2
+kind: Edit
+name: bro-bump-go-modules
+refs: {holding: [bro-holds-wrangler-3-8, bro-holds-wrangler-3-7, bro-holds-wrangler-3-6, bro-holds-wrangler-3-3, bro-holds-lasso]}
+spec: {strategy: goBump}
