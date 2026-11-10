@@ -308,7 +308,7 @@ func TestHoldingsOfOneLocationHaveNoLocationsToShow(t *testing.T) {
 func twoStreams(t *testing.T) *fakeWorkspace {
 	t.Helper()
 	ws := fixture(t)
-	ws.producer = projectSpec{Name: "lib", Repo: "acme/lib", Owned: true, Streams: []extraStream{
+	ws.producer = projectSpec{Name: "lib", Repo: "acme/lib", ManagedBy: testTeam, Streams: []extraStream{
 		{Name: "one", Pattern: "v1.*", Image: "acme/lib-one"}, {Name: "two", Pattern: "v2.*", Image: "acme/lib-two"},
 	}}
 	consumer := projectSpec{Name: "svc", Repo: "acme/svc", Lines: []lineSpec{{"v2.16", ""}, {"v2.15", "release/v2.15"}, {"v2.14", "release/v2.14"}}}

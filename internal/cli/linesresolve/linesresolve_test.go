@@ -90,7 +90,7 @@ func fixtureDocs() *docSet {
 	for i, doc := range producer("rancher", "rancher/rancher", "  lines:\n    - {line: v2.16, series: \"2.16.x\"}\n    - {line: v2.15, series: \"2.15.x\"}\n    - {line: v2.14, series: \"2.14.x\"}\n    - {line: v2.13, series: \"2.13.x\"}\n") {
 		d.put("rancher-"+string(rune('a'+i)), doc)
 	}
-	d.put("shell", project("shell", `  repo: {name: rancher/shell, owned: true}
+	d.put("shell", project("shell", `  repo: {name: rancher/shell, managedBy: orbs}
   branches:
     layout: perLine
     lines:
@@ -101,7 +101,7 @@ func fixtureDocs() *docSet {
 	for i, doc := range producer("shell", "rancher/shell", "  lines:\n    - {line: v2.16, series: \"0.9.x\"}\n    - {line: v2.15, series: \"0.8.x\"}\n    - {line: v2.14, series: \"0.7.x\"}\n") {
 		d.put("shell-"+string(rune('a'+i)), doc)
 	}
-	d.put("scc", project("scc-operator", "  repo: {name: rancher/scc-operator, owned: true}\n"))
+	d.put("scc", project("scc-operator", "  repo: {name: rancher/scc-operator, managedBy: orbs}\n"))
 	for i, doc := range producer("scc-operator", "rancher/scc-operator", "  universal: true\n") {
 		d.put("scc-"+string(rune('a'+i)), doc)
 	}
@@ -119,7 +119,7 @@ func fixtureDocs() *docSet {
       - {line: v2.16}
       - {line: v2.15, branch: release-v2.15}
 `))
-	d.put("obteam", project("obteam", "  repo: {name: rancher/ob-team-charts, owned: true}\n"))
+	d.put("obteam", project("obteam", "  repo: {name: rancher/ob-team-charts, managedBy: orbs}\n"))
 	for i, doc := range producer("obteam", "rancher/ob-team-charts", "  universal: true\n") {
 		d.put("obteam-"+string(rune('a'+i)), doc)
 	}
@@ -522,7 +522,7 @@ func TestAProjectUsedForOneLineTakesPartOnThatLineAndHasNoGapOnTheOthers(t *test
 // project on the lines that is not connected to the hub, for different lines.
 func moduleDocs() *docSet {
 	d := fixtureDocs()
-	d.put("lib", project("lib", "  repo: {name: acme/lib, owned: true}\n"))
+	d.put("lib", project("lib", "  repo: {name: acme/lib, managedBy: orbs}\n"))
 	d.put("lib-1", chaintest.Doc("Stream", "lib-1", "{project: lib}", "  tagPattern: \"v1.*\"\n  universal: true\n"))
 	d.put("lib-2", chaintest.Doc("Stream", "lib-2", "{project: lib}", "  tagPattern: \"v2.*\"\n  universal: true\n"))
 	d.put("lib-1-module", chaintest.Doc("Artifact", "lib-1-module", "{stream: lib-1}", "  kind: gomod\n  name: github.com/acme/lib\n"))

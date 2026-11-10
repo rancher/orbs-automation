@@ -25,7 +25,7 @@ func holdingsOfStream(t *testing.T, streamSpec string, specs ...string) []*chain
 	t.Helper()
 	docs := []string{
 		chaintest.Lines("v2.16", "v2.15"),
-		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, owned: true}\n"),
+		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "prod", "{project: prod}", streamSpec),
 		chaintest.Doc("Artifact", "img", "{stream: prod}", "  kind: image\n  name: acme/prod\n"),
 		chaintest.Doc("Artifact", "chart", "{stream: prod}", "  kind: file\n  name: prod-{version}.tgz\n"),

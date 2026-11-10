@@ -27,7 +27,7 @@ func addRepo(root *cobra.Command) {
 		Use:   "info [name|owner/name]",
 		Short: "Show the config entry and local clone of a repository, without the network",
 		Long: `Print what is known about a repository without reading the network: its
-central-config entry (owned, default branch, release policy and lines), and
+central-config entry (who manages it and whether your team owns it, default branch, release policy and lines), and
 where it is cloned on this machine with the state of that clone.
 
 Name a Project (its config name, such as scc-operator, or its owner/name
@@ -172,7 +172,7 @@ the repository you are in is used.`,
 	cloneCmd := &cobra.Command{
 		Use:   "clone [project...]",
 		Short: "Clone the team's projects onto this machine",
-		Long: `Clone each named Project, or with --all every Project that is owned and not
+		Long: `Clone each named Project, or with --all every Project your active team (team, GERO_TEAM) owns and that is not
 external (an external one needs its name), into <root>/<name>, where <name> is
 the repository's name. A project that is already cloned, wherever the user file
 says it is or a repos.search directory finds it, is skipped.
@@ -190,7 +190,7 @@ report says so. One project failing does not stop the others, and the exit is 1.
 The projects come from the central config in centralConfigDir (or ./config).
 A workstation with none needs it cloned first: the central bundle reader is not
 built yet. --dry-run says what would be cloned and reads the host for forks.`,
-		Example: `  # Everything the team owns, under the configured root
+		Example: `  # Everything the active team owns, under the configured root
   gero repo clone --all
 
   # Two projects, somewhere else
@@ -209,7 +209,7 @@ built yet. --dry-run says what would be cloned and reads the host for forks.`,
 			})
 		},
 	}
-	cloneCmd.Flags().BoolVar(&cloneAll, "all", false, "clone every project that is owned and not external")
+	cloneCmd.Flags().BoolVar(&cloneAll, "all", false, "clone every project the active team owns, and that is not external")
 	cloneCmd.Flags().StringVar(&cloneInto, "into", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
 	var push, yes, nonInteractive, stable, minor, major bool
 	tagCmd := &cobra.Command{

@@ -71,7 +71,7 @@ func rancherGraph(t *testing.T, repo string) *chain.Graph {
 func fixture(t *testing.T) *fakeWorkspace {
 	t.Helper()
 	return &fakeWorkspace{
-		graph:   rancherGraph(t, "{name: rancher/rancher, owned: true}"),
+		graph:   rancherGraph(t, "{name: rancher/rancher, managedBy: orbs}"),
 		current: "rancher/rancher",
 		paths:   map[string]workspace.RepoPath{"rancher/rancher": {Path: "/src/rancher", Source: workspace.PathCwd}},
 	}
@@ -81,7 +81,7 @@ var cloneOnMain = fakeClone{ref: "refs/heads/main", short: "abc1234"}
 
 func TestInfoConfigAndLocalState(t *testing.T) {
 	ws := fixture(t)
-	got, err := gather(ws, opener(cloneOnMain, nil), []string{"rancher/rancher"})
+	got, err := gather(ws, "orbs", opener(cloneOnMain, nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/rancher", ws.asked)
 	assert.Equal(t, "rancher/rancher", got.Slug)
@@ -109,7 +109,7 @@ func TestInfoNeedsNothingFromTheHost(t *testing.T) {
 
 func TestInfoFromCurrentRepository(t *testing.T) {
 	ws := fixture(t)
-	got, err := gather(ws, opener(cloneOnMain, nil), nil)
+	got, err := gather(ws, "orbs", opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	assert.Empty(t, ws.asked, "an empty slug asks for the working directory's Project")
 	assert.Equal(t, "rancher/rancher", got.Slug)
@@ -119,7 +119,7 @@ func TestInfoProjectErrors(t *testing.T) {
 	for _, want := range []error{workspace.ErrNotProject, workspace.ErrUnknownProject, workspace.ErrNotFound} {
 		ws := fixture(t)
 		ws.projectErr = want
-		_, err := gather(ws, opener(cloneOnMain, nil), nil)
+		_, err := gather(ws, "orbs", opener(cloneOnMain, nil), nil)
 		assert.ErrorIs(t, err, want)
 	}
 }
@@ -127,7 +127,7 @@ func TestInfoProjectErrors(t *testing.T) {
 func TestInfoUnresolvedCloneKeepsTheRest(t *testing.T) {
 	ws := fixture(t)
 	ws.paths["rancher/rancher"] = workspace.RepoPath{Err: workspace.ErrRepoNotFound}
-	got, err := gather(ws, opener(cloneOnMain, nil), []string{"rancher/rancher"})
+	got, err := gather(ws, "orbs", opener(cloneOnMain, nil), []string{"rancher/rancher"})
 	require.NoError(t, err)
 	assert.Equal(t, "rancher/rancher", got.Slug)
 	assert.Equal(t, LocalInfo{Error: workspace.ErrRepoNotFound.Error()}, got.Local)
@@ -137,7 +137,7 @@ func TestInfoUnresolvedCloneKeepsTheRest(t *testing.T) {
 func TestInfoDetachedHead(t *testing.T) {
 	c := cloneOnMain
 	c.ref, c.headErr = "", workspace.ErrDetachedHead
-	got, err := gather(fixture(t), opener(c, nil), nil)
+	got, err := gather(fixture(t), "orbs", opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "(detached)", got.Local.Branch)
 	assert.False(t, got.Local.Dirty, "a detached HEAD alone is not a change")
@@ -146,19 +146,19 @@ func TestInfoDetachedHead(t *testing.T) {
 func TestInfoDirtyClone(t *testing.T) {
 	c := cloneOnMain
 	c.dirty = true
-	got, err := gather(fixture(t), opener(c, nil), nil)
+	got, err := gather(fixture(t), "orbs", opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.True(t, got.Local.Dirty)
 	assert.Contains(t, renderText(got, nil), "changes or an operation in progress")
 
-	got, err = gather(fixture(t), opener(cloneOnMain, nil), nil)
+	got, err = gather(fixture(t), "orbs", opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	assert.False(t, got.Local.Dirty)
 	assert.Contains(t, renderText(got, nil), "clean")
 }
 
 func TestInfoUnreadableClone(t *testing.T) {
-	got, err := gather(fixture(t), opener(nil, errors.New("boom")), nil)
+	got, err := gather(fixture(t), "orbs", opener(nil, errors.New("boom")), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "/src/rancher", got.Local.Path)
 	assert.Equal(t, "boom", got.Local.Error)
@@ -168,14 +168,14 @@ func TestInfoUnreadableClone(t *testing.T) {
 func TestInfoUnreadableWorkTree(t *testing.T) {
 	c := cloneOnMain
 	c.cleanErr = errors.New("status failed")
-	got, err := gather(fixture(t), opener(c, nil), nil)
+	got, err := gather(fixture(t), "orbs", opener(c, nil), nil)
 	require.NoError(t, err)
 	assert.Equal(t, "status failed", got.Local.Error)
 	assert.False(t, got.Local.Dirty)
 }
 
 func TestRenderTextHeadings(t *testing.T) {
-	got, err := gather(fixture(t), opener(cloneOnMain, nil), nil)
+	got, err := gather(fixture(t), "orbs", opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	out := renderText(got, nil)
 
@@ -201,14 +201,14 @@ func TestRenderTextShowsLocalError(t *testing.T) {
 func TestRenderTextSingleProjectHasNoLinesTable(t *testing.T) {
 	ws := fixture(t)
 	ws.graph = chaintest.Projects(t, "rancher", "rancher/rancher")
-	got, err := gather(ws, opener(cloneOnMain, nil), nil)
+	got, err := gather(ws, "orbs", opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	assert.NotContains(t, renderText(got, nil), "Branches\n")
 	assert.Equal(t, "single", got.Branches.Layout)
 }
 
 func TestRenderJSON(t *testing.T) {
-	got, err := gather(fixture(t), opener(cloneOnMain, nil), nil)
+	got, err := gather(fixture(t), "orbs", opener(cloneOnMain, nil), nil)
 	require.NoError(t, err)
 	out, err := renderJSON(got)
 	require.NoError(t, err)
@@ -224,27 +224,42 @@ func TestRunRejectsOtherOutputFormats(t *testing.T) {
 	assert.ErrorContains(t, err, "not supported by repo info")
 }
 
-func TestInfoSaysWhoManagesTheProject(t *testing.T) {
+func TestInfoSaysWhoManagesTheProjectAndWhetherTheActiveTeamOwnsIt(t *testing.T) {
 	tests := []struct {
-		name string
-		repo string
-		want string
+		name       string
+		repo       string
+		want       string
+		wantOwned  bool
+		wantShared bool
 	}{
-		{"owned defaults to orbs", "{name: rancher/rancher, owned: true}", "orbs"},
-		{"another team's name", "{name: rancher/rancher, managedBy: release-team}", "release-team"},
-		{"unowned and unset is unspecified", "{name: rancher/rancher}", ""},
+		{"the active team's", "{name: rancher/rancher, managedBy: orbs}", "orbs", true, false},
+		{"another team's", "{name: rancher/rancher, managedBy: release-team}", "release-team", false, false},
+		{"shared", "{name: rancher/rancher, managedBy: shared}", "shared", false, true},
+		{"unset is unspecified", "{name: rancher/rancher}", "", false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ws := fixture(t)
 			ws.graph = rancherGraph(t, tt.repo)
 
-			got, err := gather(ws, opener(cloneOnMain, nil), nil)
+			got, err := gather(ws, "orbs", opener(cloneOnMain, nil), nil)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got.ManagedBy)
+			assert.Equal(t, tt.wantOwned, got.Owned)
+			assert.Equal(t, tt.wantShared, got.Shared)
 		})
 	}
+}
+
+func TestInfoOwnershipFollowsTheActiveTeam(t *testing.T) {
+	ws := fixture(t)
+	ws.graph = rancherGraph(t, "{name: rancher/rancher, managedBy: release-team}")
+
+	got, err := gather(ws, "release-team", opener(cloneOnMain, nil), nil)
+
+	require.NoError(t, err)
+	assert.True(t, got.Owned, "the same project is owned by the team that manages it")
 }
 
 func TestRenderTextShowsManagedByNextToOwned(t *testing.T) {
@@ -273,7 +288,7 @@ func TestInfoShowsALineWithABranchForEachStageAndOneWithNoneYet(t *testing.T) {
 	)
 	ws.current = "rancher/charts"
 
-	got, err := gather(ws, opener(cloneOnMain, nil), nil)
+	got, err := gather(ws, "orbs", opener(cloneOnMain, nil), nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"dev", "stable"}, got.Branches.Stages)

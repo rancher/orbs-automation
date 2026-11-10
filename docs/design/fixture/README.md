@@ -11,8 +11,8 @@
 | `rancher-assets.yaml` | Project, Stream, Artifact, Holding |
 | `rancher-charts.yaml` | Project, one chart Stream, 2 Holdings, Edit |
 | `rancher.yaml` | Project, Stream, Artifact, 9 Holdings (build.yaml, charts branch, wrangler for each minor, lasso), Edit |
-| `wrangler.yaml` | Project (unowned), a Stream and `gomod` Artifact for each tracked minor (v3.8, v3.7, v3.6, v3.3) |
-| `lasso.yaml` | Project (unowned), one Stream and `gomod` Artifact for v0.2 |
+| `wrangler.yaml` | Project (managed by another team), a Stream and `gomod` Artifact for each tracked minor (v3.8, v3.7, v3.6, v3.3) |
+| `lasso.yaml` | Project (managed by another team), one Stream and `gomod` Artifact for v0.2 |
 | `rancher.lines.yaml` | RancherLines, as in the real config |
 | `examples/library.yaml` | a library, two services holding it in their Dockerfiles |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |

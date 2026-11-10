@@ -41,9 +41,10 @@ type Opener func(dir string) (Clone, error)
 // Info is everything the command reports about one repository.
 type Info struct {
 	Slug          string       `json:"slug"`
-	Owned         bool         `json:"owned"`
+	Owned         bool         `json:"owned"` // the active team manages it
 	External      bool         `json:"external,omitempty"`
-	ManagedBy     string       `json:"managedBy,omitempty"` // the team responsible; empty when an unowned project names none
+	Shared        bool         `json:"shared,omitempty"`    // every team manages it together, and none owns it
+	ManagedBy     string       `json:"managedBy,omitempty"` // the team responsible; empty when the project names none
 	DefaultBranch string       `json:"defaultBranch"`
 	Branches      BranchesInfo `json:"branches"`
 	Streams       []StreamInfo `json:"streams,omitempty"`
@@ -109,7 +110,7 @@ func Run(s clicfg.Settings, cwd string, slugs []string) (string, error) {
 		return "", fmt.Errorf("output format %q is not supported by repo info: use text or json", s.Output)
 	}
 	ws := workspace.Open(s, cwd)
-	i, err := gather(ws, func(dir string) (Clone, error) {
+	i, err := gather(ws, s.Team, func(dir string) (Clone, error) {
 		r, err := ws.OpenAt(dir)
 		if err != nil {
 			return nil, err
@@ -125,7 +126,7 @@ func Run(s clicfg.Settings, cwd string, slugs []string) (string, error) {
 	return renderText(i, style.New(s.Terminal)), nil
 }
 
-func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
+func gather(ws Workspace, team string, open Opener, slugs []string) (Info, error) {
 	var slug string
 	if len(slugs) > 0 {
 		slug = slugs[0]
@@ -136,9 +137,10 @@ func gather(ws Workspace, open Opener, slugs []string) (Info, error) {
 	}
 	i := Info{
 		Slug:          p.Slug(),
-		Owned:         p.Owned(),
+		Owned:         p.Owned(team),
 		External:      p.External(),
-		ManagedBy:     p.Steward(),
+		Shared:        p.Shared(),
+		ManagedBy:     p.ManagedBy(),
 		DefaultBranch: p.DefaultBranch(),
 		Branches:      BranchesInfo{Layout: p.Layout(), Stages: p.Stages()},
 	}
@@ -317,7 +319,7 @@ func renderJSON(i Info) (string, error) {
 	return string(b) + "\n", nil
 }
 
-// orUnspecified is how an unowned project that names no team is shown.
+// orUnspecified is how a project that names no team is shown.
 func orUnspecified(team string) string {
 	if team == "" {
 		return "unspecified"

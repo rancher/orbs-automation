@@ -3,7 +3,9 @@ package ship
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -23,8 +25,8 @@ var (
 	// ErrNoTargets is returned when no consumer branch can be worked out for the
 	// release, and none was named.
 	ErrNoTargets = errors.New("no target branch for the release")
-	// ErrNotOwned is returned when the producer is not an owned project: gero reads
-	// where its releases stand and never opens a PR for them.
+	// ErrNotOwned is returned when the producer is not owned by the active team: gero
+	// reads where its releases stand and never opens a PR for them.
 	ErrNotOwned = errors.New("not owned")
 	// ErrBranchNotFound is returned when the consumer's repository has no branch
 	// of the name.
@@ -80,6 +82,8 @@ type Input struct {
 	To         string   // the consumer, when the producer ships to several
 	Lines      []string // the consumer's Rancher lines to ship to, such as v2.15, in place of every branch the release goes to
 	Prerelease bool     // let prereleases count
+	// Team is the active team context: a producer it owns is shipped from.
+	Team string
 	// DryRun is the invocation's --dry-run: compute and report, and create no
 	// branch or PR. It is carried into the plan so the report says which it is.
 	DryRun bool
@@ -249,6 +253,9 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 		plan.Holdings = append(plan.Holdings, h.Name())
 	}
 	plan.Notes = sel.notes
+	if note := skippedNote(res, specs); note != "" {
+		plan.Notes = append(plan.Notes, note)
+	}
 	for _, sp := range specs {
 		if !slices.ContainsFunc(plan.Releases, func(r Release) bool { return r.Tag == sp.release.Tag }) {
 			plan.Releases = append(plan.Releases, sp.release)
@@ -290,6 +297,28 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	}
 	plan.Status = overall(plan)
 	return plan, res, nil
+}
+
+// skippedNote says which steps a route that skips the producer's steps leaves out,
+// for the targets, or "" when there are none. They are the steps of the edits that
+// run from the repo of a project the active team does not own.
+func skippedNote(res resolution, specs []spec) string {
+	var runs []string
+	seen := map[string]bool{}
+	for _, sp := range specs {
+		for _, ref := range res.route.SkippedSteps(sp.target) {
+			key := fmt.Sprintf("%s/%s/%d", ref.Edit, ref.Phase, ref.Index)
+			if run := strings.Join(ref.Step.Run, " "); !seen[key] {
+				seen[key] = true
+				runs = append(runs, "`"+run+"`")
+			}
+		}
+	}
+	if len(runs) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s is managed by %s, so gero did not run the %d step(s) that run from its repo (%s) and the PRs may be incomplete",
+		res.producer.Slug(), orUnspecified(res.producer.ManagedBy()), len(runs), strings.Join(runs, ", "))
 }
 
 // overall is the state of the whole plan.

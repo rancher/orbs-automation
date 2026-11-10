@@ -83,8 +83,8 @@ None of these is forced by the shell and SCC to Rancher baseline, which the shap
 
 ### O6. How do `owned`, observed edges and sending fit?
 
-* **Context:** `repo.owned` says gero ships from a repo, and an edge from an unowned producer is only observed. With holdings declared by the consumer, "who ships" is not where the edge is written. A producer may also send by itself (shell every release, SCC a stable and an RC on request).
-* **Option A, derive it:** gero can ship a holding when the artifact's project is `owned` and an Edit has what it needs. **Option B, `mode: observe | ship` on the holding.** **Option C, a producer-side `Delivery` kind** for what a stream sends by itself.
+* **Context:** a repo is owned when its `managedBy` is the active team, gero ships from an owned one, and an edge from a producer the team does not own is only observed. With holdings declared by the consumer, "who ships" is not where the edge is written. A producer may also send by itself (shell every release, SCC a stable and an RC on request).
+* **Option A, derive it:** gero can ship a holding when the artifact's project is owned by the active team and an Edit has what it needs. **Option B, `mode: observe | ship` on the holding.** **Option C, a producer-side `Delivery` kind** for what a stream sends by itself.
 * **Lean A now, C if a status view needs the expectation.**
 
 ### O7. Where do the policies live?

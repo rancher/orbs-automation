@@ -127,7 +127,7 @@ func inputFrom(s clicfg.Settings, opts Options) domain.Input {
 	return domain.Input{
 		Project: opts.Project, Arg: opts.Arg, To: opts.To, Lines: opts.Lines, Prerelease: opts.Prerelease,
 		BranchPrefix: s.BranchPrefix, AllowDowngrade: opts.AllowDowngrade, DryRun: s.DryRun, NoPush: opts.NoPush,
-		PushTo: opts.PushTo, CI: s.CI, Refresh: opts.Refresh,
+		PushTo: opts.PushTo, CI: s.CI, Refresh: opts.Refresh, Team: s.Team,
 	}
 }
 

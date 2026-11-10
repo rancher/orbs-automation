@@ -22,7 +22,7 @@ func publishing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *
 	return ws, clone, ex, remote, lg
 }
 
-func realRun() Input { return Input{Project: "scc-operator", Lines: []string{"v2.15"}} }
+func realRun() Input { return Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}} }
 
 // mine and others' PRs for the bump that the fixture ships, v0.5.3 to release/v2.15.
 func existing(number int, author, version string) pulls.PR {

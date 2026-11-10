@@ -27,7 +27,7 @@ The file it writes starts with the `yaml-language-server` comment that points at
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/user-config.schema.json
 ```
-On a fresh workstation it enables `gero repo clone [project...] [--all]`, which clones the named projects, or every project that is owned and not external, under `repos.cloneRoot` or `--into`.
+On a fresh workstation it enables `gero repo clone [project...] [--all]`, which clones the named projects, or every project the active team owns and that is not external, under `repos.cloneRoot` or `--into`.
 
 ## Goal: a repo clone tool to fetch team projects
 

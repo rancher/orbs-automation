@@ -47,6 +47,14 @@ const (
 	BundleChannelPrerelease = "prerelease" // the newest release, a pre-release or not
 )
 
+// The active team context (docs/specs/CLI_CONFIG.md).
+const (
+	DefaultTeam = "orbs" // the team gero works for when none is set
+	// TeamShared is the managedBy of a project no team owns and every team may write
+	// into. It is a sentinel and never a team, so it cannot be the active team.
+	TeamShared = "shared"
+)
+
 // Log levels, lowest verbosity last.
 const (
 	LogDebug = "debug"
@@ -91,9 +99,13 @@ type Settings struct {
 	// ReplPrompt is the template of the prompt of gero repl, repl.prompt in the
 	// user file. It is checked when the REPL starts and not here, so a bad one
 	// breaks the REPL and no other command.
-	ReplPrompt   string
-	LogLevel     string // LogDebug, LogInfo, LogWarn or LogError
-	Upstream     string // remote treated as the real source
+	ReplPrompt string
+	LogLevel   string // LogDebug, LogInfo, LogWarn or LogError
+	Upstream   string // remote treated as the real source
+	// Team is the active team context gero works in when run: a project is owned
+	// when its managedBy is this team. It is team, GERO_TEAM or --team, and orbs
+	// when none is set.
+	Team         string
 	Fork         string // remote holding the developer's fork
 	GitHubUser   string
 	BranchPrefix string

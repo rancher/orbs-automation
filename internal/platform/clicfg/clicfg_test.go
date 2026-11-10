@@ -889,3 +889,44 @@ func TestMissingSearchIsTheEntriesThatAreNotDirectories(t *testing.T) {
 	assert.Equal(t, []string{gone, file}, got)
 	assert.Empty(t, Repos{}.MissingSearch())
 }
+
+func TestLoadTeam(t *testing.T) {
+	tests := []struct {
+		name       string
+		file       string
+		env        map[string]string
+		flags      map[string]string
+		want       string
+		wantSource Source
+	}{
+		{"default is orbs", "", nil, nil, DefaultTeam, SourceDefault},
+		{"file", "team: frameworks-team\n", nil, nil, "frameworks-team", SourceFile},
+		{"env beats the file", "team: frameworks-team\n", map[string]string{"GERO_TEAM": "release-team"}, nil, "release-team", SourceEnv},
+		{"flag beats env", "", map[string]string{"GERO_TEAM": "release-team"}, map[string]string{"team": "frameworks-team"}, "frameworks-team", SourceFlag},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Load(Inputs{UserFile: file(tt.file), UserFileName: "gero.yaml", Getenv: env(tt.env), Flags: flags(tt.flags)})
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, s.Team)
+			assert.Equal(t, tt.wantSource, s.Source("team"))
+		})
+	}
+}
+
+func TestLoadRejectsATeamThatIsNotASlug(t *testing.T) {
+	for name, in := range map[string]Inputs{
+		"file, not lowercase": {UserFile: file("team: Frameworks\n"), UserFileName: "gero.yaml"},
+		"file, a space":       {UserFile: file("team: \"a b\"\n"), UserFileName: "gero.yaml"},
+		"env, shared":         {Getenv: env(map[string]string{"GERO_TEAM": TeamShared})},
+		"flag, shared":        {Flags: flags(map[string]string{"team": TeamShared})},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Load(in)
+
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "team")
+		})
+	}
+}

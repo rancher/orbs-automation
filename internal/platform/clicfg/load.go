@@ -103,6 +103,13 @@ var scalars = []scalar{
 		field:    func(s *Settings) *string { return &s.Upstream },
 		fromFile: func(f *fileConfig) string { return f.Upstream },
 	},
+	{
+		name:     "team",
+		def:      DefaultTeam,
+		validate: validateTeam,
+		field:    func(s *Settings) *string { return &s.Team },
+		fromFile: func(f *fileConfig) string { return f.Team },
+	},
 }
 
 func validateOutput(v string) error {
@@ -133,6 +140,20 @@ func validateBundleChannel(v string) error {
 		return nil
 	}
 	return fmt.Errorf("must be %q, %q or %q, got %q", BundleChannelAuto, BundleChannelStable, BundleChannelPrerelease, v)
+}
+
+var teamRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
+// validateTeam accepts a lowercase slug, which is what managedBy is, except
+// shared: that names projects no team owns, so no team can be it.
+func validateTeam(v string) error {
+	switch {
+	case v == TeamShared:
+		return fmt.Errorf("%q is not a team: it names the projects every team may write into", v)
+	case !teamRE.MatchString(v):
+		return fmt.Errorf("must be a lowercase slug such as release-team, got %q", v)
+	}
+	return nil
 }
 
 func validateLog(v string) error {

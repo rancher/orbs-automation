@@ -52,6 +52,16 @@ func TestEntries(t *testing.T) {
 				"upstream": {"upstream", "", "default"},
 				"fork":     {"fork", "", "default"},
 				"log":      {"log", "warn", "default"},
+				"team":     {"team", "orbs", "default"},
+			},
+		},
+		{
+			name:  "team from the file, env, then flag",
+			file:  "team: frameworks-team\n",
+			env:   map[string]string{"GERO_TEAM": "release-team"},
+			flags: map[string]string{"team": "platform"},
+			want: map[string]Entry{
+				"team": {"team", "platform", "flag"},
 			},
 		},
 		{

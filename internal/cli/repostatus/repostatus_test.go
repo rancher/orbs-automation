@@ -116,7 +116,7 @@ func opener(c Clone, err error) Opener {
 func rancherDocs(streamExtra string) []string {
 	return []string{
 		chaintest.Lines("v2.13", "v2.12"),
-		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, owned: true}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.13}\n      - {line: v2.12, branch: release/v2.12}\n"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, managedBy: orbs}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.13}\n      - {line: v2.12, branch: release/v2.12}\n"),
 		chaintest.Doc("Stream", "rancher", "{project: rancher}", "  requiresPrerelease: true\n"+streamExtra+"  lines:\n    - {line: v2.13, series: \"2.13.x\"}\n    - {line: v2.12, series: \"2.12.x\"}\n"),
 	}
 }
@@ -298,7 +298,7 @@ func TestStatusTagsFollowTheTagPattern(t *testing.T) {
 func TestStatusSingleBranchProject(t *testing.T) {
 	ws := fixture(t)
 	ws.docs = []string{
-		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, owned: true}\n"),
+		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "rancher", "{project: rancher}", "  universal: true\n"),
 	}
 	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
@@ -517,7 +517,7 @@ func shipping(t *testing.T) *fakeWorkspace {
 	t.Helper()
 	ws := fixture(t)
 	ws.docs = append(rancherDocs(""),
-		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, owned: true}\n"),
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
 		chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),
 		chaintest.Doc("Holding", "rancher-holds-scc", "{project: rancher, artifact: scc-image}",

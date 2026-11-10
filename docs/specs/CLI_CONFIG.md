@@ -63,7 +63,7 @@ Keys are table-driven (file key, derived env var, flag name, default, validator)
 * No secrets. Tokens stay with `gh` or the environment.
 * **CI ignores it** unless `GERO_CONFIG` is set explicitly, so a runner never behaves differently because of a stray file. What counts as CI is decided in one place ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)).
 * The main use is per-developer behavior that must not leak into the shared tool. The motivating case: locally `origin` is a developer's fork, while in CI `origin` is the real source, so `upstream` tells `gero` which remote to treat as the real source.
-* It never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. There is deliberately no layout key: it would encode a workstation convention not everyone follows. `repos.cloneRoot` is not one, since it says where a new clone goes and not how existing clones are arranged; the layout under it is fixed at `<root>/<name>`.
+* It never holds a tool decision, only where things are and how output looks, so CI results stay reproducible. `team` says whose projects this person works for, not what the tool does with them, and the default is the same in CI, so a stray file changes nothing there. There is deliberately no layout key: it would encode a workstation convention not everyone follows. `repos.cloneRoot` is not one, since it says where a new clone goes and not how existing clones are arranged; the layout under it is fixed at `<root>/<name>`.
 
 ### Keys and environment
 
@@ -76,6 +76,7 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 | `bundleChannel` | `GERO_BUNDLE_CHANNEL` | `--bundle-channel` | `auto` (default), `stable` or `prerelease`: which releases the central bundle may come from ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#releases-fetching-and-verifying)). `auto` follows the running gero: a pre-release gero reads pre-release bundles, a stable one only stable ones |
 | n/a | `GERO_BUNDLE_FILE` | `--bundle-file` | Path of one bundle file, downloaded by hand, to run against the config of an exact release. **Not a user-file key**: it is the explicit one-off, and a file that pinned it would fix every command to one release |
 | `upstream` | `GERO_UPSTREAM` | `--upstream` | Remote or repo treated as the real source |
+| `team` | `GERO_TEAM` | `--team` | The **active team context gero works in when run**, a lowercase slug, default `orbs`. A project whose `managedBy` is this team is **owned**: gero ships from it, `gero repo clone --all` clones it, and its `from: producer` steps run. `shared` is not a team and is refused. A project of another team is observed, and `gero ship` takes one as the producer only with `--to` naming a consumer the team owns or one that is `shared` ([PUSH_TO_REPO](PUSH_TO_REPO.md#shipping-another-teams-release)). The default means CI, which reads no user file, acts as ORBS unless `GERO_TEAM` says otherwise. A team that is the `managedBy` of no project owns nothing, so a typo shows as every project being observed |
 | `output` | `GERO_OUTPUT` | `--output`, `--json` | `text` (default), `json` or `env` |
 | `color` | `GERO_COLOR` | `--color`, `--no-color` | `auto` (default), `always` or `never`. `auto` defers to `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and TTY detection ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)) |
 | (none) | `GERO_DRY_RUN` | `--dry-run` | `true` or `false` (default). **Not a user-file key**: a file that turned it on would silence every write |
@@ -113,6 +114,7 @@ bundleChannel: auto    # auto (default), stable or prerelease
 output: text
 color: auto            # auto (default), always or never
 upstream: upstream
+team: orbs             # the active team context; default orbs
 repl:
   prompt: "gero{project: (%s)}> "   # {project} {dir} {path}; {{ and }} are braces
 fork: origin

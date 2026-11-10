@@ -7,7 +7,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: lasso
 spec:
-  repo: {name: rancher/lasso, owned: false, managedBy: frameworks-team}
+  repo: {name: rancher/lasso, managedBy: frameworks-team}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

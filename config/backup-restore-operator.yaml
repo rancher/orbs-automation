@@ -6,7 +6,7 @@ kind: Project
 name: backup-restore-operator
 spec:
   aliases: ["bro"]
-  repo: {name: rancher/backup-restore-operator, owned: true}
+  repo: {name: rancher/backup-restore-operator, managedBy: orbs}
   branches:
     layout: perLine
     lines:

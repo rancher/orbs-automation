@@ -23,7 +23,7 @@ func (a *asked) confirm(_ context.Context, c Confirmation) (bool, error) {
 }
 
 // everyBranch ships to both release branches of the fixture.
-func everyBranch() Input { return Input{Project: "scc-operator"} }
+func everyBranch() Input { return Input{Team: testTeam, Project: "scc-operator"} }
 
 // onBase is an existing PR of the actor's for the bump to a base.
 func onBase(base string, number int, author, version string) pulls.PR {
@@ -133,8 +133,8 @@ func TestShipAClosingOfOlderPRsAloneIsAWriteThatIsAskedAbout(t *testing.T) {
 
 func TestShipIsNotAskedForADryRunOrANoPushRun(t *testing.T) {
 	for _, in := range []Input{
-		{Project: "scc-operator", Lines: []string{"v2.15"}, DryRun: true},
-		{Project: "scc-operator", Lines: []string{"v2.15"}, NoPush: true},
+		{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}, DryRun: true},
+		{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}, NoPush: true},
 	} {
 		ws, _, ex, _, _ := publishing(t)
 		q := &asked{answer: false}

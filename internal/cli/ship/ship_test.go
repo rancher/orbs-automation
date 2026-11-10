@@ -47,7 +47,7 @@ func graph() *chain.Graph {
 		fsys := fstest.MapFS{}
 		for i, d := range []string{
 			chaintest.Lines("v2.16"),
-			chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, owned: true}\n"),
+			chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, managedBy: orbs}\n"),
 			chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
 			chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),
 			chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}]\n"),
@@ -101,7 +101,7 @@ func (f fakeProber) Exists(context.Context, string, string, string) ociregistry.
 	return f.result
 }
 
-var in = domain.Input{Project: "scc-operator", Lines: []string{"v2.16"}}
+var in = domain.Input{Team: "orbs", Project: "scc-operator", Lines: []string{"v2.16"}}
 
 func readyWorkspace() *fakeWorkspace {
 	return &fakeWorkspace{files: map[string]string{"build.yaml": "image: rancher/scc-operator:v0.5.2\n"}}
@@ -287,7 +287,7 @@ func TestRunBlocksADowngradeAndAllowsItOnRequest(t *testing.T) {
 
 func TestRunWithNoBranchChecksTheBranchesTheReleaseGoesTo(t *testing.T) {
 	out, err := runWith(context.Background(), readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
-		nil, clicfg.OutputText, domain.Input{Project: "scc-operator"})
+		nil, clicfg.OutputText, domain.Input{Team: "orbs", Project: "scc-operator"})
 	require.NoError(t, err)
 	assert.Contains(t, out, "Targets")
 	assert.Contains(t, out, "main", "the consumer's one branch, since it is not tied to release lines")
@@ -666,13 +666,13 @@ func TestRunToWithNoLoggerWritesNoLogs(t *testing.T) {
 }
 
 func TestInputFromCarriesTheFlagsAndTheSettings(t *testing.T) {
-	s := clicfg.Settings{BranchPrefix: "dan/", DryRun: true}
+	s := clicfg.Settings{BranchPrefix: "dan/", DryRun: true, Team: "orbs"}
 	opts := Options{Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Lines: []string{"v2.16"}, Prerelease: true, AllowDowngrade: true, NoPush: true, PushTo: "upstream"}
 
 	got := inputFrom(s, opts)
 
 	assert.Equal(t, domain.Input{
-		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Lines: []string{"v2.16"}, Prerelease: true,
+		Project: "scc-operator", Arg: "v0.5.3", To: "rancher", Lines: []string{"v2.16"}, Prerelease: true, Team: "orbs",
 		BranchPrefix: "dan/", AllowDowngrade: true, DryRun: true, NoPush: true, PushTo: "upstream",
 	}, got)
 }

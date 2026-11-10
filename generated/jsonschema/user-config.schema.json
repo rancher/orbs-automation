@@ -42,6 +42,9 @@
         "upstream": {
           "type": "string"
         },
+        "team": {
+          "type": "string"
+        },
         "fork": {
           "type": "string"
         },

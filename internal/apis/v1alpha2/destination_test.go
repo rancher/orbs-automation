@@ -14,7 +14,7 @@ import (
 func minors() []string {
 	return []string{
 		doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n    - id: v2.15\n"),
-		doc("Project", "lib", "", "  repo: {name: acme/lib, owned: true}\n"),
+		doc("Project", "lib", "", "  repo: {name: acme/lib, managedBy: orbs}\n"),
 		doc("Stream", "lib-1-2", "{project: lib}", "  scheme: semver\n  tagPattern: \"v1.2.*\"\n  universal: true\n"),
 		doc("Stream", "lib-1-1", "{project: lib}", "  scheme: semver\n  tagPattern: \"v1.1.*\"\n  universal: true\n"),
 		doc("Artifact", "lib-1-2-module", "{stream: lib-1-2}", "  kind: gomod\n  name: github.com/acme/lib\n"),

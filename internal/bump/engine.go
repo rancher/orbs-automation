@@ -122,7 +122,11 @@ type Route struct {
 	// artifact of each of its holdings.
 	Stream   *chain.Stream
 	Holdings []*chain.Holding
-	engine   *Engine
+	// SkipProducerSteps leaves out the steps that run from the producer's repo, for
+	// a producer the active team does not own: gero runs nothing out of a repo no
+	// team of its own owns. They are reported by SkippedSteps.
+	SkipProducerSteps bool
+	engine            *Engine
 }
 
 // routeKey is what a route is for: the project the key says, and the stream of
@@ -304,8 +308,33 @@ type StepRef struct {
 // Steps returns the steps that run for a target, in the order they run: the
 // edits' pre-edit steps before the write and their post-edit steps after it. Only
 // steps whose range holds the target's line run; a branch in no line gets every
-// step that has no range.
+// step that has no range. A route that skips the producer's steps leaves out the
+// ones that run from the producer's repo (SkippedSteps).
 func (r Route) Steps(t Target) (pre, post []StepRef) {
+	ran, _ := r.split(t)
+	for _, ref := range ran {
+		if ref.Phase == PreEdit {
+			pre = append(pre, ref)
+		} else {
+			post = append(post, ref)
+		}
+	}
+	return pre, post
+}
+
+// SkippedSteps returns the steps Steps leaves out of the run for a target because
+// they run from the producer's repo and the route skips those, in the order they
+// would have run: the pre-edit steps, then the post-edit steps.
+func (r Route) SkippedSteps(t Target) []StepRef {
+	_, skipped := r.split(t)
+	return skipped
+}
+
+// split is the steps of a target that apply to its line, divided into the ones that
+// run and the ones the route skips, each in the order the steps would run: every
+// pre-edit step of the edits, then every post-edit step.
+func (r Route) split(t Target) (ran, skipped []StepRef) {
+	var pre, post []StepRef
 	collect := func(phase Phase, name string, steps []chain.Step) []StepRef {
 		var out []StepRef
 		for i, st := range steps {
@@ -319,7 +348,14 @@ func (r Route) Steps(t Target) (pre, post []StepRef) {
 		pre = append(pre, collect(PreEdit, ed.Name(), ed.PreEdit())...)
 		post = append(post, collect(PostEdit, ed.Name(), ed.PostEdit())...)
 	}
-	return pre, post
+	for _, ref := range append(pre, post...) {
+		if r.SkipProducerSteps && ref.Step.FromProducer() {
+			skipped = append(skipped, ref)
+		} else {
+			ran = append(ran, ref)
+		}
+	}
+	return ran, skipped
 }
 
 // StepError is a step that failed, naming where it was.

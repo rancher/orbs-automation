@@ -14,7 +14,7 @@ This is the order the provider runs for each document (decode, then defaults, th
 
 ## Defaults are safe and independent
 
-A default fills only a field that has a conservative value of its own, such as `layout: single`, `scheme: semver`, `at.format: yaml`, `holds.accept: stable`. A value that depends on something else is not filled: it stays as written and a getter gives the effective value (`managedBy` is `orbs` only if the repo is owned; a line's branch depends on its phase). The same "raw and effective" rule `docs/specs/WORKSPACE.md` states for today's config.
+A default fills only a field that has a conservative value of its own, such as `layout: single`, `scheme: semver`, `at.format: yaml`, `holds.accept: stable`. A value that depends on something else is not filled: it stays as written and a getter gives the effective value (whether the active team owns a project depends on the CLI settings, so `managedBy` is never filled and `Owned(team)` answers; a line's branch depends on its phase). The same "raw and effective" rule `docs/specs/WORKSPACE.md` states for today's config.
 
 ## Findings and warnings
 

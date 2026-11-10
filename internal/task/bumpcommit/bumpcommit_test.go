@@ -92,7 +92,7 @@ func invocation(t *testing.T, pre, post []chain.Step) scene {
 	t.Helper()
 	spec := "  holds: {kind: release, form: \"{image}:{tag}\"}\n"
 	docs := []string{
-		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, owned: true}\n"),
+		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
 		chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),
 		chaintest.Doc("Project", "rancher", "", "  repo: {name: rancher/rancher}\n"),
@@ -328,7 +328,7 @@ func TestRunTheCommitCallbackGetsTheFilesToo(t *testing.T) {
 func goBumpScene(t *testing.T) scene {
 	t.Helper()
 	docs := []string{
-		chaintest.Doc("Project", "lib", "", "  repo: {name: acme/lib, owned: true}\n"),
+		chaintest.Doc("Project", "lib", "", "  repo: {name: acme/lib, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "lib", "{project: lib}", "  universal: true\n"),
 		chaintest.Doc("Artifact", "lib-image", "{stream: lib}", "  kind: image\n  name: acme/lib\n"),
 		chaintest.Doc("Project", "svc", "", "  repo: {name: acme/svc}\n"),

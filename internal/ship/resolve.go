@@ -31,13 +31,19 @@ type resolution struct {
 
 // resolve finds the producer, picks the route to ship down, and resolves the
 // release from the producer's tags on the host.
+//
+// A producer the active team does not own is refused, unless the consumer is
+// named and is one the team owns or one that is shared: then the release is
+// shipped as for an owned producer, except that the steps that run from the
+// producer's repo are skipped (bump.Route.SkipProducerSteps).
 func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 	producer, err := ws.Project(in.Project)
 	if err != nil {
 		return resolution{}, err
 	}
-	if !producer.Owned() {
-		return resolution{}, notOwned(producer)
+	foreign := !producer.Owned(in.Team)
+	if foreign && in.To == "" {
+		return resolution{}, notOwned(producer, in.Team)
 	}
 	engine, engineErr := ws.Bump()
 	if engine == nil {
@@ -50,6 +56,12 @@ func resolve(ctx context.Context, ws Reader, in Input) (resolution, error) {
 	route, err := pickRoute(producer, routes, in.To)
 	if err != nil {
 		return resolution{}, err
+	}
+	if foreign {
+		if !route.Consumer.Owned(in.Team) && !route.Consumer.Shared() {
+			return resolution{}, notOwnedConsumer(producer, route.Consumer, in.Team)
+		}
+		route.SkipProducerSteps = true
 	}
 	return resolveRoute(ctx, ws, route)
 }
@@ -278,11 +290,38 @@ func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Ro
 	return bump.Route{}, fmt.Errorf("%w for %s: %s takes several of its streams, which ship cannot tell apart yet: %s", ErrAmbiguousConsumer, producer.Name(), matches[0].Consumer.Name(), describe(matches))
 }
 
-// notOwned says why gero does not ship from an unowned project, naming the team
-// that does when the config does.
-func notOwned(p *chain.Project) error {
-	if team := p.Steward(); team != "" {
-		return fmt.Errorf("%w: %s is not owned, so gero only observes it, and %s ships its releases", ErrNotOwned, p.Name(), team)
+// notOwnedConsumer says why gero does not ship another team's release into a
+// project the active team does not own.
+func notOwnedConsumer(producer, consumer *chain.Project, team string) error {
+	return fmt.Errorf("%w: %s is managed by %s, so gero only ships it into a project %s owns or one that is shared, and %s is neither",
+		ErrNotOwned, producer.Name(), orUnspecified(producer.ManagedBy()), orTheActiveTeam(team), consumer.Name())
+}
+
+// orUnspecified is the team of a project, or a word for none.
+func orUnspecified(team string) string {
+	if team == "" {
+		return "no team"
 	}
-	return fmt.Errorf("%w: %s is not owned, so gero only observes it", ErrNotOwned, p.Name())
+	return team
+}
+
+// orTheActiveTeam is the team gero acts for, or a phrase for none.
+func orTheActiveTeam(team string) string {
+	if team == "" {
+		return "the active team"
+	}
+	return team
+}
+
+// notOwned says why gero does not ship from a project the active team does not
+// own, naming the team that manages it when the config does.
+func notOwned(p *chain.Project, team string) error {
+	active := "is not owned by " + team
+	if team == "" {
+		active = "is not owned by the active team"
+	}
+	if by := p.ManagedBy(); by != "" {
+		return fmt.Errorf("%w: %s %s, so gero only observes it, and %s ships its releases", ErrNotOwned, p.Name(), active, by)
+	}
+	return fmt.Errorf("%w: %s %s, so gero only observes it", ErrNotOwned, p.Name(), active)
 }

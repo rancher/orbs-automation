@@ -493,9 +493,10 @@ func (s *set) holdingStages() {
 	}
 }
 
-// editSteps checks that a step run from the producer has a producer that is
-// owned, for each Holding the Edit follows: gero runs nothing out of a repo it
-// does not ship from.
+// editSteps checks that a step run from the producer has a producer a team
+// manages, for each Holding the Edit follows: gero runs nothing out of a repo no
+// team owns. Whether the active team is that team is known only when a command
+// runs, which skips the step for a producer the team does not own.
 func (s *set) editSteps() {
 	for _, o := range s.objs {
 		e, ok := o.(*Edit)
@@ -516,14 +517,20 @@ func (s *set) editSteps() {
 					if h == nil {
 						continue
 					}
-					if prod := s.producer(h); prod != nil && !prod.Spec.Repo.Owned {
-						r.Errorf(fmt.Sprintf("%s[%d].from", group.path, i), "Project %q is not owned, so nothing is run from it (Holding %q)", prod.Name, name)
+					if prod := s.producer(h); prod != nil && !hasTeam(prod.Spec.Repo) {
+						r.Errorf(fmt.Sprintf("%s[%d].from", group.path, i), "no team manages Project %q, so nothing is run from it (Holding %q)", prod.Name, name)
 					}
 				}
 			}
 		}
 		s.add(r)
 	}
+}
+
+// hasTeam reports whether a team manages the repo: it names one that is not
+// shared, which no team owns, and is not outside the organization.
+func hasTeam(repo Repo) bool {
+	return repo.ManagedBy != "" && repo.ManagedBy != ManagedByShared && !repo.External
 }
 
 // acknowledgements checks what each document says is expected, and marks the

@@ -84,7 +84,7 @@ func newShip(t *testing.T) (*realWorkspace, string, *Executor) {
 }
 
 func shipIn(line string) Input {
-	return Input{Project: "scc-operator", Lines: lineArgs(line), NoPush: true}
+	return Input{Team: testTeam, Project: "scc-operator", Lines: lineArgs(line), NoPush: true}
 }
 
 // onlyResult is the result of the one target, which the test requires.

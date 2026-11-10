@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	sccProducerDocs = "apiVersion: gero/v1alpha2\nkind: Project\nname: scc-operator\nspec:\n  repo: {name: rancher/scc-operator, owned: true}\n---\n" +
+	sccProducerDocs = "apiVersion: gero/v1alpha2\nkind: Project\nname: scc-operator\nspec:\n  repo: {name: rancher/scc-operator, managedBy: orbs}\n---\n" +
 		"apiVersion: gero/v1alpha2\nkind: Stream\nname: scc-operator\nrefs: {project: scc-operator}\nspec: {universal: true}\n---\n" +
 		"apiVersion: gero/v1alpha2\nkind: Artifact\nname: scc-image\nrefs: {stream: scc-operator}\nspec: {kind: image, name: rancher/scc-operator}\n"
 	rancherHolding = "apiVersion: gero/v1alpha2\nkind: Holding\nname: rancher-holds-scc\nrefs: {project: rancher, artifact: scc-image}\n" +

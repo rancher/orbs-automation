@@ -25,7 +25,7 @@ import (
 // and flags.
 type Options struct {
 	Projects []string // by config name or slug; none with All
-	All      bool     // every Project that is owned and not external
+	All      bool     // every Project the active team owns, and that is not external
 	Into     string   // --into: the clone root, which beats the environment and the user file
 	// Style colors the text report. Nil is plain, and so is a renderer built for a
 	// terminal without color; the JSON report is never styled.
@@ -113,7 +113,7 @@ func run(ctx context.Context, w io.Writer, d Deps, s clicfg.Settings, cwd string
 	if s.Output != clicfg.OutputText && s.Output != clicfg.OutputJSON {
 		return fmt.Errorf("output format %q is not supported by repo clone: use text or json", s.Output)
 	}
-	selected, err := selectProjects(d.Source, opts)
+	selected, err := selectProjects(d.Source, s.Team, opts)
 	if err != nil {
 		return err
 	}
@@ -138,14 +138,14 @@ func run(ctx context.Context, w io.Writer, d Deps, s clicfg.Settings, cwd string
 	return nil
 }
 
-// selectProjects is the Projects the user named, or with All the ones that are
-// owned and not external, each once and in the order given.
-func selectProjects(src ProjectSource, opts Options) ([]*chain.Project, error) {
+// selectProjects is the Projects the user named, or with All the ones the team
+// owns and that are not external, each once and in the order given.
+func selectProjects(src ProjectSource, team string, opts Options) ([]*chain.Project, error) {
 	switch {
 	case opts.All && len(opts.Projects) > 0:
 		return nil, errors.New("name projects or pass --all, not both")
 	case !opts.All && len(opts.Projects) == 0:
-		return nil, errors.New("name the projects to clone, or pass --all for every owned project")
+		return nil, errors.New("name the projects to clone, or pass --all for every project your team owns")
 	}
 	var all []*chain.Project
 	if opts.All {
@@ -154,7 +154,7 @@ func selectProjects(src ProjectSource, opts Options) ([]*chain.Project, error) {
 			return nil, err
 		}
 		for _, p := range ps {
-			if p.Owned() && !p.External() {
+			if p.Owned(team) && !p.External() {
 				all = append(all, p)
 			}
 		}

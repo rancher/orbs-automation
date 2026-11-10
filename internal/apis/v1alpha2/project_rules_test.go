@@ -66,7 +66,7 @@ func TestProjectDefaultsDoNotOverwriteWhatWasWritten(t *testing.T) {
 }
 
 func TestAValidProjectHasNoFindings(t *testing.T) {
-	_, rep := loadProject(t, `  repo: {name: rancher/shell, owned: true, managedBy: shared}
+	_, rep := loadProject(t, `  repo: {name: rancher/shell, managedBy: shared}
   finalDestination: true
   pullRequests:
     title: "[{branch}] Update {source} to {version}"
@@ -90,11 +90,11 @@ func TestProjectRules(t *testing.T) {
 	tests := []struct {
 		name, spec, path, want string
 	}{
-		{"no repo name", "  repo: {owned: true}\n", "spec.repo.name", "required"},
+		{"no repo name", "  repo: {defaultBranch: main}\n", "spec.repo.name", "required"},
 		{"a repo name that is not owner and name", "  repo: {name: shell}\n", "spec.repo.name", "owner/name"},
 		{"a repo name with three parts", "  repo: {name: a/b/c}\n", "spec.repo.name", "owner/name"},
 		{"managedBy that is not a slug", "  repo: {name: a/b, managedBy: Release Team}\n", "spec.repo.managedBy", "lowercase slug"},
-		{"external and owned", "  repo: {name: a/b, external: true, owned: true}\n", "spec.repo.external", "owned"},
+		{"external and managed", "  repo: {name: a/b, external: true, managedBy: orbs}\n", "spec.repo.external", "no managing team"},
 		{"pushTo that is neither", "  repo: {name: a/b}\n  pullRequests: {pushTo: origin}\n", "spec.pullRequests.pushTo", "fork or upstream"},
 		{"a title with an unknown placeholder", "  repo: {name: a/b}\n  pullRequests: {title: \"{nope}\"}\n", "spec.pullRequests.title", "unknown placeholder {nope}"},
 		{"a branch prefix with a malformed placeholder", "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"{a\"}\n", "spec.pullRequests.branchPrefix", "unclosed"},

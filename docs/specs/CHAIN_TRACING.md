@@ -32,16 +32,16 @@ The config for all three stretches is in `config/`. Tracing reads these parts of
 
 * **Stages.** A project whose branches come in tiers has a branch for each stage per line, `branch: {dev: dev-v2.16, stable: release-v2.16}`, with the stages named in `branches.stages`. The stages are `dev` and `stable`, the two the tag schemes have. A holding names the stage it is found on (`holds.stage`), and the chain answers the branch of a line for a stage (`BranchOfLine(line, stage)`). A branch name found in another project's file maps back to its line and stage through this table, with no naming pattern to get wrong. A producer of ours lands on `dev` and the release team promotes to `stable`.
 * **Lines in tags.** A project whose layout is `single` lists its lines in its stream, and the `calverLineStage` scheme says how its tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. A line is added when the project is used for it. A tag that does not parse, or is of a line not listed, is skipped, so no code discovers lines from tags, and the edge to Rancher reaches only the lines both projects list.
-* **Stewardship: `repo.owned` and `repo.managedBy`.** `owned` says whether `gero` ships from the repository, true when its workflows run `gero`. `managedBy` says which team is responsible. It is `orbs` when `owned` is true and it is unset; for an unowned project there is no default, and an unset one is reported as unspecified.
+* **Stewardship: `repo.managedBy` and the active team.** `managedBy` says which team is responsible for a repository. There is no `owned` field: a project is **owned** when its `managedBy` is the **active team context gero works in when run** (`team`, default `orbs`, [CLI_CONFIG](CLI_CONFIG.md)), and gero ships from what it owns.
 
-  | `owned` | `managedBy` | What it means |
-  |---|---|---|
-  | true | `orbs` (the default when owned) | Ours in full: `gero` ships its downstream, and ORBS is responsible |
-  | true | another team | We help ship it with `gero` tooling, and the other team stays responsible |
-  | false | another team | Not ours: that team's own tooling ships its downstream, and `gero` observes |
-  | false | `orbs`, written out | ORBS's own, with no `gero` workflows in it yet: observed until there are |
+  | `managedBy` | What it means to the active team |
+  |---|---|
+  | the active team | Owned: `gero` ships its downstream, `repo clone --all` clones it, its `from: producer` steps run |
+  | another team | Not ours: that team's own tooling ships its downstream, and `gero` observes |
+  | `shared` | No team owns it and every team may write into it, as for `rancher/rancher`. It is observed as a producer, and no team's `--all` or bare ship takes it |
+  | unset | Unspecified: observed, and reported as unspecified. An external repo has no `managedBy` and no owner |
 
-  A release holding **of an unowned project** is observed: `gero` reads where it stands, and `gero ship` never opens a PR for it. A holding **in** an unowned project is written as usual, which is how `rancher/rancher` receives its bumps. `managedBy` is shown in reports and in the message when `gero ship` declines an observed project, and changes nothing that is written. To adopt `gero` for a repository the release team manages, set `owned: true` and have its workflows call `gero`.
+  A release holding **of a project the active team does not own** is observed: `gero` reads where it stands, and a bare `gero ship` never opens a PR for it. `gero ship <producer> --to <consumer>` is the exception, for a consumer the active team owns or one that is `shared` ([PUSH_TO_REPO](PUSH_TO_REPO.md#shipping-another-teams-release)). A holding **in** a project the team does not own is written as usual, which is how `rancher/rancher` receives its bumps. `managedBy` is shown in reports and in the message when `gero ship` declines an observed project. To take over a repository another team manages, change its `managedBy` to the team that will run `gero` for it.
 * **A stage on a holding.** On a release holding it is the stage of the holder's branch written to. On a commit or branch holding, `stages` names the stages of the producer to read. A release holding that sets none follows whatever stage the consumer holds: `rancher-holds-assets` sets none, since Rancher holds a `dev` Assets tag until the release team makes a stable release.
 
 ## Tag schemes
@@ -81,7 +81,7 @@ A holding's `holds.lines` is a `{since, until}` range of lines, so each holding 
 ## Where it lives
 
 * `internal/apis/v1alpha2` holds `managedBy`, the scheme of a stream, the stages and a holding's stage, and validates them. `internal/chain` answers the branch of a line, the stream and line of a tag, and who holds what ([CHAIN_MODEL](../design/CHAIN_MODEL.md)).
-* `internal/calver` and `internal/tagscheme` are above. `internal/ship` refuses an unowned producer and asks the scheme for releases, lines and order; `internal/cli/repostatus` asks it for a project's latest tags.
+* `internal/calver` and `internal/tagscheme` are above. `internal/ship` refuses a producer the active team does not own, unless `--to` names a consumer it owns or one that is `shared` and asks the scheme for releases, lines and order; `internal/cli/repostatus` asks it for a project's latest tags.
 * **The walk (planned):** a pure, cycle-safe walk over the chain's graph that returns a tree and follows each project's own holdings by line. It asks the graph for holdings and a small reader interface for what a hop holds, with fakes in tests, and `internal/cli/linesresolve` and `internal/cli/repostatus` use it.
 
 ## Not built yet
@@ -98,7 +98,7 @@ A holding's `holds.lines` is a `{since, until}` range of lines, so each holding 
 
 ## Decided
 
-* An unowned project need not state `managedBy`: it is reported as unspecified. A team name is a lowercase slug.
+* A project need not state `managedBy`: it is reported as unspecified, and no team owns it. A team name is a lowercase slug, and `shared` is the one name that is not a team.
 * **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. The stage of a held tag is a fact, never a warning or a failure.
 * **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which a read at a ref can do: first to check a held tag's stage against it, later, if the release team adopts `gero` for Assets, to make it part of a `ship` decision.
 * **Lines are listed.** A project that finds its lines in its tags lists them in its stream, without a series, and is judged on those lines: `lines resolve` shows no gap for one it does not list. A per-line project's missing line is still a gap.

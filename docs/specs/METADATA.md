@@ -26,10 +26,10 @@ Two classes of label, by who owns the name:
 
 Two classes of repo, by who owns the repository:
 
-* **ORBS-owned repos**, where the team can create labels and own the `gero/` namespace.
+* **Repos the active team owns** (ORBS's, by default), where the team can create labels and own the `gero/` namespace.
 * **Shared repos**, shared with the whole org (`rancher/rancher`, `rancher/charts`). Only the org's standard labels may be used.
 
-Which class a repo is comes from the `Project`'s `spec.repo.owned` in central config ([APP_CONFIG](APP_CONFIG.md)), not from a guess at runtime.
+Which class a repo is comes from the `Project`'s `spec.repo.managedBy` in central config ([APP_CONFIG](APP_CONFIG.md)) against the active team (`owned`) or `shared`, not from a guess at runtime.
 
 ## The four cases
 

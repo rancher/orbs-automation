@@ -26,7 +26,6 @@ type lineSpec struct{ Line, Branch string }
 // projectSpec is a project as the tests write it, before it is made into documents.
 type projectSpec struct {
 	Name, Repo, ManagedBy string
-	Owned                 bool
 	Title                 string        // pullRequests.title
 	PushTo                string        // pullRequests.pushTo
 	Labels, BotLabels     []string      // pullRequests.labels and botLabels
@@ -77,6 +76,9 @@ type fakeWorkspace struct {
 	graph    *chain.Graph
 	graphKey string
 }
+
+// testTeam is the active team of the tests: the fixture's producers are managed by it.
+const testTeam = "orbs"
 
 var lineID = regexp.MustCompile(`v[0-9]+\.[0-9]+`)
 
@@ -168,9 +170,6 @@ func orDefault(v, d string) string {
 func projectBody(p projectSpec) string {
 	slug := orDefault(p.Repo, "acme/"+p.Name)
 	repo := "{name: " + slug
-	if p.Owned {
-		repo += ", owned: true"
-	}
 	if p.ManagedBy != "" {
 		repo += ", managedBy: " + p.ManagedBy
 	}
@@ -303,13 +302,13 @@ func tags(names ...string) []git.Tag {
 
 // universal is a producer whose every release goes to every branch: scc-operator.
 func universal() projectSpec {
-	return projectSpec{Name: "scc-operator", Repo: "rancher/scc-operator", Owned: true, Images: []string{"rancher/scc-operator"}}
+	return projectSpec{Name: "scc-operator", Repo: "rancher/scc-operator", ManagedBy: testTeam, Images: []string{"rancher/scc-operator"}}
 }
 
 // lined is a producer with a series for each of two lines: kuberlr-kubectl.
 func lined() projectSpec {
 	return projectSpec{
-		Name: "kuberlr-kubectl", Repo: "rancher/kuberlr-kubectl", Owned: true, Images: []string{"rancher/kuberlr-kubectl"},
+		Name: "kuberlr-kubectl", Repo: "rancher/kuberlr-kubectl", ManagedBy: testTeam, Images: []string{"rancher/kuberlr-kubectl"},
 		Stream: "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n",
 	}
 }

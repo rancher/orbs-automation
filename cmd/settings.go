@@ -28,6 +28,7 @@ func addGlobalFlags(cmd *cobra.Command) {
 	f.String("bundle-channel", "", "which releases the central config bundle may come from: auto, stable or prerelease (env GERO_BUNDLE_CHANNEL; default auto)")
 	f.String("bundle-file", "", "use this bundle file, downloaded by hand, as the central config (env GERO_BUNDLE_FILE)")
 	f.String("upstream", "", "remote that points at the real source repository (env GERO_UPSTREAM)")
+	f.String("team", "", "the active team context: projects whose managedBy is this team are the ones gero ships from (env GERO_TEAM; default orbs)")
 	f.String("output", "", "output format: text, json or env (env GERO_OUTPUT; default text)")
 	f.String("color", "", "color: auto, always or never (env GERO_COLOR; default auto: as much as the terminal supports)")
 	f.Bool("no-color", false, "shorthand for --color never")

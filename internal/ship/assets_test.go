@@ -103,7 +103,7 @@ func TestSourcesOfRancherShowTheAssetsTagItHolds(t *testing.T) {
 }
 
 func TestAnAssetsProducerHasNoReleaseToShip(t *testing.T) {
-	_, err := Check(ctx, assetsFixture(t), &fakeProber{}, Input{Project: "rancher-assets"})
+	_, err := Check(ctx, assetsFixture(t), &fakeProber{}, Input{Team: testTeam, Project: "rancher-assets"})
 
 	require.ErrorIs(t, err, ErrNotOwned)
 }

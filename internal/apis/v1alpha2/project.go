@@ -17,10 +17,13 @@ type ProjectSpec struct {
 	Branches         Branches     `yaml:"branches"`
 }
 
+// ManagedByShared is the managedBy of a project no team owns and every team may
+// write into, such as rancher/rancher. It is not a team.
+const ManagedByShared = "shared"
+
 // Repo identifies the repository.
 type Repo struct {
-	Name          string `yaml:"name"` // owner/name
-	Owned         bool   `yaml:"owned"`
+	Name          string `yaml:"name"`     // owner/name
 	External      bool   `yaml:"external"` // outside our organization
 	ManagedBy     string `yaml:"managedBy"`
 	DefaultBranch string `yaml:"defaultBranch"`

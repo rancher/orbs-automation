@@ -30,7 +30,7 @@ func TestCheckPreviewListsTheStepsOfTheTargetBranchsLine(t *testing.T) {
 	ws := loopFixture(t)
 	ws.links = []link{stepsLink()}
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 
 	require.NoError(t, err)
 	byBranch := map[string]TargetPlan{}
@@ -95,7 +95,7 @@ func TestCheckPreviewHasTheStepCommitsOfTheTargetBranchsLineInTheOrderTheyRun(t 
 	ws := loopFixture(t)
 	ws.links = []link{stepsLink()}
 
-	got, err := Check(ctx, ws, &fakeProber{}, Input{Project: "scc-operator"})
+	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator"})
 
 	require.NoError(t, err)
 	var old TargetPlan
