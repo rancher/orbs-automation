@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
+	"io/fs"
+	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/gomodedit"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
 // ErrNotBuilt is returned by a run that needs a strategy gero names and does not
@@ -150,7 +154,100 @@ type GoReleases interface {
 // only when a value uses it. An entry that renders empty is left out. Two edits that
 // set one name to different values are an error.
 func (r Route) EnvOf(ctx context.Context, tree Tree, t Target) (map[string]string, error) {
-	return nil, nil
+	vars := map[string]string{"line": t.Line, "branch": t.Branch}
+	haveToolchain := false
+	out, setBy := map[string]string{}, map[string]string{}
+	for _, ed := range editsOf(r.holdingsOf(t)) {
+		env := ed.Env()
+		for _, name := range slices.Sorted(maps.Keys(env)) {
+			uses, err := templates.Placeholders(env[name])
+			if err != nil {
+				return nil, fmt.Errorf("Edit %q: env %s: %w", ed.Name(), name, err)
+			}
+			if slices.Contains(uses, "goToolchain") && !haveToolchain {
+				if vars["goToolchain"], err = r.goToolchain(ctx, tree); err != nil {
+					return nil, fmt.Errorf("Edit %q: env %s: %w", ed.Name(), name, err)
+				}
+				haveToolchain = true
+			}
+			value, err := templates.Render(env[name], vars)
+			if err != nil {
+				return nil, fmt.Errorf("Edit %q: env %s: %w", ed.Name(), name, err)
+			}
+			if value == "" {
+				continue // nothing to say: a variable set to empty is not one left unset
+			}
+			if prev, ok := out[name]; ok && prev != value {
+				return nil, fmt.Errorf("Edits %q and %q set %s to different values for %s: %q and %q", setBy[name], ed.Name(), name, t.Branch, prev, value)
+			}
+			out[name], setBy[name] = value, ed.Name()
+		}
+	}
+	return out, nil
+}
+
+var (
+	goPatch      = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)        // 1.26.3
+	goPrerelease = regexp.MustCompile(`^[0-9]+\.[0-9]+(rc|beta)[0-9]+$`) // 1.27rc1
+	goMinor      = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)                // 1.26
+)
+
+// goToolchain is the Go toolchain the tree pins, from the go.mod at its root: the
+// toolchain line, else the go line when it names a patch, else the newest patch of
+// its minor from the list of releases. It is empty when there is no go.mod or no go
+// line, and an error when the file cannot be read or parsed, or a minor has no list
+// to find its patch in.
+func (r Route) goToolchain(ctx context.Context, tree Tree) (string, error) {
+	data, err := tree.ReadFile(ctx, "go.mod")
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "", nil
+	case err != nil:
+		return "", fmt.Errorf("read go.mod: %w", err)
+	}
+	goVersion, toolchain, err := gomodedit.Directives(data)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case toolchain != "" && toolchain != "default":
+		return toolchain, nil
+	case goPatch.MatchString(goVersion) || goPrerelease.MatchString(goVersion):
+		return "go" + goVersion, nil
+	case !goMinor.MatchString(goVersion):
+		return "", nil // no go line, or one that is not a version
+	case r.GoReleases == nil:
+		return "", fmt.Errorf("go.mod says go %s with no toolchain line, and there is no list of Go releases to find its patch in: add a toolchain line to it", goVersion)
+	}
+	newest, err := r.GoReleases.NewestPatch(ctx, goVersion)
+	if err != nil {
+		return "", fmt.Errorf("go.mod says go %s with no toolchain line, and its newest patch could not be found (%w): add a toolchain line to it", goVersion, err)
+	}
+	return newest, nil
+}
+
+// envAdding runs steps with an environment added to the one each step has, which a
+// step's own values win over.
+type envAdding struct {
+	StepRunner
+	env map[string]string
+}
+
+func (a envAdding) Run(ctx context.Context, step chain.Step, env StepEnv) error {
+	merged := maps.Clone(a.env)
+	maps.Copy(merged, env.Env)
+	env.Env = merged
+	return a.StepRunner.Run(ctx, step, env)
+}
+
+// withEnv is the runner with the edits' env added to every run of it, so a strategy
+// that runs a program, such as goBump's go mod tidy, runs it in the same environment
+// as the steps.
+func withEnv(runner StepRunner, env map[string]string) StepRunner {
+	if len(env) == 0 || runner == nil {
+		return runner
+	}
+	return envAdding{StepRunner: runner, env: env}
 }
 
 // routeKey is what a route is for: the project the key says, and the stream of
@@ -518,10 +615,16 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	if len(holdings) > 0 {
 		pattern = tagPatternOf(holdings[0])
 	}
-	env := StepEnv{Dir: dir, Env: map[string]string{
+	edits, err := r.EnvOf(ctx, tree, t) // before anything is written: a toolchain it cannot name stops the run
+	if err != nil {
+		return Result{}, err
+	}
+	env := StepEnv{Dir: dir, Env: map[string]string{}}
+	maps.Copy(env.Env, edits)
+	maps.Copy(env.Env, map[string]string{
 		"GERO_TAG": tag, "GERO_VERSION": newRelease(tag, pattern, "", "").Version, "GERO_TARGET_BRANCH": t.Branch,
 		"GERO_SOURCE_REPO": r.Producer.Slug(),
-	}}
+	})
 	checkpoint := func(u Unit) error {
 		if after == nil {
 			return nil
@@ -566,7 +669,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
 			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
 			Line:    t.Line, Branch: t.Branch,
-			Dir: dir, Runner: runner, Changes: changesOf(ed, written),
+			Dir: dir, Runner: withEnv(runner, edits), Changes: changesOf(ed, written),
 		})
 		if err != nil {
 			return res, fmt.Errorf("Edit %q: %w", ed.Name(), err)
