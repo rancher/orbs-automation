@@ -37,7 +37,7 @@ internal/steprun/      runs the pre-edit and post-edit steps of an update
 internal/registry/     image existence checks in the registries a project publishes to: the registries gero uses and the report over a project's image artifacts   (IMAGES_EXIST)
 internal/tagscheme/    what readers ask of a project's tags: its lines, its newest release, the order of two tags
 internal/calver/       the tag format of projects whose lines are in their tags, such as rancher-assets
-internal/releasetag/   the policy of a release line's tags: what its newest tag is, what it could have next, which tags it may not have, and the line's state; pure, asked by the tag task, `repo tag` and `repo status`
+internal/releasetag/   the policy of a release line's tags: what it could have next, which tags it may not have, and the line's state, told the line's newest tag by `tagscheme` and not finding it; pure, asked by the tag task, `repo tag` and `repo status`
 internal/lifecycle/    reads Rancher's lifecycle dates from the SUSE lifecycle page; the only importer of golang.org/x/net/html
 internal/...           domain packages as they arrive, such as the reconciler's
 

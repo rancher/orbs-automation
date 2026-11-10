@@ -53,7 +53,6 @@ Each has a `TODO(release-state)` or `TODO(releasetag)` at the code where it goes
 * How many releases a branch is behind, which needs the tags between two releases and the version the strategy found (`ship.Holding`, and `git.LatestReleases` for the per-series index).
 * The open PR for a branch, so a consumer that is behind can say a bump is already proposed (`ship.Holding`). It would be a tier of its own, with its cost, using the PR lookup and the marker `ship` uses.
 * The images a release publishes, as `repo images exist` checks them (`repostatus.Options`).
-* `ship`'s own `ResolveRelease`, `latest` and `lineSeries` folded into `internal/releasetag`, so a line's "latest" has one definition (`ship/release.go`).
 
 ## Open questions
 

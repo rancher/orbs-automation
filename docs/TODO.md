@@ -63,7 +63,6 @@ Small and bounded. None blocks anything else.
 * **S: Find an existing bump PR by its marker in `gero ship`,** not by listing the newest 100 open PRs. On a busy base such as `main` of `rancher/rancher` an older PR of the bump is missed, and `ship` only warns. Done when a test with more than 100 open PRs finds it. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
 * **S: Print the preflight line that names workstation signs under a forced CI context** in `gero ship`. `clicfg.WorkstationSigns` has no caller. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 * **S: Print the preflight line in `gero repo branch` and `gero repo tag`,** which follow the other rules and do not print it. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
-* **S: Fold `ship`'s `ResolveRelease`, `latest` and `lineSeries` into `internal/releasetag`** so a line's "latest" has one definition. [REPO_STATUS](specs/REPO_STATUS.md)
 * **M: Show in `gero repo status` how many releases a consumer is behind.** Needs the tags between two releases (`TODO(release-state)`). [REPO_STATUS](specs/REPO_STATUS.md)
 * **M: Show in `gero repo status` the open bump PR of a consumer that is behind,** as a tier of its own using the marker lookup. [REPO_STATUS](specs/REPO_STATUS.md)
 * **S: Show in `gero repo status` the images a release publishes,** using `internal/registry.CheckProject`. [REPO_STATUS](specs/REPO_STATUS.md)
