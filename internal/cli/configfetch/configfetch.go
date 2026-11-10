@@ -11,7 +11,13 @@ import (
 	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui/style"
+	"github.com/rancher/orbs-automation/internal/workspace"
 )
+
+// Main is Run with the real fetch, for cmd/.
+func Main(ctx context.Context, s clicfg.Settings) (string, error) {
+	return Run(ctx, s, workspace.FetchBundle)
+}
 
 // Fetcher is what Run needs to look for the bundle. It is defined here, where it is
 // consumed, so tests can use a fake; workspace.FetchBundle is the real one.

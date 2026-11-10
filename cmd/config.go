@@ -10,7 +10,6 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/configshow"
 	"github.com/rancher/orbs-automation/internal/cli/configvalidate"
 	"github.com/rancher/orbs-automation/internal/cli/graphresolve"
-	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/spf13/cobra"
 )
 
@@ -112,7 +111,7 @@ stable releases and a pre-release binary at pre-releases too.`,
 				if ctx == nil {
 					ctx = context.Background()
 				}
-				out, err := configfetch.Run(ctx, settingsFrom(cmd), workspace.FetchBundle)
+				out, err := configfetch.Main(ctx, settingsFrom(cmd))
 				if err != nil {
 					return err
 				}

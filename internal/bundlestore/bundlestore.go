@@ -152,7 +152,7 @@ func (r *Resolver) loadNoting(ctx context.Context, req Request, note string) (Lo
 // other case. The cache is the result of an earlier Fetch, and is never refreshed
 // here, so it is used however old it is. A gero that is not a release has no release
 // to be newer than, and takes the embedded bundle.
-func (r *Resolver) Load(ctx context.Context, req Request) (Loaded, error) {
+func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	now := r.now()
 	own := ownRelease(req.GeroVersion)
 	note := ""
