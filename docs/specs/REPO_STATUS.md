@@ -48,7 +48,7 @@ Shown only for a project that takes from others (**Sources**, the projects that 
 
 ## Not built yet
 
-Each has a `TODO(release-state)` or `TODO(releasetag)` at the code where it goes.
+Each has a `TODO(release-state)` at the code where it goes.
 
 * How many releases a branch is behind, which needs the tags between two releases and the version the strategy found (`ship.Holding`, and `git.LatestReleases` for the per-series index).
 * The open PR for a branch, so a consumer that is behind can say a bump is already proposed (`ship.Holding`). It would be a tier of its own, with its cost, using the PR lookup and the marker `ship` uses.
@@ -56,4 +56,4 @@ Each has a `TODO(release-state)` or `TODO(releasetag)` at the code where it goes
 
 ## Open questions
 
-* Whether a project that is both a producer and a consumer, such as one that takes from another and ships on, should show the Sources and Consumers sections together or only the one asked for.
+None yet.

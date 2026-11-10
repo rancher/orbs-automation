@@ -137,7 +137,6 @@ A `Tags` error is returned, not swallowed.
 
 * **Branch families as config.** Supported ref patterns default to `main` and `release/*`, and an optional config could override them, possibly in the repo-level `gero.yaml`. [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md) currently allows only `WorkflowsConfig` in a target repo's `gero.yaml`, so this needs a decision there first. Unconfigured behavior stays the script's.
 * **Flags.** Whether `--ref`, `--sha` and `--repo <path>` are worth adding to run the command without the CI environment. Undecided; the environment rule stays the default.
-* **Default local short commit.** Decided: ask the `git` binary (section 3). Revisit only if a go-git abbreviation that matches git appears, since the subprocess inherits the environment and git config.
 * **Opt-in flag names and grouping.** One flag per improvement in section 6, or a single flag that turns on the related ones.
 * **Error reporting.** The stderr row in section 6 touches a global rule ([CLI_OUTPUT](CLI_OUTPUT.md): diagnostics to stderr). Whether it still needs a per-command opt-in.
 

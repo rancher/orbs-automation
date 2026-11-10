@@ -126,4 +126,4 @@ The REPL is complete enough for v1. What is left waits for v1 and the team's use
 
 ## Open questions
 
-* Which phase the REPL belongs to, if any ([PHASES](../PHASES.md)). It is not scheduled.
+None yet.

@@ -173,4 +173,4 @@ Integration tests may need heavy dependencies (a container runner, a fake GitHub
 
 ## Open questions
 
-* Whether generated code (for example JSON schema from config types) gets its own directory.
+None yet.

@@ -67,7 +67,7 @@ Every download of a release asset, the bundle or anything else, is verified befo
 | Rule | Detail |
 |---|---|
 | Where | `$XDG_CACHE_HOME/gero/`, else `~/.cache/gero/`. A cache, not config: it can be deleted at any time |
-| Refresh | At most once a day, by the age of the cache. The bundle is downloaded only when the newest release is a different one |
+| Refresh | At most once a day, by the age of the cache alone, since `ghreleases` makes no conditional requests. The bundle is downloaded only when the newest release is a different one |
 | Offline | When the fetch fails and a cached copy exists, the cached copy is used and the command says so, with its release tag and age |
 | Nothing available | No local source, no cache and no network fails with the same message that lists the places config is looked for |
 
@@ -99,7 +99,6 @@ A change to config therefore reaches workstations with a release, not with a mer
 ## Not built yet
 
 * The newer of a local copy and the bundle: in `auto` a local source wins, and `--config-source` picks one or the other.
-* Conditional requests (`ghreleases` has none), so the daily refresh is by the age of the cache alone.
 * A refresh interval setting. Reproducing an old run needs no more: download that release's bundle and give it with `--bundle-file`.
 * The templates and generated chunks.
 

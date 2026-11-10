@@ -196,5 +196,4 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 * Whether the default PR title should carry something that identifies the tooling. Identity is the marker, the author and, in shared repositories, a label such as `origin/bot`; a title is a project's own convention, and matching on it is fragile.
 * How steps such as `go generate` get a toolchain that matches the target branch. A workstation without it fails with a `gero doctor` hint.
 * The shape of `gero ci:ship`, in [CI_SHIP](CI_SHIP.md#open-questions).
-* Whether a clean clone with untracked files should be worked in place when none collide, as designed here, or sent to a worktree whenever there are any.
 * How a strategy reads the value it wrote for the downgrade check. A holding reads its own value, and `chartsPackageBump` is not built.

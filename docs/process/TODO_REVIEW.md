@@ -29,7 +29,7 @@ Say which, if any, should stay open.
 
 I would also fix these in place, with no list entry: the `TODO(release-state)` comments at `git/latest.go` and `ship/holdings.go` (they point at `git.LatestReleases`, and the per-series index belongs in `tagscheme`); `REPO_STATUS.md:51` naming a `TODO(releasetag)` marker that does not exist; the `BRANCH_TAGS` and `PROJECT_LAYOUT` questions the code has settled.
 
-**Your call:** ______
+**Your call:** Agreed, and applied: the settled notes are removed from their specs, the stale comments and the `REPO_STATUS` marker line are fixed. Duplicates and `GERO_REPL`-style rationale stay in their specs and only drop out of the rebuilt TODO.
 
 ---
 

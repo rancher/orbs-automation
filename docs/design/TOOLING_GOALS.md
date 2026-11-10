@@ -60,6 +60,7 @@ Answer, for one line: would a stable Rancher build be valid with what Rancher ho
 * Only configured projects and traceable edges count; the answer says how many are traced and never claims readiness beyond them
 * Unknown is never reported as ready
 * The answer is necessary, not sufficient: QA sign-off and the release team's decision are outside it for now
+* A CVE stable skips the RC; readiness only looks at what is held, so that is not an exception
 
 ### Kinds of blocker
 
@@ -81,7 +82,6 @@ Answer, for one line: would a stable Rancher build be valid with what Rancher ho
 
 * A chart version holds its upstream version after `+up`; the stable test reads that part
 * A component with no tracing config: how a view names it as not traced
-* A CVE stable skips the RC; readiness only looks at what is held, so this is not an exception here
 
 ## Goal: line consistency
 

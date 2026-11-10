@@ -33,7 +33,6 @@ No gaps.
 ## Not built yet
 
 * Following the chain beyond one hop, such as `ob-team-charts` into `charts` into `rancher` (`also` lists the project and its own links today; it does not connect them back to the hub).
-* A line the lines document has no entry for, but a project has: validation rejects it when the config is loaded, so there is no gap for it here.
 * The answer for one producer and one line, "where does shell's `v2.15` go", which is a different command and not this map.
 
 ## Open questions
