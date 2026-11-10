@@ -43,7 +43,7 @@ linters:
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
         # internal/platform/errs for exit-code errors and its own subpackages.
-        # See docs/specs/PROJECT_LAYOUT.md sections 2, 3 and 6.
+        # See docs/specs/PROJECT_LAYOUT.md sections 2, 3 and 5.
         cmd:
           list-mode: strict
           files:
@@ -69,7 +69,7 @@ linters:
             - pkg: github.com/spf13/cobra
               desc: cobra is only allowed in cmd/ (docs/specs/PROJECT_LAYOUT.md)
         # go-git stays in internal/platform/git/repo, the one place that reads a local
-        # repository (docs/specs/PROJECT_LAYOUT.md section 6).
+        # repository (docs/specs/PROJECT_LAYOUT.md section 5).
         nogogit:
           list-mode: lax
           files:

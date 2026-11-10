@@ -1,6 +1,6 @@
 # branch-tags
 
-**Status:** implemented for the faithful port (sections 1 to 4), except the opt-in improvements in section 6 and the optional parity test. Section 5 has open questions.
+**Status:** implemented for the faithful port (sections 1 to 4), except the opt-in improvements in section 6, which are built only when a repo asks for one.
 
 Port of the `.github/scripts/branch-tags.sh` bash script that many ORBS repos carry. The command is `gero repo build-tags`: it names the tags of a build of the head of a branch (the rolling tag, the fixed tag for the commit, and the previous fixed tag, which a release tool such as goreleaser can use as the start of its changelog). Its first name was `current-tags`, which still works as an alias, and the script keeps its name. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same inputs, same output keys, case and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tags and the current ref are read with go-git behind an interface, and the short commit comes from the `git` binary ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md), [GITHUB_ACCESS](GITHUB_ACCESS.md)).
 
@@ -131,18 +131,13 @@ A `Tags` error is returned, not swallowed.
 * Unsupported ref: the message on stdout only, nothing on stderr, and an error (exit 1). Not a repository: an error.
 * Each improvement flag changes only its own case, and leaves the default output untouched.
 
-**Parity (optional, `test/integration/`):** build the same temporary repositories, run the original script and the built `gero`, and compare stdout. This is also the check for the unverified go-git ordering. All default-mode rows must match the script. The improvement rows from section 6 are asserted separately. The original script lives there as a fixture.
-
 ## 5. Open questions
 
-* **Branch families as config.** Supported ref patterns default to `main` and `release/*`, and an optional config could override them, possibly in the repo-level `gero.yaml`. [ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md) currently allows only `WorkflowsConfig` in a target repo's `gero.yaml`, so this needs a decision there first. Unconfigured behavior stays the script's.
-* **Flags.** Whether `--ref`, `--sha` and `--repo <path>` are worth adding to run the command without the CI environment. Undecided; the environment rule stays the default.
-* **Opt-in flag names and grouping.** One flag per improvement in section 6, or a single flag that turns on the related ones.
-* **Error reporting.** The stderr row in section 6 touches a global rule ([CLI_OUTPUT](CLI_OUTPUT.md): diagnostics to stderr). Whether it still needs a per-command opt-in.
+None yet.
 
 ## 6. Breaking changes that will improve the script after port
 
-Approved improvements. None of them is part of the faithful port. During the port each is opt-in behind a flag, so the default output never changes. Making any of them the default later is a deliberate breaking change, planned with a release, since workflows read these results. The same section exists in [CHECK_SEMVER](CHECK_SEMVER.md).
+Approved improvements, built only when a repo asks for one. None of them is part of the faithful port. During the port each is opt-in behind a flag, so the default output never changes. Making any of them the default later is a deliberate breaking change, planned with a release, since workflows read these results. The same section exists in [CHECK_SEMVER](CHECK_SEMVER.md).
 
 | Improvement | Script and default | Improved | Breaking if made default |
 |---|---|---|---|

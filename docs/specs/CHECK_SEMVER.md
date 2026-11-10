@@ -2,7 +2,7 @@
 
 The command is `gero semver check`. `check` is the lenient script port described here. Strict SemVer operations, if they come, are separate verbs under `gero semver` and do not change `check` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md) section 2).
 
-**Status:** implemented for the faithful port (sections 1 to 4), except the opt-in improvements in section 6 and the parity test.
+**Status:** implemented for the faithful port (sections 1 to 4), except the opt-in improvements in section 6, which are built only when a repo asks for one.
 
 Port of the `.github/scripts/check-semver` bash script that many ORBS repos carry. The goal is to prove the script can live in `gero`, not to delete the original. The default behavior is a **faithful port**: same input, same output keys and order, same results. Every approved improvement is listed in section 6 and is opt-in. Tag classification as a shared library is also called for by the [release rules](../IMPLEMENTATION.md#release-rules).
 
@@ -108,18 +108,13 @@ Also assert `Major`, `Minor`, `Patch`, `Prerelease` and `BuildMeta` on the gramm
 * Argument given: the two lines on stdout, and extra arguments are accepted.
 * Neither argument nor `GITHUB_REF_NAME`: empty stdout and an error, which `Execute` turns into exit 1.
 
-**Parity (`test/integration/`):** run the original script and the built `gero` over every row above in default mode and compare stdout and exit code. All rows must match, including the ones that are quirks. The original script lives there as a fixture, not in the root module.
-
 ## 5. Open questions
 
-* **Opt-in flag names and grouping.** One flag per improvement in section 6, or one flag (for example for the SemVer grammar) that turns on the related ones together.
-* **Extra env format name.** `--output env-full` or `env-extra`. Decided with the CLI output work, since it adds a value to `--output`.
-* **Strict mode.** Whether `--strict` is worth adding (section 6).
-* **Non-SemVer `+`.** Whether the grammar mode should keep the script's "any `+`" meaning for non-SemVer text. Deferred until a real workflow depends on it.
+None yet.
 
 ## 6. Breaking changes that will improve the script after port
 
-Approved improvements. None of them is part of the faithful port. During the port each is opt-in behind a flag, so the default output never changes. Making any of them the default later is a deliberate breaking change, planned with a release, since workflows read these results. The same section exists in [BRANCH_TAGS](BRANCH_TAGS.md).
+Approved improvements, built only when a repo asks for one. None of them is part of the faithful port. During the port each is opt-in behind a flag, so the default output never changes. Making any of them the default later is a deliberate breaking change, planned with a release, since workflows read these results. The same section exists in [BRANCH_TAGS](BRANCH_TAGS.md).
 
 | Improvement | Script and default | Improved | Breaking if made default |
 |---|---|---|---|

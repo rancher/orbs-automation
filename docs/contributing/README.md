@@ -7,7 +7,7 @@ How we work on this repo, for anyone, a person or an assistant. The rules are sh
 * **Write the failing test first, honestly.** Stub the API so everything compiles, make the test fail on its assertion, then fix it. The cycle is in [red-green-commits](red-green-commits.md), and [TESTING](../specs/TESTING.md) says how the tests are built.
 * **Tests read nothing from the machine they run on:** no `GERO_*`, token, `HOME`, `XDG_*` or `CI`, and never the network.
 * **Check mutants with `gremlins`, never by hand.** It mutates a temporary copy, is optional and installed globally by whoever wants it, and is not in `go.mod` ([TESTING](../specs/TESTING.md)). Do not edit code to see whether a test notices.
-* **Respect the doors.** Each outside module has one package that may import it, and layers import downward only. `golangci-lint` fails on a breach ([PROJECT_LAYOUT](../specs/PROJECT_LAYOUT.md#6-enforcement), [DEPENDENCY_POLICY](../specs/DEPENDENCY_POLICY.md)). A new module needs an entry in the policy first.
+* **Respect the doors.** Each outside module has one package that may import it, and layers import downward only. `golangci-lint` fails on a breach ([PROJECT_LAYOUT](../specs/PROJECT_LAYOUT.md#5-enforcement), [DEPENDENCY_POLICY](../specs/DEPENDENCY_POLICY.md)). A new module needs an entry in the policy first.
 
 ## Commits
 
