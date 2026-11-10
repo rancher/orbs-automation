@@ -30,6 +30,10 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("USERPROFILE", home)
 	_ = os.Setenv("XDG_CACHE_HOME", home+"/.cache")
 	_ = os.Setenv("GERO_OFFLINE", "true")
+	// The binary carries a config bundle, so a command with no config directory
+	// would read that and not find none. Tests of the directory lookup and of local
+	// config want the lookup alone; those of the bundle set the source themselves.
+	_ = os.Setenv("GERO_CONFIG_SOURCE", "dir")
 	code := m.Run()
 	_ = os.RemoveAll(home)
 	os.Exit(code)

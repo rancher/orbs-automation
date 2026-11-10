@@ -84,7 +84,7 @@ Names are not final **(leaning)**. A dot in a key nests it in the file, and beco
 | n/a | `GERO_BOT_USER` | n/a | The bot's login in CI, for example `rancher-scc-bot[bot]`, supplied by the workflow with the token. Names the commit identity ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)). Recorded as `Settings.BotUser`; no flag, no user-file key |
 | n/a | `GERO_LOG` | `-v`, `-vv` | Log level, `debug`, `info`, `warn` (default) or `error` ([CLI_OUTPUT](CLI_OUTPUT.md)). A setting named `log`; no user-file key |
 | `repl.prompt` | `GERO_REPL_PROMPT` | n/a | The prompt of `gero repl`, a template of plain text and placeholders (`{project}`, `{dir}`, `{path}`), default `gero{project: (%s)}> ` ([REPL](REPL.md#the-prompt)). No flag: a prompt is not a per-invocation choice. Checked by `gero repl` when it starts, and by no other command |
-| n/a | `GERO_OFFLINE` | n/a | `true` makes the central config bundle come from the cache only and a command skip the network where it has a local way. Env only: a file that turned it on would silence the network for every command |
+| n/a | `GERO_OFFLINE` | n/a | `true` makes `gero config fetch` fail and a command skip the network where it has a local way. The central config bundle is never fetched by another command, so offline changes nothing about which one is read. Env only: a file that turned it on would silence the network for every command |
 | n/a | `GERO_CONFIG` | n/a | Path of the user file |
 | n/a | `GERO_CONTEXT` | n/a | `ci` or `workstation`, forcing the execution context ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#detecting-the-context)). Recorded as `Settings.CI`; no user-file key |
 
@@ -137,7 +137,7 @@ The keys and their allowed values are also published as a JSON Schema, `generate
 
 ## Locating the central application config
 
-gero assumes the user has no clone of the central repo. The released **bundle** of the central config ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)) is the first layer, and a local directory is a **local development mode** on top of it, for someone changing the config itself.
+gero assumes the user has no clone of the central repo. The **bundle** of the central config ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)), the one built into the binary or a newer one that `gero config fetch` cached, is the first layer, and a local directory is a **local development mode** on top of it, for someone changing the config itself.
 
 `--config-source` (`GERO_CONFIG_SOURCE`, or `configSource` in the user file) says which:
 
@@ -151,12 +151,11 @@ The flag beats the environment, which beats the file, so `configSource: bundle` 
 
 Which releases the bundle may come from is `bundleChannel` ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#releases-fetching-and-verifying)).
 
-A source that is named but broken (a missing directory or file, invalid or empty config) is an error and never falls back to another, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). CI never reads the bundle in `auto`, and ignores the user file unless `GERO_CONFIG` names it, so a stray file cannot move a runner: the central repo is checked out and the workflow gives `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir`, or a generated user file, pointing at the `config` directory of the checkout. `GERO_OFFLINE=true` makes the bundle come from the cache only; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
+A source that is named but broken (a missing directory or file, invalid or empty config) is an error and never falls back to another, so a typo cannot run on published config. If none resolves, the command fails with a message listing these places and, when the bundle was tried, why it was not available. There is no runtime fetch of config from another branch ([APP_CONFIG](APP_CONFIG.md)). CI ignores the user file unless `GERO_CONFIG` names it, so a stray file cannot move a runner. A job that wants the config of a checkout gives `GERO_CENTRAL_CONFIG_DIR` or `--central-config-dir`, or a generated user file, pointing at the `config` directory of that checkout; with none it reads the bundle in the binary, the config of its own release. `gero config fetch` is the one command that looks for a newer bundle, and `GERO_OFFLINE=true` makes it fail; it is an environment variable and never a user-file key, so a file cannot turn the network off for every command.
 
 ## Not built yet
 
 * A `host` setting (`GERO_HOST`, `--host`) for a GitHub host other than github.com, built only if someone asks. Today the host is `GH_HOST`, else the one in `gh`'s config, else github.com ([GITHUB_ACCESS](GITHUB_ACCESS.md)).
-* A `ci:*` command with no config directory loading the bundle of its own `gero` version, and the default bundle embedded in the binary, so a CI job needs only the binary ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
 * A fork whose repository name differs from the upstream's, under `githubUser`.
 
 ## Open questions

@@ -44,7 +44,9 @@ func Main(ctx context.Context, env Environment, f Flags, b Build) (string, error
 }
 
 // forDoctor is the settings for gero doctor's own workspace. Doctor is offline
-// unless asked to be online, so the central bundle is read from the cache only.
+// unless asked to be online. The central bundle is never fetched by it either way:
+// it reads the cache and the bundle in the binary, and gero config fetch is what
+// looks for a newer one.
 func forDoctor(s clicfg.Settings, online bool) clicfg.Settings {
 	s.Offline = s.Offline || !online
 	return s

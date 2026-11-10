@@ -53,7 +53,6 @@ v1.0.0 is about **automation we trust**: `gero` does real work in place of scrip
 `gero ship` already opens bump PRs for an engineer. A CI variant, `gero ci:ship`, runs the same bump as the bot from a workflow, so the `push-to-rancher` scripts of `scc-operator` and `shell` can go ([CI_SHIP](specs/CI_SHIP.md)).
 
 * `gero ci:ship`: a temporary clone, the bot identity from `GERO_BOT_USER`, a push with a token that starts workflows, a step summary and the workflow run URL in the PR body.
-* How a `ci:*` command gets the central config in a repo with no checkout: the bundle that matches its own version, with the default bundle embedded in the binary ([CENTRAL_BUNDLE](specs/CENTRAL_BUNDLE.md)).
 * A workflow that installs a pinned, signed release of `gero`, run beside the bash script, then in place of it, and the script removed from `scc-operator` and `shell`.
 
 ### The chain: a whole release chain from a workstation

@@ -154,9 +154,9 @@ func TestWithNoBundleSourceTheConfigIsNotFoundAsBefore(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
-func TestTheDefaultBundleSourceNeedsAReleaseContextAndIsNotUsedInCI(t *testing.T) {
-	assert.Nil(t, bundleFor(clicfg.Settings{}), "no gero version: no release context")
-	assert.Nil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", CI: true}), "CI has a checkout")
+func TestTheDefaultBundleSourceNeedsAGeroVersionAndIsUsedInCIToo(t *testing.T) {
+	assert.Nil(t, bundleFor(clicfg.Settings{}), "no gero version: only cmd/ sets one")
+	assert.NotNil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", CI: true}), "a CI job with only the binary reads the embedded bundle")
 	assert.NotNil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0"}))
 	assert.NotNil(t, bundleFor(clicfg.Settings{GeroVersion: "dev", Offline: true}))
 }
@@ -242,8 +242,8 @@ func TestConfigSourceDirUsesALocalDirectory(t *testing.T) {
 }
 
 func TestTheDefaultBundleSourceFollowsTheConfigSource(t *testing.T) {
-	assert.NotNil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", ConfigSource: clicfg.ConfigSourceBundle, CI: true}), "an explicit bundle is used in CI")
-	assert.Nil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", ConfigSource: clicfg.ConfigSourceAuto, CI: true}))
+	assert.NotNil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", ConfigSource: clicfg.ConfigSourceBundle, CI: true}))
+	assert.NotNil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", ConfigSource: clicfg.ConfigSourceAuto, CI: true}))
 	assert.Nil(t, bundleFor(clicfg.Settings{GeroVersion: "v0.5.0", ConfigSource: clicfg.ConfigSourceDir}))
 	assert.Nil(t, bundleFor(clicfg.Settings{ConfigSource: clicfg.ConfigSourceBundle}), "still no release context, so none")
 }
@@ -316,4 +316,10 @@ func TestTheChannelOfTheSettingsReachesTheBundleRequest(t *testing.T) {
 	assert.Equal(t, bundlestore.ChannelPrerelease, channelOf(clicfg.Settings{BundleChannel: clicfg.BundleChannelPrerelease}))
 	assert.Equal(t, bundlestore.ChannelAuto, channelOf(clicfg.Settings{BundleChannel: clicfg.BundleChannelAuto}))
 	assert.Equal(t, bundlestore.ChannelAuto, channelOf(clicfg.Settings{}))
+}
+
+func TestFetchBundleOfflineIsRefusedBeforeAnyRequest(t *testing.T) {
+	_, err := FetchBundle(context.Background(), clicfg.Settings{GeroVersion: "v0.5.0", Offline: true})
+
+	require.ErrorIs(t, err, ErrOffline)
 }
