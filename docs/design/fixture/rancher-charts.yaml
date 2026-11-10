@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
-# rancher-charts: unowned (release team), two branches for each line, no tags.
+# rancher-charts: managed by the release team, two branches for each line, no tags.
 # A chart's releases are versions in a list; one stream for each chart. rancher-backup shown.
 apiVersion: gero/v1alpha2
 kind: Project

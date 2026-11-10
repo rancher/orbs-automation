@@ -82,7 +82,7 @@ spec:
 ---
 # What Rancher holds of wrangler and lasso, in go.mod: the root and its nested modules (pkg/apis, pkg/client,
 # pkg/plan, which exists from v2.15). Each line stays on one wrangler minor, so a Holding for each minor and the
-# lines that hold it; the locations of one Holding should hold the same version. Observed only: both are unowned.
+# lines that hold it; the locations of one Holding should hold the same version. Observed only: both are managed by another team.
 # `replace` directives (v2.12's pkg/client pins wrangler v3.2.2) are not modelled.
 apiVersion: gero/v1alpha2
 kind: Holding

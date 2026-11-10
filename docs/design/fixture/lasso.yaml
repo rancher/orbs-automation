@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # lasso: a Go library of the frameworks team (CODEOWNERS: rancher-squad-frameworks), held by Rancher and BRO
-# in their go.mod files. Unowned, so gero only observes what is held of it.
+# in their go.mod files. Managed by another team, so gero only observes what is held of it.
 # One Stream: every v0.2.* release goes with any wrangler v3.*.*, and consumers hold different patches, not
 # different minors. A v0.3 would be a new Stream and Artifact. The module path has no major suffix below v2.
 apiVersion: gero/v1alpha2

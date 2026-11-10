@@ -16,7 +16,7 @@ The kinds are small documents joined by `refs`: a Project does not know its Stre
 | Type | Holds | Answers |
 |---|---|---|
 | `Graph` | every Project, the lines, every Holding | a Project by name, by `owner/name` slug, or by a clone's remotes; every holding; the lines in order |
-| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `Steward`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ReleaseBranches`, `Held`, `Sourced` |
+| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ReleaseBranches`, `Held`, `Sourced` |
 | `Stream` | the Stream document, its Project and Artifacts | `LineOf(tag)`, `Series(line)`, `Stages`, `Serves(line)` |
 | `Artifact` | the Artifact document and its Stream | `Registries(stable)`, `AppliesTo(line)` |
 | `Holding` | the Holding document, its holder and producer Projects, its Artifact or `from` | `AppliesTo(line)`, `Edits` |

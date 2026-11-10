@@ -81,7 +81,9 @@ func graph(ws Workspace) (string, error) {
 		writeProject(&b, p)
 	}
 
-	holdings := slices.Clone(g.Holdings())
+	// What a pin makes is a holding of its holder as well: a consumer says nothing of
+	// lasso where it holds wrangler, and lasso still flows to it.
+	holdings := append(slices.Clone(g.Holdings()), g.Virtual()...)
 	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
 	b.WriteString("\n")
 	edits := map[string]*chain.Edit{}
@@ -183,6 +185,9 @@ func producerPath(h *chain.Holding) string {
 func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
 	id := quote("holding:" + h.Name())
 	label := h.Name() + "\n" + h.Kind()
+	if h.Virtual() {
+		label += ", pinned"
+	}
 	fmt.Fprintf(b, "%s: {class: [%s]; label: %s}\n", id, classHolding, quote(label))
 	fmt.Fprintf(b, "%s -> %s\n", producerPath(h), id)
 	var served []string

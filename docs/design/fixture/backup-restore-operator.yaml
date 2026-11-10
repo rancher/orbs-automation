@@ -57,7 +57,7 @@ spec:
   holds: {kind: release, form: "{tag}"}
 ---
 # What BRO holds of wrangler, in go.mod. The module is the same for every minor; each line stays on one minor,
-# so a Holding for each minor and the lines that hold it. Observed only: wrangler is unowned, so there is no Edit.
+# so a Holding for each minor and the lines that hold it. Observed only: wrangler is managed by another team, so there is no Edit.
 # v2.14 holds 3.4.0 and v2.12 holds 3.2.4: minors with no Stream, because BRO is out of step with Rancher there
 # (Rancher holds 3.6 and 3.3). Those lines stay unresolved until BRO moves or a Stream is added.
 # cmd/tool is a nested module (v2.14 and later) that requires wrangler and lasso indirectly; `replace` directives
