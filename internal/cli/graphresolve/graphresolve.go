@@ -38,6 +38,10 @@ const (
 
 const header = `direction: right
 
+vars: {
+  d2-config: {layout-engine: elk}
+}
+
 classes: {
   managed: {style.fill: "#d8f0e0"}
   shared: {style.fill: "#fdf0c8"}
