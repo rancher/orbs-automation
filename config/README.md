@@ -35,7 +35,7 @@ A lifecycle date raises a warning, never an error, so a release exception is nev
 * A line in a project's `branches.lines` with no `branch` is on the default branch, which is for the line in development; once the line is past it, that is a warning
 * `branch: ""` says the line has no branch yet, and the line is reported as unresolved
 * A line may have a branch for each stage (`branch: {dev: dev-v2.16, stable: release-v2.16}`), named in `branches.stages`
-* A Holding holds a release of an Artifact, or the commit or the branch of another project; a release holding is written when the producer's project is owned and the consumer is not external
+* A Holding holds a release of an Artifact, or the commit or the branch of another project; a release holding is written when the producer's project is owned by the active team and the consumer is not external (or, with `--to`, when the consumer is owned or `shared`)
 * A repo's `gero.yaml` may only hold `WorkflowsConfig` documents for now; any other kind is an error. The reconciler reads central config, and fetches a repo's `gero.yaml` only when it is about to act on that repo
 
 ## Defaults
@@ -44,9 +44,8 @@ Only conservative or no-surprise defaults. Anything that changes release behavio
 
 | Field | Default |
 |---|---|
-| `repo.owned` | `false`: `gero` does not ship from the repository |
 | `repo.external` | `false` |
-| `repo.managedBy` | not filled: `orbs` for an owned repo, none for an unowned one, which is shown as unspecified |
+| `repo.managedBy` | not filled: none, shown as unspecified. A repo is owned when this is the active team (`team`, default `orbs`), and `shared` is owned by none |
 | `repo.defaultBranch` | `main` |
 | `branches.layout` | `single` |
 | `scheme` | `semver` |

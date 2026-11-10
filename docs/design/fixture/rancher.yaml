@@ -5,7 +5,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: rancher
 spec:
-  repo: {name: rancher/rancher, owned: false, managedBy: shared}
+  repo: {name: rancher/rancher, managedBy: shared}
   finalDestination: true
   pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/orbs]}
   branches:

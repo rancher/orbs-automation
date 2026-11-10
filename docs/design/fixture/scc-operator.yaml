@@ -4,7 +4,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: scc-operator
 spec:
-  repo: {name: rancher/scc-operator, owned: true}
+  repo: {name: rancher/scc-operator, managedBy: orbs}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

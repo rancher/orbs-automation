@@ -22,9 +22,8 @@ The repo as a place. `refs`: none.
 | Field | Type | Default | Rules |
 |---|---|---|---|
 | `repo.name` | `owner/name` | required | no space; unique across Projects |
-| `repo.owned` | bool | `false` | gero ships from the repo; a holding of an unowned producer is only observed |
-| `repo.external` | bool | `false` | the repo is outside our organization: gero never ships into it and expects no `managedBy`; implies `owned: false`, so setting both is an error |
-| `repo.managedBy` | slug | `orbs` if owned, else unspecified | `shared` is valid |
+| `repo.external` | bool | `false` | the repo is outside our organization: gero never ships into it, and no team owns it, so it expects no `managedBy` |
+| `repo.managedBy` | slug | none: unspecified | the team responsible. A project is **owned** when this is the active team ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and gero ships from what it owns; there is no `owned` field. `shared` is a sentinel for every team: no team's context owns it, and any team may ship into it |
 | `repo.defaultBranch` | string | `main` | |
 | `finalDestination` | bool | `false` | at most one Project |
 | `pullRequests.title`, `.branchPrefix` | template | none | variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, … |
@@ -171,14 +170,13 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A holding's `from` or `artifact` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
 * A selector's `since` is not after its `until`
 * A project that holds something of another, which holds something of it, is a warning: the dependency is circular
-* `repo.external` and `repo.owned` are not both true
 * Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
 * A calver stream is on a project whose layout is `single`; a project holds nothing of itself
 * A holding's `stage` is a stage of its holder's `branches.stages`, and its `stages` are stages of the producer's streams
 * The locations of one Holding should hold the same version for a line; a difference is a warning (a repo's nested modules out of step). A project's locations at the same file and key, in one Holding or several, do not overlap in lines; a `gomod` name is unique within a stream, not a project (the same module is one Artifact for each minor)
 * A project with `layout: perLine` that holds an artifact (matched by its image name or module path) which the `finalDestination` also holds (a project is not compared with itself) should hold the same stream for each line; a difference is a warning. A `single` layout is not compared
 * A `gomod` Artifact's `name` is a module path; a Holding with `format: gomod` holds a `gomod` Artifact; a `goBump` Edit has at least one such Holding
-* A step run `from: producer` needs a producer that is owned
+* A step run `from: producer` needs a producer whose `managedBy` is a team: not unset, not `shared`, and not external, since no team could run it. Whether the active team owns the producer is known only when a command runs: a producer it does not own has its `from: producer` steps skipped
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
 
 ## Warnings

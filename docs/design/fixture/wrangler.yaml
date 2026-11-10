@@ -9,7 +9,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: wrangler
 spec:
-  repo: {name: rancher/wrangler, owned: false, managedBy: frameworks-team}
+  repo: {name: rancher/wrangler, managedBy: frameworks-team}
   branches: {layout: single}
 ---
 # A major version is a different module path (/v3), not a tag prefix: the tags are plain (v3.8.0).

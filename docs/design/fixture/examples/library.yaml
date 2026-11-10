@@ -3,7 +3,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: libfoo
 spec:
-  repo: {name: acme/libfoo, owned: true}
+  repo: {name: acme/libfoo, managedBy: orbs}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

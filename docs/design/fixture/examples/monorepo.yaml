@@ -4,7 +4,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: mono
 spec:
-  repo: {name: acme/mono, owned: true}
+  repo: {name: acme/mono, managedBy: orbs}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2
