@@ -94,7 +94,7 @@ func (h *humanSink) Event(e domain.Event) {
 		h.destination(e.Destination)
 	case domain.EventImagesChecked:
 		h.endTargets()
-		h.images(e.Release, e.Images)
+		h.images(e.Producer, e.Release, e.Images)
 		h.pr()
 	case domain.EventActor:
 		h.endTargets()
@@ -144,6 +144,13 @@ func (h *humanSink) resolved(p *domain.Plan) {
 	}
 	for _, note := range p.Notes {
 		h.out.Line("  " + h.label("left out") + "  " + note)
+	}
+	for _, c := range p.Companions {
+		if c.Error != "" {
+			h.out.Line("  " + h.label("with") + "  " + h.st.Style(style.Warn, c.Module+": "+c.Error))
+			continue
+		}
+		h.out.Line(fmt.Sprintf("  %s  %s %s of %s, which %s requires", h.label("with"), c.Module, c.Tag, c.Producer, c.RequiredBy))
 	}
 	h.out.Line("")
 	h.header = *p
@@ -220,15 +227,18 @@ func (h *humanSink) destination(d *domain.Destination) {
 	}
 }
 
-func (h *humanSink) images(release string, r *registry.Report) {
+func (h *humanSink) images(producer, release string, r *registry.Report) {
 	if r == nil {
 		return
 	}
 	if len(r.Rows) > 0 {
 		h.out.Line("")
-		if h.header.Uniform() {
+		switch {
+		case producer != "":
+			h.heading("Images (" + producer + " " + release + ")") // a companion's
+		case h.header.Uniform():
 			h.heading("Images")
-		} else {
+		default:
 			h.heading("Images (" + release + ")")
 		}
 		h.table("IMAGE", "REGISTRY", "STATUS", "REFERENCE")

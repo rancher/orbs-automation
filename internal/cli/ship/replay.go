@@ -18,7 +18,7 @@ func replay(plan domain.Plan) []domain.Event {
 		events = append(events, domain.Event{Kind: domain.EventDestination, Line: plan.Destination[i].Line, Destination: &plan.Destination[i]})
 	}
 	for i := range plan.Images {
-		events = append(events, domain.Event{Kind: domain.EventImagesChecked, Release: plan.Images[i].Release, Images: &plan.Images[i].Report})
+		events = append(events, domain.Event{Kind: domain.EventImagesChecked, Producer: plan.Images[i].Producer, Release: plan.Images[i].Release, Images: &plan.Images[i].Report})
 	}
 	if plan.Actor != nil {
 		events = append(events, domain.Event{Kind: domain.EventActor, Actor: plan.Actor})

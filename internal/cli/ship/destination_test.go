@@ -3,6 +3,7 @@ package ship
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,4 +48,49 @@ func TestRenderTextShowsADestinationThatCouldNotBeRead(t *testing.T) {
 
 func TestRenderTextHasNoDestinationSectionWithoutOne(t *testing.T) {
 	assert.NotContains(t, renderText(previewPlan(), false), "Destination")
+}
+
+func withCompanion() domain.Plan {
+	p := previewPlan()
+	p.Companions = []domain.Companion{{
+		Producer: "rancher/lasso", Module: "github.com/rancher/lasso", Tag: "v0.2.5", Version: "v0.2.5",
+		RequiredBy: "rancher/wrangler v3.7.4", File: "go.mod",
+	}}
+	p.Images = []domain.ReleaseImages{{Release: "v0.5.3"}, {Producer: "rancher/lasso", Release: "v0.2.5"}}
+	return p
+}
+
+func TestRenderTextSaysWhichReleasesGoWithTheOneAskedFor(t *testing.T) {
+	out := renderText(withCompanion(), false)
+
+	assert.Contains(t, out, "with  github.com/rancher/lasso v0.2.5 of rancher/lasso, which rancher/wrangler v3.7.4 requires")
+}
+
+func TestRenderTextSaysAPinThatCouldNotBeResolved(t *testing.T) {
+	p := withCompanion()
+	p.Companions[0].Tag, p.Companions[0].Error = "", "rancher/lasso has no tag v0.2.9"
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "github.com/rancher/lasso: rancher/lasso has no tag v0.2.9")
+}
+
+func TestReplayCarriesTheProducerOfACompanionsImages(t *testing.T) {
+	var producers []string
+	for _, e := range replay(withCompanion()) {
+		if e.Kind == domain.EventImagesChecked {
+			producers = append(producers, e.Producer)
+		}
+	}
+
+	assert.Equal(t, []string{"", "rancher/lasso"}, producers)
+}
+
+func TestRenderTextNamesTheProducerOfACompanionsImages(t *testing.T) {
+	p := withCompanion()
+	p.Images = []domain.ReleaseImages{{Producer: "rancher/lasso", Release: "v0.2.5", Report: registry.Report{Rows: []registry.Row{{Image: "github.com/rancher/lasso", Registry: "goproxy", Status: "found"}}}}}
+
+	out := renderText(p, false)
+
+	assert.Contains(t, out, "Images (rancher/lasso v0.2.5)")
 }
