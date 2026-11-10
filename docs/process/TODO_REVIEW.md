@@ -122,35 +122,48 @@ So the strategy will be an abstraction of that process/tooling which can replica
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-11 | E07: how the reconciler is triggered | Cron only first; `repository_dispatch` later if latency hurts | |
-| DEC-12 | D25: labels per class? | No; per project (already built) is enough | |
-| DEC-13 | D26: label vocabulary | `gero/*` as the spec has it | |
+| DEC-11 | E07: how the reconciler is triggered | Cron only first; `repository_dispatch` later if latency hurts | We will plan/design for both. A repo dispatch will be more "real-time" but Crons catch periodic jobs or resovle any drift caused by human interaction on issues/PRs across repos related to the issue.  |
+| DEC-12 | D25: labels per class? | No; per project (already built) is enough | Agreed - per project is fine. Maybe somewhere we need to define constanst of lables for use in the Automation repo tho |
+| DEC-13 | D26: label vocabulary | `gero/*` as the spec has it | Yes. |
 
-**Domain milestone, your call:** ______
+**Domain milestone, your call:** Post-V1
 
 ---
 
-### Domain 5. Repo workflow management (WorkflowsConfig, `workflows sync` and `verify`, templates, `VERSION.md`)
+### Domain 5. Repo workflow management (render workflow templates with the RancherLines vars; `VERSION.md`; branch for X)
 
-**Proposed: AV1 for the type, `sync`, `verify` and `VERSION.md`; BV2 for "branch for X" (E13).** This is a scoped feature domain that is not built: both commands are stubs, there is no `WorkflowsConfig` Go type, the bundle has no template chunk, and nothing generates `VERSION.md`. PHASES lists rendered workflows and `VERSION.md` under v1.x and "branch for X" as a v2.0.0 gate item.
+**Decided: After V1 for all of it, and Before V2 for "branch for X" (E13).** The aim is to simplify the `automation-core` branch tooling. The part of this domain that renders is: workflow templates and configs the repos provide, with the RancherLines variables injected. (My first proposal was the same milestones.) This is a scoped feature domain that is not built: both commands are stubs, there is no `WorkflowsConfig` Go type, the bundle has no template chunk, and nothing generates `VERSION.md`. PHASES lists rendered workflows and `VERSION.md` under v1.x and "branch for X" as a v2.0.0 gate item.
 
 | IDs | Work | Size |
 |---|---|---|
 | A01, A02, T49 | `WorkflowsConfig` Go type, schema, and a loader that rejects any other kind in a repo's `gero.yaml` | M |
-| D14, A12, T50 | `workflows sync` and `verify`, with template and generated chunks in the bundle | L |
-| E12, T51 | Generate `VERSION.md` from `branches.lines` and `RancherLines` | M |
+| D14, A12, T50 | `workflows sync` and `verify`: render the templates and configs a repo provides, injecting the RancherLines variables, with template and generated chunks in the bundle; `verify` exits 3 on drift (DEC-16) | L |
+| E12, T51 | Generate `VERSION.md` from `branches.lines` and `RancherLines`. The layout is flexible per repo: as many columns as make sense, and a `Project` config opts into the format it wants (DEC-18). That adds a config shape to design | M |
 | E13 | "Branch for X": compose `repo branch`, `branches.lines` update, `VERSION.md` and workflow render (**BV2**) | L |
 | D16 | Rename or widen `centralConfigDir` once templates ship | S |
 
 | # | Decision | Proposed | Your call |
 |---|---|---|---|
-| DEC-14 | E08: reusable workflows or composite actions, and which workflow first | Reusable workflows pinned by tag or SHA (PHASES); `ci.yml` already has `workflow_call`; start with the one `ci:ship` needs | |
-| DEC-15 | E11: how a downstream repo pins and calls them | By `gero` tag or SHA, as PHASES says | |
-| DEC-16 | A15: does `workflows verify` exit 3 on drift? | Yes | |
-| DEC-17 | A09: does any config besides `WorkflowsConfig` move into target repos? | No | |
-| DEC-18 | E12: the `VERSION.md` layout and whether older readers (frameworks-automation) need the old formats | **Not mine to answer**: needs the team and a look at those readers | |
+| DEC-14 | E08: reusable workflows or composite actions, and which workflow first | Reusable workflows pinned by tag or SHA (PHASES); `ci.yml` already has `workflow_call`; start with the one `ci:ship` needs | This is more about each repo and their workflows than Gero - to resolve as we implement this feature across repos. |
+| DEC-15 | E11: how a downstream repo pins and calls them | By `gero` tag or SHA, as PHASES says | This question doesn't fit the context of the feature - most the workflows will be related to how CI jobs run and likely come from templates in that repo. The only actions about/using `gero` might be the one I mentioned for calling `gero ci:ship` from the shipping repos. |
+| DEC-16 | A15: does `workflows verify` exit 3 on drift? | Yes | Yes |
+| DEC-17 | A09: does any config besides `WorkflowsConfig` move into target repos? | No | No |
+| DEC-18 | E12: the `VERSION.md` layout and whether older readers (frameworks-automation) need the old formats | **Not mine to answer**: needs the team and a look at those readers | The layout we generate VERSION.md might need to be "flexible" per repo. I think we can design a system that uses as many columns that make sense and let `Project` configs opt-in to format they want.   |
 
-**Domain milestone, your call:** ______
+Your grouping mixed up some layers here that seem related but are not.
+This work mainly seeks to simplify the `automation-core` branch tooling.
+
+The Workflow generating concept of Gero is more about rendering workflow templates and configs the repos provide - and also injecting the RancherLines vars related to them too.
+There will also be a few Actions we may expose to make using `gero` easier in CI, but these are distinc topics/ideas.
+Only the first one relates to this Domain - the second one is a "DX Improvmenet for Gero" idea.
+
+**Recorded after review**
+
+* **Moved out of this domain:** E08 and E11 (reusable workflows or composite actions, how a downstream repo pins and calls them) are not part of rendering. How CI jobs run comes from the templates each repo provides, and E08 is settled repo by repo as the feature rolls out. What remains is a distinct idea, **DX actions for `gero`**: a few Actions that make using `gero` easier in CI, the one named so far being for calling `gero ci:ship` from the shipping repos (Domain 1's workflows are the first user). Not placed on a milestone yet; I will carry it into the wishlist when you review Domain 19.
+* **DEC-17:** No. Only `WorkflowsConfig` lives in a target repo (A09 is closed as decided; the spec already says so).
+* **DEC-18** answered above, so E12 is no longer waiting on the team.
+
+**Domain milestone, your call:** Post-V1
 
 ---
 
