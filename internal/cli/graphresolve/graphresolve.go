@@ -48,7 +48,7 @@ const (
 	classEdit     = "edit"
 )
 
-const header = `direction: right
+const header = `direction: down
 
 vars: {
   d2-config: {layout-engine: elk}
