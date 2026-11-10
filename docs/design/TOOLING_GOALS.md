@@ -88,3 +88,9 @@ Answer, for one line: does each hop hold a version of its own line?
 * A hop that holds a version of another line is a mismatch; today a branch can hold a dependency from the wrong line and nobody sees it
 * Needs from config: how each project maps a version to a line; for kuberlr, shell, BRO and charts that is a function of the line, so it may be data, not a per-project rule
 * The verdict is a list of mismatches with the path to each, never a block on its own
+
+## Goal: say when a consumer holds less than a pin requires
+
+A release that pins another says which version of it goes with the release ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)): wrangler's `go.mod` requires a lasso. `gero repo status` should report a consumer whose pinned module is older than that, for the pinning release it holds, as "requires at least vX (wrangler vY)", and not compare it with the latest release of the module, which is what a virtual Holding would otherwise be read against. `gero lines resolve` should show the pin as an edge between the two projects.
+
+`gero ship` of the pinned Artifact alone is open with it: it would be allowed with a tag, with a warning when the tag is below what the consumer's pinning release requires.

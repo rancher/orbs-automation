@@ -64,13 +64,14 @@ Scheme defaults for stages: `calverLineStage` gives `dev` (prerelease) and `stab
 
 ## Artifact
 
-One thing each release of a stream produces. `refs`: `stream` (required).
+One thing each release of a stream produces. `refs`: `stream` (required), `pins` (a name or a list of names, each an Artifact).
 
 | Field | Type | Default | Rules |
 |---|---|---|---|
 | `kind` | `image`, `file` or `gomod` | required | |
 | `name` | text | required | an image: its repository path. A file: a name template; variables `tag`, `version`. A `gomod`: the module path, no space |
 | `lines` | `{since, until}` | every line | the lines that produce it |
+| `pins` | `{file}` | `{file: go.mod}` | for a `gomod` Artifact with `refs.pins`: the file of a release that says which version of each pinned module goes with it. The key read in it is the pinned Artifact's `name` |
 | `registries` | list | by release kind | an image only; `dockerhub`, `prime-staging`, `prime-production`; the default is Docker Hub and Prime staging always, Prime production for a stable |
 
 An image is checked in its registries; a file on the GitHub release **(provisional: exists only)**. A `gomod` exists when its tag is on the repo and the version is listed by the public Go module proxy, which `gero repo images exist` and `gero ship` ask over HTTP ([IMAGES_EXIST](../specs/IMAGES_EXIST.md#go-modules)) **(provisional: the proxy is not configurable; a field can name another later)**.
@@ -176,6 +177,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A holding's `stage` is a stage of its holder's `branches.stages`, and its `stages` are stages of the producer's streams
 * The locations of one Holding should hold the same version for a line; a difference is a warning (a repo's nested modules out of step). A project's locations at the same file and key, in one Holding or several, do not overlap in lines; a `gomod` name is unique within a stream, not a project (the same module is one Artifact for each minor)
 * A project with `layout: perLine` that holds an artifact (matched by its image name or module path) which the `finalDestination` also holds (a project is not compared with itself) should hold the same stream for each line; a difference is a warning. A `single` layout is not compared
+* An Artifact that `pins` is `gomod`, and so is each one it pins; none pins itself, and the pins have no cycle. A pin makes a virtual Holding of the pinned Artifact for each Holding of the pinning one ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)), and it is an error when an explicit Holding, or another pin's, is at the same file and key of the same project on overlapping lines
 * A `gomod` Artifact's `name` is a module path; a Holding with `format: gomod` holds a `gomod` Artifact; a `goBump` Edit has at least one such Holding
 * A step run `from: producer` needs a producer whose `managedBy` is a team: not unset, not `shared`, and not external, since no team could run it. Whether the active team owns the producer is known only when a command runs: a producer it does not own has its `from: producer` steps skipped
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))

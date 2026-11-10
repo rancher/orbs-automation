@@ -41,9 +41,14 @@ The rules the graph applies, each in `internal/chain`.
 | `Stream.Serves(line)` | `universal`, or the line is one of the stream's lines |
 | `Artifact.Registries(stable)` | the registries written, else Docker Hub and Prime staging, and Prime production for a stable ([CONFIG_UNITS](CONFIG_UNITS.md), registries are code) |
 | `Artifact.AppliesTo(line)` | the artifact's `lines` range holds the line; a line that does not read as one counts as in range |
+| `Artifact.Pins` and `Artifact.PinnedBy` | the Artifacts this one pins, as written in `refs.pins`, and the ones that pin it; an edge of the graph between Artifacts, and none when no Artifact pins ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)) |
+| `Holding.Virtual`, `Holding.PinnedBy` | a virtual Holding is the one a pin makes in a consumer: the pinned Artifact, the files and lines of the Holding it comes from (`PinnedBy`), and no document of its own |
+| `Holding.Pinned` | the virtual Holdings of the pinned Artifacts of a Holding, which a run that ships its Artifact writes beside it, and which follow its Edits |
 | `Holding.AppliesTo(line)` | the holding's `holds.lines` range holds the line, and the line is one the holder and the producer both list |
 | `Edit.Steps(line)` | the pre and post steps whose `since` and `until` hold the line, as `chain.Step` (the graph's own type, so `bump` and `steprun` do not import the API version) |
 | `Line.PhaseAt` | in `apis/lines`, shared by every version |
+
+A virtual Holding is built with the graph, from each Holding of a pinning Artifact and each Artifact it pins, so a route, a target, a check and the validation of overlaps see it as a Holding like any other: it is a route out of the pinned Artifact's project, and `RoutesFrom` lists it. What is not worked out from the config is the release it holds: that is the version in the pinning release's file, read when a run ships ([UPDATE_ENGINE](UPDATE_ENGINE.md#a-release-that-pins-another)).
 
 No answer is stored in the config that can be worked out from it. There is no implicit image: an Artifact is written for each thing a release produces.
 

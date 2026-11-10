@@ -41,6 +41,16 @@ The variables of a form are `image` (the artifact's repository path), `tag`, `ve
 * **Check:** reads the value, renders the form for the release, and says what is held, what is wanted, whether they are the same, and how the versions in them compare (newer, same, older, or unknown when either has no version)
 * **Apply:** replaces the value when it differs, and says what changed, one change for each holding that changed
 
+## A release that pins another
+
+An Artifact that `pins` another ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)) makes a **virtual** Holding of the pinned Artifact for each of its Holdings in a consumer, the **companions** of the Holding. A route that ships the pinning Artifact writes its Holdings and their companions in one run:
+
+* **The release of a companion is not the latest of its stream.** It is the version the pinned module has in the file of the pinning release (`go.mod` at the tag, read from the host), written as the tag of the pinned Artifact's stream. It must be a release of that stream and exist, as a release of any gomod Artifact does; a version with no tag, a pseudo-version for one, is a blocker that says so
+* **The check is a floor.** A companion holds what it must when the consumer's value is the required version or newer. Older is written. Newer is left as it is, and the target has a warning that the consumer holds a newer version than the pin resolves. It is never a downgrade and never blocked
+* **The same targets.** A companion is for the lines of the Holding it comes from, in its files. A file that does not require the pinned module is skipped when it is read
+* **Edits.** A companion follows the Edits of the Holding it comes from, so a `goBump` Edit tidies once after both `require` lines are written, as one unit
+* **The engine's part.** A Holding's release is worked out for it, and not taken as the one tag of the run: `ReleaseOf` takes the companion's own tag, and the check says whether a value is older, the same or newer than it. The caller gives the engine the tags it derived, as it gives the runner, so the engine reads no host
+
 ## Edits
 
 The edits that follow the holdings of a route run around the write, for the line of the target branch, each edit once:

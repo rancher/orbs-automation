@@ -33,6 +33,17 @@ A producer such as wrangler has a stream for each minor, all `universal`, and a 
 
 **The destination is the reference.** When the `finalDestination` holds the producer for the line, and is not the consumer, the plan has a **Destination** section: which stream Rancher's Holding for the line is of, and what Rancher's own file holds on the branch for that line, read from the host. The consumer's own Holding still decides the route. A warning on the target says so when Rancher's stream or the release it holds is not the one the consumer's Holding is for ("Rancher holds v3.7.1 on v2.15, and BRO would hold a v3.6 release"). A failed read of Rancher is a warning, never a blocker.
 
+## Shipping a release with the releases it pins
+
+An Artifact can pin others: a wrangler release goes with the lasso its `go.mod` requires ([CONFIG_UNITS](../design/CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)). Shipping it also ships those, in the same run, the same pull request and before the one `go mod tidy`:
+
+* **The version** is what `go.mod` of the shipped tag requires of the pinned module, read from the host. It must be a release of the pinned Artifact's stream, exist on the repository and on the Go proxy; a version with no tag is a blocker that names it.
+* **The plan** lists each companion with the version it needs and where it comes from ("lasso v0.2.5, required by wrangler v3.7.4"), and the PR body lists them in the same words.
+* **A floor.** A consumer that holds an older version of the companion gets the required one. One that holds the same keeps it. One that holds a newer version keeps it too, with a warning on the target that it is newer than the one the pin resolves; that is never a downgrade and never a blocker.
+* **The files** are the ones of the wrangler Holding for the line, and a file that does not require the module is skipped.
+* **The ownership gate** is the one for the producer named. With `--to` naming a consumer the team owns or one that is shared, the companion, though another team's, ships with it.
+* **Not here yet:** shipping the pinned Artifact alone, and `gero repo status` saying that a consumer holds less than a pin requires, which are open ([TOOLING_GOALS](../design/TOOLING_GOALS.md)).
+
 ## Shipping another team's release
 
 Whether a project is **owned** is `managedBy` against the **active team context** gero works in when run (`team`, [CLI_CONFIG](CLI_CONFIG.md)), not a field of the project. `gero ship` is gated on it:

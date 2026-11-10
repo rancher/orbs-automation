@@ -122,6 +122,19 @@ None of these is forced by the shell and SCC to Rancher baseline, which the shap
 * **Context:** lasso `v0.2.*` goes with any wrangler `v3.*.*`. That is a fact about two producers' releases and matters to every project holding both (BRO, Rancher), not to how one flows into the other. No kind says it: a Holding is a consumer's file, a Stream is one producer's releases, and a Policy is a project's practice.
 * **Option A, nothing yet:** every pair held is inside the one range that exists, so a check would never fail. **Option B, a `Pairing` kind** that refs two or more `gomod` Artifacts and selects the releases of each that go together (`series`); a project holding both must hold a declared pair, and a failure is a warning. **Option C, derive it** from each module's own `go.mod`, which already holds the hard minimums.
 * **Lean A now, B** when a case needs it: lasso `v0.3` or higher, or wrangler `v4` or higher. Until one exists the shape is a guess, and the cross-version matrix is what such a case would show. Go's own resolution keeps enforcing minimums meanwhile.
+* **Decided: C, written as a pin on the Artifact.** The case arrived with shipping wrangler into BRO and Rancher: the lasso that goes with a wrangler release is the version in that release's own `go.mod`. It is a fact about two producers, so it is written once beside wrangler's config and not in each consumer, and it needs no new kind. `Pairing` stays the option for a pair that is not read from a `go.mod`.
+  * **The pin.** An Artifact names another in `refs.pins` (a name or a list), and may set `spec.pins.file`, the file of the pinning release that is read (`go.mod`, by default). Both are `gomod` Artifacts. The key read is the pinned Artifact's own `name`, its module path.
+
+    ```yaml
+    kind: Artifact
+    name: wrangler-v3-7-module
+    refs: {stream: wrangler-v3-7, pins: lasso-v0-2-module}
+    spec: {kind: gomod, name: github.com/rancher/wrangler/v3}
+    ```
+  * **Virtual holdings.** For each Holding of the pinning Artifact in a consumer, and each Artifact it pins, the consumer has a **virtual** Holding of the pinned one, with the files (`at`) and lines of the Holding it comes from, the pinned Artifact's module path as the key, `{bareTag}` as the form and `accept: all`. The consumer writes nothing about the pinned module, and `bro-holds-lasso` and `rancher-holds-lasso` are not needed where a wrangler Holding covers the lines. A virtual Holding has no document: it is a result of the pin and the Holding, whether kept in memory or worked out when asked. A file of the Holding that does not require the pinned module is skipped when it is read, and is not an error. A virtual Holding follows the Edits of the Holding it comes from, so one `goBump` Edit covers wrangler and lasso.
+  * **The pin owns what it covers.** An explicit Holding of the pinned Artifact that overlaps a virtual one (the same holder, file and key, on overlapping lines) is an error, naming both. An explicit Holding is for the lines and files no pin covers, such as BRO's `v2.12`, which has no wrangler stream. Two pins that overlap are the same error.
+  * **A pin is a floor.** A `require` line is a minimum. The pinned module is raised when the consumer holds an older version than the pinning release requires, and kept when it holds a newer one, with a warning that it is newer than what the pin resolves. It is never a downgrade, and never a blocker.
+  * **What a run does.** Shipping the pinning Artifact reads `go.mod` of its tag from the host, takes the version the pinned module has there, which must be a release of the pinned Artifact's stream and exist ([PUSH_TO_REPO](../specs/PUSH_TO_REPO.md#shipping-a-release-with-the-releases-it-pins)), and writes the pinned module in the same run and the same pull request, before `go mod tidy`.
 
 ### O13. How is a warning acknowledged?
 
