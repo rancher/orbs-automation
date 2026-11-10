@@ -256,12 +256,19 @@ func (r resolution) noSuchLine(line string) error {
 	return fmt.Errorf("%w: %s has no release line %s; it has %s", ErrNoTargets, consumer.Slug(), line, strings.Join(have, ", "))
 }
 
+// named reports whether a project is what the user called it: its config name, its
+// owner/name slug or one of its aliases, whatever the case.
+func named(p *chain.Project, key string) bool {
+	return strings.EqualFold(p.Name(), key) || strings.EqualFold(p.Slug(), key) ||
+		slices.ContainsFunc(p.Aliases(), func(a string) bool { return strings.EqualFold(a, key) })
+}
+
 // pickRoute chooses the route to ship down: the one to the consumer named by to
-// (a config name or a slug); the only route when there is just one.
+// (a config name, a slug or an alias); the only route when there is just one.
 func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Route, error) {
 	var matches []bump.Route
 	for _, r := range routes {
-		if to == "" || strings.EqualFold(r.Consumer.Name(), to) || strings.EqualFold(r.Consumer.Slug(), to) {
+		if to == "" || named(r.Consumer, to) {
 			matches = append(matches, r)
 		}
 	}

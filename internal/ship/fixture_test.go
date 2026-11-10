@@ -26,6 +26,7 @@ type lineSpec struct{ Line, Branch string }
 // projectSpec is a project as the tests write it, before it is made into documents.
 type projectSpec struct {
 	Name, Repo, ManagedBy string
+	Aliases               []string      // shorthand names
 	Title                 string        // pullRequests.title
 	PushTo                string        // pullRequests.pushTo
 	Labels, BotLabels     []string      // pullRequests.labels and botLabels
@@ -175,6 +176,9 @@ func projectBody(p projectSpec) string {
 	}
 	repo += "}"
 	body := "  repo: " + repo + "\n"
+	if len(p.Aliases) > 0 {
+		body = "  aliases: [" + strings.Join(p.Aliases, ", ") + "]\n" + body
+	}
 	var pr []string
 	if p.Title != "" {
 		pr = append(pr, fmt.Sprintf("title: %q", p.Title))

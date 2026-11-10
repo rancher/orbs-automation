@@ -112,10 +112,10 @@ func TestCheckConsumers(t *testing.T) {
 		assert.ErrorContains(t, err, "rancher")
 	})
 	t.Run("chosen by name or slug", func(t *testing.T) {
-		for _, to := range []string{"charts", "rancher/charts", "Rancher/Charts"} {
+		for _, to := range []string{"charts", "rancher/charts", "Rancher/Charts", "ch", "CH"} {
 			ws := withDevLine(fixture(t))
 			other := riLink()
-			other.Consumer.Name, other.Consumer.Repo = "charts", "rancher/charts"
+			other.Consumer.Name, other.Consumer.Repo, other.Consumer.Aliases = "charts", "rancher/charts", []string{"ch"}
 			other.Consumer.Lines = ws.links[0].Consumer.Lines
 			ws.links = append(ws.links, other)
 			ws.refs["rancher/charts"] = ws.refs["rancher/rancher"]
