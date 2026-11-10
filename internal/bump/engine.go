@@ -131,7 +131,26 @@ type Route struct {
 	// a producer the active team does not own: gero runs nothing out of a repo no
 	// team of its own owns. They are reported by SkippedSteps.
 	SkipProducerSteps bool
-	engine            *Engine
+	// GoReleases names the newest patch of a Go minor, for a go.mod that pins no
+	// more than go 1.26 (the Edit's {goToolchain}). The caller gives it, as it gives the
+	// runner, so the engine reads no host. Nil means no list: such a go.mod is an error.
+	GoReleases GoReleases
+	engine     *Engine
+}
+
+// GoReleases is the list of Go releases, as far as the engine needs it.
+type GoReleases interface {
+	// NewestPatch returns the toolchain of the newest stable patch of a minor given as
+	// 1.26, such as go1.26.10.
+	NewestPatch(ctx context.Context, minor string) (string, error)
+}
+
+// EnvOf is the environment the steps and strategies of the target's edits run in:
+// the edits' env values rendered for the target, each variable read from the tree
+// only when a value uses it. An entry that renders empty is left out. Two edits that
+// set one name to different values are an error.
+func (r Route) EnvOf(ctx context.Context, tree Tree, t Target) (map[string]string, error) {
+	return nil, nil
 }
 
 // routeKey is what a route is for: the project the key says, and the stream of
