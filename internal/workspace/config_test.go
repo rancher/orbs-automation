@@ -90,8 +90,8 @@ func TestChainRejectsADirectoryWithNoDocuments(t *testing.T) {
 	assert.ErrorIs(t, err, ErrEmptyConfig)
 }
 
-func TestChainLoadsTheCheckedInConfig(t *testing.T) {
-	dir, err := filepath.Abs("../../config")
+func TestChainLoadsTheDesignFixture(t *testing.T) {
+	dir, err := filepath.Abs("../../docs/design/fixture")
 	require.NoError(t, err)
 
 	g, err := open(settings(t, "", nil, map[string]string{"central-config-dir": dir}), "/elsewhere", nil).Chain()

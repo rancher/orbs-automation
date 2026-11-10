@@ -42,9 +42,9 @@ func TestParseGivesTheConfigChunkAsOneFileTheLoaderReads(t *testing.T) {
 	assert.Len(t, g.Projects(), 2)
 }
 
-func TestParseReadsWhatCompileWroteForTheRealConfig(t *testing.T) {
+func TestParseReadsWhatCompileWroteForTheDesignFixture(t *testing.T) {
 	t.Chdir("../..")
-	shipped, err := Compile(os.DirFS("config"), header)
+	shipped, err := Compile(os.DirFS("docs/design/fixture"), header)
 	require.NoError(t, err)
 
 	_, fsys, err := Parse(shipped)
