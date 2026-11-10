@@ -30,7 +30,7 @@ func TestCheckReady(t *testing.T) {
 	assert.Equal(t, []string{"rancher-h0"}, got.Holdings)
 	assert.Equal(t, Target{Branch: "release/v2.15", Commit: "sha-215"}, got.Targets[0].Target)
 	require.Len(t, got.Targets[0].Holdings, 1)
-	assert.Equal(t, HoldingPlan{Name: "rancher-h0", File: "build.yaml", Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3"}, got.Targets[0].Holdings[0])
+	assert.Equal(t, HoldingPlan{Name: "rancher-h0", Project: "scc-operator", File: "build.yaml", Current: "rancher/scc-operator:v0.5.2", Want: "rancher/scc-operator:v0.5.3"}, got.Targets[0].Holdings[0])
 	assert.Equal(t, StatusReady, got.Status)
 	assert.Empty(t, got.Blockers)
 	require.Len(t, got.Images, 1)

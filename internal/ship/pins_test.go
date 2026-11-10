@@ -15,9 +15,9 @@ import (
 // pinGraph is wrangler (wr), whose module pins lasso (la), and bro, which holds
 // wrangler for v2.15 and newer. Lasso's tags are v0.2.*. The virtual Holding of
 // lasso in bro is the first the graph makes.
-func pinGraph(t *testing.T, laStream string) (*chain.Graph, *chain.Holding) {
+func pinGraph(t *testing.T, laStream string, extra ...string) (*chain.Graph, *chain.Holding) {
 	t.Helper()
-	g := chaintest.Load(t,
+	g := chaintest.Load(t, append([]string{
 		chaintest.Lines("v2.16", "v2.15"),
 		chaintest.Doc("Project", "wr", "", "  repo: {name: acme/wr, managedBy: frameworks}\n"),
 		chaintest.Doc("Project", "la", "", "  repo: {name: acme/la, managedBy: frameworks}\n"),
@@ -27,8 +27,8 @@ func pinGraph(t *testing.T, laStream string) (*chain.Graph, *chain.Holding) {
 		chaintest.Doc("Artifact", "la-mod", "{stream: la}", "  kind: gomod\n  name: github.com/acme/la\n"),
 		chaintest.Doc("Artifact", "wr-mod", "{stream: wr, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr\n"),
 		chaintest.Doc("Holding", "bro-holds-wr", "{project: bro, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.15}}\n"),
-	)
-	require.Len(t, g.Virtual(), 1)
+	}, extra...)...)
+	require.NotEmpty(t, g.Virtual())
 	return g, g.Virtual()[0]
 }
 

@@ -64,6 +64,7 @@ func renderPreview(in previewInput) (Preview, error) {
 		Target: in.target.Branch, Version: tag,
 	}
 	vars := textVars(in)
+	vars["companions"] = companionsText(in.pins)
 	vars["changes"] = changes(in)
 	vars["marker"] = marker.String()
 
@@ -72,12 +73,16 @@ func renderPreview(in previewInput) (Preview, error) {
 	if err != nil {
 		return Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
 	}
-	titleTemplate := firstNonEmpty(prs.Title, templates.DefaultTitle())
+	defaultTitle, defaultCommit := templates.DefaultTitle(), templates.CommitMessage()
+	if len(in.pins) > 0 { // lasso goes with wrangler: the title and the commit say so
+		defaultTitle, defaultCommit = templates.DefaultTitleWith(), templates.CommitMessageWith()
+	}
+	titleTemplate := firstNonEmpty(prs.Title, defaultTitle)
 	title, err := templates.Render(titleTemplate, vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("title %q: %w", titleTemplate, err)
 	}
-	commit, err := templates.Render(templates.CommitMessage(), vars)
+	commit, err := templates.Render(defaultCommit, vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("commit message: %w", err)
 	}
@@ -110,6 +115,20 @@ func stepPreviews(in previewInput) ([]StepPreview, error) {
 		})
 	}
 	return out, nil
+}
+
+// companionsText says what goes with the release as a title does: "lasso to
+// v0.2.10", and for more than one "a to v1, b to v2 and c to v3".
+func companionsText(pins []Companion) string {
+	parts := make([]string, len(pins))
+	for i, c := range pins {
+		parts[i] = c.Name + " to " + c.Tag
+	}
+	switch len(parts) {
+	case 0, 1:
+		return strings.Join(parts, "")
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
 }
 
 // textVars are the variables of the texts that only need to know what the bump

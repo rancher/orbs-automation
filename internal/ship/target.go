@@ -44,13 +44,15 @@ func (r resolution) checkTarget(ctx context.Context, ws Reader, sp spec, in Inpu
 		if c.Absent {
 			continue // no file of the pinning holding requires the module: nothing to hold
 		}
+		companionHolding := c.Holding.Virtual() && c.Holding.Producer() != r.producer // another release's, not the route's own
 		tp.Holdings = append(tp.Holdings, HoldingPlan{
 			Name: c.Holding.Name(), File: c.Change.Path, Current: c.Current, Want: c.Want,
 			UpToDate: c.UpToDate, Downgrade: !c.UpToDate && c.Relation == bump.RelationOlder,
-			Pinned: c.Holding.Virtual(),
+			Pinned: companionHolding, Project: c.Holding.Producer().Name(),
 		})
-		if c.Holding.Virtual() {
+		if companionHolding {
 			comp := r.companionOf(c.Holding, sp.release.Tag)
+			tp.Holdings[len(tp.Holdings)-1].Release = comp.Tag
 			if c.HeldNewer {
 				tp.Warnings = append(tp.Warnings, fmt.Sprintf("%s holds %s %s, newer than %s, which %s requires: it is kept",
 					consumerSlug, comp.Module, c.Current, comp.Tag, comp.RequiredBy))

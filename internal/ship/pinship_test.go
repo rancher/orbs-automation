@@ -2,10 +2,12 @@ package ship
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -217,4 +219,96 @@ func TestHoldingsOfLassoSayWhenNoFileOfTheVirtualHoldingRequiresIt(t *testing.T)
 	require.NotEmpty(t, got[0].Targets)
 	held := got[0].Targets[0].Held[0]
 	assert.Contains(t, held.Error, "requires", "no panic, and the row says why it holds nothing")
+}
+
+// withDestination is the world with rancher, the final destination, holding wrangler
+// for v2.15 and newer as bro does, so it holds lasso through the pin; it is on v1.7.4
+// and lasso v0.2.5 on both branches.
+func withPinDestination(t *testing.T) pinWorkspace {
+	t.Helper()
+	g, _ := pinGraph(t, laStream,
+		chaintest.Doc("Project", "dest", "", "  repo: {name: acme/dest}\n  finalDestination: true\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r15}]\n"),
+		chaintest.Doc("Holding", "dest-holds-wr", "{project: dest, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.15}}\n"),
+	)
+	w := pinWorkspace{g: g, host: newPinWorkspace(t).host}
+	w.host.files["acme/dest@sha-dmain:go.mod"] = "module acme/dest\n\nrequire (\n\tgithub.com/acme/la v0.2.5\n\tgithub.com/acme/wr v1.7.4\n)\n"
+	w.host.files["acme/dest@sha-d15:go.mod"] = "module acme/dest\n\nrequire (\n\tgithub.com/acme/la v0.2.5\n\tgithub.com/acme/wr v1.7.4\n)\n"
+	w.host.branches["acme/dest"] = []git.Branch{{Name: "main", Commit: "sha-dmain"}, {Name: "r15", Commit: "sha-d15"}}
+	return w
+}
+
+func TestACheckLooksForACompanionsReleaseEvenWhenTheConsumerAlreadyHoldsIt(t *testing.T) {
+	w := newPinWorkspace(t)
+	w.host.files["acme/bro@sha-r15:go.mod"] = broGoMod("v0.2.5")
+	w.host.files["acme/bro@sha-main:go.mod"] = broGoMod("v0.2.5")
+
+	got, err := shipWrangler(w)
+
+	require.NoError(t, err)
+	var producers []string
+	for _, im := range got.Images {
+		producers = append(producers, im.Producer+" "+im.Release)
+	}
+	assert.Equal(t, []string{" v1.7.4", "acme/la v0.2.5"}, producers, "it goes out with the release, so its artifact is checked whatever bro holds")
+	assert.True(t, holdingNamed(t, r15Target(t, got), "bro-holds-wr+la-mod").UpToDate)
+}
+
+func TestAHoldingOfAPlanNamesTheProjectOfItsArtifactAndTheReleaseOfACompanion(t *testing.T) {
+	got, err := shipWrangler(newPinWorkspace(t))
+
+	require.NoError(t, err)
+	tp := r15Target(t, got)
+	assert.Equal(t, "wr", holdingNamed(t, tp, "bro-holds-wr").Project)
+	la := holdingNamed(t, tp, "bro-holds-wr+la-mod")
+	assert.Equal(t, "la", la.Project)
+	assert.Equal(t, "v0.2.5", la.Release, "the tag of the companion, which is not the target's")
+	assert.Empty(t, holdingNamed(t, tp, "bro-holds-wr").Release, "the target's own release is the target's")
+	require.Len(t, got.Companions, 1)
+	assert.Equal(t, "la", got.Companions[0].Name)
+}
+
+func TestACheckReadsTheDestinationForTheCompanionToo(t *testing.T) {
+	got, err := shipWrangler(withPinDestination(t))
+
+	require.NoError(t, err)
+	require.Len(t, got.Destination, 4, "wrangler and lasso on each of the two lines")
+	var seen []string
+	for _, d := range got.Destination {
+		seen = append(seen, d.Line+" "+d.Producer)
+		assert.Equal(t, "acme/dest", d.Project)
+		assert.Empty(t, d.Error)
+		require.Len(t, d.Held, 1)
+	}
+	assert.ElementsMatch(t, []string{"v2.16 wr", "v2.16 la", "v2.15 wr", "v2.15 la"}, seen)
+	for _, d := range got.Destination {
+		if d.Producer == "la" {
+			assert.Equal(t, "v0.2.5", d.Held[0].Current, "what the destination really holds of lasso")
+			assert.Equal(t, "la", d.Stream)
+		}
+	}
+}
+
+func TestACheckKeepsTheTitleAndTheCommitToWranglerWhenTheCompanionIsNotBumped(t *testing.T) {
+	w := newPinWorkspace(t)
+	w.host.files["acme/bro@sha-r15:go.mod"] = broGoMod("v0.2.5")
+
+	got, err := shipWrangler(w)
+
+	require.NoError(t, err)
+	tp := r15Target(t, got)
+	require.NotNil(t, tp.Preview)
+	assert.Equal(t, "[r15] Update wr to v1.7.4", tp.Preview.Title)
+	assert.Contains(t, tp.Preview.CommitMessage, "Update wr to v1.7.4\n")
+}
+
+func TestACheckNamesTheCompanionInTheTitleAndTheCommitWhenItIsBumped(t *testing.T) {
+	got, err := shipWrangler(newPinWorkspace(t))
+
+	require.NoError(t, err)
+	tp := r15Target(t, got)
+	require.NotNil(t, tp.Preview)
+	assert.Equal(t, "[r15] Update wr to v1.7.4 and la to v0.2.5", tp.Preview.Title)
+	assert.True(t, strings.HasPrefix(tp.Preview.CommitMessage, "Update wr to v1.7.4 and la to v0.2.5\n"), tp.Preview.CommitMessage)
+	assert.Contains(t, tp.Preview.Branch, "wr-v1.7.4-r15", "the branch is named for the release asked for, so it is the same whether lasso goes with it or not")
+	assert.NotContains(t, tp.Preview.Branch, "la")
 }

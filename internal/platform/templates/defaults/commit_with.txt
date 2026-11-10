@@ -1,0 +1,5 @@
+Update {source} to {tag} and {companions}
+
+Automated update from {sourceRepo} release {tag}, with {companions}
+
+Automation: gero ship

@@ -17,6 +17,7 @@ import (
 // that release pins the Artifact of this one (wrangler's go.mod requires a lasso):
 // the version it requires, where it was read, and whether it can be shipped.
 type Companion struct {
+	Name     string `json:"name"`     // the config name of the project it is released from
 	Producer string `json:"producer"` // the repository the pinned module is released from, owner/name
 	Module   string `json:"module"`   // the pinned module's path
 	Tag      string `json:"tag"`      // the release of it that goes with the pinning release
@@ -47,7 +48,7 @@ func derive(ctx context.Context, src pinSource, v *chain.Holding, pinnerTag stri
 	pinner, pinned := v.PinnedBy().Artifact(), v.Artifact()
 	pinnerSlug := pinner.Stream().Project().Slug()
 	c := Companion{
-		Producer: v.Producer().Slug(), Module: pinned.Ref(),
+		Name: v.Producer().Name(), Producer: v.Producer().Slug(), Module: pinned.Ref(),
 		RequiredBy: pinnerSlug + " " + pinnerTag, File: pinner.PinFile(),
 	}
 	data, err := src.UpstreamFile(ctx, pinnerSlug, pinnerTag, c.File)
@@ -159,8 +160,8 @@ func (r resolution) companionsToShip(plan Plan, release string) []companion {
 			continue
 		}
 		for _, hp := range tp.Holdings {
-			if !hp.Pinned || hp.UpToDate {
-				continue
+			if !hp.Pinned {
+				continue // whether the consumer holds it already or not, it goes out with the release
 			}
 			c := r.derived[derivedKey{hp.Name, tp.Release}]
 			if c.holding != nil && !slices.ContainsFunc(out, func(o companion) bool { return o.Producer == c.Producer && o.Tag == c.Tag }) {

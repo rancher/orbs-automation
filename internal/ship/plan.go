@@ -160,6 +160,12 @@ type HoldingPlan struct {
 	// Pinned says the holding is a companion's: the virtual Holding a pin makes of
 	// another module, written with the release the pin resolved.
 	Pinned bool `json:"pinned,omitempty"`
+	// Project is the config name of the producer of the holding's artifact, so a
+	// report can say whose release a row is: wrangler's, or the lasso that goes with it.
+	Project string `json:"project,omitempty"`
+	// Release is the tag of the companion's release, for a holding that is one; the
+	// target's own release is the target's.
+	Release string `json:"release,omitempty"`
 }
 
 // Key is what a report calls the target: its Rancher line, which means the same

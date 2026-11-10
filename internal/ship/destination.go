@@ -17,7 +17,10 @@ import (
 // the release goes where the destination is.
 type Destination struct {
 	Project string `json:"project"` // the repository of the destination, owner/name
-	Line    string `json:"line"`    // the Rancher line
+	// Producer is the config name of the project whose release it holds there: the
+	// release asked for, or a companion that goes with it.
+	Producer string `json:"producer,omitempty"`
+	Line     string `json:"line"` // the Rancher line
 	// Stream is the stream the destination's holding for the line is of.
 	Stream string `json:"stream"`
 	Branch string `json:"branch,omitempty"`
@@ -42,29 +45,55 @@ func (r resolution) destinations(ctx context.Context, ws Reader, specs []spec) (
 	seen := map[string]bool{}
 	for _, sp := range specs {
 		line := sp.target.Line
-		if line == "" || seen[line] {
+		if line == "" {
 			continue
 		}
-		seen[line] = true
-		held := r.destinationHoldings(line)
-		if len(held) == 0 {
-			continue
-		}
-		d := Destination{Project: held[0].Holder().Slug(), Line: line, Stream: held[0].Artifact().Stream().Name()}
-		r.readDestination(ctx, ws, held[0].Holder(), held[0].Artifact().Stream(), &d)
-		out = append(out, d)
-		if w := r.destinationWarnings(d); len(w) > 0 {
-			warnings[line] = w
+		// The release asked for, then each companion that goes with it: the
+		// destination holds lasso beside wrangler as the consumer does.
+		for _, held := range r.destinationReferences(sp.target) {
+			key := line + " " + held.producer.Name()
+			found := held.holdings
+			if seen[key] || len(found) == 0 {
+				continue
+			}
+			seen[key] = true
+			d := Destination{Project: found[0].Holder().Slug(), Producer: held.producer.Name(), Line: line, Stream: found[0].Artifact().Stream().Name()}
+			r.readDestination(ctx, ws, held.producer, found[0].Holder(), found[0].Artifact().Stream(), &d)
+			out = append(out, d)
+			if w := r.destinationWarnings(d, held.producer, held.stream); len(w) > 0 {
+				warnings[line] = append(warnings[line], w...)
+			}
 		}
 	}
 	return out, warnings
 }
 
-// destinationHoldings is the holdings of the producer's releases in the final
+// reference is a producer whose release a target writes, and what the destination
+// holds of it for the target's line.
+type reference struct {
+	producer *chain.Project
+	stream   *chain.Stream // the stream the consumer's holding of it is of
+	holdings []*chain.Holding
+}
+
+// destinationReferences is the producer of the release and the producer of each
+// companion of the target, each with the destination's holdings of it for the line.
+func (r resolution) destinationReferences(t bump.Target) []reference {
+	refs := []reference{{producer: r.producer, stream: r.route.Stream, holdings: destinationHoldings(r.producer, t.Line)}}
+	for _, h := range t.Holdings {
+		if !h.Virtual() || h.Producer() == r.producer || slices.ContainsFunc(refs, func(o reference) bool { return o.producer == h.Producer() }) {
+			continue
+		}
+		refs = append(refs, reference{producer: h.Producer(), stream: h.Artifact().Stream(), holdings: destinationHoldings(h.Producer(), t.Line)})
+	}
+	return refs
+}
+
+// destinationHoldings is the holdings of a producer's releases in the final
 // destination that are for the line.
-func (r resolution) destinationHoldings(line string) []*chain.Holding {
+func destinationHoldings(producer *chain.Project, line string) []*chain.Holding {
 	var out []*chain.Holding
-	for _, h := range r.producer.Sourced() {
+	for _, h := range producer.Sourced() {
 		if h.Holder().FinalDestination() && h.Kind() == chain.HoldsRelease && h.AppliesTo(line) {
 			out = append(out, h)
 		}
@@ -75,18 +104,19 @@ func (r resolution) destinationHoldings(line string) []*chain.Holding {
 // readDestination fills d with what the destination holds of the stream on its
 // line, read from the host with the pieces that trace a route in gero repo status:
 // the destination's route for the stream, and its branch for the line.
-func (r resolution) readDestination(ctx context.Context, ws Reader, dest *chain.Project, stream *chain.Stream, d *Destination) {
+func (r resolution) readDestination(ctx context.Context, ws Reader, producer, dest *chain.Project, stream *chain.Stream, d *Destination) {
 	engine, engineErr := ws.Bump()
 	if engine == nil {
 		d.Error = engineErr.Error()
 		return
 	}
-	i := slices.IndexFunc(engine.RoutesFrom(r.producer), func(route bump.Route) bool { return route.Consumer == dest && route.Stream == stream })
+	routes := engine.RoutesFrom(producer)
+	i := slices.IndexFunc(routes, func(route bump.Route) bool { return route.Consumer == dest && route.Stream == stream })
 	if i < 0 {
 		d.Error = "it has no usable route for " + stream.Name()
 		return
 	}
-	res, err := resolveRoute(ctx, ws, engine.RoutesFrom(r.producer)[i])
+	res, err := resolveRoute(ctx, ws, routes[i])
 	if err != nil {
 		d.Error = err.Error()
 		return
@@ -113,14 +143,14 @@ func (r resolution) readDestination(ctx context.Context, ws Reader, dest *chain.
 // destinationWarnings is what is wrong with the release going where the destination
 // is not: the destination could not be read, it holds another stream for the line, or
 // what it really holds is not a release of the stream the consumer holds.
-func (r resolution) destinationWarnings(d Destination) []string {
-	consumer, stream := r.route.Consumer.Slug(), r.route.Stream
+func (r resolution) destinationWarnings(d Destination, producer *chain.Project, stream *chain.Stream) []string {
+	consumer := r.route.Consumer.Slug()
 	switch {
 	case d.Error != "":
 		return []string{fmt.Sprintf("could not read %s on %s to compare it with: %s", d.Project, d.Line, d.Error)}
 	case d.Stream != stream.Name():
 		return []string{fmt.Sprintf("%s holds %s on %s through the stream %s, and %s would hold the stream %s",
-			d.Project, r.producer.Name(), d.Line, d.Stream, consumer, stream.Name())}
+			d.Project, producer.Name(), d.Line, d.Stream, consumer, stream.Name())}
 	}
 	var out []string
 	for _, held := range d.Held {

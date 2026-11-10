@@ -162,11 +162,12 @@ func parse(text string) ([]part, error) {
 //	consumer          the consumer's owner/name
 //	sourceReleaseURL  where the producer's release is published
 //	file, from, to    what the strategy changed: the file, its old and new value
+//	companions        the releases that go with this one, such as "lasso to v0.2.10": empty when none
 //	changes           a list of what was changed, generated from the edits
 //	marker            the hidden block that identifies the PR (PR body only)
 var TextVars = []string{
 	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
-	"consumer", "sourceReleaseURL", "file", "from", "to", "changes", "marker",
+	"consumer", "sourceReleaseURL", "file", "from", "to", "companions", "changes", "marker",
 }
 
 // StrategyVars are the extra variables a strategy supplies to the texts of a PR
