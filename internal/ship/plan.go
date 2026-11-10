@@ -157,6 +157,9 @@ type HoldingPlan struct {
 	Want      string `json:"want"`    // what it should hold for the release
 	UpToDate  bool   `json:"upToDate"`
 	Downgrade bool   `json:"downgrade,omitempty"` // the release is older than what the file holds
+	// Pinned says the holding is a companion's: the virtual Holding a pin makes of
+	// another module, written with the release the pin resolved.
+	Pinned bool `json:"pinned,omitempty"`
 }
 
 // Key is what a report calls the target: its Rancher line, which means the same
@@ -188,6 +191,9 @@ type Plan struct {
 	Blockers []string        `json:"blockers,omitempty"` // in the way of the whole release
 	Images   []ReleaseImages `json:"images,omitempty"`   // one check for each release that some target needs a PR for
 	Warnings []string        `json:"warnings,omitempty"`
+	// Companions are the releases that go with the release, because its Artifact
+	// pins theirs, each once, in the order the targets need them.
+	Companions []Companion `json:"companions,omitempty"`
 	// Destination is what the final destination holds of the producer on the lines
 	// shipped to, when it holds it and is not the consumer: the reference to compare
 	// the release with. A mismatch is a warning of the target.
@@ -209,7 +215,10 @@ type Plan struct {
 
 // ReleaseImages is the check of the images of one release.
 type ReleaseImages struct {
-	Release string `json:"release"` // the tag
+	// Producer is the repository of a companion whose release this is, and empty for
+	// the release asked for.
+	Producer string `json:"producer,omitempty"`
+	Release  string `json:"release"` // the tag
 	registry.Report
 }
 
