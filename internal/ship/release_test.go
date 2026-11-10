@@ -103,3 +103,25 @@ func TestResolveReleaseFillsTheLineOfATag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "v2.15", got.Line)
 }
+
+func TestResolveReleaseAStreamWithOnlyPrereleasesNamesTheFlag(t *testing.T) {
+	rcs := tags("v0.7.0-rc.1", "v0.7.0-rc.2")
+
+	_, err := resolveRelease(t, universal(), rcs, "", false, "stable")
+
+	require.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorContains(t, err, "no stable release")
+	assert.ErrorContains(t, err, "v0.7.0-rc.2", "it names the newest there is")
+	assert.ErrorContains(t, err, "--prerelease")
+
+	got, err := resolveRelease(t, universal(), rcs, "", true, "stable")
+	require.NoError(t, err)
+	assert.Equal(t, "v0.7.0-rc.2", got.Tag, "which the flag takes")
+}
+
+func TestResolveReleaseAStreamWithNoTagsAtAllSaysNone(t *testing.T) {
+	_, err := resolveRelease(t, universal(), nil, "", false, "stable")
+
+	require.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorContains(t, err, "has no release tags")
+}

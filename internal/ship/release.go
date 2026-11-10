@@ -41,8 +41,11 @@ func ResolveRelease(scheme tagscheme.Scheme, slug string, tags []git.Tag, arg st
 	var tag *git.Tag
 	switch {
 	case arg == "":
-		tag = newest(scheme.Latest(tags, ""), prerelease)
-		if tag == nil {
+		latest := scheme.Latest(tags, "")
+		if tag = newest(latest, prerelease); tag == nil {
+			if pre := latest.Newest(); pre != nil {
+				return Release{}, fmt.Errorf("%w: %s has no stable release, only %s; pass --prerelease to ship it, or name a tag", ErrNoRelease, slug, pre.Name)
+			}
 			return Release{}, fmt.Errorf("%w: %s has no release tags", ErrNoRelease, slug)
 		}
 	case scheme.Valid(arg):
@@ -61,7 +64,11 @@ func ResolveRelease(scheme tagscheme.Scheme, slug string, tags []git.Tag, arg st
 		if !slices.Contains(scheme.Lines(tags), arg) {
 			return Release{}, fmt.Errorf("%w: %q is neither a tag nor a release line of %s", ErrNoRelease, arg, slug)
 		}
-		if tag = newest(scheme.Latest(tags, arg), prerelease); tag == nil {
+		latest := scheme.Latest(tags, arg)
+		if tag = newest(latest, prerelease); tag == nil {
+			if pre := latest.Newest(); pre != nil {
+				return Release{}, fmt.Errorf("%w: %s has no stable release in line %s, only %s; pass --prerelease to ship it, or name a tag", ErrNoRelease, slug, arg, pre.Name)
+			}
 			return Release{}, fmt.Errorf("%w: %s has no tags in line %s", ErrNoRelease, slug, arg)
 		}
 	}
