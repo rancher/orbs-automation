@@ -3,9 +3,12 @@ package v1alpha2
 import (
 	"fmt"
 	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
 // Where the program of a step comes from.
@@ -41,6 +44,33 @@ func (e *Edit) Validate(_ config.Context, r *config.Report) {
 	}
 	checkSteps(r, "spec.preEdit", s.PreEdit)
 	checkSteps(r, "spec.postEdit", s.PostEdit)
+	checkEnv(r, s.Env)
+}
+
+// envName is what the name of an environment variable looks like.
+var envName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+
+// checkEnv checks the env of an Edit: each name is an environment variable of the
+// shape programs read and not one of the engine's own, and each value is a template
+// over the variables a target gives.
+func checkEnv(r *config.Report, env map[string]string) {
+	names := make([]string, 0, len(env))
+	for name := range env {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		at := "spec.env." + name
+		switch {
+		case !envName.MatchString(name):
+			r.Errorf(at, "%q is not the name of an environment variable: write it like GOTOOLCHAIN", name)
+		case strings.HasPrefix(name, "GERO_"):
+			r.Errorf(at, "%q is for the engine: names that start with GERO_ are its own", name)
+		}
+		if err := templates.Validate(env[name], templates.EnvVars); err != nil {
+			r.Errorf(at, "%v", err)
+		}
+	}
 }
 
 // checkSteps checks each step's program and range of lines.

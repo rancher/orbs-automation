@@ -170,6 +170,16 @@ var TextVars = []string{
 	"consumer", "sourceReleaseURL", "file", "from", "to", "companions", "changes", "marker",
 }
 
+// EnvVars are the variables an Edit's env values may use, read from the target the
+// Edit runs for:
+//
+//	goToolchain  the Go toolchain the branch pins, from its go.mod: its toolchain
+//	             line, else its go line, else the newest patch of its minor; empty
+//	             when the branch has no go.mod
+//	line         the Rancher line of the target branch, such as v2.16
+//	branch       the target branch, such as release/v2.15
+var EnvVars = []string{"goToolchain", "line", "branch"}
+
 // StrategyVars are the extra variables a strategy supplies to the texts of a PR
 // of a project that uses it, by the strategy's name. They are listed here, and
 // not only in the strategy, so config validation can accept them without

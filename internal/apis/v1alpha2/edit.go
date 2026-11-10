@@ -13,4 +13,7 @@ type EditSpec struct {
 	PostEdit []Step            `yaml:"postEdit"`
 	Strategy string            `yaml:"strategy"`
 	With     map[string]string `yaml:"with"`
+	// Env is the environment every step and strategy of the Edit runs in for one
+	// target: names to templates (templates.EnvVars).
+	Env map[string]string `yaml:"env"`
 }

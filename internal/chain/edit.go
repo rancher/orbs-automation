@@ -17,6 +17,10 @@ func (e *Edit) Name() string { return e.Doc.Name }
 // Holdings returns the holdings the edit follows.
 func (e *Edit) Holdings() []*Holding { return e.holdings }
 
+// Env is the environment the edit's steps and strategy run in: names to templates
+// that are rendered for each target.
+func (e *Edit) Env() map[string]string { return e.Doc.Spec.Env }
+
 // Strategy is the named rule that needs code, or empty.
 func (e *Edit) Strategy() string { return e.Doc.Spec.Strategy }
 

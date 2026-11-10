@@ -296,6 +296,13 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Env is the environment every step and strategy of the Edit runs in for one\ntarget: names to templates (templates.EnvVars)."
         }
       },
       "additionalProperties": false,
