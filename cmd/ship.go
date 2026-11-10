@@ -38,6 +38,12 @@ to one Rancher line of the consumer (v2.15 or 2.15), on whichever branch the
 consumer keeps that line, so the same flag works for consumers that name their
 branches differently.
 
+A consumer that holds a different stream of the project for each line (BRO holds
+a different wrangler minor on v2.15 and v2.16) needs the line, or a tag, to know
+which: "gero ship wrangler v2.15 --to=bro" ships the latest stable release of the
+stream BRO holds on v2.15, and the plan compares it with what rancher/rancher
+holds on that line. A tag picks the stream it belongs to.
+
 Before anything is written the state is checked, from the host and not from
 any clone: the release and the target branch must exist, the consumer's
 current value is read and compared with what the release needs, and the
