@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/gero/authorship"
 )
 
 // Action is what Run did.
@@ -59,7 +59,7 @@ type Git interface {
 	Fetch(ctx context.Context, dir, remote, branch string) (commit string, err error)
 	BranchCommit(ctx context.Context, dir, branch string) (commit string, found bool, err error)
 	MergeBase(ctx context.Context, dir, a, b string) (string, error)
-	CommitsSince(ctx context.Context, dir, base, tip string) ([]git.BranchCommit, error)
+	CommitsSince(ctx context.Context, dir, base, tip string) ([]authorship.Commit, error)
 	// Config is what git uses for key in the clone: user.email is the actor's.
 	Config(ctx context.Context, dir, key string) (string, error)
 	Push(ctx context.Context, dir, remote, branch string) error
@@ -109,7 +109,7 @@ func Run(ctx context.Context, g Git, in Input) (Output, error) {
 	if err != nil {
 		return plain()
 	}
-	if ours, why := git.CommitsAreOurs(facts, email); !ours {
+	if ours, why := authorship.AreOurs(facts, email); !ours {
 		return Output{}, fmt.Errorf("%s on %s: %w: %s", in.Branch, in.Remote, ErrNotOurs, why)
 	}
 	if !in.Replace {

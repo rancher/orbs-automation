@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/rancher/orbs-automation/internal/gero/authorship"
 	"github.com/rancher/orbs-automation/internal/gero/workdir"
-	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 var bg = context.Background()
@@ -31,7 +31,7 @@ type fakeGit struct {
 	existing   string // the commit the branch of that name is at; empty is none
 	collisions []string
 	mergeBase  string
-	commits    []git.BranchCommit
+	commits    []authorship.Commit
 	email      string
 	startErr   error
 	worktreeEr error
@@ -78,7 +78,7 @@ func (f *fakeGit) MergeBase(context.Context, string, string, string) (string, er
 	return f.mergeBase, nil
 }
 
-func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]git.BranchCommit, error) {
+func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]authorship.Commit, error) {
 	return f.commits, nil
 }
 
@@ -103,8 +103,8 @@ func input() Input {
 	return Input{CloneDir: "/src/rancher", Remote: "upstream", Target: "release/v2.15", Base: base, Branch: branch, TempDir: "/tmp/gero"}
 }
 
-func ours(hash string) git.BranchCommit {
-	return git.BranchCommit{Hash: hash, AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\n" + git.OurTrailer}
+func ours(hash string) authorship.Commit {
+	return authorship.Commit{Hash: hash, AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\n" + authorship.Trailer}
 }
 
 func TestRunACleanCloneIsWorkedInPlaceFromTheBase(t *testing.T) {
@@ -233,9 +233,9 @@ func TestRunABranchOfOursThatIsCurrentIsReusedAsItIs(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = base
-	g.commits = []git.BranchCommit{
-		{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\nbody\n\n" + git.OurTrailer},
-		{Hash: "bbbb", AuthorEmail: "dev@example.com", Message: "Run generate\n\n" + git.OurTrailer},
+	g.commits = []authorship.Commit{
+		{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\nbody\n\n" + authorship.Trailer},
+		{Hash: "bbbb", AuthorEmail: "dev@example.com", Message: "Run generate\n\n" + authorship.Trailer},
 	}
 
 	out, err := Run(bg, g, input())
@@ -252,7 +252,7 @@ func TestRunABranchOfOursThatTheTargetHasMovedOnFromIsBuiltAgain(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = "older000"
-	g.commits = []git.BranchCommit{ours("aaaa")}
+	g.commits = []authorship.Commit{ours("aaaa")}
 
 	out, err := Run(bg, g, input())
 
@@ -266,7 +266,7 @@ func TestRunRebuildBuildsAgainEvenWhenTheBranchIsCurrent(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = base
-	g.commits = []git.BranchCommit{ours("aaaa")}
+	g.commits = []authorship.Commit{ours("aaaa")}
 	in := input()
 	in.Rebuild = true
 
@@ -282,7 +282,7 @@ func TestRunABranchWithACommitThatIsNotOursIsNeverTouched(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = base
-	g.commits = []git.BranchCommit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine\n\n" + git.OurTrailer}}
+	g.commits = []authorship.Commit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine\n\n" + authorship.Trailer}}
 	in := input()
 	in.Rebuild = true
 
