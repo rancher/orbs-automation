@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/dockerfileedit"
@@ -63,9 +62,10 @@ func ReleaseOf(h *chain.Holding, tag, commit string) (Release, error) {
 // starts with it; the bare tag is the tag without it, and the version is that
 // without a leading v.
 func newRelease(tag, pattern, sourceRepo, commit string) Release {
-	prefix := chain.TagPrefix(pattern, tag)
-	bare := strings.TrimPrefix(tag, prefix)
-	return Release{Tag: tag, Prefix: prefix, BareTag: bare, Version: strings.TrimPrefix(bare, "v"), SourceRepo: sourceRepo, Commit: commit}
+	return Release{
+		Tag: tag, Prefix: chain.TagPrefix(pattern, tag), BareTag: chain.BareTag(pattern, tag), Version: chain.Version(pattern, tag),
+		SourceRepo: sourceRepo, Commit: commit,
+	}
 }
 
 // tagPatternOf is the pattern of the tags of the stream a holding's artifact is
