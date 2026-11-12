@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundle"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
 )
 
 // Origin says where a stored bundle came from.
@@ -115,6 +116,23 @@ func (s Store) List() ([]Entry, error) {
 		return strings.Compare(a.ID, b.ID)
 	})
 	return out, nil
+}
+
+// Releases are the bundles of releases in the store, the highest release first and,
+// for one release held twice, the one fetched last.
+func (s Store) Releases() []Entry {
+	list, _ := s.List() // a store that cannot be read is the same as an empty one
+	var out []Entry
+	for _, e := range list {
+		if e.Origin != OriginEmbedded {
+			out = append(out, e)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Entry) int {
+		c, _ := assetfetch.CompareVersions(b.Tag, a.Tag)
+		return c
+	})
+	return out
 }
 
 // Put keeps the entry under its ID, replacing one with the same ID, and fills in the

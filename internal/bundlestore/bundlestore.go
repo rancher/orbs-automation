@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"slices"
 	"strings"
 	"time"
 
@@ -108,16 +107,16 @@ type Loaded struct {
 //   - When the release cannot be reached or verified that is an error, and the cache
 //     is as it was.
 func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
-	own := ownRelease(req.GeroVersion)
+	own := OwnRelease(req.GeroVersion)
 	if own == "" {
 		return r.loadNoting(ctx, req, "this build is not a release, so there is no newer release to fetch a bundle of")
 	}
-	prereleases := wantsPrereleases(own, req.Channel)
+	prereleases := WantsPrereleases(own, req.Channel)
 	latest, err := r.Releases.Latest(ctx, prereleases)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
-	if !newerThan(latest.Tag, own) {
+	if !NewerThan(latest.Tag, own) {
 		return r.loadNoting(ctx, req, fmt.Sprintf("the newest release on this channel, %s, is not newer than this gero's own, %s", latest.Tag, own))
 	}
 	now := r.now()
@@ -129,8 +128,8 @@ func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 		return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}
 	note := fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v)", latest.Tag, err)
-	if prereleases && isPrerelease(latest.Tag) {
-		if stable, serr := r.Releases.Latest(ctx, false); serr == nil && newerThan(stable.Tag, own) {
+	if prereleases && IsPrerelease(latest.Tag) {
+		if stable, serr := r.Releases.Latest(ctx, false); serr == nil && NewerThan(stable.Tag, own) {
 			if l, ferr := r.use(ctx, stable.Tag, now); ferr == nil {
 				l.Source.Note = note + "; using the bundle of " + stable.Tag
 				return l, nil
@@ -158,10 +157,10 @@ func (r *Resolver) loadNoting(ctx context.Context, req Request, note string) (Lo
 // and takes the embedded bundle.
 func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	now := r.now()
-	own := ownRelease(req.GeroVersion)
+	own := OwnRelease(req.GeroVersion)
 	skipped := ""
-	for _, cached := range r.releases() {
-		if !newerThan(cached.Tag, own) || !fitsChannel(cached.Tag, own, req.Channel) {
+	for _, cached := range r.Store.Releases() {
+		if !NewerThan(cached.Tag, own) || !FitsChannel(cached.Tag, own, req.Channel) {
 			continue
 		}
 		l, err := fromEntry(cached, now)
@@ -183,9 +182,9 @@ func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	return l, err
 }
 
-// keepEntries is how many bundles the store keeps: the newest by when each was
+// KeepEntries is how many bundles the store keeps: the newest by when each was
 // fetched or compiled.
-const keepEntries = 3
+const KeepEntries = 3
 
 // embedded is the bundle of the config compiled into the binary, for the gero of
 // release own. It is looked for in the store under the ID of the files and the
@@ -211,7 +210,7 @@ func (r *Resolver) embedded(own string, now time.Time) (Loaded, error) {
 			return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
 		}
 		if _, err := r.Store.Put(Entry{Tag: own, Origin: OriginEmbedded, Data: data, FetchedAt: now}); err == nil {
-			_ = r.Store.Prune(keepEntries)
+			_ = r.Store.Prune(KeepEntries)
 		}
 	}
 	h, bundleFS, err := bundle.Parse(data)
@@ -229,9 +228,9 @@ func (r *Resolver) storedBundle(id string) []byte {
 	return nil
 }
 
-// newerThan is whether the release tag is newer than the gero's own. A gero with no
+// NewerThan is whether the release tag is newer than the gero's own. A gero with no
 // release of its own has nothing a cached bundle could be newer than.
-func newerThan(tag, own string) bool {
+func NewerThan(tag, own string) bool {
 	if own == "" {
 		return false
 	}
@@ -246,45 +245,28 @@ func (r *Resolver) now() time.Time {
 	return time.Now()
 }
 
-// wantsPrereleases is whether pre-releases are candidates: as the channel says, or,
+// WantsPrereleases is whether pre-releases are candidates: as the channel says, or,
 // left to auto, when the gero itself is a pre-release.
-func wantsPrereleases(own, channel string) bool {
+func WantsPrereleases(own, channel string) bool {
 	switch channel {
 	case ChannelStable:
 		return false
 	case ChannelPrerelease:
 		return true
 	}
-	return own != "" && isPrerelease(own)
+	return own != "" && IsPrerelease(own)
 }
 
-// fitsChannel is whether a cached release is one the channel would choose: a
+// FitsChannel is whether a cached release is one the channel would choose: a
 // pre-release is not, when pre-releases are not candidates.
-func fitsChannel(tag, own, channel string) bool {
-	return wantsPrereleases(own, channel) || !isPrerelease(tag)
-}
-
-// releases are the bundles of releases in the store, the highest release first and,
-// for one release held twice, the one fetched last.
-func (r *Resolver) releases() []Entry {
-	list, _ := r.Store.List() // a store that cannot be read is the same as an empty one
-	var out []Entry
-	for _, e := range list {
-		if e.Origin != OriginEmbedded {
-			out = append(out, e)
-		}
-	}
-	slices.SortStableFunc(out, func(a, b Entry) int {
-		c, _ := assetfetch.CompareVersions(b.Tag, a.Tag)
-		return c
-	})
-	return out
+func FitsChannel(tag, own, channel string) bool {
+	return WantsPrereleases(own, channel) || !IsPrerelease(tag)
 }
 
 // use is the bundle of the release: the stored one when it is of that release, else
 // the download, which is kept, and the store is pruned.
 func (r *Resolver) use(ctx context.Context, tag string, now time.Time) (Loaded, error) {
-	for _, cached := range r.releases() {
+	for _, cached := range r.Store.Releases() {
 		if cached.Tag != tag {
 			continue
 		}
@@ -306,7 +288,7 @@ func (r *Resolver) use(ctx context.Context, tag string, now time.Time) (Loaded, 
 	}
 	// A store that cannot be written costs the next run a download.
 	if _, err := r.Store.Put(Entry{Tag: tag, Data: data, Origin: OriginRelease, FetchedAt: now}); err == nil {
-		_ = r.Store.Prune(keepEntries)
+		_ = r.Store.Prune(KeepEntries)
 	}
 	return Loaded{Header: h, FS: fsys, Source: Source{Tag: tag, FetchedAt: now}}, nil
 }
@@ -321,10 +303,10 @@ func fromEntry(e Entry, now time.Time) (Loaded, error) {
 	}}, nil
 }
 
-// ownRelease is the release tag of the running gero, or "" for a build that is not
+// OwnRelease is the release tag of the running gero, or "" for a build that is not
 // one, such as "dev". GoReleaser stamps the version without the leading v that the
 // tags of the releases have, so it is put back.
-func ownRelease(version string) string {
+func OwnRelease(version string) string {
 	if _, ok := assetfetch.CompareVersions(version, version); !ok {
 		return ""
 	}
@@ -334,7 +316,7 @@ func ownRelease(version string) string {
 	return version
 }
 
-func isPrerelease(tag string) bool {
+func IsPrerelease(tag string) bool {
 	tag, _, _ = strings.Cut(tag, "+")
 	return strings.Contains(tag, "-")
 }
