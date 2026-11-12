@@ -1,7 +1,9 @@
 package bundle
 
 import (
+	"io/fs"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -49,6 +51,15 @@ sourceCommit: abc123
 compiledAt: 2026-01-02T03:04:05Z
 `
 
+// headerFor is the header Compile writes for the files under fsys: the one the header
+// values give, then the digest of the files and the revision of Compile.
+func headerFor(t *testing.T, fsys fs.FS) string {
+	t.Helper()
+	d, err := Digest(fsys)
+	require.NoError(t, err)
+	return wantHeader + "inputsDigest: " + d + "\ncompilerRevision: " + strconv.Itoa(CompilerRevision) + "\n"
+}
+
 // fixture is two files: a.yaml with the schema comment of the config files, b.yaml
 // that starts with a document marker and has a schema comment further down.
 func fixture() fstest.MapFS {
@@ -64,7 +75,7 @@ func TestCompileMakesTheHeaderThenEachFileInOrder(t *testing.T) {
 	got, err := Compile(fixture(), header)
 
 	require.NoError(t, err)
-	want := wantHeader +
+	want := headerFor(t, fixture()) +
 		"---\n# source: a.yaml\n# a: first\n" + project("alpha") +
 		"---\n# source: b.yaml\n# b: second\n" + project("bravo") + "# yaml-language-server: $schema=elsewhere\n"
 	assert.Equal(t, want, string(got))
@@ -158,8 +169,9 @@ func TestCompileRefusesAHeaderValueThatBreaksTheHeader(t *testing.T) {
 func TestTheBodyLoadsToTheConfigThatWentIn(t *testing.T) {
 	got, err := Compile(fixture(), header)
 	require.NoError(t, err)
-	require.True(t, strings.HasPrefix(string(got), wantHeader), "the header comes first")
-	body := string(got)[len(wantHeader):]
+	head := headerFor(t, fixture())
+	require.True(t, strings.HasPrefix(string(got), head), "the header comes first")
+	body := string(got)[len(head):]
 
 	g, rep := chainload.Load(fstest.MapFS{"bundle.yaml": {Data: []byte(body)}}, config.Context{Now: header.CompiledAt})
 
@@ -179,7 +191,7 @@ func TestTheRealConfigCompiles(t *testing.T) {
 
 	require.NoError(t, err)
 	out := string(got)
-	assert.True(t, strings.HasPrefix(out, wantHeader+"---\n# source: "))
+	assert.True(t, strings.HasPrefix(out, headerFor(t, os.DirFS("config"))+"---\n# source: "))
 	assert.NotContains(t, out, "yaml-language-server", "the schema comments of the files are dropped")
 	assert.Contains(t, out, "# source: rancher.yaml\n")
 	assert.NotContains(t, out, "# source: README.md")
@@ -215,4 +227,38 @@ func TestTheBodyDoesNotDependOnTheHeader(t *testing.T) {
 	_, bodyB, _ := strings.Cut(string(b), "\n---\n")
 	assert.NotEmpty(t, bodyA)
 	assert.Equal(t, bodyA, bodyB, "the version, commit and date are in the header only")
+}
+
+// warningFixture is a config that is valid and has one warning: a line at general
+// availability, at the date of the header, that has no branch written.
+func warningFixture() fstest.MapFS {
+	return fstest.MapFS{"w.yaml": {Data: []byte(`apiVersion: gero/v1alpha2
+kind: RancherLines
+name: rancher
+spec:
+  lines:
+    - id: v2.16
+    - id: v2.15
+      dates: {ga: 2025-08-27, eom: 2026-08-27}
+---
+apiVersion: gero/v1alpha2
+kind: Project
+name: w
+spec:
+  repo: {name: rancher/w, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines: [{line: v2.16, branch: release/v2.16}, {line: v2.15}]
+`)}}
+}
+
+func TestCompileReportGivesTheWarningsTheConfigHas(t *testing.T) {
+	data, warnings, err := CompileReport(warningFixture(), header)
+
+	require.NoError(t, err)
+	require.Len(t, warnings, 1)
+	assert.Contains(t, warnings[0].Error(), "v2.15")
+	plain, err := Compile(warningFixture(), header)
+	require.NoError(t, err)
+	assert.Equal(t, string(plain), string(data), "Compile is the same bundle, and says nothing of the warnings")
 }
