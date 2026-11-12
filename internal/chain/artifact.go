@@ -59,5 +59,8 @@ func (a *Artifact) Registries(stable bool) []string {
 	return regs
 }
 
+// Ranged reports whether the artifact is for some lines only, and not for all.
+func (a *Artifact) Ranged() bool { return false }
+
 // AppliesTo reports whether releases for the line produce the artifact.
 func (a *Artifact) AppliesTo(line string) bool { return a.Doc.Spec.Lines.Contains(line) }

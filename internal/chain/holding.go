@@ -1,6 +1,9 @@
 package chain
 
-import "github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+import (
+	"github.com/rancher/orbs-automation/internal/apis/lines"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+)
 
 // Holding is a place in the holder's repo where a piece of information about a
 // producer lives.
@@ -66,6 +69,35 @@ func (h *Holding) AppliesTo(line string) bool {
 	}
 	return h.producer.serves(line)
 }
+
+// Stage is the stage the holding is for, empty when it is for none in particular.
+func (h *Holding) Stage() string { return "" }
+
+// Form is how the holding writes a release, as written: a template over the
+// release's variables.
+func (h *Holding) Form() string { return "" }
+
+// AcceptsAll reports whether the holding takes every release, a prerelease too,
+// and not only a stable one.
+func (h *Holding) AcceptsAll() bool { return false }
+
+// HoldsLine reports whether the holding's own range of lines holds the line. It is
+// narrower than AppliesTo, which also asks whether the holder and the producer list
+// the line.
+func (h *Holding) HoldsLine(line string) bool { return false }
+
+// Location is one place to look for what a holding holds: a file and a key in it, in
+// a format, for some lines.
+type Location struct {
+	File, Key, Format string // File and Key are templates, as written
+	lines             lines.Range
+}
+
+// AppliesTo reports whether the file is there for the line.
+func (l Location) AppliesTo(line string) bool { return false }
+
+// Locations returns the places the holding is looked for, in the order written.
+func (h *Holding) Locations() []Location { return nil }
 
 // Edits returns the edits that follow the holding, in the order read.
 func (h *Holding) Edits() []*Edit { return h.edits }
