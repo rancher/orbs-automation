@@ -1,8 +1,10 @@
 package chain
 
 import (
+	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
@@ -217,7 +219,30 @@ func (p *Project) ReleaseBranches() []string {
 // for a branch in no line. It is an error naming what the project has when the
 // text is neither.
 func (p *Project) ResolveLineOrBranch(arg string) (branch, line string, err error) {
-	return "", "", nil
+	if b, ok := p.BranchOfLine(arg, ""); ok && p.knowsLine(arg) {
+		return b, arg, nil
+	}
+	if slices.Contains(p.ReleaseBranches(), arg) {
+		return arg, p.LineOfBranch(arg), nil
+	}
+	have := p.Lines()
+	if len(have) == 0 {
+		have = p.ReleaseBranches()
+	}
+	return "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), arg, strings.Join(have, ", "))
+}
+
+// knowsLine reports whether the line is one the project lists, or one a stream of
+// it gives a series. A single layout lists none, and answers to every line in
+// BranchOfLine, so this is what tells a line from any other text.
+func (p *Project) knowsLine(line string) bool {
+	if p.listsExplicitly(line) {
+		return true
+	}
+	return slices.ContainsFunc(p.streams, func(s *Stream) bool {
+		_, ok := s.Series(line)
+		return ok
+	})
 }
 
 // External reports whether the repo is outside the organization: gero never ships
