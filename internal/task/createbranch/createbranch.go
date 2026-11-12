@@ -39,6 +39,11 @@ type Input struct {
 	TempDir  string // where a worktree goes
 	// Rebuild makes the branch again even when one of ours is there and current.
 	Rebuild bool
+	// StageUntracked commits every untracked file in the checkout when the work is
+	// done in place, the ones that were there before the run too. Without it the
+	// engineer's own untracked files are left out. A run that owns its checkout,
+	// such as one in CI, sets it.
+	StageUntracked bool
 }
 
 // Output is the branch that was made. Work is a handle on it, to commit to and to
