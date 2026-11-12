@@ -15,7 +15,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/embedded"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
 )
 
 // ErrUnavailable is returned by Fetch when the release's bundle could not be got:

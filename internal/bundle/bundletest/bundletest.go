@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundle"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch/fakehub"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch/fakehub"
 )
 
 // CompiledAt is the time every test bundle says it was compiled at.

@@ -149,12 +149,12 @@ linters:
         noghreleases:
           list-mode: lax
           files:
-            - "!**/internal/platform/assetfetch/**"
+            - "!**/internal/gero/assetfetch/**"
             - "!**/internal/gero/releasesign/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/ghreleases
-              desc: ghreleases is only allowed in internal/platform/assetfetch, the one place a release asset is downloaded and verified (docs/specs/DEPENDENCY_POLICY.md)
+              desc: ghreleases is only allowed in internal/gero/assetfetch, the one place a release asset is downloaded and verified (docs/specs/DEPENDENCY_POLICY.md)
         # The terminal checks (is this a TTY, how wide) stay in one package, so
         # the rest of gero asks it and never the library
         # (docs/specs/DEPENDENCY_POLICY.md).

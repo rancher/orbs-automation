@@ -12,8 +12,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
 	"github.com/rancher/orbs-automation/internal/chainload"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch/fakehub"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch/fakehub"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
