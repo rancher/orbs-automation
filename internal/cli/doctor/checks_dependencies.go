@@ -68,7 +68,7 @@ func (c ghCheck) Run(ctx context.Context) Result {
 	return Result{Status: StatusOK, Message: fmt.Sprintf("%s at %s", version, path)}
 }
 
-// ghBinary is the GhBinary backed by internal/platform/ghcli.
+// ghBinary is the GhBinary backed by internal/gero/ghcli.
 type ghBinary struct{}
 
 func (ghBinary) Locate() (string, error) { return ghcli.Locate(os.Getenv) }

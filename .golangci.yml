@@ -78,7 +78,7 @@ linters:
           deny:
             - pkg: github.com/go-git/go-git
               desc: go-git is only allowed in internal/platform/git/repo (docs/specs/PROJECT_LAYOUT.md)
-        # binup stays in internal/platform/selfupdate, and the Sigstore verifier in
+        # binup stays in internal/gero/selfupdate, and the Sigstore verifier in
         # internal/gero/releasesign (docs/specs/DEPENDENCY_POLICY.md).
         noselfupdate:
           list-mode: lax
