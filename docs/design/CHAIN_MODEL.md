@@ -16,8 +16,8 @@ The kinds are small documents joined by `refs`: a Project does not know its Stre
 | Type | Holds | Answers |
 |---|---|---|
 | `Graph` | every Project, the lines, every Holding | a Project by name, by `owner/name` slug, or by a clone's remotes; every holding; the lines in order |
-| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ReleaseBranches`, `Held`, `Sourced` |
-| `Stream` | the Stream document, its Project and Artifacts | `LineOf(tag)`, `Series(line)`, `Stages`, `Serves(line)` |
+| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `Named(key)`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ResolveLineOrBranch(text)`, `ReleaseBranches`, `ReleaseTargets`, `ReleaseTargetsOf(line)`, `ListsLine(line)`, `StreamListsLine(line)`, `SeriesOf(line)`, `OnlyStream`, `StreamOf(tag)`, `ReleaseVersion(tag)`, `DestinationHoldings(line)`, `Held`, `Sourced` |
+| `Stream` | the Stream document, its Project and Artifacts | `LineOf(tag)`, `Series(line)`, `Stages`, `Serves(line)`, `TagMatches(tag)`, `HasRelease(value)`, `BareTag(tag)`, `Version(tag)` |
 | `Artifact` | the Artifact document and its Stream | `Registries(stable)`, `AppliesTo(line)` |
 | `Holding` | the Holding document, its holder and producer Projects, its Artifact or `from` | `AppliesTo(line)`, `Edits` |
 | `Edit` | the Edit document and the Holdings it follows | `Steps(line)`, `Strategy` |
@@ -35,6 +35,18 @@ The rules the graph applies, each in `internal/chain`.
 | `Project.BranchOfLine(line, stage)` | the same, for a line id written with or without `v`, any case; a `single` layout gives the default branch for every line; a stage picks from the stage map |
 | `Project.LineOfBranch(branch)` | the first line whose branch (or a stage's branch) is the branch |
 | `Project.ReleaseBranches` | the default branch for `single`, else the distinct branches of the lines, in order |
+| `Project.ResolveLineOrBranch(text)` | what a person typed to say where a release is made: a line, with or without the `v`, or a release branch of the project. It gives the branch and the line the branch is of. A line must be one the project lists or one a stream gives a series; text that is neither, or a line with no branch yet, is an error naming the lines the project has |
+| `Project.ReleaseTargets` | the release branches of the project, as `chain.ReleaseTarget{Line, Series, Stage, Branch, IsDefault}`: a row for each listed line, and for each stage of a line that has a branch for each. A `single` layout has the one branch, with a row for each line its streams list, or one row of no line when they list none |
+| `Project.ReleaseTargetsOf(line)` | the rows of `ReleaseTargets` for one line, written with or without the `v`, in any case |
+| `Project.SeriesOf(line)` | the series the first stream that gives the line one writes for it |
+| `Project.ListsLine(line)` | the project lists the line itself for its branches. A `single` layout lists none, though `BranchOfLine` answers for every line |
+| `Project.StreamListsLine(line)` | a stream of the project lists the line itself, which a `universal` stream does not |
+| `Project.OnlyStream` | the project's one stream; an error wrapping `ErrNoStream` or `ErrSeveralStreams` when it has none or more than one |
+| `Project.StreamOf(tag)`, `Project.ReleaseVersion(tag)` | the first stream whose pattern the tag matches and none of whose excludes it matches; the version of the release, which is the tag without that stream's prefix and without a leading `v`, or the tag without its `v` when no stream matches |
+| `Project.Named(key)` | the key is the project's config name, its `owner/name` slug or one of its aliases, whatever the case. The rules for names make these unique, so it agrees with how `Graph.Project` finds a project |
+| `Project.DestinationHoldings(line)` | the holdings of a release of the project in the final destination that are for the line |
+| `Stream.HasRelease(value)` | the value is a tag of the stream, or a tag without the prefix a Go module goes without |
+| `Stream.BareTag(tag)`, `Stream.Version(tag)` | the tag without the prefix its pattern puts before the version, and that without a leading `v`. `chain.BareTag(pattern, tag)` and `chain.Version(pattern, tag)` are the same for a pattern alone |
 | `Stream.Series(line)` | the series written for the line; there is none for `calverLineStage`, whose tag carries the line |
 | `Stream.LineOf(tag)` | the line whose series holds the tag, by the scheme's grammar; a `universal` stream has no line of its own; a calver tag names it |
 | `Stream.Stages` | the stages written, else the scheme's: `calverLineStage` gives `dev` (a prerelease) and `stable`, `chartVersion` takes the branch layout's stages, `semver` gives none |
