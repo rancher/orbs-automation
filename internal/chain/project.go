@@ -373,15 +373,57 @@ type ReleaseTarget struct {
 // lines: a row for each listed line, and for each stage of a line that has a
 // branch for each. A single layout has one branch, with a row for each line its
 // streams list, or the one row of a project whose streams list none.
-func (p *Project) ReleaseTargets() []ReleaseTarget { return nil }
+func (p *Project) ReleaseTargets() []ReleaseTarget {
+	if p.single() {
+		var out []ReleaseTarget
+		for _, s := range p.streams {
+			for _, line := range s.Lines() {
+				out = append(out, ReleaseTarget{Line: line, Series: p.SeriesOf(line), Branch: p.DefaultBranch(), IsDefault: true})
+			}
+		}
+		if len(out) == 0 {
+			return []ReleaseTarget{{Branch: p.DefaultBranch(), IsDefault: true}}
+		}
+		return out
+	}
+	var out []ReleaseTarget
+	for _, lb := range p.LineBranches() {
+		series := p.SeriesOf(lb.Line)
+		if len(lb.Stages) == 0 {
+			out = append(out, ReleaseTarget{Line: lb.Line, Series: series, Branch: lb.Branch, IsDefault: lb.IsDefault})
+			continue
+		}
+		for _, stage := range p.Stages() {
+			if branch, ok := lb.Stages[stage]; ok {
+				out = append(out, ReleaseTarget{Line: lb.Line, Series: series, Stage: stage, Branch: branch})
+			}
+		}
+	}
+	return out
+}
 
 // ReleaseTargetsOf returns the rows of ReleaseTargets for one line, written with or
 // without its v, in any case.
-func (p *Project) ReleaseTargetsOf(line string) []ReleaseTarget { return nil }
+func (p *Project) ReleaseTargetsOf(line string) []ReleaseTarget {
+	var out []ReleaseTarget
+	for _, t := range p.ReleaseTargets() {
+		if t.Line != "" && lines.Normalize(t.Line) == lines.Normalize(line) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 // SeriesOf is the version series a stream of the project gives a line, the first to
 // give one; empty when none does.
-func (p *Project) SeriesOf(line string) string { return "" }
+func (p *Project) SeriesOf(line string) string {
+	for _, s := range p.streams {
+		if series, ok := s.Series(line); ok {
+			return series
+		}
+	}
+	return ""
+}
 
 // BranchesOfStage returns the branches a release of a stage goes to: the branch of
 // each listed line for the stage, where a line has one for each, and its one
