@@ -195,3 +195,62 @@ func TestTagPrefixIsThePatternUpToItsLastSlashWhenTheTagStartsWithIt(t *testing.
 		})
 	}
 }
+
+func TestTheVersionOfARelease(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16"),
+		project("mono", "  repo: {name: acme/mono}\n"),
+		project("bare", "  repo: {name: acme/bare}\n"),
+		stream("pkg-a", "mono", "  universal: true\n  tagPattern: \"pkg-a/v*\"\n"),
+		stream("pkg-b", "mono", "  tagPattern: \"v*\"\n  lines: [{line: v2.16, series: \"3.x\"}]\n"),
+	)
+	mono, bare := g.Project("mono"), g.Project("bare")
+
+	assert.Equal(t, "1.2.3", mono.Streams()[0].Version("pkg-a/v1.2.3"), "without the prefix of the stream and the v")
+	assert.Equal(t, "3.1.0", mono.Streams()[1].Version("v3.1.0"))
+	assert.Equal(t, "1.2.3", mono.ReleaseVersion("pkg-a/v1.2.3"), "through the stream the tag is a release of")
+	assert.Equal(t, "3.1.0", mono.ReleaseVersion("v3.1.0"))
+	assert.Equal(t, "1.0.0", bare.ReleaseVersion("v1.0.0"), "a project with no stream loses only the v")
+	assert.Equal(t, "other/v1.0.0", mono.ReleaseVersion("other/v1.0.0"), "a tag no stream matches keeps its prefix")
+}
+
+func TestAStreamKnowsAValueAHoldingReadIsOneOfItsReleases(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16"),
+		project("mono", "  repo: {name: acme/mono}\n"),
+		stream("pkg-a", "mono", "  universal: true\n  tagPattern: \"pkg-a/v*\"\n"),
+		stream("pkg-b", "mono", "  tagPattern: \"v*\"\n  lines: [{line: v2.16, series: \"3.x\"}]\n"),
+	)
+	a, b := g.Project("mono").Streams()[0], g.Project("mono").Streams()[1]
+
+	assert.True(t, a.HasRelease("pkg-a/v1.2.3"), "a tag of the stream")
+	assert.True(t, a.HasRelease("v1.2.3"), "a Go module requires it without the prefix")
+	assert.False(t, a.HasRelease("other/v1.0.0"))
+	assert.False(t, a.HasRelease("1.2.3"), "the v is part of the tag")
+	assert.True(t, b.HasRelease("v3.1.0"))
+	assert.False(t, b.HasRelease("3.1.0"), "a stream with no prefix has no bare form")
+}
+
+func TestAProjectKnowsItsOnlyStream(t *testing.T) {
+	g := chaintest.Load(t,
+		project("one", "  repo: {name: acme/one}\n"),
+		project("bare", "  repo: {name: acme/bare}\n"),
+		project("mono", "  repo: {name: acme/mono}\n"),
+		stream("only", "one", "  universal: true\n"),
+		stream("pkg-a", "mono", "  universal: true\n  tagPattern: \"pkg-a/v*\"\n"),
+		stream("pkg-b", "mono", "  universal: true\n  tagPattern: \"pkg-b/v*\"\n"),
+	)
+
+	got, err := g.Project("one").OnlyStream()
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, "only", got.Name())
+
+	_, err = g.Project("bare").OnlyStream()
+	require.ErrorIs(t, err, chain.ErrNoStream)
+	assert.ErrorContains(t, err, "acme/bare has no stream")
+
+	_, err = g.Project("mono").OnlyStream()
+	require.ErrorIs(t, err, chain.ErrSeveralStreams)
+	assert.ErrorContains(t, err, "acme/mono has 2 streams")
+}
