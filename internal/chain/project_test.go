@@ -424,3 +424,40 @@ func TestTheSeriesAProjectsStreamsGiveALine(t *testing.T) {
 	assert.Empty(t, a.SeriesOf("v2.16"), "no stream gives it one")
 	assert.Empty(t, g.Project("s").SeriesOf("v2.15"), "a project with no stream")
 }
+
+func TestTheIdAProjectListsALineUnder(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+	)
+	a := g.Project("a")
+
+	for _, typed := range []string{"v2.15", "2.15", "V2.15"} {
+		id, ok := a.LineID(typed)
+		assert.True(t, ok, typed)
+		assert.Equal(t, "v2.15", id, "the id as the project lists it, not as it was typed")
+	}
+	id, ok := a.LineID("v2.14")
+	assert.True(t, ok, "a line with no branch yet is listed")
+	assert.Equal(t, "v2.14", id)
+	_, ok = a.LineID("v2.99")
+	assert.False(t, ok)
+	_, ok = g.Project("s").LineID("v2.15")
+	assert.False(t, ok, "a single layout lists none")
+	assert.Equal(t, a.ListsLine("2.15"), func() bool { _, ok := a.LineID("2.15"); return ok }(), "ListsLine is whether there is an id")
+}
+
+func TestTheLineOfTheLinesDocumentAnIdNames(t *testing.T) {
+	g := chaintest.Load(t, chaintest.Lines("v2.16", "v2.15"))
+
+	for _, typed := range []string{"v2.15", "2.15", "V2.15"} {
+		line, ok := g.Line(typed)
+		assert.True(t, ok, typed)
+		assert.Equal(t, "v2.15", line.ID)
+	}
+	_, ok := g.Line("v2.99")
+	assert.False(t, ok)
+	_, ok = g.Line("")
+	assert.False(t, ok)
+}
