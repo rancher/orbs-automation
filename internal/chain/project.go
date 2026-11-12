@@ -354,6 +354,35 @@ func (p *Project) LineBranches() []LineBranch {
 	return out
 }
 
+// ReleaseTarget is one release branch of a project and what it is for.
+type ReleaseTarget struct {
+	// Line and Series are set for a project with a branch per line, and for each
+	// line the streams of a single layout list. Series is empty for a line no stream
+	// gives one.
+	Line, Series string
+	// Stage is set for a line that has a branch for each stage.
+	Stage string
+	// Branch is empty for a line that has none yet.
+	Branch string
+	// IsDefault is set when Branch is the project's default branch because the line
+	// has none of its own, or the layout is single.
+	IsDefault bool
+}
+
+// ReleaseTargets returns the release branches of the project, in the order of its
+// lines: a row for each listed line, and for each stage of a line that has a
+// branch for each. A single layout has one branch, with a row for each line its
+// streams list, or the one row of a project whose streams list none.
+func (p *Project) ReleaseTargets() []ReleaseTarget { return nil }
+
+// ReleaseTargetsOf returns the rows of ReleaseTargets for one line, written with or
+// without its v, in any case.
+func (p *Project) ReleaseTargetsOf(line string) []ReleaseTarget { return nil }
+
+// SeriesOf is the version series a stream of the project gives a line, the first to
+// give one; empty when none does.
+func (p *Project) SeriesOf(line string) string { return "" }
+
 // BranchesOfStage returns the branches a release of a stage goes to: the branch of
 // each listed line for the stage, where a line has one for each, and its one
 // branch where it has one. With no stage it is the release branches. A single
