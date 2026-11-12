@@ -15,11 +15,11 @@ The kinds are small documents joined by `refs`: a Project does not know its Stre
 
 | Type | Holds | Answers |
 |---|---|---|
-| `Graph` | every Project, the lines, every Holding | a Project by name, by `owner/name` slug, or by a clone's remotes; every holding; the lines in order |
-| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `Named(key)`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ResolveLineOrBranch(text)`, `ReleaseBranches`, `ReleaseTargets`, `ReleaseTargetsOf(line)`, `ListsLine(line)`, `StreamListsLine(line)`, `SeriesOf(line)`, `OnlyStream`, `StreamOf(tag)`, `ReleaseVersion(tag)`, `DestinationHoldings(line)`, `Held`, `Sourced` |
+| `Graph` | every Project, the lines, every Holding | a Project by name, by `owner/name` slug, or by a clone's remotes; every holding; the lines in order; a line by its id, `Line(id)` |
+| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `Named(key)`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ResolveLineOrBranch(text)`, `ReleaseBranches`, `ReleaseTargets`, `ReleaseTargetsOf(line)`, `ListsLine(line)`, `LineID(line)`, `StreamListsLine(line)`, `LinesInTags`, `SeriesOf(line)`, `OnlyStream`, `StreamOf(tag)`, `ReleaseVersion(tag)`, `DestinationHoldings(line)`, `Held`, `Sourced` |
 | `Stream` | the Stream document, its Project and Artifacts | `LineOf(tag)`, `Series(line)`, `Stages`, `Serves(line)`, `TagMatches(tag)`, `HasRelease(value)`, `BareTag(tag)`, `Version(tag)` |
-| `Artifact` | the Artifact document and its Stream | `Registries(stable)`, `AppliesTo(line)` |
-| `Holding` | the Holding document, its holder and producer Projects, its Artifact or `from` | `AppliesTo(line)`, `Edits` |
+| `Artifact` | the Artifact document and its Stream | `Registries(stable)`, `AppliesTo(line)`, `Ranged` |
+| `Holding` | the Holding document, its holder and producer Projects, its Artifact or `from` | `AppliesTo(line)`, `HoldsLine(line)`, `Stage`, `Form`, `AcceptsAll`, `Locations`, `Edits` |
 | `Edit` | the Edit document and the Holdings it follows | `Steps(line)`, `Strategy` |
 
 ## Answers, and where each came from
@@ -39,6 +39,9 @@ The rules the graph applies, each in `internal/chain`.
 | `Project.ReleaseTargets` | the release branches of the project, as `chain.ReleaseTarget{Line, Series, Stage, Branch, IsDefault}`: a row for each listed line, and for each stage of a line that has a branch for each. A `single` layout has the one branch, with a row for each line its streams list, or one row of no line when they list none |
 | `Project.ReleaseTargetsOf(line)` | the rows of `ReleaseTargets` for one line, written with or without the `v`, in any case |
 | `Project.SeriesOf(line)` | the series the first stream that gives the line one writes for it |
+| `Graph.Line(id)` | the line of the lines document the id names, with or without the `v`, in any case |
+| `Project.LineID(line)` | the id the project lists the line under, for a line typed with or without the `v`, in any case; none when it does not list it. Like `ListsLine` it knows only the lines listed for branches |
+| `Project.LinesInTags` | a `single` layout with a stream that lists lines: the project finds its lines in its tags, and `ReleaseTargets` has a row for each |
 | `Project.ListsLine(line)` | the project lists the line itself for its branches. A `single` layout lists none, though `BranchOfLine` answers for every line |
 | `Project.StreamListsLine(line)` | a stream of the project lists the line itself, which a `universal` stream does not |
 | `Project.OnlyStream` | the project's one stream; an error wrapping `ErrNoStream` or `ErrSeveralStreams` when it has none or more than one |
@@ -56,6 +59,10 @@ The rules the graph applies, each in `internal/chain`.
 | `Artifact.Pins` and `Artifact.PinnedBy` | the Artifacts this one pins, as written in `refs.pins`, and the ones that pin it; an edge of the graph between Artifacts, and none when no Artifact pins ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)) |
 | `Holding.Virtual`, `Holding.PinnedBy` | a virtual Holding is the one a pin makes in a consumer: the pinned Artifact, the files and lines of the Holding it comes from (`PinnedBy`), and no document of its own |
 | `Holding.Pinned` | the virtual Holdings of the pinned Artifacts of a Holding, which a run that ships its Artifact writes beside it, and which follow its Edits |
+| `Holding.HoldsLine(line)` | the holding's own `holds.lines` range holds the line, which is narrower than `AppliesTo` |
+| `Holding.Stage`, `Holding.Form`, `Holding.AcceptsAll` | the stage and the form as written, and whether `holds.accept` is `all`, so that a prerelease is taken too |
+| `Holding.Locations` | the places the holding is looked for, in the order written, as `chain.Location{File, Key, Format}` with `AppliesTo(line)` for the lines the file exists for. File and Key are templates, rendered by the update engine |
+| `Artifact.Ranged` | the artifact's `lines` range is set, so it is for some lines only |
 | `Holding.AppliesTo(line)` | the holding's `holds.lines` range holds the line, and the line is one the holder and the producer both list |
 | `Edit.Steps(line)` | the pre and post steps whose `since` and `until` hold the line, as `chain.Step` (the graph's own type, so `bump` and `steprun` do not import the API version) |
 | `Line.PhaseAt` | in `apis/lines`, shared by every version |
