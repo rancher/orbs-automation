@@ -166,14 +166,21 @@ func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 		}
 		note = fmt.Sprintf("the cached bundle of %s is not readable (%v); using the embedded bundle", cached.Tag, err)
 	}
-	l, err := r.embedded(own)
+	l, err := r.embedded(own, now)
 	l.Source.Note = note
 	return l, err
 }
 
+// keepEntries is how many bundles the store keeps: the newest by when each was
+// fetched or compiled.
+const keepEntries = 3
+
 // embedded is the bundle of the config compiled into the binary, for the gero of
-// release own.
-func (r *Resolver) embedded(own string) (Loaded, error) {
+// release own. It is looked for in the store under the ID of the files and the
+// compiler, which the files alone tell, and compiled and kept there when it is not.
+// A store that cannot be read or written costs only the compile: the bundle made in
+// memory is used either way.
+func (r *Resolver) embedded(own string, now time.Time) (Loaded, error) {
 	fsys, hdr := r.Embedded, r.EmbeddedHeader
 	if fsys == nil {
 		fsys = embedded.FS()
@@ -181,15 +188,33 @@ func (r *Resolver) embedded(own string) (Loaded, error) {
 	if hdr.GeroVersion == "" {
 		hdr = embedded.Header
 	}
-	data, err := bundle.Compile(fsys, hdr)
+	digest, err := bundle.Digest(fsys)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+	}
+	id := bundle.Header{InputsDigest: digest, CompilerRevision: bundle.CompilerRevision}.ID()
+	data := r.storedBundle(id)
+	if data == nil {
+		if data, err = bundle.Compile(fsys, hdr); err != nil {
+			return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+		}
+		if _, err := r.Store.Put(Entry{Tag: own, Origin: OriginEmbedded, Data: data, FetchedAt: now}); err == nil {
+			_ = r.Store.Prune(keepEntries)
+		}
 	}
 	h, bundleFS, err := bundle.Parse(data)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
 	}
 	return Loaded{Header: h, FS: bundleFS, Source: Source{Embedded: true, Tag: own}}, nil
+}
+
+// storedBundle is the bytes of the entry with the ID, or nil when the store has none.
+func (r *Resolver) storedBundle(id string) []byte {
+	if e, ok := r.Store.Get(id); ok {
+		return e.Data
+	}
+	return nil
 }
 
 // newerThan is whether the release tag is newer than the gero's own. A gero with no
