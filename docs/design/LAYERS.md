@@ -33,4 +33,5 @@ cmd
 
 * **Layer rules:** platform imports only platform; apis imports only platform and apis; gero imports only platform, apis and gero; domain does not import `cli` or `ui`; a command does not import another command except the shared helpers
 * **Doors:** one home each for exec, go-git, YAML, the HTML parser, lipgloss, readline, `x/term`, go-gh and go-github, and one door to the application config
+* **One reader of the model's documents:** only `internal/chain` reads the `Doc` of a Project, Stream, Artifact, Holding or Edit; everything else asks the type ([CHAIN_MODEL](CHAIN_MODEL.md)). Tests are held to it too
 * Each rule is checked by a throwaway illegal import that must fail lint

@@ -10,6 +10,7 @@ The kinds are small documents joined by `refs`: a Project does not know its Stre
 * Read-only: nothing in it changes after `Build`
 * Domain layer: it imports `apis`, `appconfig` and `platform`, and nothing of `cli` or `ui`
 * Each type wraps its document (`Doc`) and adds links and answers; a command never needs to walk `refs` by name
+* Only this package reads a `Doc`: lint refuses it anywhere else, tests included, so a command asks the type, and a missing answer is added here
 
 ## Shape
 
