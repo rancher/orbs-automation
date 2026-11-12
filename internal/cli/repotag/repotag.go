@@ -348,17 +348,19 @@ func (r Result) what() string {
 // with none, or with several, has no one stream, and the caller would have to name
 // it.
 func oneStream(p *chain.Project) (*chain.Stream, error) {
-	switch streams := p.Streams(); len(streams) {
-	case 0:
-		return nil, fmt.Errorf("%s has no stream, so no release to tag", p.Slug())
-	case 1:
-		if streams[0].Scheme() != tagscheme.Semver {
-			return nil, fmt.Errorf("%s has tags of the %s scheme, which its own CI makes: repo tag makes semver tags only", p.Slug(), streams[0].Scheme())
-		}
-		return streams[0], nil
-	default:
-		return nil, fmt.Errorf("%s has %d streams, and repo tag does not yet name one", p.Slug(), len(streams))
+	st, err := p.OnlyStream()
+	switch {
+	case errors.Is(err, chain.ErrNoStream):
+		return nil, fmt.Errorf("%w, so no release to tag", err)
+	case errors.Is(err, chain.ErrSeveralStreams):
+		return nil, fmt.Errorf("%w, and repo tag does not yet name one", err)
+	case err != nil:
+		return nil, err
 	}
+	if st.Scheme() != tagscheme.Semver {
+		return nil, fmt.Errorf("%s has tags of the %s scheme, which its own CI makes: repo tag makes semver tags only", p.Slug(), st.Scheme())
+	}
+	return st, nil
 }
 
 // short abbreviates a commit for a message.
