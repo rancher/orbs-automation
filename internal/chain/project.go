@@ -84,7 +84,12 @@ func (p *Project) StreamOf(tag string) *Stream {
 
 // ReleaseVersion is the version of a release of the project, through the stream
 // the tag is a release of. A tag no stream matches loses only its v.
-func (p *Project) ReleaseVersion(tag string) string { return "" }
+func (p *Project) ReleaseVersion(tag string) string {
+	if s := p.StreamOf(tag); s != nil {
+		return s.Version(tag)
+	}
+	return strings.TrimPrefix(tag, "v")
+}
 
 var (
 	// ErrNoStream is returned by OnlyStream for a project with no stream.
@@ -96,7 +101,24 @@ var (
 // OnlyStream returns the one stream of a project. A project with none, or with
 // several, has no one stream, and the caller names it: the error wraps
 // ErrNoStream or ErrSeveralStreams.
-func (p *Project) OnlyStream() (*Stream, error) { return nil, nil }
+func (p *Project) OnlyStream() (*Stream, error) {
+	switch len(p.streams) {
+	case 0:
+		return nil, &streamCountError{kind: ErrNoStream, msg: p.Slug() + " has no stream"}
+	case 1:
+		return p.streams[0], nil
+	}
+	return nil, &streamCountError{kind: ErrSeveralStreams, msg: fmt.Sprintf("%s has %d streams", p.Slug(), len(p.streams))}
+}
+
+// streamCountError says how many streams a project has, and is the sentinel for it.
+type streamCountError struct {
+	kind error
+	msg  string
+}
+
+func (e *streamCountError) Error() string { return e.msg }
+func (e *streamCountError) Unwrap() error { return e.kind }
 
 // LineOf returns the line a tag is of, through the stream it is a release of.
 func (p *Project) LineOf(tag string) (line string, ok bool) {
