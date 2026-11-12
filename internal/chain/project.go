@@ -28,20 +28,37 @@ func (p *Project) Name() string { return p.Doc.Name }
 // Named reports whether a person's name for the project is this one: its config
 // name, its owner/name slug or one of its aliases, whatever the case. It is what
 // Graph.Project finds a project by.
-func (p *Project) Named(key string) bool { return false }
+func (p *Project) Named(key string) bool {
+	return strings.EqualFold(p.Name(), key) || strings.EqualFold(p.Slug(), key) ||
+		slices.ContainsFunc(p.Aliases(), func(a string) bool { return strings.EqualFold(a, key) })
+}
 
 // ListsLine reports whether the project lists the line itself for its branches,
 // written with or without its v, in any case. A single layout lists none: it keeps
 // every line on one branch, and ListsLine is not what says it serves one.
-func (p *Project) ListsLine(line string) bool { return false }
+func (p *Project) ListsLine(line string) bool {
+	return slices.ContainsFunc(p.Lines(), func(id string) bool { return lines.Normalize(id) == lines.Normalize(line) })
+}
 
 // StreamListsLine reports whether a stream of the project lists the line itself,
 // which a universal stream does not: its releases belong to no line.
-func (p *Project) StreamListsLine(line string) bool { return false }
+func (p *Project) StreamListsLine(line string) bool {
+	return slices.ContainsFunc(p.streams, func(s *Stream) bool {
+		return slices.ContainsFunc(s.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
+	})
+}
 
 // DestinationHoldings returns the holdings of a release of the project in the final
 // destination that are for the line.
-func (p *Project) DestinationHoldings(line string) []*Holding { return nil }
+func (p *Project) DestinationHoldings(line string) []*Holding {
+	var out []*Holding
+	for _, h := range p.sourced {
+		if h.Holder().FinalDestination() && h.Kind() == HoldsRelease && h.AppliesTo(line) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
 
 // Slug is the repo's owner/name.
 func (p *Project) Slug() string { return p.Doc.Spec.Repo.Name }
@@ -164,17 +181,7 @@ func (p *Project) lists(line string) bool {
 	if p.single() {
 		return true
 	}
-	return p.listsExplicitly(line)
-}
-
-// listsExplicitly reports whether the line is one of the project's branch lines.
-func (p *Project) listsExplicitly(line string) bool {
-	for _, id := range p.Lines() {
-		if lines.Normalize(id) == lines.Normalize(line) {
-			return true
-		}
-	}
-	return false
+	return p.ListsLine(line)
 }
 
 // serves reports whether a stream of the project serves the line, or the project
@@ -185,7 +192,7 @@ func (p *Project) serves(line string) bool {
 			return true
 		}
 	}
-	return p.listsExplicitly(line)
+	return p.ListsLine(line)
 }
 
 // BranchOfLine returns the branch a line is on, for a stage when the line has a
@@ -293,7 +300,7 @@ func (p *Project) ResolveLineOrBranch(arg string) (branch, line string, err erro
 // it gives a series. A single layout lists none, and answers to every line in
 // BranchOfLine, so this is what tells a line from any other text.
 func (p *Project) knowsLine(line string) bool {
-	if p.listsExplicitly(line) {
+	if p.ListsLine(line) {
 		return true
 	}
 	return slices.ContainsFunc(p.streams, func(s *Stream) bool {
