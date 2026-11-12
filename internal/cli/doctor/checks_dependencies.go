@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/platform/ghcli"
+	"github.com/rancher/orbs-automation/internal/gero/ghcli"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 )
 

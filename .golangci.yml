@@ -98,7 +98,7 @@ linters:
               desc: the Sigstore verifier is only allowed in internal/gero/releasesign (docs/specs/DEPENDENCY_POLICY.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/platform/git/gitcli (the git binary) and
-        # internal/platform/ghcli (gero doctor) go through it
+        # internal/gero/ghcli (gero doctor) go through it
         # (docs/specs/DEPENDENCY_POLICY.md).
         noexec:
           list-mode: lax
