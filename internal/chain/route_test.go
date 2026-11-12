@@ -1,6 +1,7 @@
 package chain_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -39,11 +40,11 @@ func routeGraph(t *testing.T) *chain.Graph {
 func shape(routes []chain.Route) []string {
 	var out []string
 	for _, r := range routes {
-		s := r.Consumer.Name() + "<-" + r.Producer.Name() + "/" + r.Stream.Name() + ":"
+		var names []string
 		for _, h := range r.Holdings {
-			s += " " + h.Name()
+			names = append(names, h.Name())
 		}
-		out = append(out, s)
+		out = append(out, r.Consumer.Name()+"<-"+r.Producer.Name()+"/"+r.Stream.Name()+": "+strings.Join(names, " "))
 	}
 	return out
 }
