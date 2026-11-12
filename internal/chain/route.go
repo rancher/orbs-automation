@@ -22,9 +22,13 @@ func (r Route) AppliesTo(line string) bool {
 
 // Edits returns the edits that follow the route's holdings, each once, in the order
 // they are read.
-func (r Route) Edits() []*Edit {
+func (r Route) Edits() []*Edit { return EditsOf(r.Holdings) }
+
+// EditsOf returns the edits that follow the holdings, each once, in the order they are
+// read.
+func EditsOf(holdings []*Holding) []*Edit {
 	var out []*Edit
-	for _, h := range r.Holdings {
+	for _, h := range holdings {
 		for _, ed := range h.Edits() {
 			if !slices.Contains(out, ed) {
 				out = append(out, ed)
