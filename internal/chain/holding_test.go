@@ -170,3 +170,76 @@ func TestAHoldingSaysWhetherItsDocumentAcknowledgesAWarning(t *testing.T) {
 	_, ok = h.Acknowledgement("stream-differs-from-destination", "v2.16")
 	assert.False(t, ok)
 }
+
+func TestAHoldingSaysWhatItHoldsAndWhereItIsLookedFor(t *testing.T) {
+	g := chaintest.Load(t, pair(
+		holding("full", "{project: hold, artifact: img}",
+			"  at:\n    - {file: a.yaml, key: .a, format: yaml, lines: {since: v2.15}}\n    - {file: b.yaml, key: .b, format: dockerfile}\n"+
+				"  holds: {kind: release, form: \"{tag}\", accept: all, lines: {until: v2.15}}\n"),
+		holding("plain", "{project: hold, artifact: img}", holdsImage),
+	)...)
+	full, plain := g.Holdings()[0], g.Holdings()[1]
+
+	assert.Equal(t, "{tag}", full.Form())
+	assert.True(t, full.AcceptsAll())
+	assert.False(t, plain.AcceptsAll(), "a holding takes stable releases unless it says otherwise")
+	assert.True(t, full.HoldsLine("v2.15"))
+	assert.True(t, full.HoldsLine("2.14"), "with or without the v")
+	assert.False(t, full.HoldsLine("v2.16"), "its own range ends at v2.15")
+	assert.True(t, plain.HoldsLine("v2.16"), "no range holds every line")
+
+	locations := full.Locations()
+	require.Len(t, locations, 2)
+	assert.Equal(t, "a.yaml", locations[0].File)
+	assert.Equal(t, ".a", locations[0].Key)
+	assert.Equal(t, "yaml", locations[0].Format)
+	assert.Equal(t, "dockerfile", locations[1].Format)
+	assert.True(t, locations[0].AppliesTo("v2.15"))
+	assert.False(t, locations[0].AppliesTo("v2.14"), "its file exists from v2.15")
+	assert.True(t, locations[1].AppliesTo("v2.14"), "no range is every line")
+	assert.Empty(t, full.Stage())
+}
+
+func TestAHoldingKnowsItsStage(t *testing.T) {
+	g := chaintest.Load(t, pair(
+		holding("staged", "{project: hold, artifact: img}", at+"  holds: {kind: release, stage: dev}\n"),
+	)...)
+
+	assert.Equal(t, "dev", g.Holdings()[0].Stage())
+}
+
+func TestAnArtifactSaysWhetherItIsForSomeLinesOnly(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		project("prod", "  repo: {name: acme/prod}\n"),
+		stream("s", "prod", "  universal: true\n"),
+		artifact("all", "s", "  kind: image\n  name: acme/all\n"),
+		artifact("some", "s", "  kind: image\n  name: acme/some\n  lines: {since: v2.16}\n"),
+	)
+	arts := g.Project("prod").Artifacts()
+	require.Len(t, arts, 2)
+
+	assert.False(t, arts[0].Ranged())
+	assert.True(t, arts[1].Ranged())
+}
+
+func TestAProjectKnowsWhetherItFindsItsLinesInItsTags(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		project("tags", "  repo: {name: acme/tags}\n"),
+		project("bare", "  repo: {name: acme/bare}\n"),
+		project("branches", "  repo: {name: acme/branches}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r/2.15}]\n"),
+		stream("tags-one", "tags", "  lines:\n    - {line: v2.16, series: \"1.x\"}\n"),
+		stream("branches-one", "branches", "  lines:\n    - {line: v2.16, series: \"1.x\"}\n"),
+	)
+
+	assert.True(t, g.Project("tags").LinesInTags(), "one branch, and a stream that lists lines")
+	assert.False(t, g.Project("bare").LinesInTags(), "one branch and no lines")
+	assert.False(t, g.Project("branches").LinesInTags(), "a branch for each line, whatever its streams list")
+	for _, p := range g.Projects() {
+		rows := p.ReleaseTargets()
+		if p.LinesInTags() {
+			assert.NotEmpty(t, rows[0].Line, p.Name(), ": a row for each line")
+		}
+	}
+}
