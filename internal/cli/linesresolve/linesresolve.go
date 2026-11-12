@@ -146,7 +146,7 @@ func Resolve(g *chain.Graph, engine *bump.Engine, opts Options, now time.Time) (
 	if err != nil {
 		return Result{}, err
 	}
-	doc, err := selectLines(g.Lines(), opts, now)
+	doc, err := selectLines(g, opts, now)
 	if err != nil {
 		return Result{}, err
 	}
@@ -180,8 +180,8 @@ func hubOf(g *chain.Graph, name string) (*chain.Project, error) {
 var phases = []string{lines.PhaseDevelopment, lines.PhaseGA, lines.PhaseEOM, lines.PhaseEOL}
 
 // selectLines is the lines of the document that the options keep, newest first.
-func selectLines(all []lines.Line, opts Options, now time.Time) ([]lines.Line, error) {
-	sorted := slices.Clone(all)
+func selectLines(g *chain.Graph, opts Options, now time.Time) ([]lines.Line, error) {
+	sorted := slices.Clone(g.Lines())
 	slices.SortStableFunc(sorted, func(a, b lines.Line) int { return -lines.Compare(a.ID, b.ID) })
 	for _, p := range opts.Phases {
 		if !slices.Contains(phases, p) {
@@ -190,15 +190,15 @@ func selectLines(all []lines.Line, opts Options, now time.Time) ([]lines.Line, e
 	}
 	var want []string
 	for _, id := range opts.Lines {
-		id = lines.Normalize(id)
-		if !slices.ContainsFunc(sorted, func(l lines.Line) bool { return strings.EqualFold(l.ID, id) }) {
+		line, ok := g.Line(id)
+		if !ok {
 			ids := make([]string, len(sorted))
 			for i, l := range sorted {
 				ids[i] = l.ID
 			}
-			return nil, fmt.Errorf("%s is not a Rancher line: they are %s", id, strings.Join(ids, ", "))
+			return nil, fmt.Errorf("%s is not a Rancher line: they are %s", lines.Normalize(id), strings.Join(ids, ", "))
 		}
-		want = append(want, strings.ToLower(id))
+		want = append(want, strings.ToLower(line.ID))
 	}
 	var out []lines.Line
 	for _, l := range sorted {
