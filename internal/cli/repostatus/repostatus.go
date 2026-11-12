@@ -322,11 +322,14 @@ func targets(p *chain.Project) []Target {
 // the tags it could have next from them (internal/releasetag, which is what
 // gero repo tag asks), and compares them with the clone, which may be nil.
 func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
-	scheme, err := tagscheme.ForProject(p)
+	stream, err := p.OnlyStream()
 	if err != nil {
 		return
 	}
-	stream := p.Streams()[0]
+	scheme, err := tagscheme.ForStream(stream)
+	if err != nil {
+		return
+	}
 	latest := scheme.Latest(refs.Tags, t.Line)
 	t.LatestStable, t.LatestPrerelease = tagInfo(latest.Stable), tagInfo(latest.Prerelease)
 	for _, b := range refs.Branches {

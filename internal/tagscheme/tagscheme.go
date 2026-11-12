@@ -6,6 +6,7 @@
 package tagscheme
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -268,14 +269,14 @@ func ForStream(st *chain.Stream) (Scheme, error) {
 // ForProject returns the scheme of the one stream of a project. A project with no
 // stream, or with several, has no one scheme, and the caller names the stream.
 func ForProject(p *chain.Project) (Scheme, error) {
-	switch streams := p.Streams(); len(streams) {
-	case 0:
-		return nil, fmt.Errorf("project %s has no stream", p.Name())
-	case 1:
-		return ForStream(streams[0])
-	default:
-		return nil, fmt.Errorf("project %s has %d streams: name the one to use", p.Name(), len(streams))
+	st, err := p.OnlyStream()
+	switch {
+	case errors.Is(err, chain.ErrSeveralStreams):
+		return nil, fmt.Errorf("%w: name the one to use", err)
+	case err != nil:
+		return nil, err
 	}
+	return ForStream(st)
 }
 
 // Newest is the newest tag of a line of any kind, a prerelease or a stable tag,
