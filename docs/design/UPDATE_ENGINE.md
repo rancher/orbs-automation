@@ -37,7 +37,7 @@ For a target branch, a holding gives:
 
 The variables of a form are `image` (the artifact's repository path), `tag`, `version` (the tag without its v), `url` and `file` (for a file artifact, the rendered file name and its address among the release's files), `sourceRepo` (the producer's `owner/name`), and `commit`, `base` and `upstream` for the kinds that read them. A form that uses a modifier is rendered with it; it is written only with ones that can be undone, so the value held can be read back as a tag.
 
-* **Formats built:** `yaml`, read and replaced in place without disturbing the rest of the file, by the path of the [schema](CONFIG_SCHEMA.md#templates-formats-and-paths): keys, quoted keys for a dot inside one, `[n]` for a list item, a leading dot optional. A holding of another format is reported as not built, and is an error when it is a release holding the engine would write
+* **Formats built:** `yaml`, `dockerfile`, `gomod` and `regex`, each read and replaced in place without disturbing the rest of the file, by the key of the [schema](CONFIG_SCHEMA.md#templates-formats-and-paths). For `dockerfile` the key is the name of an `ARG` or `ENV` that is given a value, in any of its forms (`ARG N=v`, `ENV N=v`, several pairs on one `ENV`, the old `ENV N v`, and a continued line); a bare `ARG N` that redeclares one gives none, and a name given a value in more than one place is ambiguous, an error. The value keeps its quotes. A holding of another format is reported as not built, and is an error when it is a release holding the engine would write
 * **Check:** reads the value, renders the form for the release, and says what is held, what is wanted, whether they are the same, and how the versions in them compare (newer, same, older, or unknown when either has no version)
 * **Apply:** replaces the value when it differs, and says what changed, one change for each holding that changed
 
@@ -70,4 +70,4 @@ The steps are run by a runner the caller supplies, so the engine starts no proce
 ## Not here
 
 * Choosing the release and the targets, the pull request, the commits and the push are `internal/ship`'s
-* Reading a commit or a branch holding, and the `dockerfile` format, are not built
+* Reading a commit or a branch holding is not built

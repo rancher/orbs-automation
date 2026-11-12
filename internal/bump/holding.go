@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/dockerfileedit"
 	"github.com/rancher/orbs-automation/internal/platform/gomodedit"
 	"github.com/rancher/orbs-automation/internal/platform/regexedit"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
@@ -21,17 +22,18 @@ import (
 var ErrFormatNotBuilt = errors.New("format not built")
 
 // A format reads the value at a key in a file and replaces it, leaving the rest of
-// the file as it was. Only the formats here are built: a holding in another one,
-// such as dockerfile, is refused with ErrFormatNotBuilt.
+// the file as it was. Only the formats here are built: a holding in another one is
+// refused with ErrFormatNotBuilt.
 type format struct {
 	get func(src []byte, key string) (string, error)
 	set func(src []byte, key, value string) (out []byte, old string, err error)
 }
 
 var formats = map[string]format{
-	"yaml":  {get: yamledit.Get, set: yamledit.Set},
-	"gomod": {get: gomodedit.Get, set: gomodedit.Set},
-	"regex": {get: regexedit.Get, set: regexedit.Set},
+	"yaml":       {get: yamledit.Get, set: yamledit.Set},
+	"dockerfile": {get: dockerfileedit.Get, set: dockerfileedit.Set},
+	"gomod":      {get: gomodedit.Get, set: gomodedit.Set},
+	"regex":      {get: regexedit.Get, set: regexedit.Set},
 }
 
 // ReleaseOf makes the variables of a release of the producer for what a holding

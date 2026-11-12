@@ -36,7 +36,6 @@ One chain runs `kuberlr-kubectl`, BRO, `rancher/charts`, `rancher/rancher`. Chai
 
 * **M: Read a commit or a branch that a repo holds, at a ref.** The config models and validates both kinds; the engine skips them. Done when `gero repo status` and `gero lines resolve` report what such a holding holds. [UPDATE_ENGINE](design/UPDATE_ENGINE.md)
 * **M: Read the commit pinned in `lock.yaml` at a ref and compare it with the head of the stage's branch.** Done when `repo status` says whether the newest Assets tag was built from today's charts branch.
-* **M: Let the update engine read and write the `dockerfile` format.** It returns `ErrFormatNotBuilt`, and the pre-v2.16 Rancher holding uses it. Done when the refusal test is replaced by a read and a write test.
 * **S: Confirm where Rancher holds the charts branch.** Before v2.16 it is `CHART_DEFAULT_BRANCH` in `package/Dockerfile`; find the file and key for v2.16 and later. Done when each line's holding names the right file and key and a test reads it.
 * **L: Walk several hops in `gero lines resolve` and `gero repo status`.** The walk is safe on cycles, prints a tree, and takes `--depth`. Done when `ob-team-charts`, `charts` and `rancher` appear as one connected path for a line. [LINES_RESOLVE](specs/LINES_RESOLVE.md)
 * **M: Check a held tag's stage against the release team's rule.** The rule comes from the release team. Done when a mismatch is reported by `repo status` or the walk.
