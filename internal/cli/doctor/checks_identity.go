@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/cli/identity"
-	"github.com/rancher/orbs-automation/internal/platform/actor"
+	"github.com/rancher/orbs-automation/internal/gero/actor"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 
