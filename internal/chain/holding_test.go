@@ -201,9 +201,14 @@ func TestAHoldingSaysWhatItHoldsAndWhereItIsLookedFor(t *testing.T) {
 }
 
 func TestAHoldingKnowsItsStage(t *testing.T) {
-	g := chaintest.Load(t, pair(
-		holding("staged", "{project: hold, artifact: img}", at+"  holds: {kind: release, stage: dev}\n"),
-	)...)
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("prod", "  repo: {name: acme/prod}\n"),
+		stream("prod", "prod", "  universal: true\n"),
+		artifact("img", "prod", "  kind: image\n  name: acme/prod\n"),
+		holding("staged", "{project: a, artifact: img}", at+"  holds: {kind: release, stage: dev}\n"),
+	)
 
 	assert.Equal(t, "dev", g.Holdings()[0].Stage())
 }

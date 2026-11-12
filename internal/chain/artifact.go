@@ -1,6 +1,9 @@
 package chain
 
-import "github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+import (
+	"github.com/rancher/orbs-automation/internal/apis/lines"
+	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
+)
 
 // Artifact is one thing each release of a stream produces.
 type Artifact struct {
@@ -60,7 +63,7 @@ func (a *Artifact) Registries(stable bool) []string {
 }
 
 // Ranged reports whether the artifact is for some lines only, and not for all.
-func (a *Artifact) Ranged() bool { return false }
+func (a *Artifact) Ranged() bool { return a.Doc.Spec.Lines != (lines.Range{}) }
 
 // AppliesTo reports whether releases for the line produce the artifact.
 func (a *Artifact) AppliesTo(line string) bool { return a.Doc.Spec.Lines.Contains(line) }

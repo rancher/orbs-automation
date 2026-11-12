@@ -55,7 +55,9 @@ func (p *Project) LineID(line string) (id string, ok bool) {
 // LinesInTags reports whether the project finds its lines in its tags: one branch
 // for them all, and streams that list the lines. ReleaseTargets then has a row for
 // each line.
-func (p *Project) LinesInTags() bool { return false }
+func (p *Project) LinesInTags() bool {
+	return p.single() && slices.ContainsFunc(p.streams, func(s *Stream) bool { return len(s.Lines()) > 0 })
+}
 
 // StreamListsLine reports whether a stream of the project lists the line itself,
 // which a universal stream does not: its releases belong to no line.
