@@ -43,9 +43,12 @@ func run(configDir, out string, h bundle.Header) error {
 	if _, err := os.Stat("go.mod"); err != nil {
 		return fmt.Errorf("run it from the repository root, where go.mod is: %w", err)
 	}
-	data, err := bundle.Compile(os.DirFS(configDir), h)
+	data, warnings, err := bundle.CompileReport(os.DirFS(configDir), h)
 	if err != nil {
 		return err
+	}
+	for _, w := range warnings {
+		fmt.Fprintln(os.Stderr, "compilebundle: warning:", w.Error())
 	}
 	if err := os.MkdirAll(out, 0o755); err != nil {
 		return err

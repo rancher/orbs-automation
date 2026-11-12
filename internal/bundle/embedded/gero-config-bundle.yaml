@@ -4,6 +4,8 @@ formatVersion: 1
 geroVersion: dev
 sourceCommit: none
 compiledAt: 1970-01-01T00:00:00Z
+inputsDigest: 1aecf97bfb401c94ad7c72e8b8287c1ab2d847677fac7e74e46307eb9c4b3f3b
+compilerRevision: 1
 ---
 # source: backup-restore-operator.yaml
 # backup-restore-operator: owned, one stream for each line, an image and two chart packages.
