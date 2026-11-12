@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"time"
 
@@ -111,7 +112,6 @@ func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 	if own == "" {
 		return r.loadNoting(ctx, req, "this build is not a release, so there is no newer release to fetch a bundle of")
 	}
-	cached, have := r.newestRelease() // an unreadable store is the same as none
 	prereleases := wantsPrereleases(own, req.Channel)
 	latest, err := r.Releases.Latest(ctx, prereleases)
 	if err != nil {
@@ -121,7 +121,7 @@ func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 		return r.loadNoting(ctx, req, fmt.Sprintf("the newest release on this channel, %s, is not newer than this gero's own, %s", latest.Tag, own))
 	}
 	now := r.now()
-	l, err := r.use(ctx, latest.Tag, cached, have, now)
+	l, err := r.use(ctx, latest.Tag, now)
 	if err == nil {
 		return l, nil
 	}
@@ -131,7 +131,7 @@ func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 	note := fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v)", latest.Tag, err)
 	if prereleases && isPrerelease(latest.Tag) {
 		if stable, serr := r.Releases.Latest(ctx, false); serr == nil && newerThan(stable.Tag, own) {
-			if l, ferr := r.use(ctx, stable.Tag, cached, have, now); ferr == nil {
+			if l, ferr := r.use(ctx, stable.Tag, now); ferr == nil {
 				l.Source.Note = note + "; using the bundle of " + stable.Tag
 				return l, nil
 			}
@@ -150,24 +150,36 @@ func (r *Resolver) loadNoting(ctx context.Context, req Request, note string) (Lo
 	return l, err
 }
 
-// Load is the bundle to use with no request made: a cached bundle when it is of a
-// newer release than the gero's own on the channel, and the embedded bundle in every
-// other case. The cache is the result of an earlier Fetch, and is never refreshed
-// here, so it is used however old it is. A gero that is not a release has no release
-// to be newer than, and takes the embedded bundle.
+// Load is the bundle to use with no request made: the highest release in the store
+// that is newer than the gero's own and on the channel, passing over one this gero
+// cannot read for the next, and the embedded bundle when there is none. The store is
+// the result of earlier Fetches, and is never refreshed here, so a bundle is used
+// however old it is. A gero that is not a release has no release to be newer than,
+// and takes the embedded bundle.
 func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	now := r.now()
 	own := ownRelease(req.GeroVersion)
-	note := ""
-	if cached, have := r.newestRelease(); have && newerThan(cached.Tag, own) && fitsChannel(cached.Tag, own, req.Channel) {
-		l, err := fromEntry(cached, now)
-		if err == nil {
-			return l, nil
+	skipped := ""
+	for _, cached := range r.releases() {
+		if !newerThan(cached.Tag, own) || !fitsChannel(cached.Tag, own, req.Channel) {
+			continue
 		}
-		note = fmt.Sprintf("the cached bundle of %s is not readable (%v); using the embedded bundle", cached.Tag, err)
+		l, err := fromEntry(cached, now)
+		if err != nil {
+			if skipped == "" {
+				skipped = fmt.Sprintf("the cached bundle of %s is not readable (%v)", cached.Tag, err)
+			}
+			continue
+		}
+		if skipped != "" {
+			l.Source.Note = skipped + "; using the bundle of " + cached.Tag
+		}
+		return l, nil
 	}
 	l, err := r.embedded(own, now)
-	l.Source.Note = note
+	if skipped != "" {
+		l.Source.Note = skipped + "; using the embedded bundle"
+	}
 	return l, err
 }
 
@@ -252,28 +264,37 @@ func fitsChannel(tag, own, channel string) bool {
 	return wantsPrereleases(own, channel) || !isPrerelease(tag)
 }
 
-// newestRelease is the entry of a release that was fetched last, and false when the
-// store holds none.
-func (r *Resolver) newestRelease() (Entry, bool) {
-	list, _ := r.Store.List()
+// releases are the bundles of releases in the store, the highest release first and,
+// for one release held twice, the one fetched last.
+func (r *Resolver) releases() []Entry {
+	list, _ := r.Store.List() // a store that cannot be read is the same as an empty one
+	var out []Entry
 	for _, e := range list {
 		if e.Origin != OriginEmbedded {
-			return e, true
+			out = append(out, e)
 		}
 	}
-	return Entry{}, false
+	slices.SortStableFunc(out, func(a, b Entry) int {
+		c, _ := assetfetch.CompareVersions(b.Tag, a.Tag)
+		return c
+	})
+	return out
 }
 
-// use is the bundle of the release: the cached one when it is of that release, else
-// the download.
-func (r *Resolver) use(ctx context.Context, tag string, cached Entry, have bool, now time.Time) (Loaded, error) {
-	if have && cached.Tag == tag {
+// use is the bundle of the release: the stored one when it is of that release, else
+// the download, which is kept, and the store is pruned.
+func (r *Resolver) use(ctx context.Context, tag string, now time.Time) (Loaded, error) {
+	for _, cached := range r.releases() {
+		if cached.Tag != tag {
+			continue
+		}
 		if l, err := fromEntry(cached, now); err == nil {
 			if err := r.Store.Touch(cached.ID, now); err == nil {
 				l.Source.FetchedAt, l.Source.Age = now, 0
 			}
 			return l, nil
 		}
+		break
 	}
 	data, err := r.Releases.Asset(ctx, tag, bundle.Name)
 	if err != nil {
@@ -283,7 +304,10 @@ func (r *Resolver) use(ctx context.Context, tag string, cached Entry, have bool,
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the bundle of %s: %w", tag, err)
 	}
-	_, _ = r.Store.Put(Entry{Tag: tag, Data: data, Origin: OriginRelease, FetchedAt: now}) // a store that cannot be written costs the next run a download
+	// A store that cannot be written costs the next run a download.
+	if _, err := r.Store.Put(Entry{Tag: tag, Data: data, Origin: OriginRelease, FetchedAt: now}); err == nil {
+		_ = r.Store.Prune(keepEntries)
+	}
 	return Loaded{Header: h, FS: fsys, Source: Source{Tag: tag, FetchedAt: now}}, nil
 }
 

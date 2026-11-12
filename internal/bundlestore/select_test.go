@@ -49,7 +49,7 @@ func TestLoadSkipsAPrereleaseThatTheChannelWouldNotChoose(t *testing.T) {
 func TestFetchKeepsTheNewestThreeBundles(t *testing.T) {
 	g := newRig(t)
 	for i, tag := range []string{"v0.6.0", "v0.7.0", "v0.8.0", "v0.9.0"} {
-		g.publish(tag, "release-"+tag)
+		g.publish(tag, "r"+string(rune('0'+i)))
 		g.now = t0.Add(time.Duration(i) * time.Hour)
 
 		_, err := g.fetch("0.5.0")
