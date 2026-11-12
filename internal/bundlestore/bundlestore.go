@@ -37,7 +37,7 @@ type Resolver struct {
 	Cache    Cache
 	Now      func() time.Time // nil for time.Now
 	// Embedded is the bundle compiled into the binary, in the format bundle.Parse
-	// reads. Nil is the real one, embedded.Bytes.
+	// reads. Nil is the real one, compiled from the embedded config by embedded.Bytes.
 	Embedded []byte
 }
 
@@ -172,7 +172,10 @@ func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 func (r *Resolver) embedded(own string) (Loaded, error) {
 	data := r.Embedded
 	if data == nil {
-		data = embedded.Bytes()
+		var err error
+		if data, err = embedded.Bytes(); err != nil {
+			return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+		}
 	}
 	h, fsys, err := bundle.Parse(data)
 	if err != nil {
