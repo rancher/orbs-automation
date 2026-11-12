@@ -40,6 +40,11 @@ func (p *Project) ListsLine(line string) bool {
 	return slices.ContainsFunc(p.Lines(), func(id string) bool { return lines.Normalize(id) == lines.Normalize(line) })
 }
 
+// LineID returns the id the project lists a line under, for a line written with or
+// without its v, in any case; ok is false when the project does not list it. Like
+// ListsLine it knows only the lines listed for branches.
+func (p *Project) LineID(line string) (id string, ok bool) { return "", false }
+
 // StreamListsLine reports whether a stream of the project lists the line itself,
 // which a universal stream does not: its releases belong to no line.
 func (p *Project) StreamListsLine(line string) bool {
