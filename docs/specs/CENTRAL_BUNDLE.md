@@ -16,7 +16,7 @@ One multi-document YAML file. It is chunks of the same documents the repo holds,
 
 | Chunk | Meaning |
 |---|---|
-| Header | The first document: `apiVersion: gero-bundle/v1`, `kind: Bundle`, `formatVersion`, `geroVersion` (the release tag it was compiled for), `sourceCommit` and `compiledAt`. It is not a config kind and is not in `gero/v1alpha2`: the reader takes it off before the config |
+| Header | The first document: `apiVersion: gero-bundle/v1`, `kind: Bundle`, `formatVersion`, `geroVersion` (the release tag it was compiled for), `sourceCommit`, `compiledAt`, and `inputsDigest` and `compilerRevision`, which say what it was made from (see Identity). The last two are optional on reading, so a bundle released before they were written still loads. It is not a config kind and is not in `gero/v1alpha2`: the reader takes it off before the config |
 | Config | The documents of each `config/` YAML file, in the order of the file names, each file after a `# source: <file>` comment. They are as written, except that the `# yaml-language-server` comment at the top of a file and a leading `---` are dropped: the comment only works as a file's first line, and the bundle is not edited, so it carries none. Compiling the same tree twice gives the same bytes |
 | Templates | Later. The workflow templates, as documents carrying their path and content. Today the templates are compiled into the binary and the bundle holds none |
 | Generated | Documents of a kind that marks them as compile-time output, always after the others. Never mixed into the config documents, so a reader can tell hand-written content from generated data |
@@ -25,13 +25,25 @@ The seam for config is `chainload.Load`, which takes an `fs.FS` (`appconfig.Load
 
 **Generated is a place, not a plan.** No generated document exists yet. The expected use is caches that save work at run time, for example API results that rarely change. Each one needs its own spec before it is added, including who refreshes it and what happens when it is stale.
 
+## Identity
+
+The bytes of a bundle are a function of its input files and of the compiler, and of nothing else: the version, commit and date go in the header as given, and are never read from git or the clock. Four things make that checkable.
+
+* **The digest.** `bundle.Digest` is the SHA-256 of the YAML input files in the order the compiler reads them, each by its name and the hash of its bytes. It is the same for the same files whoever lists them, changes with one byte or one name, and ignores everything the compiler does not bundle. It is written to the header as `inputsDigest`.
+* **The compiler revision.** `bundle.CompilerRevision` is raised whenever `Compile` makes different bytes for the same files, and is written to the header as `compilerRevision`. A golden test compiles a small fixed config and compares it with `internal/bundle/testdata/golden-bundle.yaml`, whose digest was worked out apart from the Go code. It fails when the output changes, and its message says to raise the revision and then write the file again with `UPDATE_GOLDEN=1`.
+* **The ID.** The hash of the compiler revision and the digest is what identifies a bundle in the store. The version and commit are provenance and are not part of it, so the same files and compiler are the same bundle whatever release carries them. A bundle released before the digest existed has no ID, and the store names it from the hash of its bytes.
+* **A recorded hash that does not match means absent.** The store reads an entry only when its bytes match the hash in its record, it is a bundle this `gero` can read or one of a newer format it can pass over, and its header gives the ID its directory is named for. Otherwise the entry is as good as none, and it is fetched or compiled again.
+
+The header fields are additive: the format version stays 1, and an older `gero` ignores the two new lines.
+
 ## The embedded bundle
 
-The binary carries the bundle of its own release, in `internal/bundle/embedded`, through `go:embed`. It is `config/` compiled by the same tool and read by the same `bundle.Parse` as a fetched one, so there is one reader and one format.
+The binary carries the config of its own release as files. `config/embed.go` embeds the YAML of `config/` with `go:embed`, `internal/bundle/embedded` exposes it, and the bundle is made from those files by the same `bundle.Compile` and read by the same `bundle.Parse` as a fetched one, so there is one reader and one format. There is no generated copy to commit and keep in step.
 
-* **Generated and committed.** `go generate ./internal/bundle/embedded` compiles `config/` with the tool's default header, a placeholder version, commit and date, so the committed bytes change only when `config/` does. They are committed so that a plain `go build` or `go install` has something to embed. A test compiles `config/` and fails when the committed file is behind it, so a change to `config/` that skips the generate step fails `go test ./...`.
-* **The binary's release is not in the header.** What the binary is comes from its own version, set at build time. The embedded header's version says nothing, and the source of a loaded embedded bundle is reported with the binary's release.
-* **The release asset is separate.** The standalone `gero-config-bundle.yaml` of a release is still compiled with the real version, commit and date and is still signed. It is what `gero config fetch` downloads for a newer release, and what `--bundle-file` reads.
+* **Compiled once, kept in the store.** The first command that needs the embedded bundle works out the digest of the embedded files, looks in the store for the bundle with that identity, and compiles it and keeps it there when it is not. Later runs read it. A store that cannot be read or written costs only the compile: the bundle made in memory is used either way.
+* **The header is a placeholder.** The embedded bundle is compiled with the tool's default header, a placeholder version, commit and date, so the same files and compiler make the same bytes. What the binary is comes from its own version, set at build time, and the source of a loaded embedded bundle is reported with the binary's release.
+* **Every file is embedded.** The pattern takes the YAML files at the top of `config/`. A test compares the digest of the embedded files with that of the directory, so a YAML file that the pattern does not take fails `go test ./...`. Another compiles the embedded config and parses it, so an invalid `config/` fails there and not at first use.
+* **The release asset is separate.** The standalone `gero-config-bundle.yaml` of a release is compiled with the real version, commit and date and is signed. It is what `gero config fetch` downloads for a newer release, and what `--bundle-file` reads.
 * **Trusted as part of the binary.** An embedded bundle is not verified on load: it is as trusted as the binary, which is signed and checksummed with the release.
 
 ## Compile command
@@ -42,7 +54,7 @@ The binary carries the bundle of its own release, in `internal/bundle/embedded`,
 go run ./tools/compilebundle --out .bundle --version v0.5.0 --commit "$(git rev-parse HEAD)" --date "$(git show -s --format=%cI HEAD)"
 ```
 
-`--config` (default `config`) is the directory to bundle and `--out` (default `dist`) where to write it. The version, commit and date go in the header and are flags, never read from git or the clock, so the same input gives the same bytes. The tool loads the directory with `chainload.Load`, as every command does, and fails on invalid or empty config, so a bad bundle is never produced. It then loads the body of the bundle back, through an in-memory file system as a reader will, and fails unless it gives the same projects, holdings and lines. It writes nothing on failure. A test compiles the real `config/`, so a bad edit fails `go test ./...`.
+`--config` (default `config`) is the directory to bundle and `--out` (default `dist`) where to write it. The version, commit and date go in the header and are flags, never read from git or the clock, so the same input gives the same bytes. `Compile` writes the digest and the compiler revision itself, and returns the warnings of the config without printing them, so a binary that compiles its own config says nothing: the tool prints them to stderr. The tool loads the directory with `chainload.Load`, as every command does, and fails on invalid or empty config, so a bad bundle is never produced. It then loads the body of the bundle back, through an in-memory file system as a reader will, and fails unless it gives the same projects, holdings and lines. It writes nothing on failure. A test compiles the real `config/`, so a bad edit fails `go test ./...`.
 
 ## Publishing
 
@@ -73,15 +85,19 @@ Every download of a release asset, the bundle or anything else, is verified befo
 
 **Fetching is opt-in.** Only `gero config fetch` makes a request for the bundle. No other command, `gero doctor --online` included, and no CI job does. The command needs the network, so it fails under `--offline`. It always asks the releases, however fresh the cache is, downloads only when the newest one on the channel is a different release from the cached one, and confirms the cached copy otherwise. A failed fetch is an error and leaves the cache as it was.
 
-**What the other commands use.** With no request made, a command takes the cached bundle when its release is newer than the binary's own and fits the channel, and the embedded bundle in every other case. A cached bundle is used however old it is, since only a fetch replaces it. A build that is not a release always takes the embedded bundle. A cached bundle that this `gero` cannot read is passed over for the embedded bundle, and the source says so.
+**What the other commands use.** With no request made, a command takes the highest release in the store that is newer than the binary's own and fits the channel, and the embedded bundle when there is none. A stored bundle is used however old it is, since only a fetch adds a newer one. A build that is not a release always takes the embedded bundle. A stored bundle that this `gero` cannot read is passed over for the next release, or for the embedded bundle, and the source says so.
 
-**Caching.**
+**The store and the fetch layer.** `internal/bundlestore` is the local side: the store, the choice of what to load, and the rules about channels and versions. `internal/bundlefetch` is the network side: the releases, the checks, and putting a verified bundle in the store. It imports the store, never the reverse, and the store works with no network at all.
+
+**The store.**
 
 | Rule | Detail |
 |---|---|
-| Where | `$XDG_CACHE_HOME/gero/`, else `~/.cache/gero/`. A cache, not config: it can be deleted at any time, and the embedded bundle is what is left |
-| Written | Only by a fetch, and only after the download matched its checksum, its signatures verified and it parsed |
-| Used | When newer than the binary and on its channel, as above. An older binary's cache is therefore ignored after the binary is upgraded past it |
+| Where | `$XDG_CACHE_HOME/gero/bundles/<id>/`, else `~/.cache/gero/bundles/<id>/`, one directory for each bundle with `bundle.yaml` and `meta.json`. A cache, not config: it can be deleted at any time, and the embedded config is what is left |
+| Several at once | The newest three are kept, by when each was fetched or compiled, and the store is pruned after each write. The single entry an older `gero` kept beside the directory is removed by the pruning |
+| Written | By a fetch, and only after the download matched its checksum, its signatures verified and it parsed; and for the embedded bundle, by the first run that needs it. The record is written last, so a write that stops half way leaves an entry that does not match its record, which is read as none |
+| Read | Only when the bytes match the hash of the record and the header gives the ID the directory is named for (see Identity) |
+| Used | The highest release newer than the binary and on its channel that this `gero` can read, as above. An older binary's entries are therefore ignored after the binary is upgraded past them |
 | Nothing available | Cannot happen with the default sources: the embedded bundle is always there. Only `--config-source=dir` with no directory fails, with the message that lists the places config is looked for |
 
 ## Source precedence
@@ -93,8 +109,8 @@ With `configSource: auto`, the default, a local source that is present is read a
 2. `GERO_CENTRAL_CONFIG_DIR`
 3. `centralConfigDir` in the user file
 4. `./config`, when the working directory is a checkout of the central repo
-5. The cached bundle, when newer than the binary on its channel
-6. The bundle embedded in the binary
+5. The highest stored bundle, when newer than the binary on its channel
+6. The bundle compiled from the config embedded in the binary
 
 ## In CI
 

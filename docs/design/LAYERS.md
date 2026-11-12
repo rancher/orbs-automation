@@ -10,7 +10,7 @@ Imports point down, never up:
 cmd
  └─ cli (internal/cli/*)        ui (internal/ui/*)
      └─ domain (ship, bump, chain, chainload, workspace, appconfig, tagscheme,
-        calver, registry, releasetag, steprun, lifecycle, bundle, bundlestore, task/*)
+        calver, registry, releasetag, steprun, lifecycle, bundle, bundlestore, bundlefetch, task/*)
          └─ gero (internal/gero/*)
              └─ apis (internal/apis/meta, internal/apis/lines, internal/apis/v1alpha2)
                  └─ platform (internal/platform/*)

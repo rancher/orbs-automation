@@ -9,7 +9,7 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 * All Go packages live under `internal/`, except the `main` package (`main.go` at the repo root) and the cobra layer under `cmd/`. The compiler enforces that code outside this module cannot import `internal/`.
 * There is no `pkg/` directory. Moving a package out of `internal/` later is cheap. Retracting a public API is not.
 * **Promotion criteria.** A package leaves `internal/` only when all hold: a real external consumer exists, its API has survived at least one minor release unchanged, and it has no dependency on other `internal/` packages that are not themselves promoted. Promotion is a decision recorded in this spec, not a drive-by move.
-* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level, and so does `generated/`, which holds files that a tool writes and a test keeps current. A developer tool that is not part of `gero` is a `main` under `tools/`: `tools/genschema` writes the JSON Schemas of the config ([APP_CONFIG](APP_CONFIG.md#json-schemas)), and `tools/compilebundle` writes the central config bundle for a release ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#compile-command)). A tool may import `internal/` and nothing imports it.
+* Data files (`config/`, `mock-repos/`) are not Go code and stay at the top level, and `config/` holds the one Go file, `embed.go`, that embeds its YAML in the binary (`internal/bundle/embedded` compiles the bundle from it), and so does `generated/`, which holds files that a tool writes and a test keeps current. A developer tool that is not part of `gero` is a `main` under `tools/`: `tools/genschema` writes the JSON Schemas of the config ([APP_CONFIG](APP_CONFIG.md#json-schemas)), and `tools/compilebundle` writes the central config bundle for a release ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md#compile-command)). A tool may import `internal/` and nothing imports it.
 
 ## 2. Layout
 
@@ -29,8 +29,10 @@ internal/ui/editor/    the one importer of ergochat/readline: the line reader se
 
 internal/workspace/    the one door from Settings to the world: config dir, the joined config and the update engine, repo paths, upstream, fork   (WORKSPACE)
 internal/ship/         one pull request for each target branch of a consumer: the state check and the write sequence, with its interfaces   (PUSH_TO_REPO). It holds most of the actions still; they move to internal/task/ and ship keeps the decisions and the order
-internal/bundle/       the format of the central config bundle: Compile for the release, Parse for the reader   (CENTRAL_BUNDLE)
-internal/bundlestore/  the cache and the release resolver of the bundle: which release, refreshed at most daily, verified before it is kept
+internal/bundle/       the format of the central config bundle: Compile for the release, Parse for the reader, and the digest of the input files and the compiler revision that identify a bundle   (CENTRAL_BUNDLE)
+internal/bundle/embedded/  the config embedded in the binary, and the header its bundle is compiled with
+internal/bundlestore/  the local side of the bundle: a store of several bundles under the ID of the files they were made from, and the choice of which to load, among the stored releases and the embedded config
+internal/bundlefetch/  the network side: asks the releases for a bundle newer than the binary's, verifies it and keeps it in the store; imports bundlestore, never the reverse
 internal/task/<name>/  one package per single action (create a branch, bump and commit, push a branch, open a PR, make a tag), run by a command alone or chained by a higher-order one such as ship   (see Tasks below); pushbranch, createpr, createbranch, bumpcommit and createtag are built
 internal/bump/         the update engine: the routes of release holdings, the targets of a release, writing a holding in place, the edits' strategies and steps around the write; starts no process   (UPDATE_ENGINE)
 internal/steprun/      runs the pre-edit and post-edit steps of an update
