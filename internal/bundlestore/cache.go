@@ -11,14 +11,6 @@ import (
 	"time"
 )
 
-// Entry is a bundle in the cache, and when it was last confirmed to be the one
-// to use.
-type Entry struct {
-	Tag       string    // the release it came from
-	Data      []byte    // the bundle, as it was verified
-	FetchedAt time.Time // when it was downloaded, or last confirmed current
-}
-
 // Cache is the user's cache directory of the bundle: a cache, not config, so it can
 // be deleted at any time and a damaged copy is the same as none. A Cache with no
 // Dir keeps nothing.
