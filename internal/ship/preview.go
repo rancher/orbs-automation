@@ -141,7 +141,7 @@ func textVars(in previewInput) map[string]string {
 		"source":           in.producer.Name(),
 		"sourceRepo":       in.producer.Slug(),
 		"tag":              in.release.Tag,
-		"version":          releaseVersion(in.producer, in.release.Tag),
+		"version":          in.producer.ReleaseVersion(in.release.Tag),
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
@@ -150,18 +150,6 @@ func textVars(in previewInput) map[string]string {
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
 		"to":               joined(in.checks, func(c bump.HoldingCheck) string { return c.Want }),
 	}
-}
-
-// releaseVersion is the version of a release of the producer: its tag without the
-// prefix of the stream it is a release of (helmtools/v0.1.2 has helmtools/) and
-// without a leading v. A tag no stream matches loses only its v.
-func releaseVersion(producer *chain.Project, tag string) string {
-	for _, s := range producer.Streams() {
-		if s.TagMatches(tag) {
-			return strings.TrimPrefix(s.BareTag(tag), "v")
-		}
-	}
-	return strings.TrimPrefix(tag, "v")
 }
 
 // stepMessage returns the function that makes the commit message of a step that

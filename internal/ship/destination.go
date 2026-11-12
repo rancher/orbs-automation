@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -154,23 +153,10 @@ func (r resolution) destinationWarnings(d Destination, producer *chain.Project, 
 	}
 	var out []string
 	for _, held := range d.Held {
-		if tag := heldTag(held.Current); tag != "" && !matchesStream(stream, tag) {
+		if tag := heldTag(held.Current); tag != "" && !stream.HasRelease(tag) {
 			out = append(out, fmt.Sprintf("%s holds %s on %s, which is not a release of the stream %s that %s holds",
 				d.Project, tag, d.Line, stream.Name(), consumer))
 		}
 	}
 	return out
-}
-
-// matchesStream reports whether a value a holding read is a release of the stream:
-// its tag, or the tag without the prefix a Go module goes without.
-func matchesStream(s *chain.Stream, value string) bool {
-	if s.TagMatches(value) {
-		return true
-	}
-	pattern := s.TagPattern()
-	if i := strings.LastIndex(pattern, "/"); i >= 0 {
-		return s.TagMatches(pattern[:i+1] + value)
-	}
-	return false
 }
