@@ -300,7 +300,7 @@ func (r resolution) noSuchLine(line string) error {
 func narrowStreams(producer *chain.Project, routes []bump.Route, in Input) ([]bump.Route, error) {
 	var of []bump.Route // the routes of the consumer the user named
 	for _, r := range routes {
-		if in.To == "" || named(r.Consumer, in.To) {
+		if in.To == "" || r.Consumer.Named(in.To) {
 			of = append(of, r)
 		}
 	}
@@ -317,7 +317,7 @@ func narrowStreams(producer *chain.Project, routes []bump.Route, in Input) ([]bu
 		}
 	}
 	lines := slices.Clone(in.Lines)
-	if in.Arg != "" && !tagged && hasLine(consumer, in.Arg) && !listsLine(producer, in.Arg) {
+	if in.Arg != "" && !tagged && consumer.ListsLine(in.Arg) && !producer.StreamListsLine(in.Arg) {
 		lines = append(lines, in.Arg)
 	}
 	if len(lines) == 0 && !tagged {
@@ -366,32 +366,12 @@ func describeStreams(routes []bump.Route) string {
 	return strings.Join(out, ", ")
 }
 
-// hasLine reports whether a project lists the line, written with or without its v.
-func hasLine(p *chain.Project, line string) bool {
-	return slices.ContainsFunc(p.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
-}
-
-// listsLine reports whether a stream of the project lists the line itself, which a
-// universal stream does not: its releases belong to no line.
-func listsLine(p *chain.Project, line string) bool {
-	return slices.ContainsFunc(p.Streams(), func(s *chain.Stream) bool {
-		return slices.ContainsFunc(s.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
-	})
-}
-
-// named reports whether a project is what the user called it: its config name, its
-// owner/name slug or one of its aliases, whatever the case.
-func named(p *chain.Project, key string) bool {
-	return strings.EqualFold(p.Name(), key) || strings.EqualFold(p.Slug(), key) ||
-		slices.ContainsFunc(p.Aliases(), func(a string) bool { return strings.EqualFold(a, key) })
-}
-
 // pickRoute chooses the route to ship down: the one to the consumer named by to
 // (a config name, a slug or an alias); the only route when there is just one.
 func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Route, error) {
 	var matches []bump.Route
 	for _, r := range routes {
-		if to == "" || named(r.Consumer, to) {
+		if to == "" || r.Consumer.Named(to) {
 			matches = append(matches, r)
 		}
 	}
