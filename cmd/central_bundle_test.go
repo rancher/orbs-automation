@@ -30,9 +30,10 @@ func cacheBundle(t *testing.T, tag string, names ...string) {
 	t.Helper()
 	cache := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cache)
-	require.NoError(t, bundlestore.Cache{Dir: filepath.Join(cache, "gero")}.Write(bundlestore.Entry{
+	_, err := bundlestore.Store{Dir: filepath.Join(cache, "gero")}.Put(bundlestore.Entry{
 		Tag: tag, Data: bundletest.Compile(t, tag, bundletest.Config(names...)), FetchedAt: time.Now(),
-	}))
+	})
+	require.NoError(t, err)
 }
 
 func TestWithNoLocalConfigACommandReadsACachedBundleNewerThanItself(t *testing.T) {

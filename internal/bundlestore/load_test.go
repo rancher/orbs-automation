@@ -1,6 +1,7 @@
 package bundlestore
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -132,7 +133,9 @@ func TestLoadTheCacheMustBeOnTheLineTheGeroIsOn(t *testing.T) {
 
 func TestLoadACacheThisGeroCannotReadIsPassedOverAndTheNoteSaysSo(t *testing.T) {
 	g := loadRig(t)
-	require.NoError(t, g.cache.Write(Entry{Tag: "v0.6.0", Data: []byte("not a bundle\n"), FetchedAt: t0}))
+	newer := strings.Replace(string(bundleOf(t, "v0.6.0", "alpha")), "formatVersion: 1", "formatVersion: 2", 1)
+	_, err := g.store.Put(Entry{Tag: "v0.6.0", Data: []byte(newer), FetchedAt: t0})
+	require.NoError(t, err)
 
 	got, err := g.loadOffline("0.5.0", "")
 

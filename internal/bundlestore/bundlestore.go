@@ -34,7 +34,7 @@ type Releases interface {
 // Resolver chooses and loads the bundle.
 type Resolver struct {
 	Releases Releases
-	Cache    Cache
+	Store    Store
 	Now      func() time.Time // nil for time.Now
 	// Embedded is the bundle compiled into the binary, in the format bundle.Parse
 	// reads. Nil is the real one, compiled from the embedded config by embedded.Bytes.
@@ -108,7 +108,7 @@ func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
 	if own == "" {
 		return r.loadNoting(ctx, req, "this build is not a release, so there is no newer release to fetch a bundle of")
 	}
-	cached, have, _ := r.Cache.Read() // an unreadable cache is the same as none
+	cached, have := r.newestRelease() // an unreadable store is the same as none
 	prereleases := wantsPrereleases(own, req.Channel)
 	latest, err := r.Releases.Latest(ctx, prereleases)
 	if err != nil {
@@ -156,8 +156,8 @@ func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	now := r.now()
 	own := ownRelease(req.GeroVersion)
 	note := ""
-	if cached, have, _ := r.Cache.Read(); have && newerThan(cached.Tag, own) && fitsChannel(cached.Tag, own, req.Channel) {
-		l, err := fromCache(cached, now)
+	if cached, have := r.newestRelease(); have && newerThan(cached.Tag, own) && fitsChannel(cached.Tag, own, req.Channel) {
+		l, err := fromEntry(cached, now)
 		if err == nil {
 			return l, nil
 		}
@@ -219,12 +219,24 @@ func fitsChannel(tag, own, channel string) bool {
 	return wantsPrereleases(own, channel) || !isPrerelease(tag)
 }
 
+// newestRelease is the entry of a release that was fetched last, and false when the
+// store holds none.
+func (r *Resolver) newestRelease() (Entry, bool) {
+	list, _ := r.Store.List()
+	for _, e := range list {
+		if e.Origin != OriginEmbedded {
+			return e, true
+		}
+	}
+	return Entry{}, false
+}
+
 // use is the bundle of the release: the cached one when it is of that release, else
 // the download.
 func (r *Resolver) use(ctx context.Context, tag string, cached Entry, have bool, now time.Time) (Loaded, error) {
 	if have && cached.Tag == tag {
-		if l, err := fromCache(cached, now); err == nil {
-			if err := r.Cache.Confirm(now); err == nil {
+		if l, err := fromEntry(cached, now); err == nil {
+			if err := r.Store.Touch(cached.ID, now); err == nil {
 				l.Source.FetchedAt, l.Source.Age = now, 0
 			}
 			return l, nil
@@ -238,11 +250,11 @@ func (r *Resolver) use(ctx context.Context, tag string, cached Entry, have bool,
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the bundle of %s: %w", tag, err)
 	}
-	_ = r.Cache.Write(Entry{Tag: tag, Data: data, FetchedAt: now}) // a cache that cannot be written costs the next run a download
+	_, _ = r.Store.Put(Entry{Tag: tag, Data: data, Origin: OriginRelease, FetchedAt: now}) // a store that cannot be written costs the next run a download
 	return Loaded{Header: h, FS: fsys, Source: Source{Tag: tag, FetchedAt: now}}, nil
 }
 
-func fromCache(e Entry, now time.Time) (Loaded, error) {
+func fromEntry(e Entry, now time.Time) (Loaded, error) {
 	h, fsys, err := bundle.Parse(e.Data)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the cached bundle of %s: %w", e.Tag, err)

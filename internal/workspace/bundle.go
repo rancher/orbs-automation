@@ -143,7 +143,7 @@ func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
 // there are any to look at.
 func resolverFor(releases bundlestore.Releases) *bundlestore.Resolver {
 	home, _ := os.UserHomeDir()
-	return &bundlestore.Resolver{Releases: releases, Cache: bundlestore.Cache{Dir: clicfg.CacheDir(os.Getenv, home)}}
+	return &bundlestore.Resolver{Releases: releases, Store: bundlestore.Store{Dir: clicfg.CacheDir(os.Getenv, home)}}
 }
 
 // ErrOffline is returned by FetchBundle when the settings say no request is to be

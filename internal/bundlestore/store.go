@@ -1,6 +1,8 @@
 package bundlestore
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,6 +50,12 @@ type Store struct {
 // bundlesDir is the directory of the entries under the store's Dir, one directory for
 // each, named by dirName.
 const bundlesDir = "bundles"
+
+// The files of an entry's directory.
+const (
+	bundleFile = "bundle.yaml"
+	metaFile   = "meta.json"
+)
 
 // dirName is the name of an entry's directory: the start of its ID.
 func dirName(id string) string { return id[:min(len(id), 16)] }
@@ -209,4 +217,37 @@ func writeRecord(dir string, rec record) error {
 		return err
 	}
 	return writeFile(filepath.Join(dir, metaFile), raw)
+}
+
+func hash(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// writeFile writes through a temporary file in the same directory and renames it,
+// so the file is never half written.
+func writeFile(path string, data []byte) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("write the bundle cache: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = os.Remove(tmp.Name())
+		}
+	}()
+	if _, err = tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write the bundle cache: %w", err)
+	}
+	if err = tmp.Close(); err != nil {
+		return fmt.Errorf("write the bundle cache: %w", err)
+	}
+	if err = os.Chmod(tmp.Name(), 0o644); err != nil {
+		return fmt.Errorf("write the bundle cache: %w", err)
+	}
+	if err = os.Rename(tmp.Name(), path); err != nil {
+		return fmt.Errorf("write the bundle cache: %w", err)
+	}
+	return nil
 }
