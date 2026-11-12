@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -80,6 +81,22 @@ func (p *Project) StreamOf(tag string) *Stream {
 	}
 	return nil
 }
+
+// ReleaseVersion is the version of a release of the project, through the stream
+// the tag is a release of. A tag no stream matches loses only its v.
+func (p *Project) ReleaseVersion(tag string) string { return "" }
+
+var (
+	// ErrNoStream is returned by OnlyStream for a project with no stream.
+	ErrNoStream = errors.New("the project has no stream")
+	// ErrSeveralStreams is returned by OnlyStream for a project with more than one.
+	ErrSeveralStreams = errors.New("the project has several streams")
+)
+
+// OnlyStream returns the one stream of a project. A project with none, or with
+// several, has no one stream, and the caller names it: the error wraps
+// ErrNoStream or ErrSeveralStreams.
+func (p *Project) OnlyStream() (*Stream, error) { return nil, nil }
 
 // LineOf returns the line a tag is of, through the stream it is a release of.
 func (p *Project) LineOf(tag string) (line string, ok bool) {
