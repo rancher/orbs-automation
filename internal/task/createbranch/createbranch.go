@@ -109,7 +109,11 @@ func Run(ctx context.Context, g Git, in Input) (Output, error) {
 		if err := g.StartBranch(ctx, in.CloneDir, in.Branch, in.Base); err != nil {
 			return Output{}, err
 		}
-		w = workdir.NewInPlace(g, in.CloneDir, in.Branch, st.Branch, st.Untracked)
+		had := st.Untracked
+		if in.StageUntracked {
+			had = nil // none is the engineer's to leave out
+		}
+		w = workdir.NewInPlace(g, in.CloneDir, in.Branch, st.Branch, had)
 	default:
 		dir := filepath.Join(in.TempDir, strings.ReplaceAll(in.Branch, "/", "-"))
 		if err := g.AddWorktree(ctx, in.CloneDir, dir, in.Branch, in.Base); err != nil {
