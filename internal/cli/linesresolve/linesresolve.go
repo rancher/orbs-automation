@@ -299,7 +299,7 @@ func universal(r bump.Route) bool {
 func holdingsOn(r bump.Route, line string) []string {
 	var names []string
 	for _, h := range r.Holdings {
-		if h.Doc.Spec.Holds.Lines.Contains(line) {
+		if h.HoldsLine(line) {
 			names = append(names, h.Name())
 		}
 	}
@@ -338,15 +338,6 @@ func branchesOn(r bump.Route, line string) ([]string, error) {
 	return branches, nil
 }
 
-// tagLines says the project finds its lines in its tags: one branch for them all,
-// and streams that list the lines.
-func tagLines(p *chain.Project) bool {
-	if p.Layout() != chain.LayoutSingle {
-		return false
-	}
-	return slices.ContainsFunc(p.Streams(), func(s *chain.Stream) bool { return len(s.Lines()) > 0 })
-}
-
 // feedsHub says whether producer p ships to the hub's branch for the line by route
 // r, and when it should but cannot, why (a gap). A producer with no lines of its own
 // ships every release to every release branch of the hub, so it feeds the line the
@@ -367,7 +358,7 @@ func (m mapper) feedsHub(p *chain.Project, r bump.Route, line string, hubNode No
 			return Link{}, "", false
 		}
 		return Link{Project: p.Slug(), Name: p.Name(), Holdings: holdingNames(r), Universal: true}, "", true
-	case !pHas && tagLines(p):
+	case !pHas && p.LinesInTags():
 		// Its lines are the ones it is used for, and it lists those, so a line it does
 		// not list is not one it is meant to feed.
 		return Link{}, "", false
