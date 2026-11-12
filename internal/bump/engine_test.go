@@ -211,6 +211,13 @@ func TestNewEngineReportsAReleaseHoldingInAFormatThatIsNotBuilt(t *testing.T) {
 	assert.Equal(t, []string{"prod > cons: cons-image, cons-chart"}, names(e.RoutesFrom(g.Project("prod"))), "the consumer whose holding cannot be written is left out")
 }
 
+func TestNewEngineAcceptsADockerfileHolding(t *testing.T) {
+	e, g, err := buildEngine(t, d("Holding", "df", "{project: other, artifact: prod-image}", "  at: {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release}\n"))
+
+	require.NoError(t, err)
+	assert.Contains(t, strings.Join(names(e.RoutesFrom(g.Project("prod"))), ";"), "df")
+}
+
 func TestNewEngineAcceptsAGoModHolding(t *testing.T) {
 	e, g, err := buildEngine(t, d("Holding", "gomod", "{project: other, artifact: prod-chart}", "  at: {file: go.mod, key: github.com/acme/lib, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\"}\n"))
 
