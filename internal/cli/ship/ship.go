@@ -21,7 +21,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
 	"github.com/rancher/orbs-automation/internal/cli/identity"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"

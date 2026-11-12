@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )

@@ -7,7 +7,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
 // hint adds to one field what its tag and type cannot say. def is the Go name of

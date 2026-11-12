@@ -54,7 +54,7 @@ linters:
             - github.com/spf13/cobra
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
-            - github.com/rancher/orbs-automation/internal/platform/clicfg
+            - github.com/rancher/orbs-automation/internal/gero/clicfg
             - github.com/rancher/orbs-automation/internal/gero/errs
             - github.com/rancher/orbs-automation/internal/platform/header
         # cobra stays in cmd/. internal/cli/ and domain packages must not

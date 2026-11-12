@@ -12,7 +12,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/apis/meta"
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
 const module = "github.com/rancher/orbs-automation"
@@ -23,7 +23,7 @@ var commentDirs = []string{
 	"internal/apis/lines",
 	"internal/apis/meta",
 	"internal/apis/v1alpha2",
-	"internal/platform/clicfg",
+	"internal/gero/clicfg",
 }
 
 const defsPrefix = "#/$defs/"

@@ -10,8 +10,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/gero/releasesign"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 )
 
 // BundleSource is where the central config comes from when no local source is

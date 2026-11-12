@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
 // EnvRepl is set in the environment of a running REPL, so a REPL started from

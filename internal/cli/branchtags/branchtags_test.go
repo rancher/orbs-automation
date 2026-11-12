@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/gero/buildtags"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git/repo"
 	"github.com/rancher/orbs-automation/internal/platform/git/repo/repotest"
 	"github.com/stretchr/testify/assert"

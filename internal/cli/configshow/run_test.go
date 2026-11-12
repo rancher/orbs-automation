@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundlestore"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

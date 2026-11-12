@@ -6,7 +6,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/identity"
 	"github.com/rancher/orbs-automation/internal/gero/actor"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
 // IdentityResolver resolves the commit identity for the current context. It is

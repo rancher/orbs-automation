@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/bundlestore"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )

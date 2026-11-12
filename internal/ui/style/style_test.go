@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

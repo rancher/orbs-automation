@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/gero/buildtags"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )

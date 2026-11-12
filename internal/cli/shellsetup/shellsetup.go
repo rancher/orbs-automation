@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/gero/shellenv"
 	"github.com/rancher/orbs-automation/internal/platform/atomicfile"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 

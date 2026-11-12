@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/rancher/orbs-automation/internal/gero/actor"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/platform/github"
 )
