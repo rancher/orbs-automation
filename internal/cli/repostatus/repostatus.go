@@ -281,41 +281,11 @@ func compareStatus(h ship.HeldValue) string {
 // the one row of a project with a single release branch, or for each line of the
 // stream of a project that finds its lines in its tags.
 func targets(p *chain.Project) []Target {
-	series := func(line string) string {
-		for _, st := range p.Streams() {
-			if sr, ok := st.Series(line); ok {
-				return sr
-			}
-		}
-		return ""
+	var out []Target
+	for _, t := range p.ReleaseTargets() {
+		out = append(out, Target{Line: t.Line, Series: t.Series, Stage: t.Stage, Branch: t.Branch, IsDefaultBranch: t.IsDefault})
 	}
-	if p.Layout() == chain.LayoutSingle {
-		// Every line is on the one branch. A stream that lists lines has them in its
-		// tags, so each is a row of its own.
-		var ts []Target
-		for _, st := range p.Streams() {
-			for _, line := range st.Lines() {
-				ts = append(ts, Target{Line: line, Series: series(line), Branch: p.DefaultBranch(), IsDefaultBranch: true})
-			}
-		}
-		if len(ts) == 0 {
-			return []Target{{Branch: p.DefaultBranch(), IsDefaultBranch: true}}
-		}
-		return ts
-	}
-	var ts []Target
-	for _, lb := range p.LineBranches() {
-		if len(lb.Stages) > 0 {
-			for _, stage := range p.Stages() {
-				if branch, ok := lb.Stages[stage]; ok {
-					ts = append(ts, Target{Line: lb.Line, Series: series(lb.Line), Stage: stage, Branch: branch})
-				}
-			}
-			continue
-		}
-		ts = append(ts, Target{Line: lb.Line, Series: series(lb.Line), Branch: lb.Branch, IsDefaultBranch: lb.IsDefault})
-	}
-	return ts
+	return out
 }
 
 // fill reads the latest tags and the head of t from refs, works out its state and

@@ -420,31 +420,16 @@ func shipsTo(r bump.Route, line string) (Link, bool) {
 // project that keeps each line on a branch has the lines it lists; one that finds
 // its lines in its tags has the lines its streams list, all on its default branch.
 func nodeOf(p *chain.Project, line string) (Node, bool) {
-	series := func(l string) string {
-		for _, st := range p.Streams() {
-			if sr, ok := st.Series(l); ok {
-				return sr
-			}
-		}
-		return ""
+	rows := p.ReleaseTargetsOf(line)
+	if len(rows) == 0 {
+		return Node{}, false
 	}
-	for _, lb := range p.LineBranches() {
-		if !strings.EqualFold(lb.Line, line) {
-			continue
-		}
-		branch, _ := p.BranchOfLine(lb.Line, "")
-		return Node{Project: p.Slug(), Name: p.Name(), Branch: branch, IsDefaultBranch: lb.IsDefault, Series: series(lb.Line)}, true
+	node := Node{Project: p.Slug(), Name: p.Name(), Series: rows[0].Series}
+	// A line that has a branch for each stage has no one branch to name.
+	if len(rows) == 1 && rows[0].Stage == "" {
+		node.Branch, node.IsDefaultBranch = rows[0].Branch, rows[0].IsDefault
 	}
-	if tagLines(p) {
-		for _, st := range p.Streams() {
-			for _, l := range st.Lines() {
-				if strings.EqualFold(l, line) {
-					return Node{Project: p.Slug(), Name: p.Name(), Branch: p.DefaultBranch(), IsDefaultBranch: true, Series: series(l)}, true
-				}
-			}
-		}
-	}
-	return Node{}, false
+	return node, true
 }
 
 func date(t time.Time) string {
