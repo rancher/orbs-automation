@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -132,17 +131,6 @@ type selection struct {
 // does not send every release to every branch.
 func (r resolution) followsLines() bool { return !r.stream.Universal() }
 
-// consumerLine finds a line of the consumer by name, with or without the v.
-func (r resolution) consumerLine(line string) (string, bool) {
-	line = lines.Normalize(line)
-	for _, l := range r.route.Consumer.Lines() {
-		if strings.EqualFold(l, line) {
-			return l, true
-		}
-	}
-	return "", false
-}
-
 // specs chooses the targets to check, each with its release.
 //
 // A producer whose releases follow the lines, given no release, ships each line
@@ -165,7 +153,7 @@ func (r resolution) specs(in Input) (selection, error) {
 	if len(in.Lines) > 0 {
 		sel := selection{named: true}
 		for _, line := range in.Lines {
-			canonical, ok := r.consumerLine(line)
+			canonical, ok := r.route.Consumer.LineID(line)
 			if !ok {
 				return selection{}, r.noSuchLine(line)
 			}
@@ -206,7 +194,7 @@ func (r resolution) lineArgument(in Input) Input {
 	if in.Arg == "" || r.followsLines() || slices.ContainsFunc(r.tags, func(t git.Tag) bool { return t.Name == in.Arg }) {
 		return in
 	}
-	canonical, ok := r.consumerLine(in.Arg)
+	canonical, ok := r.route.Consumer.LineID(in.Arg)
 	if !ok {
 		return in
 	}
@@ -233,7 +221,7 @@ func (r resolution) eachLine(in Input) (selection, error) {
 	var names []string
 	if sel.named {
 		for _, line := range in.Lines {
-			canonical, ok := r.consumerLine(line)
+			canonical, ok := r.route.Consumer.LineID(line)
 			if !ok {
 				return selection{}, r.noSuchLine(line)
 			}
@@ -241,7 +229,7 @@ func (r resolution) eachLine(in Input) (selection, error) {
 		}
 	} else {
 		for _, line := range r.scheme.Lines(r.tags) {
-			if _, ok := r.consumerLine(line); ok {
+			if _, ok := r.route.Consumer.LineID(line); ok {
 				names = append(names, line)
 			}
 		}
