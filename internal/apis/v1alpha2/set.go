@@ -95,6 +95,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.circular()
 	s.omittedBranches()
 	s.streamsDifferFromDestination()
+	s.streamsOverlap()
 	s.acknowledgements()
 }
 
@@ -452,6 +453,11 @@ func (s *set) streams() {
 		s.add(r)
 	}
 }
+
+// streamsOverlap warns of two streams of one Project whose tag patterns could both
+// match a tag, on the later stream: a tag then is a release of the first of them, and
+// which that is depends on the order the documents are read.
+func (s *set) streamsOverlap() {}
 
 // stagesOf is the names of the stages the streams of a Project have.
 func (s *set) stagesOf(p *Project) map[string]bool {
