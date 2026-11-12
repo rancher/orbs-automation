@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/gero/buildtags"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/git/repo"
 	"github.com/rancher/orbs-automation/internal/platform/git/repo/repotest"
 	"github.com/stretchr/testify/assert"
@@ -49,7 +49,7 @@ func TestResolveFromCI(t *testing.T) {
 	got, err := resolve(env(vars), neverOpened(t), serve(r, nil, &discovered))
 
 	require.NoError(t, err)
-	assert.Equal(t, git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}, got)
+	assert.Equal(t, buildtags.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}, got)
 	assert.Equal(t, 1, discovered)
 }
 
@@ -60,7 +60,7 @@ func TestResolveFromCIWithoutRepository(t *testing.T) {
 	got, err := resolve(env(vars), neverOpened(t), serve(nil, repo.ErrNotRepository, &calls))
 
 	require.NoError(t, err, "a missing repository is not an error in CI mode")
-	assert.Equal(t, git.BranchTags{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef1"}, got)
+	assert.Equal(t, buildtags.BranchTags{BranchTag: "v2.x-head", BranchStaticTag: "v2.x-head-abcdef1"}, got)
 }
 
 func TestResolveFromCIOtherOpenErrorIsReturned(t *testing.T) {
@@ -91,7 +91,7 @@ func TestResolveFromRepository(t *testing.T) {
 
 			require.NoError(t, err)
 			// The local abbreviation is used as given, even past 7 characters.
-			assert.Equal(t, git.BranchTags{
+			assert.Equal(t, buildtags.BranchTags{
 				BranchTag:       "v2.x-head",
 				BranchStaticTag: "v2.x-head-abcdef12",
 				PrevStaticTag:   "v2.x-head-1111111",
@@ -118,7 +118,7 @@ func TestResolveErrors(t *testing.T) {
 		{
 			name:  "unsupported local branch",
 			setup: func(r *MockRepository) { r.EXPECT().Head().Return("refs/heads/feature/x", "abcdef1", nil) },
-			want:  git.ErrUnsupportedRef,
+			want:  buildtags.ErrUnsupportedRef,
 		},
 		{
 			name: "tag listing fails",
@@ -154,23 +154,23 @@ func TestResolveUnsupportedCIRef(t *testing.T) {
 	var calls int
 	_, err := resolve(env(vars), neverOpened(t), serve(r, nil, &calls))
 
-	assert.ErrorIs(t, err, git.ErrUnsupportedRef)
+	assert.ErrorIs(t, err, buildtags.ErrUnsupportedRef)
 }
 
 func TestRender(t *testing.T) {
 	tests := []struct {
 		name string
-		res  git.BranchTags
+		res  buildtags.BranchTags
 		want string
 	}{
 		{
 			"all set",
-			git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"},
+			buildtags.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"},
 			"branch_tag=head\nbranch_static_tag=main-abcdef1\nprev_static_tag=main-1111111\n",
 		},
 		{
 			"empty previous tag keeps its line",
-			git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1"},
+			buildtags.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1"},
 			"branch_tag=head\nbranch_static_tag=main-abcdef1\nprev_static_tag=\n",
 		},
 	}
@@ -198,7 +198,7 @@ func TestResolveRealDirectoryNotARepository(t *testing.T) {
 		got, err := Resolve(clicfg.Settings{}, env(vars), dir)
 
 		require.NoError(t, err)
-		assert.Equal(t, git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1"}, got)
+		assert.Equal(t, buildtags.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1"}, got)
 	})
 }
 
@@ -213,7 +213,7 @@ func TestResolveRealRepository(t *testing.T) {
 		got, err := Resolve(clicfg.Settings{}, env(vars), sub)
 
 		require.NoError(t, err)
-		assert.Equal(t, git.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}, got)
+		assert.Equal(t, buildtags.BranchTags{BranchTag: "head", BranchStaticTag: "main-abcdef1", PrevStaticTag: "main-1111111"}, got)
 	})
 
 	t.Run("local mode reads the ref and commit", func(t *testing.T) {
