@@ -17,10 +17,11 @@ The kinds are small documents joined by `refs`: a Project does not know its Stre
 | Type | Holds | Answers |
 |---|---|---|
 | `Graph` | every Project, the lines, every Holding | a Project by name, by `owner/name` slug, or by a clone's remotes; every holding; the lines in order; a line by its id, `Line(id)` |
-| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `Named(key)`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ResolveLineOrBranch(text)`, `ReleaseBranches`, `ReleaseTargets`, `ReleaseTargetsOf(line)`, `ListsLine(line)`, `LineID(line)`, `StreamListsLine(line)`, `LinesInTags`, `SeriesOf(line)`, `OnlyStream`, `StreamOf(tag)`, `ReleaseVersion(tag)`, `DestinationHoldings(line)`, `Held`, `Sourced` |
+| `Project` | the Project document, its Streams, the Holdings it makes and the Holdings made of it | `ManagedBy`, `Owned(team)`, `Shared`, `Named(key)`, `DefaultBranch`, `Branch(line)`, `BranchOfLine(line, stage)`, `LineOfBranch(branch)`, `ResolveLineOrBranch(text)`, `ReleaseBranches`, `ReleaseTargets`, `ReleaseTargetsOf(line)`, `ListsLine(line)`, `LineID(line)`, `StreamListsLine(line)`, `LinesInTags`, `SeriesOf(line)`, `OnlyStream`, `StreamOf(tag)`, `ReleaseVersion(tag)`, `DestinationHoldings(line)`, `RoutesFrom`, `RoutesInto`, `Held`, `Sourced` |
 | `Stream` | the Stream document, its Project and Artifacts | `LineOf(tag)`, `Series(line)`, `Stages`, `Serves(line)`, `TagMatches(tag)`, `HasRelease(value)`, `BareTag(tag)`, `Version(tag)` |
 | `Artifact` | the Artifact document and its Stream | `Registries(stable)`, `AppliesTo(line)`, `Ranged` |
 | `Holding` | the Holding document, its holder and producer Projects, its Artifact or `from` | `AppliesTo(line)`, `HoldsLine(line)`, `Stage`, `Form`, `AcceptsAll`, `Locations`, `Edits` |
+| `Route` | the release holdings one consumer has of one stream of a producer, as `chain.Route{Producer, Consumer, Stream, Holdings}` | `AppliesTo(line)`, `Edits` |
 | `Edit` | the Edit document and the Holdings it follows | `Steps(line)`, `Strategy` |
 
 ## Answers, and where each came from
@@ -46,7 +47,9 @@ The rules the graph applies, each in `internal/chain`.
 | `Project.ListsLine(line)` | the project lists the line itself for its branches. A `single` layout lists none, though `BranchOfLine` answers for every line |
 | `Project.StreamListsLine(line)` | a stream of the project lists the line itself, which a `universal` stream does not |
 | `Project.OnlyStream` | the project's one stream; an error wrapping `ErrNoStream` or `ErrSeveralStreams` when it has none or more than one |
-| `Project.StreamOf(tag)`, `Project.ReleaseVersion(tag)` | the first stream whose pattern the tag matches and none of whose excludes it matches; the version of the release, which is the tag without that stream's prefix and without a leading `v`, or the tag without its `v` when no stream matches |
+| `Project.StreamOf(tag)`, `Project.ReleaseVersion(tag)` | the first stream whose pattern the tag matches and none of whose excludes it matches (two streams of a project whose patterns could both match a tag are a `streams-overlap` warning); the version of the release, which is the tag without that stream's prefix and without a leading `v`, or the tag without its `v` when no stream matches |
+| `Project.RoutesFrom`, `Project.RoutesInto` | the release holdings made of the project, or that it has, grouped into a route for each project at the other end and each stream of the artifact, in the order the holdings are read. A commit or a branch holding is no route. The update engine wraps each route with what it needs to run it and leaves out one whose holdings cannot be used |
+| `Route.AppliesTo(line)`, `Route.Edits` | one of the holdings is for the line (`Holding.AppliesTo`); the edits that follow the holdings, each once, in the order read (`chain.EditsOf` is the same for any holdings) |
 | `Project.Named(key)` | the key is the project's config name, its `owner/name` slug or one of its aliases, whatever the case. The rules for names make these unique, so it agrees with how `Graph.Project` finds a project |
 | `Project.DestinationHoldings(line)` | the holdings of a release of the project in the final destination that are for the line |
 | `Stream.HasRelease(value)` | the value is a tag of the stream, or a tag without the prefix a Go module goes without |
