@@ -79,7 +79,7 @@ linters:
             - pkg: github.com/go-git/go-git
               desc: go-git is only allowed in internal/platform/git/repo (docs/specs/PROJECT_LAYOUT.md)
         # binup stays in internal/platform/selfupdate, and the Sigstore verifier in
-        # internal/platform/releasesign (docs/specs/DEPENDENCY_POLICY.md).
+        # internal/gero/releasesign (docs/specs/DEPENDENCY_POLICY.md).
         noselfupdate:
           list-mode: lax
           files:
@@ -91,11 +91,11 @@ linters:
         nosigstore:
           list-mode: lax
           files:
-            - "!**/internal/platform/releasesign/**"
+            - "!**/internal/gero/releasesign/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/ghreleases/sigstore
-              desc: the Sigstore verifier is only allowed in internal/platform/releasesign (docs/specs/DEPENDENCY_POLICY.md)
+              desc: the Sigstore verifier is only allowed in internal/gero/releasesign (docs/specs/DEPENDENCY_POLICY.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/platform/git/gitcli (the git binary) and
         # internal/platform/ghcli (gero doctor) go through it
@@ -143,14 +143,14 @@ linters:
               desc: the HTML parser is only allowed in internal/lifecycle (docs/specs/DEPENDENCY_POLICY.md)
         # Downloading a release asset and verifying it against the published checksum
         # is done in one place (docs/specs/CENTRAL_BUNDLE.md,
-        # docs/specs/DEPENDENCY_POLICY.md). internal/platform/releasesign is the one
+        # docs/specs/DEPENDENCY_POLICY.md). internal/gero/releasesign is the one
         # other importer, and only of the Sigstore verifier: depguard matches a
         # package by prefix, and nosigstore keeps that verifier out of the rest.
         noghreleases:
           list-mode: lax
           files:
             - "!**/internal/platform/assetfetch/**"
-            - "!**/internal/platform/releasesign/**"
+            - "!**/internal/gero/releasesign/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/ghreleases
