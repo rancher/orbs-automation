@@ -307,6 +307,23 @@ linters:
           allow:
             - github.com/rancher/orbs-automation/internal/platform
             - github.com/rancher/orbs-automation/internal/apis
+        # The gero layer is gero's own infrastructure: it knows gero but not the
+        # config model, so it sits above apis and below the domain. It imports only
+        # platform, apis and itself.
+        layer-gero:
+          list-mode: lax
+          files:
+            - "**/internal/gero/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal
+              desc: the gero layer may import only internal/platform, internal/apis and internal/gero (docs/design/LAYERS.md)
+            - pkg: github.com/rancher/orbs-automation/cmd
+              desc: the gero layer does not import the command shell (docs/design/LAYERS.md)
+          allow:
+            - github.com/rancher/orbs-automation/internal/platform
+            - github.com/rancher/orbs-automation/internal/apis
+            - github.com/rancher/orbs-automation/internal/gero
         # Domain packages (everything under internal/ that is not platform, apis,
         # cli or ui) never import the command layer or the output seam.
         layer-domain:
