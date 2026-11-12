@@ -366,3 +366,61 @@ func TestTheHoldingsOfAProjectInTheFinalDestination(t *testing.T) {
 	assert.Empty(t, prod.DestinationHoldings("v2.14"), "the destination lists no such line")
 	assert.Empty(t, g.Project("end").DestinationHoldings("v2.15"), "it produces nothing the destination holds")
 }
+
+func releaseTargetGraph(t *testing.T) *chain.Graph {
+	return chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+		project("t", "  repo: {name: acme/t}\n"),
+		stream("a-one", "a", "  lines:\n    - {line: v2.15, series: \"0.9.x\"}\n    - {line: v2.13, series: \"0.7.x\"}\n"),
+		stream("t-one", "t", "  lines:\n    - {line: v2.16, series: \"1.x\"}\n    - {line: v2.15, series: \"0.9.x\"}\n"),
+	)
+}
+
+func TestTheReleaseTargetsOfAProject(t *testing.T) {
+	g := releaseTargetGraph(t)
+
+	t.Run("a branch for each line, and for each stage of a line that has one for each", func(t *testing.T) {
+		assert.Equal(t, []chain.ReleaseTarget{
+			{Line: "v2.16", Branch: "main", IsDefault: true},
+			{Line: "v2.15", Series: "0.9.x", Branch: "release/v2.15"},
+			{Line: "v2.14"},
+			{Line: "v2.13", Series: "0.7.x", Stage: "dev", Branch: "dev-v2.13"},
+			{Line: "v2.13", Series: "0.7.x", Stage: "stable", Branch: "release-v2.13"},
+		}, g.Project("a").ReleaseTargets())
+	})
+	t.Run("a single layout has one branch, with a row for each line its streams list", func(t *testing.T) {
+		assert.Equal(t, []chain.ReleaseTarget{
+			{Line: "v2.16", Series: "1.x", Branch: "main", IsDefault: true},
+			{Line: "v2.15", Series: "0.9.x", Branch: "main", IsDefault: true},
+		}, g.Project("t").ReleaseTargets())
+	})
+	t.Run("a single layout whose streams list no line has the one row", func(t *testing.T) {
+		assert.Equal(t, []chain.ReleaseTarget{{Branch: "main", IsDefault: true}}, g.Project("s").ReleaseTargets())
+	})
+}
+
+func TestTheReleaseTargetsOfALine(t *testing.T) {
+	g := releaseTargetGraph(t)
+	a, s, tagged := g.Project("a"), g.Project("s"), g.Project("t")
+
+	assert.Equal(t, []chain.ReleaseTarget{{Line: "v2.15", Series: "0.9.x", Branch: "release/v2.15"}}, a.ReleaseTargetsOf("v2.15"))
+	assert.Equal(t, a.ReleaseTargetsOf("v2.15"), a.ReleaseTargetsOf("2.15"), "with or without the v")
+	assert.Equal(t, a.ReleaseTargetsOf("v2.15"), a.ReleaseTargetsOf("V2.15"), "in any case")
+	assert.Len(t, a.ReleaseTargetsOf("v2.13"), 2, "a row for each stage")
+	assert.Equal(t, []chain.ReleaseTarget{{Line: "v2.14"}}, a.ReleaseTargetsOf("v2.14"), "a line with no branch yet")
+	assert.Empty(t, a.ReleaseTargetsOf("v2.99"))
+	assert.Equal(t, []chain.ReleaseTarget{{Line: "v2.16", Series: "1.x", Branch: "main", IsDefault: true}}, tagged.ReleaseTargetsOf("v2.16"))
+	assert.Empty(t, s.ReleaseTargetsOf("v2.16"), "the one row of a single layout is of no line")
+}
+
+func TestTheSeriesAProjectsStreamsGiveALine(t *testing.T) {
+	g := releaseTargetGraph(t)
+	a := g.Project("a")
+
+	assert.Equal(t, "0.9.x", a.SeriesOf("v2.15"))
+	assert.Equal(t, "0.9.x", a.SeriesOf("2.15"))
+	assert.Empty(t, a.SeriesOf("v2.16"), "no stream gives it one")
+	assert.Empty(t, g.Project("s").SeriesOf("v2.15"), "a project with no stream")
+}
