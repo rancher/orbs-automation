@@ -397,7 +397,7 @@ func TestAnImageNameIsUniqueWithinAProject(t *testing.T) {
 		doc("Project", "p", "", projectSpec),
 		doc("Project", "q", "", "  repo: {name: acme/b}\n"),
 		doc("Stream", "s1", "{project: p}", streamSpec),
-		doc("Stream", "s2", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec+"  tagPattern: \"w*\"\n"),
 		doc("Stream", "t", "{project: q}", streamSpec),
 		doc("Artifact", "a1", "{stream: s1}", artifactSpec),
 	}
@@ -424,7 +424,7 @@ func TestAModuleNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
 	base := []string{
 		doc("Project", "p", "", projectSpec),
 		doc("Stream", "s1", "{project: p}", streamSpec),
-		doc("Stream", "s2", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec+"  tagPattern: \"w*\"\n"),
 		doc("Artifact", "m1", "{stream: s1}", module),
 	}
 
@@ -685,7 +685,7 @@ func TestAnExplicitHoldingOfAnotherFileIsValid(t *testing.T) {
 
 func TestTwoPinsOfOneModuleInOnePlaceOverlap(t *testing.T) {
 	rep := validateSet(t, pinned(
-		doc("Stream", "wr2", "{project: wr}", streamSpec),
+		doc("Stream", "wr2", "{project: wr}", streamSpec+"  tagPattern: \"w*\"\n"),
 		doc("Artifact", "wr2-mod", "{stream: wr2, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr2\n"),
 		doc("Holding", "bro-holds-wr2", "{project: bro, artifact: wr2-mod}", "  at: {file: go.mod, key: github.com/acme/wr2, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {until: v2.15}}\n"),
 	)...)
@@ -696,7 +696,7 @@ func TestTwoPinsOfOneModuleInOnePlaceOverlap(t *testing.T) {
 
 func TestTwoPinsOfOneModuleForDifferentLinesDoNotOverlap(t *testing.T) {
 	rep := validateSet(t, pinned(
-		doc("Stream", "wr2", "{project: wr}", streamSpec),
+		doc("Stream", "wr2", "{project: wr}", streamSpec+"  tagPattern: \"w*\"\n"),
 		doc("Artifact", "wr2-mod", "{stream: wr2, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr2\n"),
 		doc("Holding", "bro-holds-wr2", "{project: bro, artifact: wr2-mod}", "  at: {file: go.mod, key: github.com/acme/wr2, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {until: v2.14}}\n"),
 	)...)
