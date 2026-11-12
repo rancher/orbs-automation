@@ -213,7 +213,7 @@ func TestStorePutLeavesNoTemporaryFilesBehind(t *testing.T) {
 	require.NoError(t, err)
 
 	var names []string
-	require.NoError(t, filepath.WalkDir(s.Dir, func(p string, d os.DirEntry, err error) error {
+	require.NoError(t, filepath.WalkDir(s.Dir, func(_ string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			names = append(names, d.Name())
 		}
