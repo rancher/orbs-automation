@@ -100,7 +100,7 @@ func resolveRoute(ctx context.Context, ws Reader, route bump.Route) (resolution,
 // prerelease too.
 func acceptsAll(route bump.Route) bool {
 	for _, h := range route.Holdings {
-		if h.Doc.Spec.Holds.Accept != chain.AcceptAll {
+		if !h.AcceptsAll() {
 			return false
 		}
 	}
