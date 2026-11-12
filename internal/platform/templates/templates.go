@@ -247,27 +247,6 @@ func Render(text string, vars map[string]string) (string, error) {
 	return out.String(), nil
 }
 
-// StepCommitVars are the variables of the commit message of a step: the ones that
-// say what the bump is, and which step this is.
-//
-//	command  the step's command, as written
-//	phase    where the step runs, such as "method postEdit"
-var StepCommitVars = []string{
-	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
-	"consumer", "sourceReleaseURL", "command", "phase",
-}
-
-// StrategyCommitVars are the variables of the commit message of a strategy: the
-// ones that say what the bump is, and which strategy this is.
-//
-//	strategy  the strategy's name, such as goBump
-//	edit      the edit that names the strategy
-//	changes   what the strategy changed, one bullet for each
-var StrategyCommitVars = []string{
-	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
-	"consumer", "sourceReleaseURL", "strategy", "edit", "changes",
-}
-
 // CheckReversible returns an error when the text uses a modifier that loses
 // information. A text that is read as well as written, such as the form of a
 // holding, may use only modifiers that can be undone.
