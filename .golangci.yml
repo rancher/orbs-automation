@@ -14,7 +14,16 @@ linters:
     - unparam
     - depguard
     - perfsprint
+    - forbidigo
   settings:
+    # The chain is the only reader of its documents: everything else asks the
+    # model, so a default or a rule about the config is applied in one place
+    # (docs/design/CHAIN_MODEL.md). internal/chain itself is excluded below.
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^chain\.(Project|Stream|Artifact|Holding|Edit)\.Doc$
+          msg: ask the chain type for the answer, or add one to internal/chain, instead of reading its document (docs/design/CHAIN_MODEL.md)
     depguard:
       rules:
         main:
@@ -399,6 +408,10 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      - path: ^internal/chain/
+        linters:
+          - forbidigo
     presets:
       - comments
       - common-false-positives
