@@ -42,7 +42,7 @@ linters:
             - github.com/mallardduck/binup
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
-        # internal/platform/errs for exit-code errors and its own subpackages.
+        # internal/gero/errs for exit-code errors and its own subpackages.
         # See docs/specs/PROJECT_LAYOUT.md sections 2, 3 and 5.
         cmd:
           list-mode: strict
@@ -55,7 +55,7 @@ linters:
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
             - github.com/rancher/orbs-automation/internal/platform/clicfg
-            - github.com/rancher/orbs-automation/internal/platform/errs
+            - github.com/rancher/orbs-automation/internal/gero/errs
             - github.com/rancher/orbs-automation/internal/platform/header
         # cobra stays in cmd/. internal/cli/ and domain packages must not
         # import it, so the CLI framework can be swapped by touching cmd/ only.
