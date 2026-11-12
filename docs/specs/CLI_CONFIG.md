@@ -11,7 +11,7 @@ Two kinds of config exist, and the docs keep them apart.
 * **Application config** describes the world `gero` operates on: projects, Rancher lines and per-repo workflow settings. It is the multi-document YAML in `config/` and a target repo's `gero.yaml` ([APP_CONFIG](APP_CONFIG.md)). Versioned by `apiVersion`.
 * **CLI config** describes how one invocation behaves: where to find the application config, which remote counts as upstream, output format, verbosity. It comes from flags, environment variables and an optional user file. It never holds application facts, and it never holds secrets.
 
-Code mirrors the split: `internal/apis`, `internal/appconfig` and `internal/chain` for application config (the types, the provider and the joined model, behind `internal/workspace`), `internal/platform/clicfg` for CLI config ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
+Code mirrors the split: `internal/apis`, `internal/appconfig` and `internal/chain` for application config (the types, the provider and the joined model, behind `internal/workspace`), `internal/gero/clicfg` for CLI config ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)).
 
 ## Sources and precedence
 
@@ -26,7 +26,7 @@ Highest wins:
  flags  >  GERO_* env  >  user file  >  defaults
                  \           |           /
                   v          v          v
-              internal/platform/clicfg  ->  Settings (resolved, immutable)
+              internal/gero/clicfg  ->  Settings (resolved, immutable)
                                         |
                                   command RunE
 ```
@@ -35,7 +35,7 @@ Highest wins:
 
 ### Flag source
 
-`internal/platform/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)), so `cmd/` hands it a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
+`internal/gero/clicfg` does not import cobra ([PROJECT_LAYOUT](PROJECT_LAYOUT.md)), so `cmd/` hands it a framework-neutral lookup, built once in `PersistentPreRunE` over `cmd.Flags()`, in the same style as `getenv`:
 
 ```go
 type FlagLookup func(key string) (value string, set bool) // set == Flags().Changed

@@ -15,14 +15,14 @@ How Go code is organized in this repo. `gero` is a CLI, not a library, so the de
 
 ```
 main.go                entry point: calls cmd.Execute(), nothing else
-cmd/                   all cobra code: root command, command tree, flags, help text, groups, gating; imports only internal/cli, internal/platform/clicfg and internal/platform/errs
+cmd/                   all cobra code: root command, command tree, flags, help text, groups, gating; imports only internal/cli, internal/gero/clicfg and internal/gero/errs
 cmd/version/           build info (Version, Commit, Date) set by GoReleaser through -ldflags -X; read only by cmd/, passed down as a value
 
 internal/cli/<cmd>/    one subpackage per command: its logic as plain functions, no cobra
 internal/cli/logging/  shared, not a command: builds the *slog.Logger, called once by cmd/   (CLI_OUTPUT)
 internal/cli/termfacts/  shared, not a command: the TTY and width checks of the process, handed to clicfg.Load; the only importer of golang.org/x/term
 internal/cli/identity/, cdpath/, cigate/, buildinfo/  shared, not commands: who commits are attributed to, the logic of gero cd, whether a CI-only command may run, the build's version
-internal/cli/selfupdate/  the flow of gero doctor self-update; the mechanics are internal/platform/selfupdate   (SELF_UPDATE)
+internal/cli/selfupdate/  the flow of gero doctor self-update; the mechanics are internal/gero/selfupdate   (SELF_UPDATE)
 internal/ui/           the output seam: Output, Stream and Align (columns laid out by what a cell shows)   (CLI_OUTPUT)
 internal/ui/style/     the one importer of lipgloss: named styles and the Renderer built from clicfg.Terminal; plain when color is off   (CLI_OUTPUT)
 internal/ui/editor/    the one importer of ergochat/readline: the line reader seam, with a plain bufio implementation, for gero repl   (REPL)
@@ -48,34 +48,38 @@ internal/appconfig/    application config provider of gero/v1alpha2: reads every
 internal/chain/        the resolved model commands read, and the only adapter from an API version to the domain (the `oneversion` lint rule keeps v1alpha2 to appconfig, chain and chainload): projects, streams, artifacts, holdings and edits joined, and the answers across them   (CHAIN_MODEL)
 internal/chainload/    reads a directory into the chain's graph (workspace only)
 
-internal/platform/actor/      who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
-internal/platform/ociregistry/ asks an image registry whether an image exists: the manifest request and the anonymous token, no knowledge of which registries gero uses
-internal/platform/clicfg/     the user file (schema.go, unversioned: not application config) and the CLI config loader -> Settings   (CLI_CONFIG)
+internal/gero/actor/        who commits are attributed to: the engineer's git identity, or the bot's in CI   (EXECUTION_CONTEXT)
+internal/gero/authorship/   the trailer every commit of gero ship ends with, and the rule for whether every commit of a branch is gero's own for an actor, which decides whether the branch may be rebuilt
+internal/gero/texts/        what gero says when a project's config says nothing: the PR title, branch prefix and body and the commit messages, as embedded files, with the variables the commit texts may use; every commit message ends with the authorship trailer
+internal/gero/buildtags/    the build tag names gero repo build-tags prints for a branch, which follow Rancher's branches   (BRANCH_TAGS)
+internal/gero/clicfg/       the user file (schema.go, unversioned: not application config) and the CLI config loader -> Settings   (CLI_CONFIG)
+internal/gero/errs/         error values shared across gero, such as NotImplemented
+internal/gero/ghcli/        finds and runs the gh binary for gero doctor (version only); runs gh through execx
+internal/gero/workdir/      the branch a run edits and commits in: made in the engineer's clone or a temporary worktree of it, committed to, and put back when the work ends or fails; shared by the tasks that make a branch and the ones that commit to it
+internal/gero/assetfetch/   downloads a release asset and verifies it against its checksum and signatures; the only importer of ghreleases
+internal/gero/releasesign/  the Sigstore verifier pinned to this repository's release workflow; the only importer of the Sigstore module
+internal/gero/selfupdate/   replaces the running binary with a verified release; the only importer of binup   (SELF_UPDATE)
+internal/gero/shellenv/     the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
+
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
+internal/platform/templates/  the placeholder syntax of config text: the renderer and validator, and the variables a project's texts, an edit's env and a strategy's texts may use
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
-internal/platform/errs/       error values shared across gero, such as NotImplemented
 internal/platform/semver/     release tag classification, as the check-semver script did, and a Series of versions (9.x, 0.9.x) that holds versions and overlaps another   (CHECK_SEMVER)
-internal/platform/git/        pure logic about git refs, tags and commits (branch tags, commit abbreviation); no go-git, no exec
+internal/platform/git/        pure logic about git refs, tags and commits: the newest releases among tags, the owner/name of a remote URL, the short commit; no go-git, no exec
 internal/platform/git/repo/   local repository access with go-git; the only importer of go-git
 internal/platform/git/gitcli/ the git client for everything that touches a working tree, and the short commit: runs the git binary through execx   (GITHUB_ACCESS)
 internal/platform/github/     gero's access to GitHub: the host and token, the REST client, the rate limit, raw file reads
 internal/platform/github/pulls/  the PR service: find, create, comment on, close and label pull requests, in plain types; where go-github's pull request calls stay
-internal/platform/ghcli/      finds and runs the gh binary for gero doctor (version only); runs gh through execx
-internal/platform/workdir/    the branch a run edits and commits in: made in the engineer's clone or a temporary worktree of it, committed to, and put back when the work ends or fails; shared by the tasks that make a branch and the ones that commit to it
-internal/platform/templates/  the embedded commit, body and title templates and their placeholder renderer
+internal/platform/ociregistry/ asks an image registry whether an image exists: the manifest request and the anonymous token, no knowledge of which registries gero uses
 internal/platform/yamledit/   changes one YAML value in place without reflowing the file
 internal/platform/gomodedit/  reads and replaces the version of a module in a go.mod; the only importer of x/mod/modfile
 internal/platform/regexedit/  reads and replaces the capture group of a pattern in any file
 internal/platform/goproxy/    asks a Go module proxy whether a version of a module exists
-internal/platform/assetfetch/ downloads a release asset and verifies it against its checksum and signatures; the only importer of ghreleases
-internal/platform/releasesign/ the Sigstore verifier pinned to this repository's release workflow; the only importer of the Sigstore module
-internal/platform/selfupdate/ replaces the running binary with a verified release; the only importer of binup   (SELF_UPDATE)
 internal/platform/atomicfile/ writes a file by a temporary file and a rename, shared by shell install and init
-internal/platform/shellenv/   the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
 
 ```
 
-**Decision: cobra lives only in `cmd/`, command logic lives in `internal/cli/`.** `cmd/` (package `cmd`, with `main.go` at the repo root, as `cobra-cli init` generates) is the one place that knows about cobra. It holds the root command, the global flags, the command tree, each command's `Use`, help text, flags and annotations, the help groups, the context gating, and a short `RunE` per command. That `RunE` only translates: it turns args, flags and the environment into plain values, calls a function in `internal/cli/<cmd>/`, writes the result to `cmd.OutOrStdout()` and returns the error. It may import the standard library, cobra, its own subpackages (`cmd/...`), `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs` (exit-code errors, needed to wire `Execute`). It may **not** import any other `internal/` package. Its use of `internal/platform/clicfg` is narrow: it builds a `clicfg.FlagLookup` over the parsed flags, calls `clicfg.Load` once in the root `PersistentPreRunE`, and passes the resulting `Settings` down by value.
+**Decision: cobra lives only in `cmd/`, command logic lives in `internal/cli/`.** `cmd/` (package `cmd`, with `main.go` at the repo root, as `cobra-cli init` generates) is the one place that knows about cobra. It holds the root command, the global flags, the command tree, each command's `Use`, help text, flags and annotations, the help groups, the context gating, and a short `RunE` per command. That `RunE` only translates: it turns args, flags and the environment into plain values, calls a function in `internal/cli/<cmd>/`, writes the result to `cmd.OutOrStdout()` and returns the error. It may import the standard library, cobra, its own subpackages (`cmd/...`), `internal/cli/...`, `internal/gero/clicfg` and `internal/gero/errs` (exit-code errors, needed to wire `Execute`). It may **not** import any other `internal/` package. Its use of `internal/gero/clicfg` is narrow: it builds a `clicfg.FlagLookup` over the parsed flags, calls `clicfg.Load` once in the root `PersistentPreRunE`, and passes the resulting `Settings` down by value.
 
 `internal/cli/<cmd>/` holds everything a command does beyond that translation, as plain exported functions that never import cobra. Inputs are plain values: strings, an options struct for flags, and a `getenv func(string) string` instead of `os.Getenv`. Outputs are returned values (a string, a struct) or an `io.Writer` argument, plus errors, with sentinel errors where a caller needs to tell them apart. Example: `gero semver check` is `checksemver.ResolveTag(args, getenv) (string, error)`, `checksemver.Classify(tag) semver.Info` and `checksemver.Render(info) string`, called from the `RunE` in `cmd/repo.go`. A noun command such as `gero repo` is a parent in `cmd/`; each child (`gero semver check`, `gero repo build-tags`) keeps its own `internal/cli/<child>/` package, named for its logic (`checksemver`, `branchtags`).
 **CI-only commands.** The help group is still a `cobra.Group` ("CI-Only Commands:") following `ob-charts-tool`. Its definition and the `gero/context` annotation constants live in `cmd/groups/`. A CI-only command prefixes its `Use` with the group ID (`gero ci:reconcile`) and sets the annotation and `GroupID` where `cmd/` defines it. The shared gating `PersistentPreRunE` is cobra code too, so it stays in `cmd/`. The command's logic in `internal/cli/` knows nothing about contexts.
@@ -100,7 +104,7 @@ Package names beyond these are decided with the code that needs them. A package 
 **Shape.** Every task has the same three parts, and nothing else is exported that a caller must know about:
 
 * An `Input` of plain values: strings, bools, small structs. No cobra, no `Settings`, no config types the task does not read.
-* An `Output` of plain, serializable values: what the next step needs and what a report shows (the branch name, the commits made, the PR URL). The `Output` of one task is meant to be the `Input` of the next, and is what `--json` prints for a task run on its own. The one exception is a branch being worked on: `createbranch` returns a `*workdir.Work` from `internal/platform/workdir`, and `bumpcommit` takes it back in its `Input`, with the caller ending the work. It is a handle, shared and not serialized, so that pair is chained in Go only.
+* An `Output` of plain, serializable values: what the next step needs and what a report shows (the branch name, the commits made, the PR URL). The `Output` of one task is meant to be the `Input` of the next, and is what `--json` prints for a task run on its own. The one exception is a branch being worked on: `createbranch` returns a `*workdir.Work` from `internal/gero/workdir`, and `bumpcommit` takes it back in its `Input`, with the caller ending the work. It is a handle, shared and not serialized, so that pair is chained in Go only.
 * A `Run(ctx, deps, in) (Output, error)` with `deps` a small interface the task defines for what it calls, so a task is tested with a hand-written fake of that interface and nothing wider ([TESTING](TESTING.md)). A task reports progress through an optional event sink and never prints.
 
 **Who composes.** A task never calls another task. `internal/cli/<cmd>/` does, in two shapes. A *gadget* command (`gero repo branch`, `gero repo tag`; [TASK_COMMANDS](TASK_COMMANDS.md)) builds the deps, calls one task and renders its `Output`. A *conveyor* command (`gero ship`) calls several in order, passing each `Output` to the next `Input`, and owns what the tasks must not: the loops over targets, the decision whether to run a step, the one confirmation question and the final report. A conveyor's logic that is worth a test stays in its own domain package (`internal/ship`); the tasks are what it calls.
@@ -111,13 +115,13 @@ Package names beyond these are decided with the code that needs them. A package 
 
 ## 3. Dependency direction
 
-`internal/` has horizontal layers, and imports point down and never up: `cmd`, then `internal/cli` and `internal/ui`, then the domain packages, then `internal/apis`, then `internal/platform`. What each layer holds and may import is in [LAYERS](../design/LAYERS.md). The rules between them:
+`internal/` has horizontal layers, and imports point down and never up: `cmd`, then `internal/cli` and `internal/ui`, then the domain packages, then `internal/gero`, then `internal/apis`, then `internal/platform`. What each layer holds and may import is in [LAYERS](../design/LAYERS.md). The rules between them:
 
-* `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
+* `cmd/` imports only the standard library, cobra, `cmd/...`, `internal/cli/...`, `internal/gero/clicfg` and `internal/gero/errs`. `main.go` imports only `cmd`. Nothing imports `cmd/`.
 * `internal/cli/<cmd>/` is the only layer that calls into domain packages on behalf of a command. It never imports cobra. It may import any lower package, but not another command package, with two exceptions: shared packages that are not commands (`identity`, `cdpath`, `termfacts`, `cigate`, `logging`, `buildinfo`), and `doctor`, which reuses `authstatus` and `configresolve` for its checks. Other shared command code goes in a third, smaller package.
 * `internal/task/<name>/` imports the standard library and lower packages, never `internal/cli/...`, cobra, `internal/ui` or another task. Tasks are composed only by `internal/cli/<cmd>/` and by a conveyor's domain package such as `internal/ship`, which is by review.
 * Domain packages never import `internal/cli/...`, `internal/ui` or cobra. Cobra is confined to `cmd/`, so neither the command logic nor a domain package knows anything about the CLI framework.
-* `internal/platform/clicfg` and the config packages (`internal/chain` and the ones that build it) do not import each other. `Settings` is passed down by the command, never read from a global.
+* `internal/gero/clicfg` and the config packages (`internal/chain` and the ones that build it) do not import each other. `Settings` is passed down by the command, never read from a global.
 * `internal/workspace` is where the two meet. It imports `clicfg`, `chain`, `chainload`, `bump` and `internal/platform/git/repo`, and nothing under `cmd/` or `internal/cli/`. Command packages reach central config and repo resolution only through it, by calling `workspace.Open(settings, cwd)` with plain values. `cmd/` does not import it, so `cmd/` stays pure translation.
 * Domain packages take their dependencies as arguments (a `*slog.Logger`, a GitHub client interface, a `Settings` value). No package-level logger, client or config singleton.
 * Interfaces are defined where they are consumed, so a domain package can be tested without the real GitHub client.
@@ -140,18 +144,18 @@ Package names beyond these are decided with the code that needs them. A package 
 * The `internal/` rule is compiler-enforced.
 * Imports of third-party modules are checked by the depguard allow-list ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)).
 * **The boundaries below are lint-enforced** by depguard rules in [`.golangci.yml`](../../.golangci.yml), each with a comment saying why. The config is the source of truth for the exact lists; this is the intent. Each rule is written as a deny with an allow carve-out, so a new package never needs a rule edit and a stale path cannot quietly stop denying.
-  * **The layers:** platform imports only platform; apis imports only platform and apis; domain packages do not import `internal/cli` or `internal/ui`; a command does not import another command except the shared helpers (and `doctor` its two named ones).
-  * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/platform/clicfg` and `internal/platform/errs`. `main.go` imports only `cmd`.
+  * **The layers:** platform imports only platform; apis imports only platform and apis; gero imports only platform, apis and gero; domain packages do not import `internal/cli` or `internal/ui`; a command does not import another command except the shared helpers (and `doctor` its two named ones).
+  * `cmd/` imports only the standard library, cobra, its own subpackages, `internal/cli/...`, `internal/gero/clicfg` and `internal/gero/errs`. `main.go` imports only `cmd`.
   * cobra is importable only from `cmd/` and `main.go`.
-  * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/config`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`, `ghreleases` only in `internal/platform/assetfetch`, binup only in `internal/platform/selfupdate`, the Sigstore verifier only in `internal/platform/releasesign`, `x/mod/modfile` only in `internal/platform/gomodedit`.
+  * Each outside dependency has one door: go-git only in `internal/platform/git/repo`, `os/exec` only in `internal/platform/execx`, the YAML library only in `internal/platform/config`, `internal/apis` and `internal/platform/yamledit`, the HTML parser only in `internal/lifecycle`, lipgloss only in `internal/ui/style`, the line editor only in `internal/ui/editor`, `golang.org/x/term` only in `internal/cli/termfacts`, go-gh only in `internal/platform/github/gogh.go`, go-github only in `internal/platform/github`, `ghreleases` only in `internal/gero/assetfetch`, binup only in `internal/gero/selfupdate`, the Sigstore verifier only in `internal/gero/releasesign`, `x/mod/modfile` only in `internal/platform/gomodedit`.
   * `internal/cli/...` reaches the repository on disk only through `internal/workspace`, never `internal/platform/git/repo` directly. Its pure logic may still take `internal/platform/git` and domain types.
   * `internal/task/**` imports neither `internal/cli`, `internal/ui` nor another task.
 * **Central config has one door.** `internal/chainload` and `internal/appconfig` are importable only from `internal/workspace` (lint-enforced; `internal/chain` also imports the provider's type). A command package cannot load config, apply defaults or skip validation: it gets a `*chain.Graph` or a `*chain.Project` from `Workspace`, already defaulted and validated, and imports `internal/chain` for the types and their answers.
 * **By review:** that tasks are composed only by commands and a conveyor's domain package, and that a package is named for what it provides.
 
-## Why `clicfg` is under `internal/platform/` and not `internal/cli/`
+## Why `clicfg` is under `internal/gero/` and not `internal/cli/`
 
-`internal/platform/clicfg` is a cobra-free leaf that other packages use, while `internal/cli/` is one package per command. How flags reach it is in [CLI_CONFIG](CLI_CONFIG.md).
+`internal/gero/clicfg` is a cobra-free leaf that other packages use, while `internal/cli/` is one package per command. How flags reach it is in [CLI_CONFIG](CLI_CONFIG.md).
 
 ## Not built yet
 

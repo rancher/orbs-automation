@@ -31,7 +31,7 @@ One object cannot check references to others. A version package adds a set check
 
 | Provider | Does | Keeps |
 |---|---|---|
-| `platform/clicfg` | the CLI settings from flags, environment, the user file and defaults | precedence and where each value came from, which a single decode cannot know |
+| `gero/clicfg` | the CLI settings from flags, environment, the user file and defaults | precedence and where each value came from, which a single decode cannot know |
 | `appconfig` | finds the files of a config directory, decodes each document by apiVersion and kind, applies defaults, validates each object and the set | one door: `workspace` is the only importer |
 | `workspace` | the one door from settings to the world | the order: CLI settings first, then application config |
 

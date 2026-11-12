@@ -38,7 +38,7 @@ Both sit behind our own interfaces, so a go-git implementation of the `gitcli` o
 
 ## `gh` via subprocess
 
-Only for interactive or human-facing steps (for example `gh auth login` and browser handoffs) and pure passthrough. It is not used for logic that must be tested or that runs in CI. `gero doctor` runs `gh --version` through `internal/platform/ghcli` so its report says which `gh` token resolution would use. Tokens are never read this way: go-gh runs `gh auth token` itself.
+Only for interactive or human-facing steps (for example `gh auth login` and browser handoffs) and pure passthrough. It is not used for logic that must be tested or that runs in CI. `gero doctor` runs `gh --version` through `internal/gero/ghcli` so its report says which `gh` token resolution would use. Tokens are never read this way: go-gh runs `gh auth token` itself.
 
 All subprocesses go through `internal/platform/execx`, the one place `gero` starts another program. Its contract is in the package doc.
 
