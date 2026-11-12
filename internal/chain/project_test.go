@@ -248,3 +248,45 @@ func TestAStepIsFromTheProducerWhenItSaysSo(t *testing.T) {
 	assert.False(t, chain.Step{Run: []string{"x"}, From: "consumer"}.FromProducer())
 	assert.False(t, chain.Step{Run: []string{"x"}}.FromProducer(), "no from is the consumer")
 }
+
+func TestAProjectResolvesWhatIsTypedAsALineOrABranch(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+		stream("s-one", "s", "  lines:\n    - {line: v2.15, series: \"0.9.x\"}\n"),
+	)
+	a, s := g.Project("a"), g.Project("s")
+
+	tests := []struct {
+		name         string
+		p            *chain.Project
+		arg          string
+		branch, line string
+		errContains  string
+	}{
+		{"a line with a branch of its own", a, "v2.15", "release/v2.15", "v2.15", ""},
+		{"a line written without its v", a, "2.15", "release/v2.15", "2.15", ""},
+		{"a line in development, on the default branch", a, "v2.16", "main", "v2.16", ""},
+		{"a release branch is the branch of its line", a, "release/v2.15", "release/v2.15", "v2.15", ""},
+		{"the default branch is the branch of the line on it", a, "main", "main", "v2.16", ""},
+		{"a line with no branch yet", a, "v2.14", "", "", "has no release line or branch \"v2.14\": it has v2.16, v2.15, v2.14, v2.13"},
+		{"a line the project does not list", a, "v2.99", "", "", "acme/a has no release line or branch \"v2.99\""},
+		{"a line of the stream's, on the one branch of a single layout", s, "v2.15", "main", "v2.15", ""},
+		{"the one branch of a single layout is in no line", s, "main", "main", "", ""},
+		{"a line a single layout knows nothing of", s, "v2.99", "", "", "acme/s has no release line or branch \"v2.99\": it has main"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			branch, line, err := tt.p.ResolveLineOrBranch(tt.arg)
+
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.branch, branch)
+			assert.Equal(t, tt.line, line)
+		})
+	}
+}
