@@ -36,9 +36,12 @@ type Resolver struct {
 	Releases Releases
 	Store    Store
 	Now      func() time.Time // nil for time.Now
-	// Embedded is the bundle compiled into the binary, in the format bundle.Parse
-	// reads. Nil is the real one, compiled from the embedded config by embedded.Bytes.
-	Embedded []byte
+	// Embedded is the config compiled into the binary, as files, which the bundle of
+	// the binary is made from. Nil is the real one, embedded.FS.
+	Embedded fs.FS
+	// EmbeddedHeader is the header that bundle is made with. The zero value is the
+	// real one, embedded.Header.
+	EmbeddedHeader bundle.Header
 }
 
 // Request says who is asking.
@@ -168,20 +171,25 @@ func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	return l, err
 }
 
-// embedded is the bundle compiled into the binary, for the gero of release own.
+// embedded is the bundle of the config compiled into the binary, for the gero of
+// release own.
 func (r *Resolver) embedded(own string) (Loaded, error) {
-	data := r.Embedded
-	if data == nil {
-		var err error
-		if data, err = embedded.Bytes(); err != nil {
-			return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
-		}
+	fsys, hdr := r.Embedded, r.EmbeddedHeader
+	if fsys == nil {
+		fsys = embedded.FS()
 	}
-	h, fsys, err := bundle.Parse(data)
+	if hdr.GeroVersion == "" {
+		hdr = embedded.Header
+	}
+	data, err := bundle.Compile(fsys, hdr)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
 	}
-	return Loaded{Header: h, FS: fsys, Source: Source{Embedded: true, Tag: own}}, nil
+	h, bundleFS, err := bundle.Parse(data)
+	if err != nil {
+		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+	}
+	return Loaded{Header: h, FS: bundleFS, Source: Source{Embedded: true, Tag: own}}, nil
 }
 
 // newerThan is whether the release tag is newer than the gero's own. A gero with no

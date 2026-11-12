@@ -7,7 +7,6 @@ package embedded
 
 import (
 	"io/fs"
-	"sync"
 	"time"
 
 	"github.com/rancher/orbs-automation/config"
@@ -24,15 +23,3 @@ func FS() fs.FS { return config.Files }
 
 // Compile is the bundle of the embedded config, in the format bundle.Parse reads.
 func Compile() ([]byte, error) { return bundle.Compile(config.Files, Header) }
-
-var (
-	once    sync.Once
-	bundled []byte
-	err     error
-)
-
-// Bytes is the embedded bundle, compiled the first time it is asked for.
-func Bytes() ([]byte, error) {
-	once.Do(func() { bundled, err = Compile() })
-	return bundled, err
-}

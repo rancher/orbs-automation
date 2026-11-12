@@ -35,10 +35,11 @@ func newRig(t *testing.T) *rig {
 	t.Helper()
 	g := &rig{t: t, hub: fakehub.New(t), store: Store{Dir: t.TempDir()}, now: t0}
 	g.r = &Resolver{
-		Releases: assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL()}),
-		Store:    g.store,
-		Now:      func() time.Time { return g.now },
-		Embedded: bundletest.Compile(t, "embedded", bundletest.Config("embedded")),
+		Releases:       assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL()}),
+		Store:          g.store,
+		Now:            func() time.Time { return g.now },
+		Embedded:       bundletest.Config("embedded"),
+		EmbeddedHeader: bundle.Header{GeroVersion: "embedded", SourceCommit: bundletest.Commit, CompiledAt: bundletest.CompiledAt},
 	}
 	return g
 }

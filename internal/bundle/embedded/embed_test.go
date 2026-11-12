@@ -33,14 +33,11 @@ func TestTheEmbeddedConfigCompilesToABundleThatParses(t *testing.T) {
 	assert.NotNil(t, fsys)
 }
 
-func TestTheEmbeddedBundleIsCompiledOnceAndTheSameEveryTime(t *testing.T) {
-	first, err := Bytes()
-	require.NoError(t, err)
-	second, err := Bytes()
+func TestTheEmbeddedConfigCompilesTheSameEveryTime(t *testing.T) {
+	first, err := Compile()
 	require.NoError(t, err)
 	again, err := Compile()
 	require.NoError(t, err)
 
-	assert.Equal(t, string(first), string(second))
-	assert.Equal(t, string(first), string(again), "compiling is repeatable")
+	assert.Equal(t, string(first), string(again))
 }

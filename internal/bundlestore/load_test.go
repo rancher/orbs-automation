@@ -3,12 +3,12 @@ package bundlestore
 import (
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
 )
 
@@ -19,7 +19,7 @@ func loadRig(t *testing.T) *rig {
 	t.Helper()
 	g := newRig(t)
 	g.r.Releases = nil
-	g.r.Embedded = bundletest.Compile(t, "embedded", bundletest.Config("embedded"))
+	g.r.Embedded = bundletest.Config("embedded")
 	return g
 }
 
@@ -145,13 +145,15 @@ func TestLoadACacheThisGeroCannotReadIsPassedOverAndTheNoteSaysSo(t *testing.T) 
 	assert.Contains(t, got.Source.Note, "embedded")
 }
 
-func TestLoadWithABrokenEmbeddedBundleIsAnError(t *testing.T) {
+func TestLoadWithABrokenEmbeddedConfigIsAnError(t *testing.T) {
 	g := loadRig(t)
-	g.r.Embedded = []byte("not a bundle\n")
+	g.r.Embedded = fstest.MapFS{"broken.yaml": {Data: []byte("a: [\n")}}
 
 	_, err := g.loadOffline("0.5.0", "")
 
-	assert.ErrorIs(t, err, bundle.ErrMalformed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "the embedded bundle")
+	assert.Contains(t, err.Error(), "does not validate")
 }
 
 func TestLoadWithNoEmbeddedBundleGivenIsTheOneCompiledIntoTheBinary(t *testing.T) {
