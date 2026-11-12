@@ -89,10 +89,10 @@ type Place struct {
 // file and key with the line, the holding's stage and the branch. A location
 // limited to other lines is left out, so a holding can have none for a line.
 func PlacesOf(h *chain.Holding, line, branch string) ([]Place, error) {
-	vars := map[string]string{"line": line, "stage": h.Doc.Spec.Holds.Stage, "branch": branch}
+	vars := map[string]string{"line": line, "stage": h.Stage(), "branch": branch}
 	var places []Place
-	for _, at := range h.Doc.Spec.At {
-		if !at.Lines.Contains(line) {
+	for _, at := range h.Locations() {
+		if !at.AppliesTo(line) {
 			continue
 		}
 		file, err := templates.Render(at.File, vars)
@@ -111,7 +111,7 @@ func PlacesOf(h *chain.Holding, line, branch string) ([]Place, error) {
 // FormOf renders how a holding writes the release: its form, with the release's
 // variables.
 func FormOf(h *chain.Holding, rel Release) (string, error) {
-	form := h.Doc.Spec.Holds.Form
+	form := h.Form()
 	value, err := templates.Render(form, map[string]string{
 		"image": rel.Image, "tag": rel.Tag, "prefix": rel.Prefix, "bareTag": rel.BareTag, "version": rel.Version, "url": rel.URL, "file": rel.File,
 		"sourceRepo": rel.SourceRepo, "commit": rel.Commit, "base": "", "upstream": "",

@@ -79,7 +79,7 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 		if h.Kind() != chain.HoldsRelease {
 			continue
 		}
-		for _, at := range h.Doc.Spec.At {
+		for _, at := range h.Locations() {
 			if _, built := formats[at.Format]; !built {
 				errs = append(errs, fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), at.Format))
 				e.unusable[h] = true
@@ -406,10 +406,10 @@ func (r Route) TargetsFor(line string) ([]Target, error) {
 	}
 	noLine := false
 	for _, h := range r.Holdings {
-		stage := h.Doc.Spec.Holds.Stage
+		stage := h.Stage()
 		if h.Artifact().Stream().Universal() {
 			for _, branch := range r.Consumer.BranchesOfStage(stage) {
-				if l := r.Consumer.LineOfBranch(branch); l == "" || h.Doc.Spec.Holds.Lines.Contains(l) {
+				if l := r.Consumer.LineOfBranch(branch); l == "" || h.HoldsLine(l) {
 					add(branch, h)
 				}
 			}
@@ -708,7 +708,7 @@ func (r Route) targetsOnLine(line string, holdings []*chain.Holding) []Target {
 		if !h.AppliesTo(line) {
 			continue
 		}
-		branch, ok := r.Consumer.BranchOfLine(line, h.Doc.Spec.Holds.Stage)
+		branch, ok := r.Consumer.BranchOfLine(line, h.Stage())
 		if !ok {
 			continue
 		}
