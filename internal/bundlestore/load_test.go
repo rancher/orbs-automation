@@ -12,13 +12,11 @@ import (
 	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
 )
 
-// loadRig is a workstation that has only the bundle compiled into the binary, one
-// project named "embedded", and an empty cache. It has no host at all: a Load that
-// reaches for the network panics on the nil Releases.
+// loadRig is a workstation that has only the config in the binary, one project named
+// "embedded", and an empty cache. Load never reaches for the network.
 func loadRig(t *testing.T) *rig {
 	t.Helper()
 	g := newRig(t)
-	g.r.Releases = nil
 	g.r.Embedded = bundletest.Config("embedded")
 	return g
 }
@@ -170,4 +168,16 @@ func TestLoadWithNoEmbeddedBundleGivenIsTheOneCompiledIntoTheBinary(t *testing.T
 func TestSourceDescribesTheEmbeddedBundle(t *testing.T) {
 	assert.Equal(t, "embedded bundle v0.5.0", Source{Embedded: true, Tag: "v0.5.0"}.Describe())
 	assert.Equal(t, "embedded bundle (a build that is not a release)", Source{Embedded: true}.Describe())
+}
+
+func TestSourceDescribesTheReleaseAndHowOldTheCopyIs(t *testing.T) {
+	assert.Equal(t, "bundle v0.5.0, 3 hours old", Source{Tag: "v0.5.0", Age: 3 * time.Hour}.Describe())
+	assert.Equal(t, "bundle v0.5.0, 3 days old", Source{Tag: "v0.5.0", Age: 72 * time.Hour}.Describe())
+	assert.Equal(t, "bundle v0.6.0, under a minute old", Source{Tag: "v0.6.0"}.Describe())
+}
+
+func TestASourceFromAFileDescribesTheFileAndTheRelease(t *testing.T) {
+	s := Source{File: "/tmp/gero-config-bundle.yaml", Tag: "v0.3.0"}
+
+	assert.Equal(t, "bundle file /tmp/gero-config-bundle.yaml (v0.3.0)", s.Describe())
 }
