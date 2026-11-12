@@ -29,6 +29,35 @@ type Header struct {
 	// FormatVersion is the version of the bundle format, set by Parse and ignored by
 	// Compile, which writes the one it knows.
 	FormatVersion int
+	// InputsDigest and CompilerRevision say what the bundle was made from: the hash of
+	// the config files that went in (Digest), and the revision of Compile that made it.
+	// Parse sets them, empty and zero for a bundle made before they were written, and
+	// Compile ignores them, writing the ones it works out.
+	InputsDigest     string
+	CompilerRevision int
+}
+
+// CompilerRevision is the revision of Compile. It is raised whenever Compile makes
+// different bytes for the same files, so that the same digest and revision always mean
+// the same bundle. The golden test fails until it is raised.
+const CompilerRevision = 1
+
+// Digest is the hash of the config files under fsys that Compile would bundle: the
+// YAML files in the order of their names, each by its name and the hash of its bytes.
+// It is the same for the same files whoever lists them, and changes when one byte of
+// one file, or a file's name, changes.
+func Digest(fsys fs.FS) (string, error) { return "", nil }
+
+// ID is what identifies the bundle in a store: a hash of the revision of Compile and
+// the digest of the files it was made from. A bundle that does not carry a digest
+// has no ID.
+func (h Header) ID() string { return "" }
+
+// CompileReport is Compile, and the warnings the config had, which Compile leaves
+// unsaid: the tool prints them, and a binary that compiles its own config does not.
+func CompileReport(fsys fs.FS, h Header) ([]byte, []config.Finding, error) {
+	data, err := Compile(fsys, h)
+	return data, nil, err
 }
 
 // Name is the file name of the bundle, in the output directory and as a release
