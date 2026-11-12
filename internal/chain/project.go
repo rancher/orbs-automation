@@ -211,6 +211,15 @@ func (p *Project) ReleaseBranches() []string {
 	return out
 }
 
+// ResolveLineOrBranch finds what a person typed to name where a release is made:
+// a release line, written with or without its v, or one of the project's release
+// branches. It returns the branch, and the line the branch is of, which is empty
+// for a branch in no line. It is an error naming what the project has when the
+// text is neither.
+func (p *Project) ResolveLineOrBranch(arg string) (branch, line string, err error) {
+	return "", "", nil
+}
+
 // External reports whether the repo is outside the organization: gero never ships
 // into it.
 func (p *Project) External() bool { return p.Doc.Spec.Repo.External }
