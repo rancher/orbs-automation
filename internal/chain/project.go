@@ -25,6 +25,24 @@ type Project struct {
 // Name is the name of the document.
 func (p *Project) Name() string { return p.Doc.Name }
 
+// Named reports whether a person's name for the project is this one: its config
+// name, its owner/name slug or one of its aliases, whatever the case. It is what
+// Graph.Project finds a project by.
+func (p *Project) Named(key string) bool { return false }
+
+// ListsLine reports whether the project lists the line itself for its branches,
+// written with or without its v, in any case. A single layout lists none: it keeps
+// every line on one branch, and ListsLine is not what says it serves one.
+func (p *Project) ListsLine(line string) bool { return false }
+
+// StreamListsLine reports whether a stream of the project lists the line itself,
+// which a universal stream does not: its releases belong to no line.
+func (p *Project) StreamListsLine(line string) bool { return false }
+
+// DestinationHoldings returns the holdings of a release of the project in the final
+// destination that are for the line.
+func (p *Project) DestinationHoldings(line string) []*Holding { return nil }
+
 // Slug is the repo's owner/name.
 func (p *Project) Slug() string { return p.Doc.Spec.Repo.Name }
 
