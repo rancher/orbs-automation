@@ -184,3 +184,35 @@ func TestTheRealConfigCompiles(t *testing.T) {
 	assert.Contains(t, out, "# source: rancher.yaml\n")
 	assert.NotContains(t, out, "# source: README.md")
 }
+
+func TestCompileDoesNotDependOnTheOrderFilesAreListed(t *testing.T) {
+	forward := fstest.MapFS{}
+	forward["a.yaml"] = &fstest.MapFile{Data: []byte(project("alpha"))}
+	forward["b.yaml"] = &fstest.MapFile{Data: []byte(project("bravo"))}
+	forward["c.yaml"] = &fstest.MapFile{Data: []byte(project("charlie"))}
+	backward := fstest.MapFS{}
+	backward["c.yaml"] = forward["c.yaml"]
+	backward["b.yaml"] = forward["b.yaml"]
+	backward["a.yaml"] = forward["a.yaml"]
+
+	a, err := Compile(forward, header)
+	require.NoError(t, err)
+	b, err := Compile(backward, header)
+	require.NoError(t, err)
+
+	assert.Equal(t, string(a), string(b))
+}
+
+func TestTheBodyDoesNotDependOnTheHeader(t *testing.T) {
+	other := Header{GeroVersion: "v9.9.9", SourceCommit: "fedcba", CompiledAt: time.Date(2030, 6, 7, 8, 9, 10, 0, time.UTC)}
+
+	a, err := Compile(fixture(), header)
+	require.NoError(t, err)
+	b, err := Compile(fixture(), other)
+	require.NoError(t, err)
+
+	_, bodyA, _ := strings.Cut(string(a), "\n---\n")
+	_, bodyB, _ := strings.Cut(string(b), "\n---\n")
+	assert.NotEmpty(t, bodyA)
+	assert.Equal(t, bodyA, bodyB, "the version, commit and date are in the header only")
+}
