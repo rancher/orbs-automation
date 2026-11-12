@@ -36,8 +36,9 @@ type fakeGit struct {
 	startErr   error
 	worktreeEr error
 
-	changes []string
-	reads   []string
+	changes   []string
+	reads     []string
+	committed []workdir.GitCommit
 }
 
 func (f *fakeGit) State(context.Context, string) (workdir.GitState, error) {
@@ -83,11 +84,14 @@ func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]git.B
 
 func (f *fakeGit) Config(context.Context, string, string) (string, error) { return f.email, nil }
 
-func (f *fakeGit) Commit(context.Context, string, workdir.GitCommit) (string, error) { return "", nil }
-func (f *fakeGit) CommitFiles(context.Context, string, string) ([]string, error)     { return nil, nil }
-func (f *fakeGit) Checkout(context.Context, string, string) error                    { return nil }
-func (f *fakeGit) RemoveWorktree(context.Context, string, string) error              { return nil }
-func (f *fakeGit) Discard(context.Context, string, []string) error                   { return nil }
+func (f *fakeGit) Commit(_ context.Context, _ string, c workdir.GitCommit) (string, error) {
+	f.committed = append(f.committed, c)
+	return "", nil
+}
+func (f *fakeGit) CommitFiles(context.Context, string, string) ([]string, error) { return nil, nil }
+func (f *fakeGit) Checkout(context.Context, string, string) error                { return nil }
+func (f *fakeGit) RemoveWorktree(context.Context, string, string) error          { return nil }
+func (f *fakeGit) Discard(context.Context, string, []string) error               { return nil }
 
 // clean is a clone on main with nothing in the way, and the target where the
 // caller read it.
@@ -115,6 +119,34 @@ func TestRunACleanCloneIsWorkedInPlaceFromTheBase(t *testing.T) {
 	assert.Empty(t, out.Work.Reason)
 	assert.Equal(t, []string{"start /src/rancher " + branch + " " + base}, g.changes)
 	assert.Contains(t, g.reads, "fetch /src/rancher upstream release/v2.15")
+}
+
+func TestRunInPlaceLeavesOutTheUntrackedFilesTheEngineerAlreadyHad(t *testing.T) {
+	g := clean()
+	g.state.Untracked = []string{"notes.txt"}
+	out, err := Run(bg, g, input())
+	require.NoError(t, err)
+
+	_, err = out.Work.Commit(bg, workdir.GitCommit{Message: "m"})
+
+	require.NoError(t, err)
+	require.Len(t, g.committed, 1)
+	assert.Empty(t, g.committed[0].Stage)
+}
+
+func TestRunInPlaceWithStageUntrackedCommitsTheUntrackedFilesThatWereThereBefore(t *testing.T) {
+	g := clean()
+	g.state.Untracked = []string{"notes.txt"}
+	in := input()
+	in.StageUntracked = true
+	out, err := Run(bg, g, in)
+	require.NoError(t, err)
+
+	_, err = out.Work.Commit(bg, workdir.GitCommit{Message: "m"})
+
+	require.NoError(t, err)
+	require.Len(t, g.committed, 1)
+	assert.Equal(t, []string{"notes.txt"}, g.committed[0].Stage)
 }
 
 func TestRunADirtyCloneGetsAWorktreeNamedForTheBranch(t *testing.T) {
