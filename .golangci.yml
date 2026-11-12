@@ -83,11 +83,11 @@ linters:
         noselfupdate:
           list-mode: lax
           files:
-            - "!**/internal/platform/selfupdate/**"
+            - "!**/internal/gero/selfupdate/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/binup
-              desc: binup is only allowed in internal/platform/selfupdate (docs/specs/DEPENDENCY_POLICY.md)
+              desc: binup is only allowed in internal/gero/selfupdate (docs/specs/DEPENDENCY_POLICY.md)
         nosigstore:
           list-mode: lax
           files:

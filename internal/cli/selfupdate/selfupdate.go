@@ -12,9 +12,9 @@ import (
 	"io"
 	"strings"
 
+	platform "github.com/rancher/orbs-automation/internal/gero/selfupdate"
 	"github.com/rancher/orbs-automation/internal/platform/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/github"
-	platform "github.com/rancher/orbs-automation/internal/platform/selfupdate"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
