@@ -253,22 +253,23 @@ func TestApplyHoldingChangesOnlyTheValue(t *testing.T) {
 	assert.Empty(t, again.Changes)
 }
 
-// withoutFormat takes a format out of the registry for one test, to reach what the
-// engine does with a holding in a format that is not built: every format the schema
-// lists is built, so none is left to name in a config.
-func withoutFormat(t *testing.T, name string) {
+// withoutDockerfile takes the dockerfile format out of the registry for one test, to
+// reach what the engine does with a holding in a format that is not built: every
+// format the schema lists is built, so none is left to name in a config, and this is
+// the one the tests take out.
+func withoutDockerfile(t *testing.T) {
 	t.Helper()
-	f, had := formats[name]
-	delete(formats, name)
+	f, had := formats["dockerfile"]
+	delete(formats, "dockerfile")
 	t.Cleanup(func() {
 		if had {
-			formats[name] = f
+			formats["dockerfile"] = f
 		}
 	})
 }
 
 func TestApplyHoldingOfAFormatThatIsNotBuilt(t *testing.T) {
-	withoutFormat(t, "dockerfile")
+	withoutDockerfile(t)
 	h := holdings(t, "img\n  at: {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release}\n")[0]
 	rel, _ := ReleaseOf(h, "v0.5.3", "c")
 	tree := files{"Dockerfile": "ARG IMAGE=x\n"}
@@ -440,7 +441,7 @@ func TestAHoldingWithNoLocationForTheLineIsAnErrorNotANoOp(t *testing.T) {
 }
 
 func TestAHoldingWithALocationInAFormatNotBuiltWritesNothing(t *testing.T) {
-	withoutFormat(t, "dockerfile")
+	withoutDockerfile(t)
 	h := holdings(t, "img\n  at:\n    - {file: build.yaml, key: defaultImage}\n    - {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n")[0]
 	rel, _ := ReleaseOf(h, "v0.5.3", "c")
 	tree := files{"build.yaml": buildYAML, "Dockerfile": "ARG IMAGE=x\n"}

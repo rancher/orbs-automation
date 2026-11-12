@@ -138,7 +138,7 @@ func TestARouteHasTheStreamOfItsHoldings(t *testing.T) {
 }
 
 func TestAHoldingThatCannotBeUsedLeavesOutTheRouteOfItsStreamOnly(t *testing.T) {
-	withoutFormat(t, "dockerfile")
+	withoutDockerfile(t)
 	docs := twoStreams()
 	docs[6] = d("Holding", "cons-lib-2", "{project: cons, artifact: lib-2-module}", "  at: {file: Dockerfile, key: LIB, format: dockerfile}\n  holds: {kind: release, lines: {until: v2.15}}\n")
 
@@ -202,7 +202,7 @@ func TestNewEngineReportsEachMistakeOfAnEditNamingIt(t *testing.T) {
 }
 
 func TestNewEngineReportsAReleaseHoldingInAFormatThatIsNotBuilt(t *testing.T) {
-	withoutFormat(t, "dockerfile")
+	withoutDockerfile(t)
 	e, g, err := buildEngine(t, d("Holding", "dockerfile", "{project: other, artifact: prod-image}", "  at: {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release}\n"))
 
 	require.Error(t, err)
@@ -240,7 +240,7 @@ func TestNewEngineAcceptsAHoldingWithSeveralLocationsInABuiltFormat(t *testing.T
 }
 
 func TestNewEngineReportsALocationInAFormatNotBuiltAmongSeveral(t *testing.T) {
-	withoutFormat(t, "dockerfile")
+	withoutDockerfile(t)
 	e, g, err := buildEngine(t, d("Holding", "two", "{project: other, artifact: prod-chart}", "  at:\n    - {file: a.yaml, key: .url}\n    - {file: Dockerfile, key: U, format: dockerfile}\n  holds: {kind: release, form: \"{url}\"}\n"))
 
 	require.ErrorIs(t, err, ErrFormatNotBuilt)
