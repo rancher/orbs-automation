@@ -89,11 +89,10 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 ## Not built yet
 
-* The workstation-signs detection (`clicfg.WorkstationSigns`) exists, and no command calls it yet. `gero ci:ship` calls the cross-repo token check (`cigate.RequireCrossRepoToken`).
+* No command calls the workstation-signs detection, `clicfg.WorkstationSigns`.
 * The `auth status` fallback treats a 403 from `GET /user` as an installation token, which is unverified against a real one.
 * The preflight line that names workstation signs under a forced CI context.
 * `gero repo branch` and `gero repo tag` follow the one-confirmation and `--dry-run` rules but do not print the preflight line, which only `gero ship` prints.
-* The push with the token has not been run against GitHub: it is tested for the header git would send and for what is left in the clone, not on the wire.
 
 ## Open questions
 

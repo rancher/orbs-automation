@@ -1,6 +1,6 @@
 # CI_SHIP
 
-**Status:** agreed, partly built: the command is registered, CI-only, and refuses the workflow's own token before it ships. The backend already acts as the bot when `Settings.CI` is set.
+**Status:** agreed. What is not built is under [Not built yet](#not-built-yet). The backend already acts as the bot when `Settings.CI` is set.
 
 `gero ci:ship` is the same bump as [`gero ship`](PUSH_TO_REPO.md), run by a workflow as the bot, for one release event, as the final step of the producer's release workflow. It replaces the bash that the producer's workflow runs today (`push-to-rancher.yml` calling `run-gha.sh`: check the image, set the bot identity in a fresh checkout of the consumer, open a PR for each branch). The context rules it follows are in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md), and this spec only adds what is specific to shipping.
 
@@ -71,12 +71,10 @@ What the push scripts took as environment becomes this:
 
 ## Not built yet
 
-* Working in the checkouts the workflow gives it (the workflow's checkout action clones the producer and the consumers into one directory, and a step before `ci:ship` seeds a user file with `repos.search` for it; that the seeding works in CI is not yet checked with a real run). The push with the token is built ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing)) and has not been run against GitHub. A step that uses `gero repo clone` instead of a checkout would need an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only).
 * The step summary, and the workflow run URL in the PR body.
 * `from: producer` and `from: central` for steps.
-* Loading the bundle that matches the version of `gero`, and the default bundle embedded in the binary ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
 * The preflight line that names workstation signs under a forced CI context ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md)). It only warns.
-* A real workflow in `scc-operator` and `shell` that installs a pinned, signed `gero` and runs it, beside the bash and then in place of it.
+* The workflow in `shell`, and a pinned, signed `gero` installed in the workflows of both repos, with the bash scripts removed.
 
 ## Open questions
 
