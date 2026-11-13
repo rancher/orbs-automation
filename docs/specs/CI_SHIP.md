@@ -33,6 +33,41 @@
 * **The token check.** `cigate.RequireCrossRepoToken` refuses the default `GITHUB_TOKEN` for a write to another repository, before any write ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#the-actor)).
 * **Inputs from the trigger.** A workflow runs it after the producer's tag is pushed ([ARCHITECTURE_DESIGN](../ARCHITECTURE_DESIGN.md)). The arguments are those of `gero ship`: the producer, a tag or line, and `--line`.
 
+## Calling it from a workflow
+
+The checkout action clones the producer and each consumer as siblings under `$GITHUB_WORKSPACE`, so one `repos.search` entry finds them all. The scan lists the directories inside each search directory, to a depth limit, and matches a clone to a project by its remote URL, never by its directory name. The working directory is not a clone, so the project is always named.
+
+```yaml
+- uses: actions/checkout@<sha>
+  with:
+    path: ${{ github.workspace }}/scc-operator
+- uses: actions/checkout@<sha>
+  with:
+    repository: rancher/rancher
+    path: ${{ github.workspace }}/rancher-repo
+- name: Push updates to rancher/rancher
+  env:
+    GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+    GERO_BOT_USER: "${{ steps.generate_token.outputs.app-slug }}[bot]"
+    GERO_CONFIG: ${{ runner.temp }}/gero.yaml
+  run: |
+    gero init --search "$GITHUB_WORKSPACE"
+    gero ci:ship scc-operator "$TAG"
+```
+
+What the push scripts took as environment becomes this:
+
+| Script input | `gero ci:ship` |
+|---|---|
+| The tag (`TAG`) | The second argument |
+| The source repository (`SOURCE_REPO`) | The project, the first argument |
+| The token (`GH_TOKEN`) | `GH_TOKEN`, the same. It must differ from `GITHUB_TOKEN` |
+| The bot's login (`APP_USER`) | `GERO_BOT_USER`, the same value, `<app-slug>[bot]` |
+| The producer's and the consumer's directories (`SCC_DIR`, `RANCHER_DIR`) | None: `repos.search` in the user file `GERO_CONFIG` names |
+| A list of branches to process (`RANCHER_BRANCHES_OVERRIDE`) | None: `--line` names a Rancher line, not a branch |
+
+`GERO_CONFIG` is the one variable `gero` adds: CI reads a user file only when it names it, so `gero init` and `ci:ship` are given the same path. `GITHUB_ACTIONS=true`, which the runner sets, is what makes the context CI. The variables `GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH` and `GERO_SOURCE_REPO` are not inputs: the bump engine builds them for the steps it runs.
+
 ## Not built yet
 
 * Working in the checkouts the workflow gives it (the workflow's checkout action clones the producer and the consumers into one directory, and a step before `ci:ship` seeds a user file with `repos.search` for it; that the seeding works in CI is not yet checked with a real run), and the push without the engineer's credentials (`gitcli.Push` and `gitcli.PushTag` take the engineer's own today). A step that uses `gero repo clone` needs an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only).
