@@ -45,13 +45,20 @@ type Publish struct {
 // where it stands against the target's branch when that is known: behind is how
 // many commits the target has that the PR's branch does not.
 func alsoNote(p pulls.PR, base string, behind int, known bool) string {
-	return fmt.Sprintf("also open: #%d by %s (%s)", p.Number, p.Author, p.URL)
+	note := fmt.Sprintf("also open: #%d by %s (%s)", p.Number, p.Author, p.URL)
+	switch {
+	case !known:
+		return note
+	case behind == 0:
+		return note + ", current with " + base
+	}
+	return fmt.Sprintf("%s, behind %s by %d", note, base, behind)
 }
 
 // otherBaseNote is the report of a PR that has the bump's marker but targets
 // another branch.
 func otherBaseNote(p pulls.PR, base string) string {
-	return ""
+	return fmt.Sprintf("#%d by %s (%s) targets %s, not %s, so it is a different bump and not an overlap: left alone", p.Number, p.Author, p.URL, p.Base, base)
 }
 
 // decidePublish decides what to do for a bump, from the open PRs found for its
@@ -66,6 +73,10 @@ func decidePublish(open []pulls.PR, me string, m Marker) Publish {
 	for _, p := range open {
 		found, ok := ParseMarker(p.Body)
 		if !ok || !found.SameBump(m) {
+			continue
+		}
+		if p.Base != "" && p.Base != m.Target {
+			out.OtherBase = append(out.OtherBase, p)
 			continue
 		}
 		order, ordered := compareVersions(found.Version, m.Version)

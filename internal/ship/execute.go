@@ -308,7 +308,16 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 		}
 	}
 	for _, a := range st.dec.Also {
-		st.warnings = append(st.warnings, fmt.Sprintf("also open: #%d by %s (%s)", a.Number, a.Author, a.URL))
+		behind, known := 0, false
+		if a.HeadOwner != "" {
+			if n, err := pub.Remote.BehindBy(ctx, plan.Consumer, tp.Branch, a.HeadOwner+":"+a.HeadRef); err == nil {
+				behind, known = n, true
+			}
+		}
+		st.warnings = append(st.warnings, alsoNote(a, tp.Branch, behind, known))
+	}
+	for _, o := range st.dec.OtherBase {
+		st.warnings = append(st.warnings, otherBaseNote(o, tp.Branch))
 	}
 	if st.dec.Action == PublishBlocked {
 		newer, _ := ParseMarker(st.dec.Newer.Body)
