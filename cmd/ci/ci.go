@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/rancher/orbs-automation/cmd/groups"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
 )
 
@@ -21,17 +22,18 @@ const (
 	ContextWorkstationOnly = "workstation-only"
 )
 
-func subCommandList() []*cobra.Command {
+func subCommandList(settings func(*cobra.Command) clicfg.Settings) []*cobra.Command {
 	return []*cobra.Command{
 		newReconcileCmd(),
+		newShipCmd(settings),
 	}
 }
 
 // RegisterSubcommands adds new instances of the CI commands to cmd, named with
 // the group prefix and marked CI-only. Each call builds them again, so a command
 // tree built for each REPL line shares no flag state with another.
-func RegisterSubcommands(cmd *cobra.Command) {
-	for _, subCmd := range subCommandList() {
+func RegisterSubcommands(cmd *cobra.Command, settings func(*cobra.Command) clicfg.Settings) {
+	for _, subCmd := range subCommandList(settings) {
 		subCmd.Use = fmt.Sprintf("%s:%s", groups.CIGroup.ID, subCmd.Use)
 		subCmd.GroupID = groups.CIGroup.ID
 		subCmd.Annotations = map[string]string{ContextAnnotation: ContextCIOnly}
