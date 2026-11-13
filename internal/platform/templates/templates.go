@@ -272,5 +272,20 @@ func CheckReversible(text string) error {
 // gero appends to every branch name already says: the producer, the tag and the
 // target. They still render. A malformed text has none, for Validate to report.
 func PrefixRepeats(text string) []string {
-	return nil
+	names, err := Placeholders(text)
+	if err != nil {
+		return nil
+	}
+	var repeats []string
+	for _, n := range names {
+		if slices.Contains(keyVars, n) {
+			repeats = append(repeats, n)
+		}
+	}
+	return repeats
 }
+
+// keyVars are the variables whose values the key gero appends to a branch name
+// already holds: the producer's name (as project or source), the tag (as tag or
+// version) and the target branch (as branch or targetBranch).
+var keyVars = []string{"source", "project", "tag", "version", "branch", "targetBranch"}

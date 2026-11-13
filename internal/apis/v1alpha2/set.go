@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
 // refKey is one key of a kind's refs: which kind it points at, whether it must be
@@ -96,6 +97,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.omittedBranches()
 	s.streamsDifferFromDestination()
 	s.streamsOverlap()
+	s.branchPrefixes()
 	s.acknowledgements()
 }
 
@@ -354,6 +356,23 @@ func (s *set) circular() {
 		if _, ok := seen[pair]; !ok {
 			seen[pair] = h.Name
 		}
+	}
+}
+
+// branchPrefixes warns of a project's branchPrefix that uses a variable the key
+// gero appends to it says already. It is a rule across the set, and not of the
+// project alone, so a document can acknowledge it.
+func (s *set) branchPrefixes() {
+	for _, o := range s.objs {
+		p, ok := o.(*Project)
+		if !ok {
+			continue
+		}
+		r := s.at(o)
+		for _, v := range templates.PrefixRepeats(p.Spec.PullRequests.BranchPrefix) {
+			r.Warnf(RuleBranchPrefixRedundantVar, "spec.pullRequests.branchPrefix", "uses {%s}, which the key gero appends to the prefix says already: remove it", v)
+		}
+		s.add(r)
 	}
 }
 

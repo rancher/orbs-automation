@@ -165,7 +165,7 @@ func TestARepoNameHasNoSpaces(t *testing.T) {
 }
 
 func TestAPrefixThatRepeatsTheKeyIsAWarningAndStillValid(t *testing.T) {
-	_, rep := loadProject(t, "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"bot/{source}-{tag}-\"}\n")
+	rep := validateSet(t, doc("Project", "p", "", projectSpec+"  pullRequests: {branchPrefix: \"bot/{source}-{tag}-\"}\n"))
 
 	require.NoError(t, rep.Err())
 	got := warningsOf(rep, RuleBranchPrefixRedundantVar)

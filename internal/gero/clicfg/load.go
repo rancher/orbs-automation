@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
 // FlagLookup reports the value of the flag named name and whether it was set
@@ -248,6 +251,10 @@ func Load(in Inputs) (Settings, error) {
 	}
 
 	s.Fork, s.GitHubUser, s.BranchPrefix, s.PushTo = fc.Fork, fc.GitHubUser, fc.BranchPrefix, fc.PushTo
+	for _, v := range templates.PrefixRepeats(fc.BranchPrefix) {
+		s.Warnings = append(s.Warnings, fmt.Sprintf("%s: branchPrefix uses {%s}, which the key gero appends to the prefix says already: remove it [%s]",
+			userFileLabel(in.UserFileName), v, config.RuleBranchPrefixRedundantVar))
+	}
 	if err := checkRole("pushTo", fc.PushTo); err != nil {
 		return Settings{}, fmt.Errorf("%s: %w", label, err)
 	}

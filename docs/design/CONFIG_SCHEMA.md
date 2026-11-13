@@ -26,7 +26,7 @@ The repo as a place. `refs`: none.
 | `repo.managedBy` | slug | none: unspecified | the team responsible. A project is **owned** when this is the active team ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and gero ships from what it owns; there is no `owned` field. `shared` is a sentinel for every team: no team's context owns it, and any team may ship into it |
 | `repo.defaultBranch` | string | `main` | |
 | `finalDestination` | bool | `false` | at most one Project |
-| `pullRequests.title`, `.branchPrefix` | template | none | `branchPrefix` is a lead-in only: `gero` always appends the key `{source}-{tag}-{target}` to it ([PUSH_TO_REPO](../specs/PUSH_TO_REPO.md#branches-and-pr-identity)), and `{key}` is a read-only variable of the title that no setting can assign. Variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, `companions` (the releases that go with this one, such as `lasso to v0.2.10`, empty when none), … |
+| `pullRequests.title`, `.branchPrefix` | template | none | `branchPrefix` is a lead-in only: `gero` always appends the key `{source}-{tag}-{branch}` to it ([PUSH_TO_REPO](../specs/PUSH_TO_REPO.md#branches-and-pr-identity)), and `{key}` is a read-only variable of the title that no setting can assign. Variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, `companions` (the releases that go with this one, such as `lasso to v0.2.10`, empty when none), … |
 | `pullRequests.labels`, `.botLabels` | list | none | |
 | `pullRequests.pushTo` | `fork` or `upstream` | none | |
 | `branches.layout` | `single` or `perLine` | `single` | `single`: every release is on the default branch, and `lines` is not given |
@@ -199,7 +199,7 @@ A warning never makes a document invalid. It names its rule by a stable id, show
 | `streams-overlap` | two streams of one project have tag patterns that could both match a tag: what one writes before its first wildcard is the start of what the other writes (`v*` and `v3.8.*`), and a tag that both match is a release of the one read first; on the later stream, at `spec.tagPattern`. It does not look at `tagExclude`, so it may warn of two streams that an exclusion keeps apart, which can be acknowledged | yes |
 | `acknowledgement-unused` | an acknowledgement matches no warning of its document | yes |
 | `lifecycle-date` | a release is shipped to a line past a lifecycle date | no |
-| `branch-prefix-redundant-var` | a `branchPrefix`, in a project or in the user file, uses `{source}`, `{tag}`, `{target}` or `{targetBranch}`, which the key `gero` appends already says | no |
+| `branch-prefix-redundant-var` | a `branchPrefix`, in a project or in the user file, uses `{source}`, `{project}`, `{tag}`, `{version}`, `{branch}` or `{targetBranch}`, which the key `gero` appends already says | yes |
 
 The names of the rules not built are provisional until they are.
 
