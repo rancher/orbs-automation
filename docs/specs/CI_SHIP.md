@@ -1,6 +1,6 @@
 # CI_SHIP
 
-**Status:** agreed, not built. The backend already acts as the bot when `Settings.CI` is set.
+**Status:** agreed, partly built: the command is registered, CI-only, and refuses the workflow's own token before it ships. The backend already acts as the bot when `Settings.CI` is set.
 
 `gero ci:ship` is the same bump as [`gero ship`](PUSH_TO_REPO.md), run by a workflow as the bot, for one release event, as the final step of the producer's release workflow. It replaces the bash that the producer's workflow runs today (`push-to-rancher.yml` calling `run-gha.sh`: check the image, set the bot identity in a fresh checkout of the consumer, open a PR for each branch). The context rules it follows are in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md), and this spec only adds what is specific to shipping.
 
@@ -12,7 +12,7 @@
 * **The fan-out.** One run is for one release event, as the `push-to-*` scripts are, and it runs the bump loop of `gero ship` on every active consumer branch of that release, as `gero ship` does.
 * **The config.** From orbs-automation a job uses the local `config/`. From any other repo it loads the bundle of the `gero` version it runs, not the newest release ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)). The default bundle is embedded in the binary and is also a release asset, so a job needs only the binary.
 * **The actor, the push and the labels** are the CI column of the table in [EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#what-differs-by-context): the bot's commit identity from `GERO_BOT_USER`, a push to the upstream with the workflow's token, the `bot/` branch prefix, and the project's `botLabels` besides its `labels`. The push target in CI is always the upstream ([PUSH_TO_REPO](PUSH_TO_REPO.md#where-the-branch-is-pushed)).
-* **No prompt.** The workflow passes `--non-interactive` (or sets `GERO_NON_INTERACTIVE`), and without it the command fails before writing, naming the flag.
+* **No prompt, and no flag for it.** `ci:ship` never asks, so it has no `--yes`, `--non-interactive` or `--no-push`, and no `--push-to`: it always pushes, to the upstream. It takes the rest of the flags of `gero ship` (`--to`, `--line`, `--prerelease`, `--allow-downgrade`, `--preview`, `--refresh`) and its arguments, so a workflow gives it the tag its build produced and the PRs go to the consumers of that tag's line.
 * **Output.** The log handler is JSON and `--json` works as it does for `gero ship` ([CLI_OUTPUT](CLI_OUTPUT.md)). The report has one model with two renderings: a fuller one for the job log and `$GITHUB_STEP_SUMMARY`, which is what the bash's `summary` function does today, and a shorter one for comments.
 
 ## Rules that do not change in CI
@@ -35,8 +35,7 @@
 
 ## Not built yet
 
-* The command: its `cmd/` registration (CI-only, [CLI_FRAMEWORK](CLI_FRAMEWORK.md)), the bump loop run as the bot (`GERO_BOT_USER` with the id lookup is tested without a real bot) and the call of `cigate.RequireCrossRepoToken` before any write.
-* Working in the checkouts the workflow gives it, and the push without the engineer's credentials (`gitcli.Push` and `gitcli.PushTag` take the engineer's own today). A step that uses `gero repo clone` needs an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only).
+* Working in the checkouts the workflow gives it (the workflow's checkout action clones the producer and the consumers; how `ci:ship` is told where they are is not settled), and the push without the engineer's credentials (`gitcli.Push` and `gitcli.PushTag` take the engineer's own today). A step that uses `gero repo clone` needs an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only).
 * The step summary, and the workflow run URL in the PR body.
 * `from: producer` and `from: central` for steps.
 * Loading the bundle that matches the version of `gero`, and the default bundle embedded in the binary ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
