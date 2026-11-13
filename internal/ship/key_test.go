@@ -21,3 +21,12 @@ func TestBranchKey(t *testing.T) {
 		})
 	}
 }
+
+func TestBranchTailIsWhatEveryNameOfTheBumpEndsIn(t *testing.T) {
+	assert.Equal(t, "v0.5.3-v2.15", BranchTail("v0.5.3", "release/v2.15"))
+	assert.Equal(t, "v0.5.3-main", BranchTail("v0.5.3", "main"))
+}
+
+func TestBranchKeyEndsInTheTail(t *testing.T) {
+	assert.Equal(t, "scc-operator-"+BranchTail("v0.5.3", "release/v2.15"), BranchKey("scc-operator", "v0.5.3", "release/v2.15"))
+}

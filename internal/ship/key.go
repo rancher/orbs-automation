@@ -10,3 +10,10 @@ import "strings"
 func BranchKey(source, tag, target string) string {
 	return source + "-" + tag + "-" + strings.TrimPrefix(target, "release/")
 }
+
+// BranchTail is what ends a bump's branch name whatever the project: the tag and
+// the target without release/. A marker holds both, so a PR's head can be checked
+// against its marker without knowing the producer's project name.
+func BranchTail(tag, target string) string {
+	return ""
+}

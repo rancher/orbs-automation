@@ -1,6 +1,10 @@
 package ship
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+)
 
 const markerOpen = "<!-- gero:ship v1"
 
@@ -62,4 +66,26 @@ func ParseMarker(body string) (m Marker, ok bool) {
 // overlap on, and a newer version supersedes an older one.
 func (m Marker) SameBump(o Marker) bool {
 	return m.Source == o.Source && m.Consumer == o.Consumer && m.Target == o.Target
+}
+
+// Key is the bump's overlap key, source, consumer and target, in one exact string:
+// the same for every version of the bump, and what the marker records as key so a
+// reader need not parse the fields to match it.
+func (m Marker) Key() string {
+	return ""
+}
+
+// RecordedKey is the key a marker in a PR body says it has, as it was written.
+// ok is false when the body has no marker or the marker has no key, as the
+// markers written before the key was added.
+func RecordedKey(body string) (key string, ok bool) {
+	return "", false
+}
+
+// markerWarnings says where a PR with this marker departs from what gero would
+// have written: the key its marker records is not the one its fields give, or its
+// branch does not end in the key of the name. Neither stops the run; the marker
+// is the identity, and these are for the report.
+func markerWarnings(p pulls.PR, m Marker) []string {
+	return nil
 }
