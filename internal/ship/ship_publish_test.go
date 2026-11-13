@@ -475,3 +475,19 @@ func TestShipABranchAlreadyOnTheRemoteAtTheSameCommitJustGetsItsPR(t *testing.T)
 	assert.Equal(t, pushed, runGit(t, ws.up, "rev-parse", botV215), "nothing new to push")
 	assert.True(t, lg.has("create"))
 }
+
+func TestShipSaysWhenAPRsBranchDoesNotMatchItsMarker(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	renamed := existing(101, "danpock", "v0.5.2")
+	renamed.HeadRef = "dan/my-own-name"
+	remote.open = pulls.Open{PRs: []pulls.PR{renamed}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status, "the marker is the identity, so the run goes on")
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "#101")
+	assert.Contains(t, res.Warnings[0], "dan/my-own-name")
+}

@@ -284,6 +284,11 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 	if open.Truncated {
 		st.warnings = append(st.warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this bump may have been missed", len(open.PRs), plan.Consumer))
 	}
+	for _, p := range prs {
+		if found, ok := ParseMarker(p.Body); ok && found.SameBump(st.m) {
+			st.warnings = append(st.warnings, markerWarnings(p, found)...)
+		}
+	}
 	for _, a := range st.dec.Also {
 		st.warnings = append(st.warnings, fmt.Sprintf("also open: #%d by %s (%s)", a.Number, a.Author, a.URL))
 	}
