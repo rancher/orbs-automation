@@ -1,11 +1,18 @@
-package ship
+// Package shipflags declares the flags that gero ship and gero ci:ship share.
+// It is in cmd/ because a flag set is the CLI framework's: internal/cli does not
+// import it.
+package shipflags
 
-import "github.com/spf13/pflag"
+import (
+	"github.com/rancher/orbs-automation/internal/cli/ship"
+	"github.com/spf13/cobra"
+)
 
-// BindFlags declares on flags the flags that gero ship and gero ci:ship share,
-// and binds them to in. What is only the workstation's to say (asking, pushing
-// or not, where to push) is declared by gero ship alone.
-func BindFlags(flags *pflag.FlagSet, in *Options) {
+// Bind declares on cmd the flags that gero ship and gero ci:ship share, and binds
+// them to in. What is only the workstation's to say (asking, pushing or not,
+// where to push) is declared by gero ship alone.
+func Bind(cmd *cobra.Command, in *ship.Options) {
+	flags := cmd.Flags()
 	flags.StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
 	flags.StringSliceVar(&in.Lines, "line", nil, "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to; repeat it or separate lines with commas for several")
 	flags.BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")

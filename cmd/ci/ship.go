@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/rancher/orbs-automation/internal/cli/ciship"
+	"github.com/rancher/orbs-automation/cmd/shipflags"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/cli/ship"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
@@ -39,9 +39,9 @@ written. GERO_BOT_USER names the bot the commits and PRs are made as.`,
 			in.Project, in.Arg = ship.ParseArgs(args)
 			s := settings(cmd)
 			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
-			return ciship.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
+			return ship.RunCI(ctx, cmd.OutOrStdout(), log, s, cwd, in)
 		},
 	}
-	ship.BindFlags(cmd.Flags(), &in)
+	shipflags.Bind(cmd, &in)
 	return cmd
 }

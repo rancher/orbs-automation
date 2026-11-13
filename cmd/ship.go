@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/rancher/orbs-automation/cmd/shipflags"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/cli/ship"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
@@ -97,7 +98,7 @@ with both flags it is a dry run.`,
 			return ship.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
 		},
 	}
-	ship.BindFlags(shipCmd.Flags(), &in)
+	shipflags.Bind(shipCmd, &in)
 	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
