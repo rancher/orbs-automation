@@ -43,3 +43,9 @@ func tokenEnv(ctx context.Context) []string {
 	}
 	return env
 }
+
+// HasToken says whether pushes made with ctx authenticate with a token.
+func HasToken(ctx context.Context) bool {
+	c, ok := ctx.Value(tokenKey{}).(credential)
+	return ok && c.token != ""
+}
