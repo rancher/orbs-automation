@@ -12,6 +12,7 @@ How `gero` tags the PRs and issues it writes, so people and tools can find and r
 | Labels | Search, filtering, signals to other teams and their automation | **Derived.** Written by the tool, readable by anyone |
 
 * One marker envelope serves PRs and tracking issues: a versioned, additive block with a `kind` and the identifying fields of that kind. What a PR marker holds is in [PUSH_TO_REPO](PUSH_TO_REPO.md#branches-and-pr-identity) and what a tracking issue holds is in [IMPLEMENTATION](../IMPLEMENTATION.md#tracking-issue-state). This spec does not repeat either.
+* A hint to a marker, such as the tail of a branch name or, later, the tracking issue's record of a PR, only proposes an item. The marker confirms it, and when they differ the marker wins.
 * A missing or corrupt marker is a loud error. A missing or odd label never is.
 * Lookup uses the marker. Labels are never a lookup key for identity.
 

@@ -46,7 +46,7 @@ Informed by [frameworks-automation](references/frameworks-automation.md) (an ins
 * Issue identity does not rely on the title. The version and other identifying fields are stored in the block. Labels are for lookup and filtering.
 * **Stale state** is marked with labels, using a threshold on the last reconciled time.
 * **Locking is per operation**, not a global lock across all workflows.
-* Idempotency uses deterministic branch names and reuses an existing open PR.
+* Idempotency uses a deterministic key in the branch name and in the PR's marker. The key finds candidates and the marker decides: an existing open PR is reused only after its marker confirms it ([PUSH_TO_REPO](specs/PUSH_TO_REPO.md#branches-and-pr-identity)).
 * The reconciler runs from a cron, which catches periodic work and drift from people editing issues and PRs across repos, and from `repository_dispatch`, which is nearer to real time. Cron minutes are staggered off the round hour. Actions are pinned by SHA.
 * Listing calls (releases, PRs) must paginate. Decide up front how prereleases are treated, since `/releases/latest` excludes them.
 * Render everything from one state object, with a zero- vs one-based stage convention documented in code, so rendering cannot contradict state.
@@ -98,4 +98,9 @@ Conventions the tool wants repos to follow, so automation does not fight them.
 
 ## Open Questions
 
+* **Starting a release's tracking issue from the producer.** An action that a producer's workflow calls when a release starts could dispatch an event that opens the tracking issue, and the central `ci:ship` run ([CI_SHIP](specs/CI_SHIP.md#open-questions)) would then update that producer's part of it as succeeded or failed. Open:
+  * What identifies a release: the source and the version, which is also the issue's key?
+  * Does the state block hold, for each target, the PR and the result of the run, so the PR is found from the issue and not by searching?
+  * Several runs write one issue body: a concurrency group per issue, or a write by each run of only its own target's part?
+  * A start event for a release that has an issue already: reuse it, or supersede it as an older tracker is?
 * The "branch for X" workflow itself: which steps `gero` automates (create branches, update `branches.lines`, regenerate `VERSION.md`, re-render workflows) and in what order.

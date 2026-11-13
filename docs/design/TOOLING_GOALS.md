@@ -13,7 +13,7 @@ The primary user config fields that are worth prompting for are:
 
 - `githubUser` - To identify their forks of repos
 - `fork` & `upstream` - To identify the remote repo names for projects under their fork and Rancher upstream respectively
-- `branchPrefix` - A branch prefix - support minimal vars - to use when creating PRs via the tooling
+- `branchPrefix` - A branch prefix - support minimal vars - to use when creating PRs via the tooling. It is a lead-in: `gero` appends a fixed key after it so a bump's branches share a tail ([PUSH_TO_REPO](../specs/PUSH_TO_REPO.md#branches-and-pr-identity))
 - `centralConfigDir` - The directory path to the ORBS automation repo's config dir. It matters less than the others: with none set, `gero` reads the config bundle of a release ([CENTRAL_BUNDLE](../specs/CENTRAL_BUNDLE.md))
 - `repos.search` - Would be useful to have set
 - `repos.cloneRoot` - Will be needed for repo clone tooling; if possible we prompt to set this (single dir value) to the first input search path?

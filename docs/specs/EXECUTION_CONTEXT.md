@@ -32,7 +32,7 @@ One function in `internal/gero/clicfg` decides, once, and the result is `Setting
 | Token | `GH_TOKEN`, then the `gh` login | `GH_TOKEN` from the workflow | [GITHUB_ACCESS](GITHUB_ACCESS.md) |
 | Actor identity | The engineer | The bot | this spec |
 | Push target and credentials | The engineer's fork | The upstream, with the workflow's token | [PUSH_TO_REPO](PUSH_TO_REPO.md) |
-| Branch prefix | The engineer's `branchPrefix` | `bot/` | [PUSH_TO_REPO](PUSH_TO_REPO.md) |
+| Branch prefix | The engineer's `branchPrefix`, then the key | `bot/`, then the key | [PUSH_TO_REPO](PUSH_TO_REPO.md#branches-and-pr-identity) |
 | Labels | The consumer's `pullRequests.labels` | `labels` and `botLabels`, such as `origin/bot` | [METADATA](METADATA.md#label-classes) |
 | Run record in the PR | The engineer's login | The workflow run URL | [PUSH_TO_REPO](PUSH_TO_REPO.md) |
 | Commit signing | Optional, opt-in | None | this spec |

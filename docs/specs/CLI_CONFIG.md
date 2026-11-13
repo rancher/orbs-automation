@@ -97,7 +97,7 @@ File-only keys, all **(leaning)**:
 | `fork` | Remote that holds the developer's fork |
 | `pushTo` | Where `gero ship` pushes branches, `fork` or `upstream`. Without it, the fork when one is set, else the upstream ([PUSH_TO_REPO](PUSH_TO_REPO.md#where-the-branch-is-pushed)) |
 | `githubUser` | Used to build fork refs for PRs |
-| `branchPrefix` | Prefix for branches `gero` creates (for example `dan/`) |
+| `branchPrefix` | Lead-in for branches `gero` creates (for example `dan/`). The key `{source}-{tag}-{target}` is always appended and cannot be set ([PUSH_TO_REPO](PUSH_TO_REPO.md#branches-and-pr-identity)) |
 | `signCommits` | `true` makes git sign the commits `gero ship` makes, with the engineer's own key; env `GERO_SIGN_COMMITS` beats the file. A commit that cannot be signed fails the target, never falls back to unsigned ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing)) |
 | `repos.paths` | Map of central-config repo slug (`spec.repo.name`, `owner/name`) to a local clone path |
 | `repos.search` | Directories scanned for clones through any directories that group them, to a depth limit, matched to slugs by remote URL. No directory layout is assumed. An entry that is not a directory is skipped by the scan, so `gero doctor` fails on it and every other command names it only with `-v` |
