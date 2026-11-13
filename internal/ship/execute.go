@@ -386,6 +386,8 @@ func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remot
 	w, err := Prepare(ctx, ex.Git, PrepareRequest{
 		CloneDir: clone, Remote: remote, Target: tp.Branch, Base: tp.Commit,
 		Branch: tp.Preview.Branch, DryRun: in.DryRun, TempDir: ex.TempDir,
+		// A run in CI owns its checkout, so what an earlier step left in it is the work.
+		StageUntracked: in.CI,
 	})
 	if errors.Is(err, ErrBaseMoved) {
 		return fail(fmt.Errorf("%w; run it again", err))
