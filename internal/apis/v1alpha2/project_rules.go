@@ -31,6 +31,10 @@ var prVars = func() []string {
 	return vars
 }()
 
+// prefixVars are the variables a branchPrefix may use: those of the other texts,
+// less the key, which gero appends to the prefix.
+var prefixVars = slices.DeleteFunc(slices.Clone(prVars), func(v string) bool { return v == "key" })
+
 // SetDefaults fills the default branch and the layout. managedBy is not filled:
 // whether a team owns the repo depends on the active team, which only the CLI
 // settings know, so it is read through a getter.
@@ -72,7 +76,11 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 		"spec.pullRequests.title":        pr.Title,
 		"spec.pullRequests.branchPrefix": pr.BranchPrefix,
 	} {
-		if err := templates.Validate(text, prVars); err != nil {
+		vars := prVars
+		if path == "spec.pullRequests.branchPrefix" {
+			vars = prefixVars // the key is appended to the prefix, so it cannot be in it
+		}
+		if err := templates.Validate(text, vars); err != nil {
 			r.Errorf(path, "%v", err)
 		}
 	}

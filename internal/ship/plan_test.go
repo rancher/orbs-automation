@@ -199,7 +199,7 @@ func TestCheckPreviewsWhatARunWouldWrite(t *testing.T) {
 func TestCheckPreviewUsesTheUsersBranchPrefix(t *testing.T) {
 	got, err := Check(ctx, fixture(t), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Lines: []string{"v2.15"}, BranchPrefix: "dan/"})
 	require.NoError(t, err)
-	assert.Equal(t, "dan/v0.5.3-v2.15", got.Targets[0].Preview.Branch)
+	assert.Equal(t, "dan/scc-operator-v0.5.3-v2.15", got.Targets[0].Preview.Branch)
 }
 
 func TestCheckHasNoPreviewWhenAlreadyUpToDate(t *testing.T) {
