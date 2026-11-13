@@ -50,6 +50,7 @@ The checkout action clones the producer and each consumer as siblings under `$GI
     GH_TOKEN: ${{ steps.generate_token.outputs.token }}
     GERO_BOT_USER: "${{ steps.generate_token.outputs.app-slug }}[bot]"
     GERO_CONFIG: ${{ runner.temp }}/gero.yaml
+    GERO_UPSTREAM: origin
   run: |
     gero init --search "$GITHUB_WORKSPACE"
     gero ci:ship scc-operator "$TAG"
@@ -66,11 +67,11 @@ What the push scripts took as environment becomes this:
 | The producer's and the consumer's directories (`SCC_DIR`, `RANCHER_DIR`) | None: `repos.search` in the user file `GERO_CONFIG` names |
 | A list of branches to process (`RANCHER_BRANCHES_OVERRIDE`) | None: `--line` names a Rancher line, not a branch |
 
-`GERO_CONFIG` is the one variable `gero` adds: CI reads a user file only when it names it, so `gero init` and `ci:ship` are given the same path. `GITHUB_ACTIONS=true`, which the runner sets, is what makes the context CI. The variables `GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH` and `GERO_SOURCE_REPO` are not inputs: the bump engine builds them for the steps it runs.
+`GERO_CONFIG` and `GERO_UPSTREAM` are what `gero` adds. CI reads a user file only when `GERO_CONFIG` names it, so `gero init` and `ci:ship` are given the same path. `GERO_UPSTREAM` is the name of the remote that is the real repository, which has no default, and in a checkout it is `origin`. `GITHUB_ACTIONS=true`, which the runner sets, is what makes the context CI. The variables `GERO_TAG`, `GERO_VERSION`, `GERO_TARGET_BRANCH` and `GERO_SOURCE_REPO` are not inputs: the bump engine builds them for the steps it runs.
 
 ## Not built yet
 
-* Working in the checkouts the workflow gives it (the workflow's checkout action clones the producer and the consumers into one directory, and a step before `ci:ship` seeds a user file with `repos.search` for it; that the seeding works in CI is not yet checked with a real run), and the push without the engineer's credentials (`gitcli.Push` and `gitcli.PushTag` take the engineer's own today). A step that uses `gero repo clone` needs an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only).
+* Working in the checkouts the workflow gives it (the workflow's checkout action clones the producer and the consumers into one directory, and a step before `ci:ship` seeds a user file with `repos.search` for it; that the seeding works in CI is not yet checked with a real run). The push with the token is built ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#push-credentials-and-signing)) and has not been run against GitHub. A step that uses `gero repo clone` instead of a checkout would need an HTTPS-with-token path, which it lacks (`sshURL` is SSH-only).
 * The step summary, and the workflow run URL in the PR body.
 * `from: producer` and `from: central` for steps.
 * Loading the bundle that matches the version of `gero`, and the default bundle embedded in the binary ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)).
@@ -79,4 +80,4 @@ What the push scripts took as environment becomes this:
 
 ## Open questions
 
-* Whether the push needs a credential of ours or the checkout's cross-repo token is enough.
+None yet.
