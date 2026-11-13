@@ -14,7 +14,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
 	"github.com/rancher/orbs-automation/internal/bundlestore"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
 // fakeBundle is a published release of gero, as the resolver would hand it over.

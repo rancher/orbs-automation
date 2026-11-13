@@ -64,7 +64,7 @@ gero repo build-tags
 
 ## 3. Library
 
-`internal/platform/git` (pure logic, no go-git and no exec) resolves the result from a ref, an abbreviated commit and a tag source. The interface is defined in the package that consumes it ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3):
+`internal/gero/buildtags` (pure logic, no go-git and no exec) resolves the result from a ref, an abbreviated commit and a tag source. The names follow Rancher's branches and build tags, so they are gero's rule and not git's, which is why it is not in `internal/platform/git`. The interface is defined in the package that consumes it ([PROJECT_LAYOUT](PROJECT_LAYOUT.md) section 3). `Short` is generic and is in `internal/platform/git`:
 
 ```go
 type BranchTags struct {
@@ -80,11 +80,13 @@ type Tags interface {
 
 var ErrUnsupportedRef = errors.New("unsupported branch pattern")
 
-// Short abbreviates a CI commit to its first 7 characters.
-func Short(sha string) string
-
 // ResolveBranchTags uses commit exactly as given.
 func ResolveBranchTags(ref, commit string, tags Tags) (BranchTags, error)
+```
+
+```go
+// package git: Short abbreviates a CI commit to its first 7 characters.
+func Short(sha string) string
 ```
 
 * `ResolveBranchTags` is pure apart from the `Tags` call. It uses `commit` **as given**, and the caller abbreviates: `Short` (7 characters) for the CI `GITHUB_SHA`, git's own `--short` for a local repository, which can be longer. If `ResolveBranchTags` cut to 7 itself, the local output would differ from the script's.

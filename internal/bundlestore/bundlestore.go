@@ -1,13 +1,13 @@
 // Package bundlestore finds the central config bundle for a workstation that has
-// no local config: the bundle compiled into the binary, or a newer release's that an
-// opt-in fetch downloaded, verified and kept in the user's cache
-// (docs/specs/CENTRAL_BUNDLE.md). It never looks at local config, which always wins
+// no local config: the bundle compiled from the config embedded in the binary, or a
+// newer release's that an opt-in fetch (internal/bundlefetch) downloaded, verified and
+// kept in the user's cache, where several bundles are kept at once, each under an ID
+// worked out from the files it was made from (docs/specs/CENTRAL_BUNDLE.md). It never looks at local config, which always wins
 // and is the workspace's business.
 package bundlestore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"strings"
@@ -15,30 +15,20 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/embedded"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
 )
 
-// ErrUnavailable is returned by Fetch when the release's bundle could not be got:
-// the releases were not reached, or what was downloaded was not verified. The error
-// wraps why.
-var ErrUnavailable = errors.New("no config bundle could be fetched")
-
-// Releases is where releases come from. It is defined here, where it is consumed;
-// assetfetch.Fetcher is the real one.
-type Releases interface {
-	Latest(ctx context.Context, prereleases bool) (assetfetch.Release, error)
-	Release(ctx context.Context, tag string) (assetfetch.Release, error)
-	Asset(ctx context.Context, tag, name string) ([]byte, error)
-}
-
-// Resolver chooses and loads the bundle.
+// Resolver chooses the bundle to use, from the store and the config embedded in the
+// binary. What fetches a newer one is internal/bundlefetch.
 type Resolver struct {
-	Releases Releases
-	Cache    Cache
-	Now      func() time.Time // nil for time.Now
-	// Embedded is the bundle compiled into the binary, in the format bundle.Parse
-	// reads. Nil is the real one, embedded.Bytes.
-	Embedded []byte
+	Store Store
+	Now   func() time.Time // nil for time.Now
+	// Embedded is the config compiled into the binary, as files, which the bundle of
+	// the binary is made from. Nil is the real one, embedded.FS.
+	Embedded fs.FS
+	// EmbeddedHeader is the header that bundle is made with. The zero value is the
+	// real one, embedded.Header.
+	EmbeddedHeader bundle.Header
 }
 
 // Request says who is asking.
@@ -82,108 +72,88 @@ type Loaded struct {
 	Source Source
 }
 
-// Fetch is the opt-in network path: it looks at the releases and, when the newest on
-// the channel is newer than the gero's own, downloads its bundle into the cache,
-// where Load finds it from then on. The rules are the spec's:
-//
-//   - The channel says which releases are candidates. Auto follows the gero: a
-//     stable gero looks at stable releases, and a prerelease gero at the newest
-//     release, a prerelease or not. Stable looks at stable releases only for any
-//     gero, and prerelease at the newest of all.
-//   - Only a release newer than the gero's own is downloaded. Its own bundle is the
-//     embedded one, so when nothing is newer the result is the embedded bundle, with
-//     a note that says so. A gero that is not a release has none to be newer than.
-//   - The release is always asked for, however fresh the cache is. A cached bundle of
-//     the same release is confirmed and not downloaded again.
-//   - A download is used only after it matches the published checksum, the
-//     fetcher has verified the signatures, and it parses, and only then replaces
-//     the cache.
-//   - A newest bundle in a format this gero cannot read is passed over: for the
-//     newest stable release when the channel looked at pre-releases and that one is
-//     newer than the gero, and otherwise for what Load gives. The note names why.
-//   - When the release cannot be reached or verified that is an error, and the cache
-//     is as it was.
-func (r *Resolver) Fetch(ctx context.Context, req Request) (Loaded, error) {
-	own := ownRelease(req.GeroVersion)
-	if own == "" {
-		return r.loadNoting(ctx, req, "this build is not a release, so there is no newer release to fetch a bundle of")
-	}
-	cached, have, _ := r.Cache.Read() // an unreadable cache is the same as none
-	prereleases := wantsPrereleases(own, req.Channel)
-	latest, err := r.Releases.Latest(ctx, prereleases)
-	if err != nil {
-		return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
-	}
-	if !newerThan(latest.Tag, own) {
-		return r.loadNoting(ctx, req, fmt.Sprintf("the newest release on this channel, %s, is not newer than this gero's own, %s", latest.Tag, own))
-	}
-	now := r.now()
-	l, err := r.use(ctx, latest.Tag, cached, have, now)
-	if err == nil {
-		return l, nil
-	}
-	if !errors.Is(err, bundle.ErrUnsupported) {
-		return Loaded{}, fmt.Errorf("%w: %w", ErrUnavailable, err)
-	}
-	note := fmt.Sprintf("the newest bundle, %s, is one this gero cannot read (%v)", latest.Tag, err)
-	if prereleases && isPrerelease(latest.Tag) {
-		if stable, serr := r.Releases.Latest(ctx, false); serr == nil && newerThan(stable.Tag, own) {
-			if l, ferr := r.use(ctx, stable.Tag, cached, have, now); ferr == nil {
-				l.Source.Note = note + "; using the bundle of " + stable.Tag
-				return l, nil
-			}
-		}
-	}
-	return r.loadNoting(ctx, req, note)
-}
-
-// loadNoting is what Load gives, with the note said before any it has of its own.
-func (r *Resolver) loadNoting(ctx context.Context, req Request, note string) (Loaded, error) {
-	l, err := r.Load(ctx, req)
-	if l.Source.Note != "" {
-		note += "; " + l.Source.Note
-	}
-	l.Source.Note = note
-	return l, err
-}
-
-// Load is the bundle to use with no request made: a cached bundle when it is of a
-// newer release than the gero's own on the channel, and the embedded bundle in every
-// other case. The cache is the result of an earlier Fetch, and is never refreshed
-// here, so it is used however old it is. A gero that is not a release has no release
-// to be newer than, and takes the embedded bundle.
+// Load is the bundle to use with no request made: the highest release in the store
+// that is newer than the gero's own and on the channel, passing over one this gero
+// cannot read for the next, and the embedded bundle when there is none. The store is
+// the result of earlier Fetches, and is never refreshed here, so a bundle is used
+// however old it is. A gero that is not a release has no release to be newer than,
+// and takes the embedded bundle.
 func (r *Resolver) Load(_ context.Context, req Request) (Loaded, error) {
 	now := r.now()
-	own := ownRelease(req.GeroVersion)
-	note := ""
-	if cached, have, _ := r.Cache.Read(); have && newerThan(cached.Tag, own) && fitsChannel(cached.Tag, own, req.Channel) {
-		l, err := fromCache(cached, now)
-		if err == nil {
-			return l, nil
+	own := OwnRelease(req.GeroVersion)
+	skipped := ""
+	for _, cached := range r.Store.Releases() {
+		if !NewerThan(cached.Tag, own) || !FitsChannel(cached.Tag, own, req.Channel) {
+			continue
 		}
-		note = fmt.Sprintf("the cached bundle of %s is not readable (%v); using the embedded bundle", cached.Tag, err)
+		l, err := fromEntry(cached, now)
+		if err != nil {
+			if skipped == "" {
+				skipped = fmt.Sprintf("the cached bundle of %s is not readable (%v)", cached.Tag, err)
+			}
+			continue
+		}
+		if skipped != "" {
+			l.Source.Note = skipped + "; using the bundle of " + cached.Tag
+		}
+		return l, nil
 	}
-	l, err := r.embedded(own)
-	l.Source.Note = note
+	l, err := r.embedded(own, now)
+	if skipped != "" {
+		l.Source.Note = skipped + "; using the embedded bundle"
+	}
 	return l, err
 }
 
-// embedded is the bundle compiled into the binary, for the gero of release own.
-func (r *Resolver) embedded(own string) (Loaded, error) {
-	data := r.Embedded
-	if data == nil {
-		data = embedded.Bytes()
+// KeepEntries is how many bundles the store keeps: the newest by when each was
+// fetched or compiled.
+const KeepEntries = 3
+
+// embedded is the bundle of the config compiled into the binary, for the gero of
+// release own. It is looked for in the store under the ID of the files and the
+// compiler, which the files alone tell, and compiled and kept there when it is not.
+// A store that cannot be read or written costs only the compile: the bundle made in
+// memory is used either way.
+func (r *Resolver) embedded(own string, now time.Time) (Loaded, error) {
+	fsys, hdr := r.Embedded, r.EmbeddedHeader
+	if fsys == nil {
+		fsys = embedded.FS()
 	}
-	h, fsys, err := bundle.Parse(data)
+	if hdr.GeroVersion == "" {
+		hdr = embedded.Header
+	}
+	digest, err := bundle.Digest(fsys)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
 	}
-	return Loaded{Header: h, FS: fsys, Source: Source{Embedded: true, Tag: own}}, nil
+	id := bundle.Header{InputsDigest: digest, CompilerRevision: bundle.CompilerRevision}.ID()
+	data := r.storedBundle(id)
+	if data == nil {
+		if data, err = bundle.Compile(fsys, hdr); err != nil {
+			return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+		}
+		if _, err := r.Store.Put(Entry{Tag: own, Origin: OriginEmbedded, Data: data, FetchedAt: now}); err == nil {
+			_ = r.Store.Prune(KeepEntries)
+		}
+	}
+	h, bundleFS, err := bundle.Parse(data)
+	if err != nil {
+		return Loaded{}, fmt.Errorf("the embedded bundle: %w", err)
+	}
+	return Loaded{Header: h, FS: bundleFS, Source: Source{Embedded: true, Tag: own}}, nil
 }
 
-// newerThan is whether the release tag is newer than the gero's own. A gero with no
+// storedBundle is the bytes of the entry with the ID, or nil when the store has none.
+func (r *Resolver) storedBundle(id string) []byte {
+	if e, ok := r.Store.Get(id); ok {
+		return e.Data
+	}
+	return nil
+}
+
+// NewerThan is whether the release tag is newer than the gero's own. A gero with no
 // release of its own has nothing a cached bundle could be newer than.
-func newerThan(tag, own string) bool {
+func NewerThan(tag, own string) bool {
 	if own == "" {
 		return false
 	}
@@ -198,48 +168,30 @@ func (r *Resolver) now() time.Time {
 	return time.Now()
 }
 
-// wantsPrereleases is whether pre-releases are candidates: as the channel says, or,
+// WantsPrereleases is whether pre-releases are candidates: as the channel says, or,
 // left to auto, when the gero itself is a pre-release.
-func wantsPrereleases(own, channel string) bool {
+func WantsPrereleases(own, channel string) bool {
 	switch channel {
 	case ChannelStable:
 		return false
 	case ChannelPrerelease:
 		return true
 	}
-	return own != "" && isPrerelease(own)
+	return own != "" && IsPrerelease(own)
 }
 
-// fitsChannel is whether a cached release is one the channel would choose: a
+// FitsChannel is whether a cached release is one the channel would choose: a
 // pre-release is not, when pre-releases are not candidates.
-func fitsChannel(tag, own, channel string) bool {
-	return wantsPrereleases(own, channel) || !isPrerelease(tag)
+func FitsChannel(tag, own, channel string) bool {
+	return WantsPrereleases(own, channel) || !IsPrerelease(tag)
 }
 
-// use is the bundle of the release: the cached one when it is of that release, else
-// the download.
-func (r *Resolver) use(ctx context.Context, tag string, cached Entry, have bool, now time.Time) (Loaded, error) {
-	if have && cached.Tag == tag {
-		if l, err := fromCache(cached, now); err == nil {
-			if err := r.Cache.Confirm(now); err == nil {
-				l.Source.FetchedAt, l.Source.Age = now, 0
-			}
-			return l, nil
-		}
-	}
-	data, err := r.Releases.Asset(ctx, tag, bundle.Name)
-	if err != nil {
-		return Loaded{}, err
-	}
-	h, fsys, err := bundle.Parse(data)
-	if err != nil {
-		return Loaded{}, fmt.Errorf("the bundle of %s: %w", tag, err)
-	}
-	_ = r.Cache.Write(Entry{Tag: tag, Data: data, FetchedAt: now}) // a cache that cannot be written costs the next run a download
-	return Loaded{Header: h, FS: fsys, Source: Source{Tag: tag, FetchedAt: now}}, nil
+// FromEntry is a stored bundle ready for the config loader, as of the time.
+func FromEntry(e Entry, now time.Time) (Loaded, error) {
+	return fromEntry(e, now)
 }
 
-func fromCache(e Entry, now time.Time) (Loaded, error) {
+func fromEntry(e Entry, now time.Time) (Loaded, error) {
 	h, fsys, err := bundle.Parse(e.Data)
 	if err != nil {
 		return Loaded{}, fmt.Errorf("the cached bundle of %s: %w", e.Tag, err)
@@ -249,10 +201,10 @@ func fromCache(e Entry, now time.Time) (Loaded, error) {
 	}}, nil
 }
 
-// ownRelease is the release tag of the running gero, or "" for a build that is not
+// OwnRelease is the release tag of the running gero, or "" for a build that is not
 // one, such as "dev". GoReleaser stamps the version without the leading v that the
 // tags of the releases have, so it is put back.
-func ownRelease(version string) string {
+func OwnRelease(version string) string {
 	if _, ok := assetfetch.CompareVersions(version, version); !ok {
 		return ""
 	}
@@ -262,7 +214,7 @@ func ownRelease(version string) string {
 	return version
 }
 
-func isPrerelease(tag string) bool {
+func IsPrerelease(tag string) bool {
 	tag, _, _ = strings.Cut(tag, "+")
 	return strings.Contains(tag, "-")
 }

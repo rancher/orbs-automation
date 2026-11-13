@@ -1,24 +1,23 @@
 package bundlestore
 
 import (
+	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
 )
 
-// loadRig is a workstation that has only the bundle compiled into the binary, one
-// project named "embedded", and an empty cache. It has no host at all: a Load that
-// reaches for the network panics on the nil Releases.
+// loadRig is a workstation that has only the config in the binary, one project named
+// "embedded", and an empty cache. Load never reaches for the network.
 func loadRig(t *testing.T) *rig {
 	t.Helper()
 	g := newRig(t)
-	g.r.Releases = nil
-	g.r.Embedded = bundletest.Compile(t, "embedded", bundletest.Config("embedded"))
+	g.r.Embedded = bundletest.Config("embedded")
 	return g
 }
 
@@ -132,7 +131,9 @@ func TestLoadTheCacheMustBeOnTheLineTheGeroIsOn(t *testing.T) {
 
 func TestLoadACacheThisGeroCannotReadIsPassedOverAndTheNoteSaysSo(t *testing.T) {
 	g := loadRig(t)
-	require.NoError(t, g.cache.Write(Entry{Tag: "v0.6.0", Data: []byte("not a bundle\n"), FetchedAt: t0}))
+	newer := strings.Replace(string(bundleOf(t, "v0.6.0", "alpha")), "formatVersion: 1", "formatVersion: 2", 1)
+	_, err := g.store.Put(Entry{Tag: "v0.6.0", Data: []byte(newer), FetchedAt: t0})
+	require.NoError(t, err)
 
 	got, err := g.loadOffline("0.5.0", "")
 
@@ -142,13 +143,15 @@ func TestLoadACacheThisGeroCannotReadIsPassedOverAndTheNoteSaysSo(t *testing.T) 
 	assert.Contains(t, got.Source.Note, "embedded")
 }
 
-func TestLoadWithABrokenEmbeddedBundleIsAnError(t *testing.T) {
+func TestLoadWithABrokenEmbeddedConfigIsAnError(t *testing.T) {
 	g := loadRig(t)
-	g.r.Embedded = []byte("not a bundle\n")
+	g.r.Embedded = fstest.MapFS{"broken.yaml": {Data: []byte("a: [\n")}}
 
 	_, err := g.loadOffline("0.5.0", "")
 
-	assert.ErrorIs(t, err, bundle.ErrMalformed)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "the embedded bundle")
+	assert.Contains(t, err.Error(), "does not validate")
 }
 
 func TestLoadWithNoEmbeddedBundleGivenIsTheOneCompiledIntoTheBinary(t *testing.T) {
@@ -165,4 +168,16 @@ func TestLoadWithNoEmbeddedBundleGivenIsTheOneCompiledIntoTheBinary(t *testing.T
 func TestSourceDescribesTheEmbeddedBundle(t *testing.T) {
 	assert.Equal(t, "embedded bundle v0.5.0", Source{Embedded: true, Tag: "v0.5.0"}.Describe())
 	assert.Equal(t, "embedded bundle (a build that is not a release)", Source{Embedded: true}.Describe())
+}
+
+func TestSourceDescribesTheReleaseAndHowOldTheCopyIs(t *testing.T) {
+	assert.Equal(t, "bundle v0.5.0, 3 hours old", Source{Tag: "v0.5.0", Age: 3 * time.Hour}.Describe())
+	assert.Equal(t, "bundle v0.5.0, 3 days old", Source{Tag: "v0.5.0", Age: 72 * time.Hour}.Describe())
+	assert.Equal(t, "bundle v0.6.0, under a minute old", Source{Tag: "v0.6.0"}.Describe())
+}
+
+func TestASourceFromAFileDescribesTheFileAndTheRelease(t *testing.T) {
+	s := Source{File: "/tmp/gero-config-bundle.yaml", Tag: "v0.3.0"}
+
+	assert.Equal(t, "bundle file /tmp/gero-config-bundle.yaml (v0.3.0)", s.Describe())
 }

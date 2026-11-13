@@ -6,10 +6,11 @@
 package bundle
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -29,6 +30,66 @@ type Header struct {
 	// FormatVersion is the version of the bundle format, set by Parse and ignored by
 	// Compile, which writes the one it knows.
 	FormatVersion int
+	// InputsDigest and CompilerRevision say what the bundle was made from: the hash of
+	// the config files that went in (Digest), and the revision of Compile that made it.
+	// Parse sets them, empty and zero for a bundle made before they were written, and
+	// Compile ignores them, writing the ones it works out.
+	InputsDigest     string
+	CompilerRevision int
+}
+
+// CompilerRevision is the revision of Compile. It is raised whenever Compile makes
+// different bytes for the same files, so that the same digest and revision always mean
+// the same bundle. The golden test fails until it is raised.
+const CompilerRevision = 1
+
+// Digest is the hash of the config files under fsys that Compile would bundle: the
+// YAML files in the order of their names, each by its name and the hash of its bytes.
+// It is the same for the same files whoever lists them, and changes when one byte of
+// one file, or a file's name, changes.
+func Digest(fsys fs.FS) (string, error) {
+	names, err := inputFiles(fsys)
+	if err != nil {
+		return "", err
+	}
+	var manifest strings.Builder
+	for _, name := range names {
+		data, err := fs.ReadFile(fsys, name)
+		if err != nil {
+			return "", err
+		}
+		sum := sha256.Sum256(data)
+		manifest.WriteString(name + "\x00" + hex.EncodeToString(sum[:]) + "\n")
+	}
+	sum := sha256.Sum256([]byte(manifest.String()))
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// inputFiles are the config files Compile bundles and Digest hashes: the YAML files
+// under fsys, in the order fs.WalkDir lists them.
+func inputFiles(fsys fs.FS) ([]string, error) {
+	var names []string
+	err := fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if ext := path.Ext(name); ext == ".yaml" || ext == ".yml" {
+			names = append(names, name)
+		}
+		return nil
+	})
+	return names, err
+}
+
+// ID is what identifies the bundle in a store: a hash of the revision of Compile and
+// the digest of the files it was made from. A bundle that does not carry a digest
+// has no ID.
+func (h Header) ID() string {
+	if h.InputsDigest == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte("compiler revision " + strconv.Itoa(h.CompilerRevision) + "\ninputs " + h.InputsDigest + "\n"))
+	return hex.EncodeToString(sum[:])
 }
 
 // Name is the file name of the bundle, in the output directory and as a release
@@ -52,63 +113,66 @@ const (
 // an editor at a schema, and a document marker, are dropped from its top. It
 // returns nothing when the config does not validate or is empty.
 func Compile(fsys fs.FS, h Header) ([]byte, error) {
+	data, _, err := CompileReport(fsys, h)
+	return data, err
+}
+
+// CompileReport is Compile, and the warnings the config had, which Compile leaves
+// unsaid: the tool prints them, and a binary that compiles its own config does not.
+func CompileReport(fsys fs.FS, h Header) ([]byte, []config.Finding, error) {
+	digest, err := Digest(fsys)
+	if err != nil {
+		return nil, nil, err
+	}
+	h.InputsDigest, h.CompilerRevision = digest, CompilerRevision
 	head, err := h.document()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	ctx := config.Context{Now: h.CompiledAt}
 	source, rep := chainload.Load(fsys, ctx)
 	if err := rep.Err(); err != nil {
-		return nil, fmt.Errorf("the config does not validate: %w", err)
+		return nil, nil, fmt.Errorf("the config does not validate: %w", err)
 	}
 	if source.Empty() {
-		return nil, errors.New("there is no config to bundle: no YAML file holds a document")
-	}
-	for _, w := range source.Warnings() {
-		fmt.Fprintln(os.Stderr, "compilebundle: warning:", w.Error())
+		return nil, nil, errors.New("there is no config to bundle: no YAML file holds a document")
 	}
 
+	names, err := inputFiles(fsys)
+	if err != nil {
+		return nil, nil, err
+	}
 	var body strings.Builder
-	err = fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		if ext := path.Ext(name); ext != ".yaml" && ext != ".yml" {
-			return nil
-		}
+	for _, name := range names {
 		data, err := fs.ReadFile(fsys, name)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		body.WriteString("---\n# source: " + name + "\n" + trimTop(string(data)))
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
 
 	// What a reader does with the body is checked here: it has to load to the
 	// config that went in.
 	_, bodyFS, err := Parse([]byte(head + body.String()))
 	if err != nil {
-		return nil, fmt.Errorf("the bundle does not parse back: %w", err)
+		return nil, nil, fmt.Errorf("the bundle does not parse back: %w", err)
 	}
 	back, rep := chainload.Load(bodyFS, ctx)
 	if err := rep.Err(); err != nil {
-		return nil, fmt.Errorf("the bundle does not load back: %w", err)
+		return nil, nil, fmt.Errorf("the bundle does not load back: %w", err)
 	}
 	if len(back.Projects()) != len(source.Projects()) || len(back.Holdings()) != len(source.Holdings()) ||
 		len(back.Lines()) != len(source.Lines()) {
-		return nil, errors.New("the bundle does not load back to the config that went in")
+		return nil, nil, errors.New("the bundle does not load back to the config that went in")
 	}
-	return []byte(head + body.String()), nil
+	return []byte(head + body.String()), source.Warnings(), nil
 }
 
 // document returns the header as the first document of a bundle. It is written
 // as text and not as YAML, so the values must be one plain word each.
 func (h Header) document() (string, error) {
 	for _, f := range []struct{ name, value string }{
-		{"version", h.GeroVersion}, {"commit", h.SourceCommit},
+		{"version", h.GeroVersion}, {"commit", h.SourceCommit}, {"inputs digest", h.InputsDigest},
 	} {
 		if f.value == "" {
 			return "", fmt.Errorf("the %s of the header is empty", f.name)
@@ -117,8 +181,8 @@ func (h Header) document() (string, error) {
 			return "", fmt.Errorf("the %s of the header, %q, must not contain spaces or control characters", f.name, f.value)
 		}
 	}
-	return fmt.Sprintf("apiVersion: %s\nkind: Bundle\nformatVersion: %d\ngeroVersion: %s\nsourceCommit: %s\ncompiledAt: %s\n",
-		bundleAPIVersion, formatVersion, h.GeroVersion, h.SourceCommit, h.CompiledAt.UTC().Format(time.RFC3339)), nil
+	return fmt.Sprintf("apiVersion: %s\nkind: Bundle\nformatVersion: %d\ngeroVersion: %s\nsourceCommit: %s\ncompiledAt: %s\ninputsDigest: %s\ncompilerRevision: %d\n",
+		bundleAPIVersion, formatVersion, h.GeroVersion, h.SourceCommit, h.CompiledAt.UTC().Format(time.RFC3339), h.InputsDigest, h.CompilerRevision), nil
 }
 
 // trimTop drops from the top of a file the schema comment and the document
@@ -188,6 +252,13 @@ func Parse(data []byte) (Header, fs.FS, error) {
 	}
 	if h.CompiledAt, err = time.Parse(time.RFC3339, fields["compiledAt"]); err != nil {
 		return Header{}, nil, fmt.Errorf("%w: compiledAt is %q, not a time", ErrMalformed, fields["compiledAt"])
+	}
+	// A bundle made before the digest was written has neither field, and has no ID.
+	h.InputsDigest = fields["inputsDigest"]
+	if rev, ok := fields["compilerRevision"]; ok {
+		if h.CompilerRevision, err = strconv.Atoi(rev); err != nil {
+			return Header{}, nil, fmt.Errorf("%w: compilerRevision is %q, not a number", ErrMalformed, rev)
+		}
 	}
 	return h, fstest.MapFS{Name: {Data: []byte(body)}}, nil
 }

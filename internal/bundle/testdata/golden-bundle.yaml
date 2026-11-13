@@ -1,0 +1,45 @@
+apiVersion: gero-bundle/v1
+kind: Bundle
+formatVersion: 1
+geroVersion: v0.5.0
+sourceCommit: abc123
+compiledAt: 2026-01-02T03:04:05Z
+inputsDigest: 0acbeadfc35fa371907c479d96a3c603a69f38cf4789b923a0ee2980287c8ed2
+compilerRevision: 1
+---
+# source: a.yaml
+# a: first
+apiVersion: gero/v1alpha2
+kind: Project
+name: alpha
+spec:
+  repo: {name: rancher/alpha, managedBy: orbs}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: alpha
+refs: {project: alpha}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  universal: true
+---
+# source: b.yaml
+# b: second
+apiVersion: gero/v1alpha2
+kind: Project
+name: bravo
+spec:
+  repo: {name: rancher/bravo, managedBy: orbs}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: bravo
+refs: {project: bravo}
+spec:
+  scheme: semver
+  requiresPrerelease: true
+  universal: true
+# yaml-language-server: $schema=elsewhere

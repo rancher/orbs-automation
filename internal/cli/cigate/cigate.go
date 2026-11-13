@@ -6,7 +6,7 @@ package cigate
 import (
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/github"
 )
 

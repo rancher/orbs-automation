@@ -7,7 +7,7 @@ import (
 	"io"
 	"regexp"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // Load decodes one YAML document into target, sets its defaults and validates it.

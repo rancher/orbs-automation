@@ -248,3 +248,216 @@ func TestAStepIsFromTheProducerWhenItSaysSo(t *testing.T) {
 	assert.False(t, chain.Step{Run: []string{"x"}, From: "consumer"}.FromProducer())
 	assert.False(t, chain.Step{Run: []string{"x"}}.FromProducer(), "no from is the consumer")
 }
+
+func TestAProjectResolvesWhatIsTypedAsALineOrABranch(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+		stream("s-one", "s", "  lines:\n    - {line: v2.15, series: \"0.9.x\"}\n"),
+	)
+	a, s := g.Project("a"), g.Project("s")
+
+	tests := []struct {
+		name         string
+		p            *chain.Project
+		arg          string
+		branch, line string
+		errContains  string
+	}{
+		{"a line with a branch of its own", a, "v2.15", "release/v2.15", "v2.15", ""},
+		{"a line written without its v", a, "2.15", "release/v2.15", "2.15", ""},
+		{"a line in development, on the default branch", a, "v2.16", "main", "v2.16", ""},
+		{"a release branch is the branch of its line", a, "release/v2.15", "release/v2.15", "v2.15", ""},
+		{"the default branch is the branch of the line on it", a, "main", "main", "v2.16", ""},
+		{"a line with no branch yet", a, "v2.14", "", "", "has no release line or branch \"v2.14\": it has v2.16, v2.15, v2.14, v2.13"},
+		{"a line the project does not list", a, "v2.99", "", "", "acme/a has no release line or branch \"v2.99\""},
+		{"a line of the stream's, on the one branch of a single layout", s, "v2.15", "main", "v2.15", ""},
+		{"the one branch of a single layout is in no line", s, "main", "main", "", ""},
+		{"a line a single layout knows nothing of", s, "v2.99", "", "", "acme/s has no release line or branch \"v2.99\": it has main"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			branch, line, err := tt.p.ResolveLineOrBranch(tt.arg)
+
+			if tt.errContains != "" {
+				require.ErrorContains(t, err, tt.errContains)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.branch, branch)
+			assert.Equal(t, tt.line, line)
+		})
+	}
+}
+
+func TestAProjectKnowsWhatItIsCalled(t *testing.T) {
+	g := chaintest.Load(t,
+		project("scc-operator", "  repo: {name: rancher/scc-operator}\n  aliases: [scc]\n"),
+		project("shell", "  repo: {name: rancher/shell}\n"),
+	)
+	scc, shell := g.Project("scc-operator"), g.Project("shell")
+
+	for _, key := range []string{"scc-operator", "SCC-Operator", "rancher/scc-operator", "Rancher/SCC-Operator", "scc", "SCC"} {
+		assert.True(t, scc.Named(key), key)
+		assert.False(t, shell.Named(key), key)
+	}
+	for _, key := range []string{"", "rancher", "scc-op", "rancher/shell"} {
+		assert.False(t, scc.Named(key), "%q is not a name of it", key)
+	}
+
+	t.Run("it is what the graph finds a project by", func(t *testing.T) {
+		for _, p := range g.Projects() {
+			for _, key := range []string{p.Name(), p.Slug(), "shell", "scc", "SCC-OPERATOR", "rancher/shell", "nobody"} {
+				assert.Equal(t, g.Project(key) == p, p.Named(key), "%s as %q", p.Name(), key)
+			}
+		}
+	})
+}
+
+func TestAProjectKnowsWhichLinesItListsForItsBranches(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+	)
+	a, s := g.Project("a"), g.Project("s")
+
+	for _, line := range []string{"v2.16", "v2.15", "2.15", "V2.15", "v2.14", "v2.13"} {
+		assert.True(t, a.ListsLine(line), line)
+	}
+	assert.False(t, a.ListsLine("v2.99"))
+	assert.False(t, s.ListsLine("v2.15"), "a single layout lists none, though it keeps them all")
+}
+
+func TestAProjectKnowsWhichLinesItsStreamsList(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15"),
+		project("a", "  repo: {name: acme/a}\n"),
+		project("u", "  repo: {name: acme/u}\n"),
+		stream("a-one", "a", "  lines:\n    - {line: v2.15, series: \"0.9.x\"}\n"),
+		stream("u-one", "u", "  universal: true\n"),
+	)
+
+	assert.True(t, g.Project("a").StreamListsLine("v2.15"))
+	assert.True(t, g.Project("a").StreamListsLine("2.15"))
+	assert.False(t, g.Project("a").StreamListsLine("v2.16"))
+	assert.False(t, g.Project("u").StreamListsLine("v2.15"), "a universal stream serves every line but lists none")
+}
+
+func TestTheHoldingsOfAProjectInTheFinalDestination(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14"),
+		project("prod", "  repo: {name: acme/prod}\n"),
+		project("hold", "  repo: {name: acme/hold}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r/2.15}]\n"),
+		project("end", "  repo: {name: acme/end}\n  finalDestination: true\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r/2.15}]\n"),
+		stream("prod", "prod", "  lines:\n    - {line: v2.16, series: \"2.x\"}\n    - {line: v2.15, series: \"1.x\"}\n    - {line: v2.14, series: \"0.x\"}\n"),
+		artifact("img", "prod", "  kind: image\n  name: acme/prod\n"),
+		holding("hold-img", "{project: hold, artifact: img}", holdsImage),
+		holding("end-img", "{project: end, artifact: img}", holdsImage),
+		holding("end-commit", "{project: end, from: prod}", holdsFrom),
+	)
+	prod := g.Project("prod")
+
+	got := prod.DestinationHoldings("v2.15")
+
+	require.Len(t, got, 1, "not the other holder's, and not a commit")
+	assert.Equal(t, "end-img", got[0].Name())
+	assert.Empty(t, prod.DestinationHoldings("v2.14"), "the destination lists no such line")
+	assert.Empty(t, g.Project("end").DestinationHoldings("v2.15"), "it produces nothing the destination holds")
+}
+
+func releaseTargetGraph(t *testing.T) *chain.Graph {
+	return chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+		project("t", "  repo: {name: acme/t}\n"),
+		stream("a-one", "a", "  lines:\n    - {line: v2.15, series: \"0.9.x\"}\n    - {line: v2.13, series: \"0.7.x\"}\n"),
+		stream("t-one", "t", "  lines:\n    - {line: v2.16, series: \"1.x\"}\n    - {line: v2.15, series: \"0.9.x\"}\n"),
+	)
+}
+
+func TestTheReleaseTargetsOfAProject(t *testing.T) {
+	g := releaseTargetGraph(t)
+
+	t.Run("a branch for each line, and for each stage of a line that has one for each", func(t *testing.T) {
+		assert.Equal(t, []chain.ReleaseTarget{
+			{Line: "v2.16", Branch: "main", IsDefault: true},
+			{Line: "v2.15", Series: "0.9.x", Branch: "release/v2.15"},
+			{Line: "v2.14"},
+			{Line: "v2.13", Series: "0.7.x", Stage: "dev", Branch: "dev-v2.13"},
+			{Line: "v2.13", Series: "0.7.x", Stage: "stable", Branch: "release-v2.13"},
+		}, g.Project("a").ReleaseTargets())
+	})
+	t.Run("a single layout has one branch, with a row for each line its streams list", func(t *testing.T) {
+		assert.Equal(t, []chain.ReleaseTarget{
+			{Line: "v2.16", Series: "1.x", Branch: "main", IsDefault: true},
+			{Line: "v2.15", Series: "0.9.x", Branch: "main", IsDefault: true},
+		}, g.Project("t").ReleaseTargets())
+	})
+	t.Run("a single layout whose streams list no line has the one row", func(t *testing.T) {
+		assert.Equal(t, []chain.ReleaseTarget{{Branch: "main", IsDefault: true}}, g.Project("s").ReleaseTargets())
+	})
+}
+
+func TestTheReleaseTargetsOfALine(t *testing.T) {
+	g := releaseTargetGraph(t)
+	a, s, tagged := g.Project("a"), g.Project("s"), g.Project("t")
+
+	assert.Equal(t, []chain.ReleaseTarget{{Line: "v2.15", Series: "0.9.x", Branch: "release/v2.15"}}, a.ReleaseTargetsOf("v2.15"))
+	assert.Equal(t, a.ReleaseTargetsOf("v2.15"), a.ReleaseTargetsOf("2.15"), "with or without the v")
+	assert.Equal(t, a.ReleaseTargetsOf("v2.15"), a.ReleaseTargetsOf("V2.15"), "in any case")
+	assert.Len(t, a.ReleaseTargetsOf("v2.13"), 2, "a row for each stage")
+	assert.Equal(t, []chain.ReleaseTarget{{Line: "v2.14"}}, a.ReleaseTargetsOf("v2.14"), "a line with no branch yet")
+	assert.Empty(t, a.ReleaseTargetsOf("v2.99"))
+	assert.Equal(t, []chain.ReleaseTarget{{Line: "v2.16", Series: "1.x", Branch: "main", IsDefault: true}}, tagged.ReleaseTargetsOf("v2.16"))
+	assert.Empty(t, s.ReleaseTargetsOf("v2.16"), "the one row of a single layout is of no line")
+}
+
+func TestTheSeriesAProjectsStreamsGiveALine(t *testing.T) {
+	g := releaseTargetGraph(t)
+	a := g.Project("a")
+
+	assert.Equal(t, "0.9.x", a.SeriesOf("v2.15"))
+	assert.Equal(t, "0.9.x", a.SeriesOf("2.15"))
+	assert.Empty(t, a.SeriesOf("v2.16"), "no stream gives it one")
+	assert.Empty(t, g.Project("s").SeriesOf("v2.15"), "a project with no stream")
+}
+
+func TestTheIdAProjectListsALineUnder(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14", "v2.13"),
+		project("a", perLine),
+		project("s", "  repo: {name: acme/s}\n"),
+	)
+	a := g.Project("a")
+
+	for _, typed := range []string{"v2.15", "2.15", "V2.15"} {
+		id, ok := a.LineID(typed)
+		assert.True(t, ok, typed)
+		assert.Equal(t, "v2.15", id, "the id as the project lists it, not as it was typed")
+	}
+	id, ok := a.LineID("v2.14")
+	assert.True(t, ok, "a line with no branch yet is listed")
+	assert.Equal(t, "v2.14", id)
+	_, ok = a.LineID("v2.99")
+	assert.False(t, ok)
+	_, ok = g.Project("s").LineID("v2.15")
+	assert.False(t, ok, "a single layout lists none")
+	assert.Equal(t, a.ListsLine("2.15"), func() bool { _, ok := a.LineID("2.15"); return ok }(), "ListsLine is whether there is an id")
+}
+
+func TestTheLineOfTheLinesDocumentAnIdNames(t *testing.T) {
+	g := chaintest.Load(t, chaintest.Lines("v2.16", "v2.15"))
+
+	for _, typed := range []string{"v2.15", "2.15", "V2.15"} {
+		line, ok := g.Line(typed)
+		assert.True(t, ok, typed)
+		assert.Equal(t, "v2.15", line.ID)
+	}
+	_, ok := g.Line("v2.99")
+	assert.False(t, ok)
+	_, ok = g.Line("")
+	assert.False(t, ok)
+}

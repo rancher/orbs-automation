@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/rancher/orbs-automation/internal/bump"
-	"github.com/rancher/orbs-automation/internal/platform/workdir"
+	"github.com/rancher/orbs-automation/internal/gero/workdir"
 	"github.com/rancher/orbs-automation/internal/task/bumpcommit"
 )
 

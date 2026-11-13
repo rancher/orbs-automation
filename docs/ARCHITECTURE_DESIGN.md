@@ -51,7 +51,7 @@ The CLI is built on **cobra** with a small custom loader for CLI config (no vipe
 ```
  flags  >  GERO_* env  >  user file (~/.config/gero/config.yaml)  >  defaults
                               |
-                        internal/platform/clicfg  ->  Settings  ->  command
+                        internal/gero/clicfg  ->  Settings  ->  command
 ```
 
 Some settings have no file key, so a file cannot change what a run does: `--dry-run`, `--bundle-file`, `GERO_OFFLINE` and the CI settings ([CLI_CONFIG](specs/CLI_CONFIG.md)).

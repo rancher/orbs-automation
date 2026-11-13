@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
@@ -109,7 +109,7 @@ func graph(ws Workspace) (string, error) {
 func writeProject(b *strings.Builder, p *chain.Project) {
 	class, label := classManaged, p.Name()
 	switch {
-	case p.Doc.Spec.Repo.External:
+	case p.External():
 		class = classExternal
 	case p.Shared():
 		class = classShared
@@ -117,7 +117,7 @@ func writeProject(b *strings.Builder, p *chain.Project) {
 		label += "\nmanaged by " + p.ManagedBy()
 	}
 	classes := class
-	if p.Doc.Spec.FinalDestination {
+	if p.FinalDestination() {
 		classes += "; " + classHub
 	}
 	fmt.Fprintf(b, "%s: {\n  class: [%s]\n  label: %s\n", quote(p.Slug()), classes, quote(label))

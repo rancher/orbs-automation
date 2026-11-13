@@ -17,7 +17,7 @@ import (
 
 	"github.com/mallardduck/binup"
 	binupgithub "github.com/mallardduck/binup/github"
-	"github.com/rancher/orbs-automation/internal/platform/releasesign"
+	"github.com/rancher/orbs-automation/internal/gero/releasesign"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
 

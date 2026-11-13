@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // UnmarshalYAML reads each ref as one name or a list of names.

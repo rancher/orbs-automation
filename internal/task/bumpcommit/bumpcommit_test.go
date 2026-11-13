@@ -16,8 +16,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/gero/workdir"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
-	"github.com/rancher/orbs-automation/internal/platform/workdir"
 )
 
 var bg = context.Background()

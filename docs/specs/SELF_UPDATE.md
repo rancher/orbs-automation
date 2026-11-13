@@ -2,7 +2,7 @@
 
 **Status:** implemented.
 
-`gero doctor self-update` replaces the running `gero` with the newest GitHub release. It is for an engineer's workstation: it is `workstation-only` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), refused in CI and in `gero repl` and hidden from help there. The mechanics are `github.com/mallardduck/binup`, behind `internal/platform/selfupdate` ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)); the flow and its text are `internal/cli/selfupdate`.
+`gero doctor self-update` replaces the running `gero` with the newest GitHub release. It is for an engineer's workstation: it is `workstation-only` ([CLI_FRAMEWORK](CLI_FRAMEWORK.md)), refused in CI and in `gero repl` and hidden from help there. The mechanics are `github.com/mallardduck/binup`, behind `internal/gero/selfupdate` ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)); the flow and its text are `internal/cli/selfupdate`.
 
 ## The flow
 
@@ -19,7 +19,7 @@ The level is the highest `binup` offers, and there is no flag that lowers it.
 
 * A checksum proves a download is intact, not that it is authentic: whoever can replace the release can replace `checksums.txt` too. So each release carries keyless [Sigstore](https://sigstore.dev) bundles, `<file>.sigstore.json`, for **the checksum manifest and for every archive**.
 * Both are verified. The manifest's signature makes its hashes trustworthy, the archive must match its hash, and the archive's own signature authenticates it directly, so neither is trusted on the strength of the other.
-* The signer is **pinned**: the certificate must name `release.yaml` of `rancher/orbs-automation`, run for a `v` tag, issued by GitHub Actions' OIDC (`selfupdate.SignerPattern` and `SignerIssuer`). A valid signature from a fork, another workflow, a branch or another repository proves nothing and is refused. The pattern is anchored at both ends, which `sigstore.NewVerifier` also insists on. The verifier and the pinned identity live in `internal/platform/releasesign`, which the fetch of the central config bundle shares ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)): one definition of "ours".
+* The signer is **pinned**: the certificate must name `release.yaml` of `rancher/orbs-automation`, run for a `v` tag, issued by GitHub Actions' OIDC (`selfupdate.SignerPattern` and `SignerIssuer`). A valid signature from a fork, another workflow, a branch or another repository proves nothing and is refused. The pattern is anchored at both ends, which `sigstore.NewVerifier` also insists on. The verifier and the pinned identity live in `internal/gero/releasesign`, which the fetch of the central config bundle shares ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)): one definition of "ours".
 * It **fails closed.** A release without the bundles fails with `ErrSignatureMissing`, a bundle that does not verify with `ErrSignatureInvalid`; the binary on disk is left as it was. Nothing falls back to the checksum alone.
 * The public-good Sigstore root is fetched over TUF unless one is supplied, so verifying needs the network beyond GitHub.
 

@@ -10,11 +10,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
 	"github.com/rancher/orbs-automation/internal/ui/style"
@@ -88,7 +86,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 	if remote == "" {
 		return fmt.Errorf("no upstream remote is set for %s: set upstream in the user file, or repos.overrides.%s.upstream", slug, slug)
 	}
-	target, err := lineBranch(project, opts.Line)
+	target, _, err := project.ResolveLineOrBranch(opts.Line)
 	if err != nil {
 		return err
 	}
@@ -130,24 +128,6 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp
 	}
 	_, err = fmt.Fprint(w, render(res, len(work.Existing), opts.Style))
 	return err
-}
-
-// lineBranch is the branch of the project that a release line lives on: the
-// line's own branch, or the default branch for a line that has none. A branch of
-// the project's, such as release/v2.15 or main, is taken as it is.
-func lineBranch(p *chain.Project, line string) (string, error) {
-	if branch, ok := p.BranchOfLine(line, ""); ok {
-		return branch, nil
-	}
-	branches := p.ReleaseBranches()
-	if slices.Contains(branches, line) {
-		return line, nil
-	}
-	lines := p.Lines()
-	if len(lines) == 0 {
-		lines = branches
-	}
-	return "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), line, strings.Join(lines, ", "))
 }
 
 // render is the report in text. What was made is green, what only would be is

@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/gero/texts"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
@@ -70,14 +71,14 @@ func renderPreview(in previewInput) (Preview, error) {
 	vars["changes"] = changes(in)
 	vars["marker"] = marker.String()
 
-	prefix := firstNonEmpty(in.userPrefix, prs.BranchPrefix, templates.DefaultBranchPrefix())
+	prefix := firstNonEmpty(in.userPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
 	renderedPrefix, err := templates.Render(prefix, vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
 	}
-	defaultTitle, defaultCommit := templates.DefaultTitle(), templates.CommitMessage()
+	defaultTitle, defaultCommit := texts.DefaultTitle(), texts.CommitMessage()
 	if len(in.pins) > 0 { // lasso goes with wrangler: the title and the commit say so
-		defaultTitle, defaultCommit = templates.DefaultTitleWith(), templates.CommitMessageWith()
+		defaultTitle, defaultCommit = texts.DefaultTitleWith(), texts.CommitMessageWith()
 	}
 	titleTemplate := firstNonEmpty(prs.Title, defaultTitle)
 	title, err := templates.Render(titleTemplate, vars)
@@ -88,7 +89,7 @@ func renderPreview(in previewInput) (Preview, error) {
 	if err != nil {
 		return Preview{}, fmt.Errorf("commit message: %w", err)
 	}
-	body, err := templates.Render(templates.Body(), vars)
+	body, err := templates.Render(texts.Body(), vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("body: %w", err)
 	}
@@ -141,7 +142,7 @@ func textVars(in previewInput) map[string]string {
 		"source":           in.producer.Name(),
 		"sourceRepo":       in.producer.Slug(),
 		"tag":              in.release.Tag,
-		"version":          releaseVersion(in.producer, in.release.Tag),
+		"version":          in.producer.ReleaseVersion(in.release.Tag),
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
@@ -150,18 +151,6 @@ func textVars(in previewInput) map[string]string {
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
 		"to":               joined(in.checks, func(c bump.HoldingCheck) string { return c.Want }),
 	}
-}
-
-// releaseVersion is the version of a release of the producer: its tag without the
-// prefix of the stream it is a release of (helmtools/v0.1.2 has helmtools/) and
-// without a leading v. A tag no stream matches loses only its v.
-func releaseVersion(producer *chain.Project, tag string) string {
-	for _, s := range producer.Streams() {
-		if s.TagMatches(tag) {
-			return strings.TrimPrefix(s.BareTag(tag), "v")
-		}
-	}
-	return strings.TrimPrefix(tag, "v")
 }
 
 // stepMessage returns the function that makes the commit message of a step that
@@ -174,7 +163,7 @@ func stepMessage(in previewInput) func(bump.Unit) (string, error) {
 		vars := textVars(in)
 		vars["command"] = strings.Join(u.Run, " ")
 		vars["phase"] = string(u.Phase)
-		return templates.Render(templates.StepCommitMessage(), vars)
+		return templates.Render(texts.StepCommitMessage(), vars)
 	}
 }
 
@@ -199,7 +188,7 @@ func strategyMessage(in previewInput) func(bump.Unit) (string, error) {
 		vars["strategy"] = u.Strategy
 		vars["edit"] = u.Edit
 		vars["changes"] = bullets(u.Changes)
-		msg, err := templates.Render(templates.StrategyCommitMessage(), vars)
+		msg, err := templates.Render(texts.StrategyCommitMessage(), vars)
 		if err != nil {
 			return "", err
 		}

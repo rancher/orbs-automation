@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/dockerfileedit"
 	"github.com/rancher/orbs-automation/internal/platform/gomodedit"
 	"github.com/rancher/orbs-automation/internal/platform/regexedit"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
@@ -21,17 +21,18 @@ import (
 var ErrFormatNotBuilt = errors.New("format not built")
 
 // A format reads the value at a key in a file and replaces it, leaving the rest of
-// the file as it was. Only the formats here are built: a holding in another one,
-// such as dockerfile, is refused with ErrFormatNotBuilt.
+// the file as it was. Only the formats here are built: a holding in another one is
+// refused with ErrFormatNotBuilt.
 type format struct {
 	get func(src []byte, key string) (string, error)
 	set func(src []byte, key, value string) (out []byte, old string, err error)
 }
 
 var formats = map[string]format{
-	"yaml":  {get: yamledit.Get, set: yamledit.Set},
-	"gomod": {get: gomodedit.Get, set: gomodedit.Set},
-	"regex": {get: regexedit.Get, set: regexedit.Set},
+	"yaml":       {get: yamledit.Get, set: yamledit.Set},
+	"dockerfile": {get: dockerfileedit.Get, set: dockerfileedit.Set},
+	"gomod":      {get: gomodedit.Get, set: gomodedit.Set},
+	"regex":      {get: regexedit.Get, set: regexedit.Set},
 }
 
 // ReleaseOf makes the variables of a release of the producer for what a holding
@@ -61,9 +62,10 @@ func ReleaseOf(h *chain.Holding, tag, commit string) (Release, error) {
 // starts with it; the bare tag is the tag without it, and the version is that
 // without a leading v.
 func newRelease(tag, pattern, sourceRepo, commit string) Release {
-	prefix := chain.TagPrefix(pattern, tag)
-	bare := strings.TrimPrefix(tag, prefix)
-	return Release{Tag: tag, Prefix: prefix, BareTag: bare, Version: strings.TrimPrefix(bare, "v"), SourceRepo: sourceRepo, Commit: commit}
+	return Release{
+		Tag: tag, Prefix: chain.TagPrefix(pattern, tag), BareTag: chain.BareTag(pattern, tag), Version: chain.Version(pattern, tag),
+		SourceRepo: sourceRepo, Commit: commit,
+	}
 }
 
 // tagPatternOf is the pattern of the tags of the stream a holding's artifact is
@@ -87,10 +89,10 @@ type Place struct {
 // file and key with the line, the holding's stage and the branch. A location
 // limited to other lines is left out, so a holding can have none for a line.
 func PlacesOf(h *chain.Holding, line, branch string) ([]Place, error) {
-	vars := map[string]string{"line": line, "stage": h.Doc.Spec.Holds.Stage, "branch": branch}
+	vars := map[string]string{"line": line, "stage": h.Stage(), "branch": branch}
 	var places []Place
-	for _, at := range h.Doc.Spec.At {
-		if !at.Lines.Contains(line) {
+	for _, at := range h.Locations() {
+		if !at.AppliesTo(line) {
 			continue
 		}
 		file, err := templates.Render(at.File, vars)
@@ -109,7 +111,7 @@ func PlacesOf(h *chain.Holding, line, branch string) ([]Place, error) {
 // FormOf renders how a holding writes the release: its form, with the release's
 // variables.
 func FormOf(h *chain.Holding, rel Release) (string, error) {
-	form := h.Doc.Spec.Holds.Form
+	form := h.Form()
 	value, err := templates.Render(form, map[string]string{
 		"image": rel.Image, "tag": rel.Tag, "prefix": rel.Prefix, "bareTag": rel.BareTag, "version": rel.Version, "url": rel.URL, "file": rel.File,
 		"sourceRepo": rel.SourceRepo, "commit": rel.Commit, "base": "", "upstream": "",

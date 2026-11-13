@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -79,26 +78,14 @@ type reference struct {
 // destinationReferences is the producer of the release and the producer of each
 // companion of the target, each with the destination's holdings of it for the line.
 func (r resolution) destinationReferences(t bump.Target) []reference {
-	refs := []reference{{producer: r.producer, stream: r.route.Stream, holdings: destinationHoldings(r.producer, t.Line)}}
+	refs := []reference{{producer: r.producer, stream: r.route.Stream, holdings: r.producer.DestinationHoldings(t.Line)}}
 	for _, h := range t.Holdings {
 		if !h.Virtual() || h.Producer() == r.producer || slices.ContainsFunc(refs, func(o reference) bool { return o.producer == h.Producer() }) {
 			continue
 		}
-		refs = append(refs, reference{producer: h.Producer(), stream: h.Artifact().Stream(), holdings: destinationHoldings(h.Producer(), t.Line)})
+		refs = append(refs, reference{producer: h.Producer(), stream: h.Artifact().Stream(), holdings: h.Producer().DestinationHoldings(t.Line)})
 	}
 	return refs
-}
-
-// destinationHoldings is the holdings of a producer's releases in the final
-// destination that are for the line.
-func destinationHoldings(producer *chain.Project, line string) []*chain.Holding {
-	var out []*chain.Holding
-	for _, h := range producer.Sourced() {
-		if h.Holder().FinalDestination() && h.Kind() == chain.HoldsRelease && h.AppliesTo(line) {
-			out = append(out, h)
-		}
-	}
-	return out
 }
 
 // readDestination fills d with what the destination holds of the stream on its
@@ -154,23 +141,10 @@ func (r resolution) destinationWarnings(d Destination, producer *chain.Project, 
 	}
 	var out []string
 	for _, held := range d.Held {
-		if tag := heldTag(held.Current); tag != "" && !matchesStream(stream, tag) {
+		if tag := heldTag(held.Current); tag != "" && !stream.HasRelease(tag) {
 			out = append(out, fmt.Sprintf("%s holds %s on %s, which is not a release of the stream %s that %s holds",
 				d.Project, tag, d.Line, stream.Name(), consumer))
 		}
 	}
 	return out
-}
-
-// matchesStream reports whether a value a holding read is a release of the stream:
-// its tag, or the tag without the prefix a Go module goes without.
-func matchesStream(s *chain.Stream, value string) bool {
-	if s.TagMatches(value) {
-		return true
-	}
-	pattern := s.TagPattern()
-	if i := strings.LastIndex(pattern, "/"); i >= 0 {
-		return s.TagMatches(pattern[:i+1] + value)
-	}
-	return false
 }

@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -101,7 +100,7 @@ func resolveRoute(ctx context.Context, ws Reader, route bump.Route) (resolution,
 // prerelease too.
 func acceptsAll(route bump.Route) bool {
 	for _, h := range route.Holdings {
-		if h.Doc.Spec.Holds.Accept != chain.AcceptAll {
+		if !h.AcceptsAll() {
 			return false
 		}
 	}
@@ -132,17 +131,6 @@ type selection struct {
 // does not send every release to every branch.
 func (r resolution) followsLines() bool { return !r.stream.Universal() }
 
-// consumerLine finds a line of the consumer by name, with or without the v.
-func (r resolution) consumerLine(line string) (string, bool) {
-	line = lines.Normalize(line)
-	for _, l := range r.route.Consumer.Lines() {
-		if strings.EqualFold(l, line) {
-			return l, true
-		}
-	}
-	return "", false
-}
-
 // specs chooses the targets to check, each with its release.
 //
 // A producer whose releases follow the lines, given no release, ships each line
@@ -165,7 +153,7 @@ func (r resolution) specs(in Input) (selection, error) {
 	if len(in.Lines) > 0 {
 		sel := selection{named: true}
 		for _, line := range in.Lines {
-			canonical, ok := r.consumerLine(line)
+			canonical, ok := r.route.Consumer.LineID(line)
 			if !ok {
 				return selection{}, r.noSuchLine(line)
 			}
@@ -206,7 +194,7 @@ func (r resolution) lineArgument(in Input) Input {
 	if in.Arg == "" || r.followsLines() || slices.ContainsFunc(r.tags, func(t git.Tag) bool { return t.Name == in.Arg }) {
 		return in
 	}
-	canonical, ok := r.consumerLine(in.Arg)
+	canonical, ok := r.route.Consumer.LineID(in.Arg)
 	if !ok {
 		return in
 	}
@@ -233,7 +221,7 @@ func (r resolution) eachLine(in Input) (selection, error) {
 	var names []string
 	if sel.named {
 		for _, line := range in.Lines {
-			canonical, ok := r.consumerLine(line)
+			canonical, ok := r.route.Consumer.LineID(line)
 			if !ok {
 				return selection{}, r.noSuchLine(line)
 			}
@@ -241,7 +229,7 @@ func (r resolution) eachLine(in Input) (selection, error) {
 		}
 	} else {
 		for _, line := range r.scheme.Lines(r.tags) {
-			if _, ok := r.consumerLine(line); ok {
+			if _, ok := r.route.Consumer.LineID(line); ok {
 				names = append(names, line)
 			}
 		}
@@ -300,7 +288,7 @@ func (r resolution) noSuchLine(line string) error {
 func narrowStreams(producer *chain.Project, routes []bump.Route, in Input) ([]bump.Route, error) {
 	var of []bump.Route // the routes of the consumer the user named
 	for _, r := range routes {
-		if in.To == "" || named(r.Consumer, in.To) {
+		if in.To == "" || r.Consumer.Named(in.To) {
 			of = append(of, r)
 		}
 	}
@@ -317,7 +305,7 @@ func narrowStreams(producer *chain.Project, routes []bump.Route, in Input) ([]bu
 		}
 	}
 	lines := slices.Clone(in.Lines)
-	if in.Arg != "" && !tagged && hasLine(consumer, in.Arg) && !listsLine(producer, in.Arg) {
+	if in.Arg != "" && !tagged && consumer.ListsLine(in.Arg) && !producer.StreamListsLine(in.Arg) {
 		lines = append(lines, in.Arg)
 	}
 	if len(lines) == 0 && !tagged {
@@ -366,32 +354,12 @@ func describeStreams(routes []bump.Route) string {
 	return strings.Join(out, ", ")
 }
 
-// hasLine reports whether a project lists the line, written with or without its v.
-func hasLine(p *chain.Project, line string) bool {
-	return slices.ContainsFunc(p.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
-}
-
-// listsLine reports whether a stream of the project lists the line itself, which a
-// universal stream does not: its releases belong to no line.
-func listsLine(p *chain.Project, line string) bool {
-	return slices.ContainsFunc(p.Streams(), func(s *chain.Stream) bool {
-		return slices.ContainsFunc(s.Lines(), func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) })
-	})
-}
-
-// named reports whether a project is what the user called it: its config name, its
-// owner/name slug or one of its aliases, whatever the case.
-func named(p *chain.Project, key string) bool {
-	return strings.EqualFold(p.Name(), key) || strings.EqualFold(p.Slug(), key) ||
-		slices.ContainsFunc(p.Aliases(), func(a string) bool { return strings.EqualFold(a, key) })
-}
-
 // pickRoute chooses the route to ship down: the one to the consumer named by to
 // (a config name, a slug or an alias); the only route when there is just one.
 func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Route, error) {
 	var matches []bump.Route
 	for _, r := range routes {
-		if to == "" || named(r.Consumer, to) {
+		if to == "" || r.Consumer.Named(to) {
 			matches = append(matches, r)
 		}
 	}

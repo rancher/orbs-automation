@@ -79,7 +79,7 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 		if h.Kind() != chain.HoldsRelease {
 			continue
 		}
-		for _, at := range h.Doc.Spec.At {
+		for _, at := range h.Locations() {
 			if _, built := formats[at.Format]; !built {
 				errs = append(errs, fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), at.Format))
 				e.unusable[h] = true
@@ -123,14 +123,10 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 	return nil
 }
 
-// Route is one way out of a producer: the release holdings a consumer has of it.
+// Route is one way out of a producer: the release holdings a consumer has of it, as
+// the chain says (chain.Route), and what the engine adds to run them.
 type Route struct {
-	Producer *chain.Project
-	Consumer *chain.Project
-	// Stream is the stream whose releases the route ships: the stream of the
-	// artifact of each of its holdings.
-	Stream   *chain.Stream
-	Holdings []*chain.Holding
+	chain.Route
 	// SkipProducerSteps leaves out the steps that run from the producer's repo, for
 	// a producer the active team does not own: gero runs nothing out of a repo no
 	// team of its own owns. They are reported by SkippedSteps.
@@ -157,7 +153,7 @@ func (r Route) EnvOf(ctx context.Context, tree Tree, t Target) (map[string]strin
 	vars := map[string]string{"line": t.Line, "branch": t.Branch}
 	haveToolchain := false
 	out, setBy := map[string]string{}, map[string]string{}
-	for _, ed := range editsOf(r.holdingsOf(t)) {
+	for _, ed := range chain.EditsOf(r.holdingsOf(t)) {
 		env := ed.Env()
 		for _, name := range slices.Sorted(maps.Keys(env)) {
 			uses, err := templates.Placeholders(env[name])
@@ -250,64 +246,29 @@ func withEnv(runner StepRunner, env map[string]string) StepRunner {
 	return envAdding{StepRunner: runner, env: env}
 }
 
-// routeKey is what a route is for: the project the key says, and the stream of
-// the artifacts it holds. A consumer that holds artifacts of two streams of one
-// producer has two routes, since a release is of one stream.
-type routeKey struct {
-	project *chain.Project
-	stream  *chain.Stream
-}
-
-// routes groups release holdings by the project the key says and the stream of
-// their artifact, in the order they come, leaving out a holding that cannot be
-// used and so the route it is in, and no other.
-func (e *Engine) routes(holdings []*chain.Holding, key func(*chain.Holding) *chain.Project) []Route {
+// usable is the routes of the chain whose holdings can all be used, as engine routes:
+// a holding that cannot be used leaves out the route it is in, and no other.
+func (e *Engine) usable(routes []chain.Route) []Route {
 	var out []Route
-	bad := map[routeKey]bool{}
-	index := map[routeKey]int{}
-	keyOf := func(h *chain.Holding) routeKey { return routeKey{key(h), h.Artifact().Stream()} }
-	for _, h := range holdings {
-		if h.Kind() != chain.HoldsRelease || h.Artifact() == nil {
-			continue
-		}
-		k := keyOf(h)
-		if e.unusable[h] {
-			bad[k] = true
-		}
-		i, ok := index[k]
-		if !ok {
-			i = len(out)
-			index[k] = i
-			out = append(out, Route{Producer: h.Producer(), Consumer: h.Holder(), Stream: k.stream, engine: e})
-		}
-		out[i].Holdings = append(out[i].Holdings, h)
-	}
-	var usable []Route
-	for _, r := range out {
-		if !bad[keyOf(r.Holdings[0])] {
-			usable = append(usable, r)
+	for _, r := range routes {
+		if !slices.ContainsFunc(r.Holdings, func(h *chain.Holding) bool { return e.unusable[h] }) {
+			out = append(out, Route{Route: r, engine: e})
 		}
 	}
-	return usable
+	return out
 }
 
 // RoutesFrom returns the routes out of a producer, one for each consumer and
 // stream, in the order of the holdings, leaving out a route whose holdings or edits are not
 // usable.
 func (e *Engine) RoutesFrom(producer *chain.Project) []Route {
-	return e.routes(producer.Sourced(), func(h *chain.Holding) *chain.Project { return h.Holder() })
+	return e.usable(producer.RoutesFrom())
 }
 
 // RoutesInto returns the routes into a consumer, one for each producer and stream, in the
 // order of the holdings.
 func (e *Engine) RoutesInto(consumer *chain.Project) []Route {
-	return e.routes(consumer.Held(), func(h *chain.Holding) *chain.Project { return h.Producer() })
-}
-
-// AppliesTo reports whether the route has a holding for the consumer's line: one
-// whose lines hold it, that the consumer lists, and whose stream serves it.
-func (r Route) AppliesTo(line string) bool {
-	return slices.ContainsFunc(r.Holdings, func(h *chain.Holding) bool { return h.AppliesTo(line) })
+	return e.usable(consumer.RoutesInto())
 }
 
 // holdingsOf is the holdings a target writes: its own, or the route's when it
@@ -319,7 +280,6 @@ func (r Route) holdingsOf(t Target) []*chain.Holding {
 	return r.Holdings
 }
 
-// editsOf returns the edits that follow the holdings, each once, in order.
 // changesOf is what the holdings of an edit wrote, in the order the edit lists them.
 func changesOf(ed *chain.Edit, written map[*chain.Holding][]Change) []Change {
 	var out []Change
@@ -328,22 +288,6 @@ func changesOf(ed *chain.Edit, written map[*chain.Holding][]Change) []Change {
 	}
 	return out
 }
-
-func editsOf(holdings []*chain.Holding) []*chain.Edit {
-	var out []*chain.Edit
-	for _, h := range holdings {
-		for _, ed := range h.Edits() {
-			if !slices.Contains(out, ed) {
-				out = append(out, ed)
-			}
-		}
-	}
-	return out
-}
-
-// Edits returns the edits that follow the route's holdings, each once, in the
-// order they are read.
-func (r Route) Edits() []*chain.Edit { return editsOf(r.Holdings) }
 
 // Target is a branch of the consumer a release goes to, and the holdings written
 // there.
@@ -406,10 +350,10 @@ func (r Route) TargetsFor(line string) ([]Target, error) {
 	}
 	noLine := false
 	for _, h := range r.Holdings {
-		stage := h.Doc.Spec.Holds.Stage
+		stage := h.Stage()
 		if h.Artifact().Stream().Universal() {
 			for _, branch := range r.Consumer.BranchesOfStage(stage) {
-				if l := r.Consumer.LineOfBranch(branch); l == "" || h.Doc.Spec.Holds.Lines.Contains(l) {
+				if l := r.Consumer.LineOfBranch(branch); l == "" || h.HoldsLine(l) {
 					add(branch, h)
 				}
 			}
@@ -508,7 +452,7 @@ func (r Route) split(t Target) (ran, skipped []StepRef) {
 		}
 		return out
 	}
-	for _, ed := range editsOf(r.holdingsOf(t)) {
+	for _, ed := range chain.EditsOf(r.holdingsOf(t)) {
 		pre = append(pre, collect(PreEdit, ed.Name(), ed.PreEdit())...)
 		post = append(post, collect(PostEdit, ed.Name(), ed.PostEdit())...)
 	}
@@ -567,7 +511,7 @@ type Checkpoint func(ctx context.Context, u Unit) error
 func (r Route) Ready() error { return r.readyFor(r.Holdings) }
 
 func (r Route) readyFor(holdings []*chain.Holding) error {
-	for _, ed := range editsOf(holdings) {
+	for _, ed := range chain.EditsOf(holdings) {
 		if nb, ok := r.engine.appliers[ed].(notBuilt); ok {
 			return fmt.Errorf("Edit %q: %w", ed.Name(), nb.NotBuilt())
 		}
@@ -660,7 +604,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	if err := checkpoint(Unit{Kind: UnitEdit, Changes: res.Changes}); err != nil {
 		return res, err
 	}
-	for _, ed := range editsOf(holdings) {
+	for _, ed := range chain.EditsOf(holdings) {
 		applier := r.engine.appliers[ed]
 		if applier == nil {
 			continue
@@ -708,7 +652,7 @@ func (r Route) targetsOnLine(line string, holdings []*chain.Holding) []Target {
 		if !h.AppliesTo(line) {
 			continue
 		}
-		branch, ok := r.Consumer.BranchOfLine(line, h.Doc.Spec.Holds.Stage)
+		branch, ok := r.Consumer.BranchOfLine(line, h.Stage())
 		if !ok {
 			continue
 		}

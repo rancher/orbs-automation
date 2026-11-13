@@ -7,7 +7,7 @@ package termfacts
 import (
 	"os"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"golang.org/x/term"
 )
 

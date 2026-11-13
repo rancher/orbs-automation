@@ -1,4 +1,10 @@
-package templates
+// Package texts is what gero ship says when a project's config does not say it
+// otherwise: the PR title, the branch prefix, the commit messages and the PR body,
+// each an embedded file under defaults/ that reads as the text it makes. Every
+// commit message ends with the authorship trailer (internal/gero/authorship), which
+// is how a later run knows a branch is its own. The placeholders are filled by
+// internal/platform/templates.
+package texts
 
 import (
 	"embed"
@@ -53,3 +59,24 @@ func StrategyCommitMessage() string { return text("strategy_commit.txt") + "\n" 
 // StepCommitMessage is the commit message of a step that changed files: what
 // ran, where it fits in the bump, and the trailers. It may use StepCommitVars.
 func StepCommitMessage() string { return text("step_commit.txt") + "\n" }
+
+// StepCommitVars are the variables of the commit message of a step: the ones that
+// say what the bump is, and which step this is.
+//
+//	command  the step's command, as written
+//	phase    where the step runs, such as "method postEdit"
+var StepCommitVars = []string{
+	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
+	"consumer", "sourceReleaseURL", "command", "phase",
+}
+
+// StrategyCommitVars are the variables of the commit message of a strategy: the
+// ones that say what the bump is, and which strategy this is.
+//
+//	strategy  the strategy's name, such as goBump
+//	edit      the edit that names the strategy
+//	changes   what the strategy changed, one bullet for each
+var StrategyCommitVars = []string{
+	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
+	"consumer", "sourceReleaseURL", "strategy", "edit", "changes",
+}

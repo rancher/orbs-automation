@@ -6,11 +6,11 @@
 package tagscheme
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/calver"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
@@ -43,25 +43,10 @@ type Scheme interface {
 	Compare(a, b string) int
 }
 
-// lineSeries is a line a project lists and the version series of its releases.
-type lineSeries struct {
-	line   string
-	series string
-}
-
-// ids is the lines of the list, in order.
-func ids(lines []lineSeries) []string {
-	var out []string
-	for _, l := range lines {
-		out = append(out, l.line)
-	}
-	return out
-}
-
 // semverScheme is the scheme of a project with per-line branches, and the default:
 // tags are versions, and a line is the version series the config gives it.
 type semverScheme struct {
-	lines   []lineSeries
+	stream  *chain.Stream // the stream whose lines and series these are
 	pattern string
 	accepts func(tag string) bool // nil: every tag the pattern matches
 }
@@ -79,20 +64,16 @@ func (semverScheme) Valid(tag string) bool {
 	return ok
 }
 
-func (s semverScheme) Lines([]git.Tag) []string { return ids(s.lines) }
+func (s semverScheme) Lines([]git.Tag) []string { return s.stream.Lines() }
 
 func (s semverScheme) LineOf(tag string) string {
-	for _, l := range s.lines {
-		if l.series != "" && semver.InSeries(tag, l.series) {
-			return l.line
-		}
-	}
-	return ""
+	line, _ := s.stream.LineOf(tag)
+	return line
 }
 
 func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 	if line != "" {
-		series, ok := s.series(line)
+		series, ok := s.stream.Series(line)
 		if !ok {
 			return git.Latest{}
 		}
@@ -115,16 +96,6 @@ func (s semverScheme) Latest(tags []git.Tag, line string) git.Latest {
 		tags = kept
 	}
 	return git.LatestReleases(tags, s.pattern)
-}
-
-// series is the version series of the project's line of that name.
-func (s semverScheme) series(line string) (string, bool) {
-	for _, l := range s.lines {
-		if lines.Normalize(l.line) == lines.Normalize(line) {
-			return l.series, true
-		}
-	}
-	return "", false
 }
 
 func (semverScheme) Stage(string) string { return "" }
@@ -247,20 +218,15 @@ func names(tags []git.Tag) []string {
 // lines it lists and the tags it accepts, and the calver scheme it names for a
 // calverLineStage stream. A chartVersion stream has none yet.
 func ForStream(st *chain.Stream) (Scheme, error) {
-	var lines []lineSeries
-	for _, id := range st.Lines() {
-		series, _ := st.Series(id)
-		lines = append(lines, lineSeries{line: id, series: series})
-	}
 	switch st.Scheme() {
 	case Semver:
-		return semverScheme{lines: lines, pattern: st.TagPattern(), accepts: st.TagMatches}, nil
+		return semverScheme{stream: st, pattern: st.TagPattern(), accepts: st.TagMatches}, nil
 	case CalverLineStage:
 		inner, err := calver.Builtin().Get(st.Scheme())
 		if err != nil {
 			return nil, fmt.Errorf("stream %s: %w", st.Name(), err)
 		}
-		return calverScheme{lines: ids(lines), inner: inner}, nil
+		return calverScheme{lines: st.Lines(), inner: inner}, nil
 	}
 	return nil, fmt.Errorf("stream %s: the scheme %s is not built", st.Name(), st.Scheme())
 }
@@ -268,14 +234,14 @@ func ForStream(st *chain.Stream) (Scheme, error) {
 // ForProject returns the scheme of the one stream of a project. A project with no
 // stream, or with several, has no one scheme, and the caller names the stream.
 func ForProject(p *chain.Project) (Scheme, error) {
-	switch streams := p.Streams(); len(streams) {
-	case 0:
-		return nil, fmt.Errorf("project %s has no stream", p.Name())
-	case 1:
-		return ForStream(streams[0])
-	default:
-		return nil, fmt.Errorf("project %s has %d streams: name the one to use", p.Name(), len(streams))
+	st, err := p.OnlyStream()
+	switch {
+	case errors.Is(err, chain.ErrSeveralStreams):
+		return nil, fmt.Errorf("%w: name the one to use", err)
+	case err != nil:
+		return nil, err
 	}
+	return ForStream(st)
 }
 
 // Newest is the newest tag of a line of any kind, a prerelease or a stable tag,

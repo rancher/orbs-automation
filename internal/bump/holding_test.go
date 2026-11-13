@@ -7,6 +7,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/platform/dockerfileedit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -252,7 +253,23 @@ func TestApplyHoldingChangesOnlyTheValue(t *testing.T) {
 	assert.Empty(t, again.Changes)
 }
 
+// withoutDockerfile takes the dockerfile format out of the registry for one test, to
+// reach what the engine does with a holding in a format that is not built: every
+// format the schema lists is built, so none is left to name in a config, and this is
+// the one the tests take out.
+func withoutDockerfile(t *testing.T) {
+	t.Helper()
+	f, had := formats["dockerfile"]
+	delete(formats, "dockerfile")
+	t.Cleanup(func() {
+		if had {
+			formats["dockerfile"] = f
+		}
+	})
+}
+
 func TestApplyHoldingOfAFormatThatIsNotBuilt(t *testing.T) {
+	withoutDockerfile(t)
 	h := holdings(t, "img\n  at: {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release}\n")[0]
 	rel, _ := ReleaseOf(h, "v0.5.3", "c")
 	tree := files{"Dockerfile": "ARG IMAGE=x\n"}
@@ -424,6 +441,7 @@ func TestAHoldingWithNoLocationForTheLineIsAnErrorNotANoOp(t *testing.T) {
 }
 
 func TestAHoldingWithALocationInAFormatNotBuiltWritesNothing(t *testing.T) {
+	withoutDockerfile(t)
 	h := holdings(t, "img\n  at:\n    - {file: build.yaml, key: defaultImage}\n    - {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n")[0]
 	rel, _ := ReleaseOf(h, "v0.5.3", "c")
 	tree := files{"build.yaml": buildYAML, "Dockerfile": "ARG IMAGE=x\n"}
@@ -432,6 +450,63 @@ func TestAHoldingWithALocationInAFormatNotBuiltWritesNothing(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrFormatNotBuilt)
 	assert.Equal(t, buildYAML, tree["build.yaml"], "the first location is not written when the second cannot be")
+}
+
+const dockerfileHolding = "img\n  at: {file: package/Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n"
+
+const imageDockerfile = "FROM scratch\nARG IMAGE=acme/prod:v0.5.2\nARG OTHER=1\nFROM x\nARG IMAGE\n"
+
+func TestCheckHoldingOfADockerfileArg(t *testing.T) {
+	h := holdings(t, dockerfileHolding)[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+
+	got, err := CheckHolding(bg, files{"package/Dockerfile": imageDockerfile}, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.Equal(t, "acme/prod:v0.5.2", got.Current)
+	assert.Equal(t, "acme/prod:v0.5.3", got.Want)
+	assert.False(t, got.UpToDate)
+	assert.Equal(t, RelationNewer, got.Relation)
+}
+
+func TestApplyHoldingOfADockerfileArgChangesOnlyTheDefault(t *testing.T) {
+	h := holdings(t, dockerfileHolding)[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"package/Dockerfile": imageDockerfile}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.True(t, got.Changed)
+	assert.Equal(t, "FROM scratch\nARG IMAGE=acme/prod:v0.5.3\nARG OTHER=1\nFROM x\nARG IMAGE\n", tree["package/Dockerfile"])
+	require.Len(t, got.Changes, 1)
+	assert.Equal(t, "Updated `IMAGE` in `package/Dockerfile` from `acme/prod:v0.5.2` to `acme/prod:v0.5.3`", got.Changes[0].Description)
+
+	again, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+	require.NoError(t, err)
+	assert.False(t, again.Changed, "already held")
+}
+
+func TestAHoldingInADockerfileAndAnotherFileIsWrittenInBoth(t *testing.T) {
+	h := holdings(t, "img\n  at:\n    - {file: build.yaml, key: defaultImage}\n    - {file: Dockerfile, key: IMAGE, format: dockerfile}\n  holds: {kind: release, form: \"{image}:{tag}\"}\n")[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+	tree := files{"build.yaml": buildYAML, "Dockerfile": imageDockerfile}
+
+	got, err := ApplyHolding(bg, tree, h, "v2.16", "main", rel)
+
+	require.NoError(t, err)
+	assert.Len(t, got.Changes, 2)
+	assert.Contains(t, tree["build.yaml"], "acme/prod:v0.5.3")
+	assert.Contains(t, tree["Dockerfile"], "ARG IMAGE=acme/prod:v0.5.3")
+}
+
+func TestCheckHoldingOfADockerfileArgThatIsNotGivenAValue(t *testing.T) {
+	h := holdings(t, dockerfileHolding)[0]
+	rel, _ := ReleaseOf(h, "v0.5.3", "c")
+
+	_, err := CheckHolding(bg, files{"package/Dockerfile": "FROM x\nARG IMAGE\n"}, h, "v2.16", "main", rel)
+
+	require.ErrorIs(t, err, dockerfileedit.ErrNotFound)
 }
 
 // libMod is a go.mod that requires the library at two versions of a family.

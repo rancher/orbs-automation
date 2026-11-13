@@ -1,36 +1,43 @@
 package embedded
 
 import (
-	"bytes"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// header is what tools/compilebundle writes with no flags: the same bytes for the
-// same config, whoever builds and whenever.
-var header = bundle.Header{GeroVersion: "dev", SourceCommit: "none", CompiledAt: time.Unix(0, 0).UTC()}
+// TestTheEmbeddedFilesAreTheConfigDirectory fails when a YAML file of config/ is not
+// embedded, such as one in a subdirectory, which the pattern in config/embed.go does
+// not take.
+func TestTheEmbeddedFilesAreTheConfigDirectory(t *testing.T) {
+	embedded, err := bundle.Digest(FS())
+	require.NoError(t, err)
+	onDisk, err := bundle.Digest(os.DirFS("../../../config"))
+	require.NoError(t, err)
 
-func TestTheEmbeddedBundleParses(t *testing.T) {
-	h, fsys, err := bundle.Parse(Bytes())
+	assert.Equal(t, onDisk, embedded, "config/ holds a YAML file that is not embedded")
+}
+
+func TestTheEmbeddedConfigCompilesToABundleThatParses(t *testing.T) {
+	data, err := Compile()
+	require.NoError(t, err, "the config in config/ must validate")
+
+	h, fsys, err := bundle.Parse(data)
 
 	require.NoError(t, err)
 	assert.Equal(t, "dev", h.GeroVersion)
+	assert.NotEmpty(t, h.InputsDigest)
 	assert.NotNil(t, fsys)
 }
 
-// TestTheEmbeddedBundleIsTheConfigDirectoryCompiled fails when config/ changed and
-// the embedded file was not made again: run go generate ./internal/bundle/embedded.
-func TestTheEmbeddedBundleIsTheConfigDirectoryCompiled(t *testing.T) {
-	want, err := bundle.Compile(os.DirFS("../../../config"), header)
+func TestTheEmbeddedConfigCompilesTheSameEveryTime(t *testing.T) {
+	first, err := Compile()
+	require.NoError(t, err)
+	again, err := Compile()
 	require.NoError(t, err)
 
-	// Not assert.Equal: a diff of two bundles is the whole of config/ twice.
-	assert.True(t, bytes.Equal(want, Bytes()),
-		"the embedded bundle (%d bytes) is not config/ compiled (%d bytes): run go generate ./internal/bundle/embedded",
-		len(Bytes()), len(want))
+	assert.Equal(t, string(first), string(again))
 }

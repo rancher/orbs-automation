@@ -14,7 +14,16 @@ linters:
     - unparam
     - depguard
     - perfsprint
+    - forbidigo
   settings:
+    # The chain is the only reader of its documents: everything else asks the
+    # model, so a default or a rule about the config is applied in one place
+    # (docs/design/CHAIN_MODEL.md). internal/chain itself is excluded below.
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^chain\.(Project|Stream|Artifact|Holding|Edit)\.Doc$
+          msg: ask the chain type for the answer, or add one to internal/chain, instead of reading its document (docs/design/CHAIN_MODEL.md)
     depguard:
       rules:
         main:
@@ -32,7 +41,7 @@ linters:
             - github.com/google/go-github
             - github.com/mallardduck/ghreleases
             - github.com/go-git/go-git
-            - go.yaml.in/yaml/v3
+            - go.yaml.in/yaml/v4
             - golang.org/x/mod/modfile
             - golang.org/x/net/html
             - golang.org/x/term
@@ -42,7 +51,7 @@ linters:
             - github.com/mallardduck/binup
         # Narrower rule on top of "main" (a file must satisfy both): cmd/ is a
         # thin shell and may only reach internal/ through internal/cli, plus
-        # internal/platform/errs for exit-code errors and its own subpackages.
+        # internal/gero/errs for exit-code errors and its own subpackages.
         # See docs/specs/PROJECT_LAYOUT.md sections 2, 3 and 5.
         cmd:
           list-mode: strict
@@ -54,8 +63,8 @@ linters:
             - github.com/spf13/cobra
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
-            - github.com/rancher/orbs-automation/internal/platform/clicfg
-            - github.com/rancher/orbs-automation/internal/platform/errs
+            - github.com/rancher/orbs-automation/internal/gero/clicfg
+            - github.com/rancher/orbs-automation/internal/gero/errs
             - github.com/rancher/orbs-automation/internal/platform/header
         # cobra stays in cmd/. internal/cli/ and domain packages must not
         # import it, so the CLI framework can be swapped by touching cmd/ only.
@@ -78,27 +87,27 @@ linters:
           deny:
             - pkg: github.com/go-git/go-git
               desc: go-git is only allowed in internal/platform/git/repo (docs/specs/PROJECT_LAYOUT.md)
-        # binup stays in internal/platform/selfupdate, and the Sigstore verifier in
-        # internal/platform/releasesign (docs/specs/DEPENDENCY_POLICY.md).
+        # binup stays in internal/gero/selfupdate, and the Sigstore verifier in
+        # internal/gero/releasesign (docs/specs/DEPENDENCY_POLICY.md).
         noselfupdate:
           list-mode: lax
           files:
-            - "!**/internal/platform/selfupdate/**"
+            - "!**/internal/gero/selfupdate/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/binup
-              desc: binup is only allowed in internal/platform/selfupdate (docs/specs/DEPENDENCY_POLICY.md)
+              desc: binup is only allowed in internal/gero/selfupdate (docs/specs/DEPENDENCY_POLICY.md)
         nosigstore:
           list-mode: lax
           files:
-            - "!**/internal/platform/releasesign/**"
+            - "!**/internal/gero/releasesign/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/ghreleases/sigstore
-              desc: the Sigstore verifier is only allowed in internal/platform/releasesign (docs/specs/DEPENDENCY_POLICY.md)
+              desc: the Sigstore verifier is only allowed in internal/gero/releasesign (docs/specs/DEPENDENCY_POLICY.md)
         # os/exec lives only in internal/platform/execx, the one place gero starts
         # another program. internal/platform/git/gitcli (the git binary) and
-        # internal/platform/ghcli (gero doctor) go through it
+        # internal/gero/ghcli (gero doctor) go through it
         # (docs/specs/DEPENDENCY_POLICY.md).
         noexec:
           list-mode: lax
@@ -143,18 +152,18 @@ linters:
               desc: the HTML parser is only allowed in internal/lifecycle (docs/specs/DEPENDENCY_POLICY.md)
         # Downloading a release asset and verifying it against the published checksum
         # is done in one place (docs/specs/CENTRAL_BUNDLE.md,
-        # docs/specs/DEPENDENCY_POLICY.md). internal/platform/releasesign is the one
+        # docs/specs/DEPENDENCY_POLICY.md). internal/gero/releasesign is the one
         # other importer, and only of the Sigstore verifier: depguard matches a
         # package by prefix, and nosigstore keeps that verifier out of the rest.
         noghreleases:
           list-mode: lax
           files:
-            - "!**/internal/platform/assetfetch/**"
-            - "!**/internal/platform/releasesign/**"
+            - "!**/internal/gero/assetfetch/**"
+            - "!**/internal/gero/releasesign/**"
             - "!$test"
           deny:
             - pkg: github.com/mallardduck/ghreleases
-              desc: ghreleases is only allowed in internal/platform/assetfetch, the one place a release asset is downloaded and verified (docs/specs/DEPENDENCY_POLICY.md)
+              desc: ghreleases is only allowed in internal/gero/assetfetch, the one place a release asset is downloaded and verified (docs/specs/DEPENDENCY_POLICY.md)
         # The terminal checks (is this a TTY, how wide) stay in one package, so
         # the rest of gero asks it and never the library
         # (docs/specs/DEPENDENCY_POLICY.md).
@@ -307,6 +316,23 @@ linters:
           allow:
             - github.com/rancher/orbs-automation/internal/platform
             - github.com/rancher/orbs-automation/internal/apis
+        # The gero layer is gero's own infrastructure: it knows gero but not the
+        # config model, so it sits above apis and below the domain. It imports only
+        # platform, apis and itself.
+        layer-gero:
+          list-mode: lax
+          files:
+            - "**/internal/gero/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal
+              desc: the gero layer may import only internal/platform, internal/apis and internal/gero (docs/design/LAYERS.md)
+            - pkg: github.com/rancher/orbs-automation/cmd
+              desc: the gero layer does not import the command shell (docs/design/LAYERS.md)
+          allow:
+            - github.com/rancher/orbs-automation/internal/platform
+            - github.com/rancher/orbs-automation/internal/apis
+            - github.com/rancher/orbs-automation/internal/gero
         # Domain packages (everything under internal/ that is not platform, apis,
         # cli or ui) never import the command layer or the output seam.
         layer-domain:
@@ -382,6 +408,10 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      - path: ^internal/chain/
+        linters:
+          - forbidigo
     presets:
       - comments
       - common-false-positives

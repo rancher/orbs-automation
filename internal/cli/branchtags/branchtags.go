@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/buildtags"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -16,7 +17,7 @@ import (
 // Repository is what the command needs from a local repository. It is defined
 // here, where it is consumed, so tests can use a fake.
 type Repository interface {
-	git.Tags
+	buildtags.Tags
 	// Head returns the full ref HEAD points to and its abbreviated commit.
 	Head() (ref, short string, err error)
 }
@@ -27,7 +28,7 @@ type opener func() (Repository, error)
 // Resolve computes the branch tags for the current ref and commit. Both come
 // from GITHUB_REF and GITHUB_SHA when both are set, else from the repository
 // in the working directory cwd, which must have a .git directory there.
-func Resolve(s clicfg.Settings, getenv func(string) string, cwd string) (git.BranchTags, error) {
+func Resolve(s clicfg.Settings, getenv func(string) string, cwd string) (buildtags.BranchTags, error) {
 	ws := workspace.Open(s, cwd)
 	return resolve(getenv, func() (Repository, error) {
 		r, err := ws.CurrentAtRoot()
@@ -44,26 +45,26 @@ func Resolve(s clicfg.Settings, getenv func(string) string, cwd string) (git.Bra
 	})
 }
 
-func resolve(getenv func(string) string, open, discover opener) (git.BranchTags, error) {
+func resolve(getenv func(string) string, open, discover opener) (buildtags.BranchTags, error) {
 	if ref, sha := getenv("GITHUB_REF"), getenv("GITHUB_SHA"); ref != "" && sha != "" {
-		return git.ResolveBranchTags(ref, git.Short(sha), tagsFrom(discover))
+		return buildtags.ResolveBranchTags(ref, git.Short(sha), tagsFrom(discover))
 	}
 
 	r, err := open()
 	if err != nil {
-		return git.BranchTags{}, err
+		return buildtags.BranchTags{}, err
 	}
 	ref, short, err := r.Head()
 	if err != nil {
-		return git.BranchTags{}, err
+		return buildtags.BranchTags{}, err
 	}
-	return git.ResolveBranchTags(ref, short, r)
+	return buildtags.ResolveBranchTags(ref, short, r)
 }
 
 // tagsFrom lists tags from the repository found from the working directory
 // upward. Like the script, which only runs git tag here, a missing repository
 // is not an error: there are simply no tags.
-func tagsFrom(discover opener) git.Tags {
+func tagsFrom(discover opener) buildtags.Tags {
 	return lazyTags(func() ([]string, error) {
 		r, err := discover()
 		if errors.Is(err, workspace.ErrNotRepository) {
@@ -81,7 +82,7 @@ type lazyTags func() ([]string, error)
 func (f lazyTags) NewestFirst() ([]string, error) { return f() }
 
 // Render formats res as the script's three lowercase key=value lines.
-func Render(res git.BranchTags) string {
+func Render(res buildtags.BranchTags) string {
 	return fmt.Sprintf("branch_tag=%s\nbranch_static_tag=%s\nprev_static_tag=%s\n",
 		res.BranchTag, res.BranchStaticTag, res.PrevStaticTag)
 }

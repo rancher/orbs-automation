@@ -20,11 +20,12 @@ spec:
 ---
 apiVersion: gero/v1alpha2
 kind: Stream
-name: charts-rancher-backup
+name: rancher-charts
 refs: {project: rancher-charts}
 spec:
   scheme: chartVersion         # CHART+upUPSTREAM; prerelease is read from the part after +up
   lines:
+    - {line: v2.17, series: "112.x"}
     - {line: v2.16, series: "111.x"}
     - {line: v2.15, series: "110.x"}
     - {line: v2.14, series: "109.x"}

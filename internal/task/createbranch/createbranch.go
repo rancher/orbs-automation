@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/platform/workdir"
+	"github.com/rancher/orbs-automation/internal/gero/authorship"
+	"github.com/rancher/orbs-automation/internal/gero/workdir"
 )
 
 var (
@@ -39,11 +39,16 @@ type Input struct {
 	TempDir  string // where a worktree goes
 	// Rebuild makes the branch again even when one of ours is there and current.
 	Rebuild bool
+	// StageUntracked commits every untracked file in the checkout when the work is
+	// done in place, the ones that were there before the run too. Without it the
+	// engineer's own untracked files are left out. A run that owns its checkout,
+	// such as one in CI, sets it.
+	StageUntracked bool
 }
 
 // Output is the branch that was made. Work is a handle on it, to commit to and to
 // end: it is shared with the tasks that go on from here, through
-// internal/platform/workdir, and is not meant to be serialized.
+// internal/gero/workdir, and is not meant to be serialized.
 type Output struct {
 	Work *workdir.Work
 }
@@ -58,7 +63,7 @@ type Git interface {
 	StartBranch(ctx context.Context, dir, branch, commit string) error
 	AddWorktree(ctx context.Context, dir, path, branch, commit string) error
 	MergeBase(ctx context.Context, dir, a, b string) (string, error)
-	CommitsSince(ctx context.Context, dir, base, tip string) ([]git.BranchCommit, error)
+	CommitsSince(ctx context.Context, dir, base, tip string) ([]authorship.Commit, error)
 	// Config is what git uses for key in the clone: user.email is the actor's.
 	Config(ctx context.Context, dir, key string) (string, error)
 }
@@ -104,7 +109,11 @@ func Run(ctx context.Context, g Git, in Input) (Output, error) {
 		if err := g.StartBranch(ctx, in.CloneDir, in.Branch, in.Base); err != nil {
 			return Output{}, err
 		}
-		w = workdir.NewInPlace(g, in.CloneDir, in.Branch, st.Branch, st.Untracked)
+		had := st.Untracked
+		if in.StageUntracked {
+			had = nil // none is the engineer's to leave out
+		}
+		w = workdir.NewInPlace(g, in.CloneDir, in.Branch, st.Branch, had)
 	default:
 		dir := filepath.Join(in.TempDir, strings.ReplaceAll(in.Branch, "/", "-"))
 		if err := g.AddWorktree(ctx, in.CloneDir, dir, in.Branch, in.Base); err != nil {
@@ -117,7 +126,7 @@ func Run(ctx context.Context, g Git, in Input) (Output, error) {
 
 // settleExisting decides what to do about a branch of the name that is already
 // there, at commit. One that is at the base itself holds nothing, and goes. One
-// whose commits are all ours (see git.CommitsAreOurs) is the actor's own earlier work:
+// whose commits are all ours (see authorship.AreOurs) is the actor's own earlier work:
 // when it is based on the current head of the target it is reused as it is, which
 // is also how a run whose push failed is resumed, and otherwise, or when a rebuild
 // was asked for, it goes and is built again. One with a commit that is not ours is
@@ -137,7 +146,7 @@ func settleExisting(ctx context.Context, g Git, in Input, commit string) (*workd
 		if err != nil {
 			return nil, err
 		}
-		if ours, why := git.CommitsAreOurs(facts, email); !ours {
+		if ours, why := authorship.AreOurs(facts, email); !ours {
 			return nil, fmt.Errorf("%w: %s is at %s, and %s: delete it or keep it, it is not ours to change", ErrBranchExists, in.Branch, shortHash(commit), why)
 		}
 		if mergeBase == in.Base && !in.Rebuild {

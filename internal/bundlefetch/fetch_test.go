@@ -1,4 +1,4 @@
-package bundlestore
+package bundlefetch
 
 import (
 	"context"
@@ -11,32 +11,39 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bundle"
 	"github.com/rancher/orbs-automation/internal/bundle/bundletest"
+	"github.com/rancher/orbs-automation/internal/bundlestore"
 	"github.com/rancher/orbs-automation/internal/chainload"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch/fakehub"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch/fakehub"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
 
 var bg = context.Background()
 
+var t0 = time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+
 // rig is a workstation with an empty cache, a clock, a fake host with nothing
-// published on it, and an embedded bundle of one project named "embedded".
+// published on it, and the config in its binary of one project named "embedded".
 type rig struct {
 	t     *testing.T
 	hub   *fakehub.Hub
-	cache Cache
+	store bundlestore.Store
 	now   time.Time
-	r     *Resolver
+	f     *Fetcher
 }
 
 func newRig(t *testing.T) *rig {
 	t.Helper()
-	g := &rig{t: t, hub: fakehub.New(t), cache: Cache{Dir: t.TempDir()}, now: t0}
-	g.r = &Resolver{
+	g := &rig{t: t, hub: fakehub.New(t), store: bundlestore.Store{Dir: t.TempDir()}, now: t0}
+	clock := func() time.Time { return g.now }
+	g.f = &Fetcher{
 		Releases: assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL()}),
-		Cache:    g.cache,
-		Now:      func() time.Time { return g.now },
-		Embedded: bundletest.Compile(t, "embedded", bundletest.Config("embedded")),
+		Store:    g.store,
+		Now:      clock,
+		Local: &bundlestore.Resolver{
+			Store: g.store, Now: clock, Embedded: bundletest.Config("embedded"),
+			EmbeddedHeader: bundle.Header{GeroVersion: "embedded", SourceCommit: bundletest.Commit, CompiledAt: bundletest.CompiledAt},
+		},
 	}
 	return g
 }
@@ -60,44 +67,56 @@ func (g *rig) publishUnreadable(tag string, opts ...fakehub.Option) {
 	bundletest.PublishRaw(g.hub, tag, []byte(newer), opts...)
 }
 
-func (g *rig) fetch(version string) (Loaded, error) {
+func (g *rig) fetch(version string) (bundlestore.Loaded, error) {
 	g.t.Helper()
-	return g.r.Fetch(bg, Request{GeroVersion: version})
+	return g.f.Fetch(bg, bundlestore.Request{GeroVersion: version})
 }
 
-func (g *rig) fetchOn(version, channel string) (Loaded, error) {
+func (g *rig) fetchOn(version, channel string) (bundlestore.Loaded, error) {
 	g.t.Helper()
-	return g.r.Fetch(bg, Request{GeroVersion: version, Channel: channel})
+	return g.f.Fetch(bg, bundlestore.Request{GeroVersion: version, Channel: channel})
 }
 
 // cached puts a bundle of the release in the cache, fetched at the time.
 func (g *rig) cached(tag string, at time.Time, names ...string) {
 	g.t.Helper()
 	data := bundletest.Compile(g.t, tag, bundletest.Config(names...))
-	require.NoError(g.t, g.cache.Write(Entry{Tag: tag, Data: data, FetchedAt: at}))
+	_, err := g.store.Put(bundlestore.Entry{Tag: tag, Data: data, FetchedAt: at})
+	require.NoError(g.t, err)
+}
+
+// releaseEntries are what the store holds that was fetched, newest first.
+func (g *rig) releaseEntries() []bundlestore.Entry {
+	g.t.Helper()
+	list, err := g.store.List()
+	require.NoError(g.t, err)
+	var out []bundlestore.Entry
+	for _, e := range list {
+		if e.Origin != bundlestore.OriginEmbedded {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func (g *rig) cachedTag() string {
 	g.t.Helper()
-	e, ok, err := g.cache.Read()
-	require.NoError(g.t, err)
-	require.True(g.t, ok, "something is in the cache")
-	return e.Tag
+	entries := g.releaseEntries()
+	require.NotEmpty(g.t, entries, "something is in the cache")
+	return entries[0].Tag
 }
 
 func (g *rig) nothingCached() {
 	g.t.Helper()
-	_, ok, err := g.cache.Read()
-	require.NoError(g.t, err)
-	assert.False(g.t, ok, "nothing is cached")
+	assert.Empty(g.t, g.releaseEntries(), "nothing is cached")
 }
 
 // verifying makes the rig refuse a release whose bundle and checksums are not signed.
 func (g *rig) verifying() {
-	g.r.Releases = assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL(), Verifier: fakehub.Verifier{}})
+	g.f.Releases = assetfetch.New("rancher", "orbs-automation", assetfetch.Options{HTTP: g.hub.Client(), BaseURL: g.hub.URL(), Verifier: fakehub.Verifier{}})
 }
 
-func projects(t *testing.T, l Loaded) int {
+func projects(t *testing.T, l bundlestore.Loaded) int {
 	t.Helper()
 	require.NotNil(t, l.FS)
 	g, rep := chainload.Load(l.FS, config.Context{Now: bundletest.CompiledAt})
@@ -115,7 +134,7 @@ func TestFetchTakesTheNewestStableBundleNewerThanTheGeroVerifiesItAndCachesIt(t 
 	require.NoError(t, err)
 	assert.Equal(t, "v0.6.0", got.Header.GeroVersion)
 	assert.Equal(t, 2, projects(t, got))
-	assert.Equal(t, Source{Tag: "v0.6.0", FetchedAt: t0}, got.Source)
+	assert.Equal(t, bundlestore.Source{Tag: "v0.6.0", FetchedAt: t0}, got.Source)
 	assert.Equal(t, "v0.6.0", g.cachedTag())
 }
 
@@ -140,7 +159,7 @@ func TestFetchWithNothingNewerIsTheEmbeddedBundleAndDownloadsNothing(t *testing.
 
 	require.NoError(t, err)
 	assert.Zero(t, g.hub.Requests("/releases/assets/"), "the bundle of the gero's own release is the embedded one")
-	assert.Equal(t, Source{Embedded: true, Tag: "v0.5.0", Note: got.Source.Note}, got.Source)
+	assert.Equal(t, bundlestore.Source{Embedded: true, Tag: "v0.5.0", Note: got.Source.Note}, got.Source)
 	assert.Contains(t, got.Source.Note, "v0.5.0")
 	assert.Equal(t, 1, projects(t, got))
 	g.nothingCached()
@@ -265,9 +284,9 @@ func TestFetchTheCachedBundleOfTheNewestReleaseIsConfirmedWithoutDownloadingAgai
 	assert.Zero(t, g.hub.Requests("/releases/assets/"), "the same release is not downloaded again")
 	assert.Equal(t, "v0.5.0", got.Source.Tag)
 	assert.Zero(t, got.Source.Age)
-	e, _, err := g.cache.Read()
-	require.NoError(t, err)
-	assert.True(t, e.FetchedAt.Equal(t0), "the cache says it was checked now")
+	entries := g.releaseEntries()
+	require.Len(t, entries, 1)
+	assert.True(t, entries[0].FetchedAt.Equal(t0), "the cache says it was checked now")
 }
 
 func TestFetchWhenTheNetworkFailsIsAnErrorAndTheCacheStaysAsItWas(t *testing.T) {
@@ -400,12 +419,12 @@ func TestChannelStableMakesAPrereleaseGeroTakeANewerStableBundleOnly(t *testing.
 	g.publish("v0.5.0", "alpha")
 	g.publishPrerelease("v0.6.0-rc.3", "beta")
 
-	got, err := g.fetchOn("v0.6.0-rc.2", ChannelStable)
+	got, err := g.fetchOn("v0.6.0-rc.2", bundlestore.ChannelStable)
 	require.NoError(t, err)
 	assert.True(t, got.Source.Embedded, "the stable v0.5.0 is older than the gero itself, and a release candidate is not asked for")
 
 	g.publish("v0.6.0", "alpha", "bravo")
-	got, err = g.fetchOn("v0.6.0-rc.2", ChannelStable)
+	got, err = g.fetchOn("v0.6.0-rc.2", bundlestore.ChannelStable)
 	require.NoError(t, err)
 	assert.Equal(t, "v0.6.0", got.Source.Tag)
 }
@@ -415,7 +434,7 @@ func TestChannelPrereleaseMakesAStableGeroTakeTheNewestPrereleaseBundle(t *testi
 	g.publish("v0.5.0", "alpha")
 	g.publishPrerelease("v0.6.0-rc.1", "beta")
 
-	got, err := g.fetchOn("v0.5.0", ChannelPrerelease)
+	got, err := g.fetchOn("v0.5.0", bundlestore.ChannelPrerelease)
 
 	require.NoError(t, err)
 	assert.Equal(t, "v0.6.0-rc.1", got.Source.Tag)
@@ -427,7 +446,7 @@ func TestChannelPrereleaseFallsBackToTheNewestNewerStableWhenTheNewestIsUnreadab
 	g.publish("v0.5.1", "alpha")
 	g.publishUnreadable("v0.7.0-rc.1", fakehub.Prerelease())
 
-	got, err := g.fetchOn("v0.5.0", ChannelPrerelease)
+	got, err := g.fetchOn("v0.5.0", bundlestore.ChannelPrerelease)
 
 	require.NoError(t, err)
 	assert.Equal(t, "v0.5.1", got.Source.Tag)
@@ -440,7 +459,7 @@ func TestChannelAutoIsWhatTheGeroIs(t *testing.T) {
 	g.publishPrerelease("v0.6.0-rc.1", "beta")
 	g.publishPrerelease("v0.6.0-rc.2", "beta")
 
-	stable, err := g.fetchOn("v0.5.0", ChannelAuto)
+	stable, err := g.fetchOn("v0.5.0", bundlestore.ChannelAuto)
 	require.NoError(t, err)
 	assert.True(t, stable.Source.Embedded, "a stable gero is not offered a release candidate")
 
@@ -449,14 +468,19 @@ func TestChannelAutoIsWhatTheGeroIs(t *testing.T) {
 	assert.Equal(t, "v0.6.0-rc.2", pre.Source.Tag)
 }
 
-func TestSourceDescribesTheReleaseAndHowOldTheCopyIs(t *testing.T) {
-	assert.Equal(t, "bundle v0.5.0, 3 hours old", Source{Tag: "v0.5.0", Age: 3 * time.Hour}.Describe())
-	assert.Equal(t, "bundle v0.5.0, 3 days old", Source{Tag: "v0.5.0", Age: 72 * time.Hour}.Describe())
-	assert.Equal(t, "bundle v0.6.0, under a minute old", Source{Tag: "v0.6.0"}.Describe())
-}
+func TestFetchKeepsTheNewestThreeBundles(t *testing.T) {
+	g := newRig(t)
+	for i, tag := range []string{"v0.6.0", "v0.7.0", "v0.8.0", "v0.9.0"} {
+		g.publish(tag, "r"+string(rune('0'+i)))
+		g.now = t0.Add(time.Duration(i) * time.Hour)
 
-func TestASourceFromAFileDescribesTheFileAndTheRelease(t *testing.T) {
-	s := Source{File: "/tmp/gero-config-bundle.yaml", Tag: "v0.3.0"}
+		_, err := g.fetch("0.5.0")
+		require.NoError(t, err)
+	}
 
-	assert.Equal(t, "bundle file /tmp/gero-config-bundle.yaml (v0.3.0)", s.Describe())
+	var tags []string
+	for _, e := range g.releaseEntries() {
+		tags = append(tags, e.Tag)
+	}
+	assert.Equal(t, []string{"v0.9.0", "v0.8.0", "v0.7.0"}, tags, "the oldest is pruned")
 }

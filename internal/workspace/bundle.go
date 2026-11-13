@@ -8,10 +8,11 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bundle"
+	"github.com/rancher/orbs-automation/internal/bundlefetch"
 	"github.com/rancher/orbs-automation/internal/bundlestore"
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/releasesign"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/releasesign"
 )
 
 // BundleSource is where the central config comes from when no local source is
@@ -136,14 +137,18 @@ type resolverSource struct {
 }
 
 func (r resolverSource) Load(ctx context.Context) (bundlestore.Loaded, error) {
-	return resolverFor(nil).Load(ctx, bundlestore.Request{GeroVersion: r.version, Channel: r.channel})
+	return resolverFor().Load(ctx, bundlestore.Request{GeroVersion: r.version, Channel: r.channel})
 }
 
-// resolverFor is the resolver over the user's cache, and over the releases when
-// there are any to look at.
-func resolverFor(releases bundlestore.Releases) *bundlestore.Resolver {
+// storeFor is the user's cache of bundles.
+func storeFor() bundlestore.Store {
 	home, _ := os.UserHomeDir()
-	return &bundlestore.Resolver{Releases: releases, Cache: bundlestore.Cache{Dir: clicfg.CacheDir(os.Getenv, home)}}
+	return bundlestore.Store{Dir: clicfg.CacheDir(os.Getenv, home)}
+}
+
+// resolverFor is the resolver over the user's cache and the config in the binary.
+func resolverFor() *bundlestore.Resolver {
+	return &bundlestore.Resolver{Store: storeFor()}
 }
 
 // ErrOffline is returned by FetchBundle when the settings say no request is to be
@@ -169,5 +174,6 @@ func FetchBundle(ctx context.Context, s clicfg.Settings) (bundlestore.Loaded, er
 	}
 	_, token := defaultCredentials()
 	releases := assetfetch.New(releaseOwner, releaseRepo, assetfetch.Options{Token: token, Verifier: verifier})
-	return resolverFor(releases).Fetch(ctx, bundlestore.Request{GeroVersion: s.GeroVersion, Channel: channelOf(s)})
+	fetcher := &bundlefetch.Fetcher{Releases: releases, Store: storeFor(), Local: resolverFor()}
+	return fetcher.Fetch(ctx, bundlestore.Request{GeroVersion: s.GeroVersion, Channel: channelOf(s)})
 }

@@ -8,7 +8,7 @@ How `gero` talks to GitHub and to git. Two Go libraries each do one job, and a s
 
 `pkg/auth` resolves the token and the host, so `gero` bridges off the user's `gh` setup on a workstation. It is an ordinary Go module and does not require running as a `gh` extension.
 
-`pkg/api` (HTTP client, GraphQL) is **not** imported. It pulls in a GraphQL library, `httpretty` and a timezone library, and go-github can authenticate by itself. `pkg/auth` imports only `gopkg.in/yaml.v3` and `safeexec`. The YAML import is a second copy of YAML code in the binary that our code cannot import, used only to read `gh`'s config files. A `replace gopkg.in/yaml.v3 => go.yaml.in/yaml/v3` works, but only at a version different from the one we require (Go rejects the same version under two paths). It swaps an unmaintained source for a maintained one without removing the second copy, and it breaks the day Renovate bumps the replacement to our version. We do not add it.
+`pkg/api` (HTTP client, GraphQL) is **not** imported. It pulls in a GraphQL library, `httpretty` and a timezone library, and go-github can authenticate by itself. `pkg/auth` imports only `gopkg.in/yaml.v3` and `safeexec`. The YAML import is a second copy of YAML code in the binary that our code cannot import, used only to read `gh`'s config files. A `replace gopkg.in/yaml.v3 => go.yaml.in/yaml/v4` works, but only at a version different from the one we require (Go rejects the same version under two paths). It swaps an unmaintained source for a maintained one without removing the second copy, and it breaks the day Renovate bumps the replacement to our version. We do not add it.
 
 * **Token order** for `github.com`, `ghe.com` and `github.localhost`: `GH_TOKEN`, `GITHUB_TOKEN`, `hosts.<host>.oauth_token` in `gh`'s config file, then `gh auth token --secure-storage --hostname <host>`. `gh` is found through `GH_PATH`, then `PATH`.
 * **Enterprise hosts** (any other host) ignore `GH_TOKEN` and `GITHUB_TOKEN`. They use `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, the config file, then `gh`.
@@ -38,7 +38,7 @@ Both sit behind our own interfaces, so a go-git implementation of the `gitcli` o
 
 ## `gh` via subprocess
 
-Only for interactive or human-facing steps (for example `gh auth login` and browser handoffs) and pure passthrough. It is not used for logic that must be tested or that runs in CI. `gero doctor` runs `gh --version` through `internal/platform/ghcli` so its report says which `gh` token resolution would use. Tokens are never read this way: go-gh runs `gh auth token` itself.
+Only for interactive or human-facing steps (for example `gh auth login` and browser handoffs) and pure passthrough. It is not used for logic that must be tested or that runs in CI. `gero doctor` runs `gh --version` through `internal/gero/ghcli` so its report says which `gh` token resolution would use. Tokens are never read this way: go-gh runs `gh auth token` itself.
 
 All subprocesses go through `internal/platform/execx`, the one place `gero` starts another program. Its contract is in the package doc.
 

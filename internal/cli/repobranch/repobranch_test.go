@@ -14,9 +14,9 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/platform/workdir"
+	"github.com/rancher/orbs-automation/internal/gero/authorship"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/workdir"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
@@ -64,7 +64,7 @@ type fakeGit struct {
 	state    workdir.GitState
 	existing string
 	mergeB   string
-	commits  []git.BranchCommit
+	commits  []authorship.Commit
 	calls    []string
 }
 
@@ -102,7 +102,7 @@ func (f *fakeGit) MergeBase(context.Context, string, string, string) (string, er
 	return f.mergeB, nil
 }
 
-func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]git.BranchCommit, error) {
+func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]authorship.Commit, error) {
 	return f.commits, nil
 }
 
@@ -217,7 +217,7 @@ func TestRunAnEarlierBranchOfOursOnTheCurrentHeadIsKept(t *testing.T) {
 	g := cleanGit()
 	g.existing = "tip22222"
 	g.mergeB = head
-	g.commits = []git.BranchCommit{{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update\n\n" + git.OurTrailer}}
+	g.commits = []authorship.Commit{{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update\n\n" + authorship.Trailer}}
 
 	out, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 
@@ -233,7 +233,7 @@ func TestRunABranchWithCommitsThatAreNotOursIsRefusedAndNothingIsDeleted(t *test
 	g := cleanGit()
 	g.existing = "tip22222"
 	g.mergeB = head
-	g.commits = []git.BranchCommit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine"}}
+	g.commits = []authorship.Commit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine"}}
 
 	_, err := do(t, newWorkspace(t), g, clicfg.OutputText, false, opts())
 

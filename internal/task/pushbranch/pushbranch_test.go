@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/gero/authorship"
 )
 
 var bg = context.Background()
@@ -21,7 +21,7 @@ type fakeGit struct {
 	local      string // the local branch; empty is not found
 	mergeBases map[[2]string]string
 	mergeErr   error
-	commits    []git.BranchCommit
+	commits    []authorship.Commit
 	commitsErr error
 	email      string
 	emailErr   error
@@ -47,7 +47,7 @@ func (f *fakeGit) MergeBase(_ context.Context, _, a, b string) (string, error) {
 	return f.mergeBases[[2]string{a, b}], nil
 }
 
-func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]git.BranchCommit, error) {
+func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]authorship.Commit, error) {
 	return f.commits, f.commitsErr
 }
 
@@ -69,8 +69,8 @@ func input() Input {
 	return Input{Dir: "/clone", Remote: "origin", Branch: "bot/x-v1", Base: "base1"}
 }
 
-func ours(hash string) git.BranchCommit {
-	return git.BranchCommit{Hash: hash, AuthorEmail: "dev@example.com", Message: "Update\n\n" + git.OurTrailer}
+func ours(hash string) authorship.Commit {
+	return authorship.Commit{Hash: hash, AuthorEmail: "dev@example.com", Message: "Update\n\n" + authorship.Trailer}
 }
 
 // diverged is a remote copy that the local branch did not grow from, so only
@@ -79,7 +79,7 @@ func diverged() *fakeGit {
 	return &fakeGit{
 		tip: "remote1", local: "local1", email: "dev@example.com",
 		mergeBases: map[[2]string]string{{"local1", "remote1"}: "base1", {"base1", "remote1"}: "base1"},
-		commits:    []git.BranchCommit{ours("remote1")},
+		commits:    []authorship.Commit{ours("remote1")},
 	}
 }
 
@@ -173,7 +173,7 @@ func TestRunAnEarlierAttemptOfOursIsNotReplacedUnlessAsked(t *testing.T) {
 
 func TestRunABranchWithACommitThatIsNotOursIsNeverReplacedAndSaysWhose(t *testing.T) {
 	g := diverged()
-	g.commits = []git.BranchCommit{{Hash: "remote1abc", AuthorEmail: "someone@example.com", Message: "Update\n\n" + git.OurTrailer}}
+	g.commits = []authorship.Commit{{Hash: "remote1abc", AuthorEmail: "someone@example.com", Message: "Update\n\n" + authorship.Trailer}}
 	in := input()
 	in.Replace = true
 

@@ -10,7 +10,7 @@ package style
 import (
 	"charm.land/lipgloss/v2"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
 // Role is what a piece of text is, not how it looks.

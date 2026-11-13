@@ -95,6 +95,7 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.circular()
 	s.omittedBranches()
 	s.streamsDifferFromDestination()
+	s.streamsOverlap()
 	s.acknowledgements()
 }
 
@@ -451,6 +452,50 @@ func (s *set) streams() {
 		r.Errorf("spec.scheme", "%s needs Project %q to have layout single, where every release is on the default branch, and it has %s", SchemeCalverLineStage, p.Name, p.Spec.Branches.Layout)
 		s.add(r)
 	}
+}
+
+// streamsOverlap warns of two streams of one Project whose tag patterns could both
+// match a tag, on the later stream: a tag then is a release of the first of them, and
+// which that is depends on the order the documents are read.
+func (s *set) streamsOverlap() {
+	earlier := map[string][]*Stream{} // the streams read so far, by Project
+	for _, o := range s.objs {
+		st, ok := o.(*Stream)
+		if !ok || len(st.Refs["project"]) != 1 {
+			continue
+		}
+		project := st.Refs["project"][0]
+		for _, before := range earlier[project] {
+			if patternsMayOverlap(before.Spec.TagPattern, st.Spec.TagPattern) {
+				r := s.at(o)
+				r.Warnf(RuleStreamsOverlap, "spec.tagPattern", "%q can match a tag that Stream %q of Project %q matches with %q, and a tag that both match is a release of the one read first", st.Spec.TagPattern, before.Name, project, before.Spec.TagPattern)
+				s.add(r)
+				break
+			}
+		}
+		earlier[project] = append(earlier[project], st)
+	}
+}
+
+// patternsMayOverlap is whether a tag could match both patterns. It compares what each
+// writes before its first wildcard, and says yes when one is the start of the other,
+// so it may warn of two patterns a tag exclusion keeps apart, and never misses a pair
+// that start the same. The default pattern is filled in before a set is checked, so an
+// empty one is a document not yet defaulted, which says nothing.
+func patternsMayOverlap(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	pa, pb := literalStart(a), literalStart(b)
+	return strings.HasPrefix(pa, pb) || strings.HasPrefix(pb, pa)
+}
+
+// literalStart is the part of a tag pattern before its first wildcard.
+func literalStart(pattern string) string {
+	if i := strings.IndexAny(pattern, `*?[\`); i >= 0 {
+		return pattern[:i]
+	}
+	return pattern
 }
 
 // stagesOf is the names of the stages the streams of a Project have.

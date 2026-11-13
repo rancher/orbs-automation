@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/platform/assetfetch/fakehub"
+	"github.com/rancher/orbs-automation/internal/gero/assetfetch/fakehub"
 )
 
 var bg = context.Background()

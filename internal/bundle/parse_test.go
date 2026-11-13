@@ -24,9 +24,22 @@ func TestParseGivesBackTheHeaderThatWentIn(t *testing.T) {
 	got, _, err := Parse(compiled(t))
 
 	require.NoError(t, err)
+	digest, err := Digest(fixture())
+	require.NoError(t, err)
 	assert.Equal(t, Header{
 		GeroVersion: header.GeroVersion, SourceCommit: header.SourceCommit, CompiledAt: header.CompiledAt, FormatVersion: 1,
+		InputsDigest: digest, CompilerRevision: CompilerRevision,
 	}, got)
+	assert.NotEmpty(t, got.InputsDigest)
+}
+
+func TestParseOfABundleMadeBeforeTheDigestWasWrittenHasNoDigestAndNoID(t *testing.T) {
+	got, _, err := Parse([]byte(wantHeader))
+
+	require.NoError(t, err)
+	assert.Empty(t, got.InputsDigest)
+	assert.Zero(t, got.CompilerRevision)
+	assert.Empty(t, got.ID(), "without a digest there is nothing to identify it by")
 }
 
 func TestParseGivesTheConfigChunkAsOneFileTheLoaderReads(t *testing.T) {

@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
@@ -164,6 +165,19 @@ func (g *Graph) Holdings() []*Holding { return g.holdings }
 
 // Lines returns the Rancher lines, as listed, or none when the config has none.
 func (g *Graph) Lines() []lines.Line { return g.lines }
+
+// Line returns the Rancher line of the lines document that an id names, written
+// with or without its v, in any case; ok is false when there is none.
+func (g *Graph) Line(id string) (line lines.Line, ok bool) {
+	if id == "" {
+		return lines.Line{}, false
+	}
+	i := slices.IndexFunc(g.lines, func(l lines.Line) bool { return lines.Normalize(l.ID) == lines.Normalize(id) })
+	if i < 0 {
+		return lines.Line{}, false
+	}
+	return g.lines[i], true
+}
 
 // Warnings returns the warnings found when the config was loaded, in the order
 // reported.

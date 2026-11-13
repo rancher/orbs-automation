@@ -41,10 +41,37 @@ func TagPrefix(pattern, tag string) string {
 	return ""
 }
 
+// BareTag is a tag without the prefix a pattern puts before it: what a Go module
+// is required at.
+func BareTag(pattern, tag string) string {
+	return strings.TrimPrefix(tag, TagPrefix(pattern, tag))
+}
+
+// Version is the version of a release whose tag a pattern matches: the tag without
+// the pattern's prefix and without a leading v.
+func Version(pattern, tag string) string {
+	return strings.TrimPrefix(BareTag(pattern, tag), "v")
+}
+
 // BareTag is a tag without the prefix of the stream: what a Go module is
 // required at.
-func (s *Stream) BareTag(tag string) string {
-	return strings.TrimPrefix(tag, TagPrefix(s.Doc.Spec.TagPattern, tag))
+func (s *Stream) BareTag(tag string) string { return BareTag(s.Doc.Spec.TagPattern, tag) }
+
+// Version is the version of a release of the stream: its tag without the stream's
+// prefix (helmtools/v0.1.2 has helmtools/) and without a leading v.
+func (s *Stream) Version(tag string) string { return Version(s.Doc.Spec.TagPattern, tag) }
+
+// HasRelease reports whether a value a holding read is a release of the stream: a
+// tag of it, or a tag without the prefix a Go module goes without.
+func (s *Stream) HasRelease(value string) bool {
+	if s.TagMatches(value) {
+		return true
+	}
+	pattern := s.TagPattern()
+	if i := strings.LastIndex(pattern, "/"); i >= 0 {
+		return s.TagMatches(pattern[:i+1] + value)
+	}
+	return false
 }
 
 // TagMatches reports whether a tag is a release of the stream: it matches the

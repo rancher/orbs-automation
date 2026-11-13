@@ -7,7 +7,6 @@ import (
 
 	"sync"
 
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/goproxy"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
@@ -190,7 +189,7 @@ func CheckProject(ctx context.Context, p *chain.Project, c Prober, tag string) R
 // anyRanged reports whether any image applies to some lines only.
 func anyRanged(images []*chain.Artifact) bool {
 	for _, img := range images {
-		if img.Doc.Spec.Lines != (lines.Range{}) {
+		if img.Ranged() {
 			return true
 		}
 	}

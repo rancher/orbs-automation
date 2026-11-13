@@ -196,6 +196,7 @@ A warning never makes a document invalid. It names its rule by a stable id, show
 | `unknown-key` | a user file has a key it does not know (the user file is not a document, so it cannot be acknowledged) | yes |
 | `locations-differ` | the locations of one Holding hold different versions for a line: it reads the files of a repo at a ref, only when a command asks (not when the graph is built), so `gero repo status` raises it on the Consumers row, not `config validate`; a document can acknowledge it, and validation does not call that acknowledgement unused, since it cannot see the warning | yes |
 | `stream-differs-from-destination` | a project with `layout: perLine` holds another stream of an artifact (matched by its kind and name) than the `finalDestination` for a line; on the holder's Holding, naming the line | yes |
+| `streams-overlap` | two streams of one project have tag patterns that could both match a tag: what one writes before its first wildcard is the start of what the other writes (`v*` and `v3.8.*`), and a tag that both match is a release of the one read first; on the later stream, at `spec.tagPattern`. It does not look at `tagExclude`, so it may warn of two streams that an exclusion keeps apart, which can be acknowledged | yes |
 | `acknowledgement-unused` | an acknowledgement matches no warning of its document | yes |
 | `lifecycle-date` | a release is shipped to a line past a lifecycle date | no |
 
@@ -216,7 +217,7 @@ acknowledge:
 
 | Field | Rules |
 |---|---|
-| `rule` | required; the id of a rule of a document (`circular-holding`, `default-branch-past-development`, `stream-differs-from-destination`, `locations-differ`); the unknown key of a user file and `acknowledgement-unused` cannot be acknowledged |
+| `rule` | required; the id of a rule of a document (`circular-holding`, `default-branch-past-development`, `stream-differs-from-destination`, `locations-differ`, `streams-overlap`); the unknown key of a user file and `acknowledgement-unused` cannot be acknowledged |
 | `reason` | required, and not only space: it is what a reader of the config is told |
 | `lines` | `{since, until}`, optional; limits it to warnings about those lines, ends included. With no `lines` it covers every warning of the rule on the document, whether it is about a line or not; with `lines` it covers only a warning about a line in the range |
 

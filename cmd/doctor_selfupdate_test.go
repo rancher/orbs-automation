@@ -8,7 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/cli/selfupdate"
-	platform "github.com/rancher/orbs-automation/internal/platform/selfupdate"
+	platform "github.com/rancher/orbs-automation/internal/gero/selfupdate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -20,7 +20,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -146,7 +146,7 @@ func Resolve(g *chain.Graph, engine *bump.Engine, opts Options, now time.Time) (
 	if err != nil {
 		return Result{}, err
 	}
-	doc, err := selectLines(g.Lines(), opts, now)
+	doc, err := selectLines(g, opts, now)
 	if err != nil {
 		return Result{}, err
 	}
@@ -180,8 +180,8 @@ func hubOf(g *chain.Graph, name string) (*chain.Project, error) {
 var phases = []string{lines.PhaseDevelopment, lines.PhaseGA, lines.PhaseEOM, lines.PhaseEOL}
 
 // selectLines is the lines of the document that the options keep, newest first.
-func selectLines(all []lines.Line, opts Options, now time.Time) ([]lines.Line, error) {
-	sorted := slices.Clone(all)
+func selectLines(g *chain.Graph, opts Options, now time.Time) ([]lines.Line, error) {
+	sorted := slices.Clone(g.Lines())
 	slices.SortStableFunc(sorted, func(a, b lines.Line) int { return -lines.Compare(a.ID, b.ID) })
 	for _, p := range opts.Phases {
 		if !slices.Contains(phases, p) {
@@ -190,15 +190,15 @@ func selectLines(all []lines.Line, opts Options, now time.Time) ([]lines.Line, e
 	}
 	var want []string
 	for _, id := range opts.Lines {
-		id = lines.Normalize(id)
-		if !slices.ContainsFunc(sorted, func(l lines.Line) bool { return strings.EqualFold(l.ID, id) }) {
+		line, ok := g.Line(id)
+		if !ok {
 			ids := make([]string, len(sorted))
 			for i, l := range sorted {
 				ids[i] = l.ID
 			}
-			return nil, fmt.Errorf("%s is not a Rancher line: they are %s", id, strings.Join(ids, ", "))
+			return nil, fmt.Errorf("%s is not a Rancher line: they are %s", lines.Normalize(id), strings.Join(ids, ", "))
 		}
-		want = append(want, strings.ToLower(id))
+		want = append(want, strings.ToLower(line.ID))
 	}
 	var out []lines.Line
 	for _, l := range sorted {
@@ -299,7 +299,7 @@ func universal(r bump.Route) bool {
 func holdingsOn(r bump.Route, line string) []string {
 	var names []string
 	for _, h := range r.Holdings {
-		if h.Doc.Spec.Holds.Lines.Contains(line) {
+		if h.HoldsLine(line) {
 			names = append(names, h.Name())
 		}
 	}
@@ -338,15 +338,6 @@ func branchesOn(r bump.Route, line string) ([]string, error) {
 	return branches, nil
 }
 
-// tagLines says the project finds its lines in its tags: one branch for them all,
-// and streams that list the lines.
-func tagLines(p *chain.Project) bool {
-	if p.Layout() != chain.LayoutSingle {
-		return false
-	}
-	return slices.ContainsFunc(p.Streams(), func(s *chain.Stream) bool { return len(s.Lines()) > 0 })
-}
-
 // feedsHub says whether producer p ships to the hub's branch for the line by route
 // r, and when it should but cannot, why (a gap). A producer with no lines of its own
 // ships every release to every release branch of the hub, so it feeds the line the
@@ -367,7 +358,7 @@ func (m mapper) feedsHub(p *chain.Project, r bump.Route, line string, hubNode No
 			return Link{}, "", false
 		}
 		return Link{Project: p.Slug(), Name: p.Name(), Holdings: holdingNames(r), Universal: true}, "", true
-	case !pHas && tagLines(p):
+	case !pHas && p.LinesInTags():
 		// Its lines are the ones it is used for, and it lists those, so a line it does
 		// not list is not one it is meant to feed.
 		return Link{}, "", false
@@ -420,31 +411,16 @@ func shipsTo(r bump.Route, line string) (Link, bool) {
 // project that keeps each line on a branch has the lines it lists; one that finds
 // its lines in its tags has the lines its streams list, all on its default branch.
 func nodeOf(p *chain.Project, line string) (Node, bool) {
-	series := func(l string) string {
-		for _, st := range p.Streams() {
-			if sr, ok := st.Series(l); ok {
-				return sr
-			}
-		}
-		return ""
+	rows := p.ReleaseTargetsOf(line)
+	if len(rows) == 0 {
+		return Node{}, false
 	}
-	for _, lb := range p.LineBranches() {
-		if !strings.EqualFold(lb.Line, line) {
-			continue
-		}
-		branch, _ := p.BranchOfLine(lb.Line, "")
-		return Node{Project: p.Slug(), Name: p.Name(), Branch: branch, IsDefaultBranch: lb.IsDefault, Series: series(lb.Line)}, true
+	node := Node{Project: p.Slug(), Name: p.Name(), Series: rows[0].Series}
+	// A line that has a branch for each stage has no one branch to name.
+	if len(rows) == 1 && rows[0].Stage == "" {
+		node.Branch, node.IsDefaultBranch = rows[0].Branch, rows[0].IsDefault
 	}
-	if tagLines(p) {
-		for _, st := range p.Streams() {
-			for _, l := range st.Lines() {
-				if strings.EqualFold(l, line) {
-					return Node{Project: p.Slug(), Name: p.Name(), Branch: p.DefaultBranch(), IsDefaultBranch: true, Series: series(l)}, true
-				}
-			}
-		}
-	}
-	return Node{}, false
+	return node, true
 }
 
 func date(t time.Time) string {

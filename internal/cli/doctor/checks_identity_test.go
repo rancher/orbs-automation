@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/rancher/orbs-automation/internal/platform/actor"
+	"github.com/rancher/orbs-automation/internal/gero/actor"
 	"github.com/stretchr/testify/assert"
 )
 

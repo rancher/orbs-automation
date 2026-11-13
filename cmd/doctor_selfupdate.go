@@ -9,7 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/cli/selfupdate"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
 )
 

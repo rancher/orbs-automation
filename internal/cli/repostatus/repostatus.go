@@ -15,7 +15,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/releasetag"
@@ -281,52 +281,25 @@ func compareStatus(h ship.HeldValue) string {
 // the one row of a project with a single release branch, or for each line of the
 // stream of a project that finds its lines in its tags.
 func targets(p *chain.Project) []Target {
-	series := func(line string) string {
-		for _, st := range p.Streams() {
-			if sr, ok := st.Series(line); ok {
-				return sr
-			}
-		}
-		return ""
+	var out []Target
+	for _, t := range p.ReleaseTargets() {
+		out = append(out, Target{Line: t.Line, Series: t.Series, Stage: t.Stage, Branch: t.Branch, IsDefaultBranch: t.IsDefault})
 	}
-	if p.Layout() == chain.LayoutSingle {
-		// Every line is on the one branch. A stream that lists lines has them in its
-		// tags, so each is a row of its own.
-		var ts []Target
-		for _, st := range p.Streams() {
-			for _, line := range st.Lines() {
-				ts = append(ts, Target{Line: line, Series: series(line), Branch: p.DefaultBranch(), IsDefaultBranch: true})
-			}
-		}
-		if len(ts) == 0 {
-			return []Target{{Branch: p.DefaultBranch(), IsDefaultBranch: true}}
-		}
-		return ts
-	}
-	var ts []Target
-	for _, lb := range p.LineBranches() {
-		if len(lb.Stages) > 0 {
-			for _, stage := range p.Stages() {
-				if branch, ok := lb.Stages[stage]; ok {
-					ts = append(ts, Target{Line: lb.Line, Series: series(lb.Line), Stage: stage, Branch: branch})
-				}
-			}
-			continue
-		}
-		ts = append(ts, Target{Line: lb.Line, Series: series(lb.Line), Branch: lb.Branch, IsDefaultBranch: lb.IsDefault})
-	}
-	return ts
+	return out
 }
 
 // fill reads the latest tags and the head of t from refs, works out its state and
 // the tags it could have next from them (internal/releasetag, which is what
 // gero repo tag asks), and compares them with the clone, which may be nil.
 func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
-	scheme, err := tagscheme.ForProject(p)
+	stream, err := p.OnlyStream()
 	if err != nil {
 		return
 	}
-	stream := p.Streams()[0]
+	scheme, err := tagscheme.ForStream(stream)
+	if err != nil {
+		return
+	}
 	latest := scheme.Latest(refs.Tags, t.Line)
 	t.LatestStable, t.LatestPrerelease = tagInfo(latest.Stable), tagInfo(latest.Prerelease)
 	for _, b := range refs.Branches {

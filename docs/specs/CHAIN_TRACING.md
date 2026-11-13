@@ -89,7 +89,6 @@ A holding's `holds.lines` is a `{since, until}` range of lines, so each holding 
 
 * Reading a commit or a branch holding at a ref, which `assets-pins-charts` and `rancher-follows-charts-branch` need ([UPDATE_ENGINE](../design/UPDATE_ENGINE.md)).
 * Reading the commit pinned in `lock.yaml` at a ref and comparing it with the head of the stage's branch.
-* The `dockerfile` format in the update engine, which the pre-v2.16 Rancher holding uses: it returns `ErrFormatNotBuilt`.
 * Confirming where Rancher holds the charts branch for each line, with a test that reads it.
 * The walk through several hops, the tree in `lines resolve` and `--depth`.
 * Checking a held tag's stage against the release team's rule.

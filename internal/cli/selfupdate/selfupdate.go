@@ -1,6 +1,6 @@
 // Package selfupdate holds the logic of gero doctor self-update: it looks for a
 // newer release, says what it found, asks, and installs it. What proves the
-// release is ours is internal/platform/selfupdate. It is framework-free: cmd/
+// release is ours is internal/gero/selfupdate. It is framework-free: cmd/
 // owns the cobra wiring.
 package selfupdate
 
@@ -12,9 +12,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
+	platform "github.com/rancher/orbs-automation/internal/gero/selfupdate"
 	"github.com/rancher/orbs-automation/internal/platform/github"
-	platform "github.com/rancher/orbs-automation/internal/platform/selfupdate"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
@@ -25,7 +25,7 @@ var ErrNeedsApproval = errors.New("self-update replaces the gero binary and need
 // ErrDeclined is returned when the user answers no. Nothing was changed.
 var ErrDeclined = errors.New("not updated")
 
-// Updater is what Run needs of internal/platform/selfupdate.
+// Updater is what Run needs of internal/gero/selfupdate.
 type Updater interface {
 	Check(ctx context.Context) (platform.Status, error)
 	Blocked() string

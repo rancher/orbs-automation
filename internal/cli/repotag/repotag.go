@@ -14,9 +14,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/platform/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/releasetag"
@@ -178,10 +177,11 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	if err != nil {
 		return fmt.Errorf("%s: clone it under a repos.search directory, or set repos.paths.%s (%v)", slug, slug, err)
 	}
-	branch, line, series, err := lineBranch(project, stream, opts.Line)
+	branch, line, err := project.ResolveLineOrBranch(opts.Line)
 	if err != nil {
 		return err
 	}
+	series, _ := stream.Series(line) // none for a branch in no line, or a line with no series
 	refs, err := ws.UpstreamRefs(ctx, slug)
 	if err != nil {
 		return fmt.Errorf("read the branches and tags of %s: %w", slug, err)
@@ -348,42 +348,19 @@ func (r Result) what() string {
 // with none, or with several, has no one stream, and the caller would have to name
 // it.
 func oneStream(p *chain.Project) (*chain.Stream, error) {
-	switch streams := p.Streams(); len(streams) {
-	case 0:
-		return nil, fmt.Errorf("%s has no stream, so no release to tag", p.Slug())
-	case 1:
-		if streams[0].Scheme() != tagscheme.Semver {
-			return nil, fmt.Errorf("%s has tags of the %s scheme, which its own CI makes: repo tag makes semver tags only", p.Slug(), streams[0].Scheme())
-		}
-		return streams[0], nil
-	default:
-		return nil, fmt.Errorf("%s has %d streams, and repo tag does not yet name one", p.Slug(), len(streams))
+	st, err := p.OnlyStream()
+	switch {
+	case errors.Is(err, chain.ErrNoStream):
+		return nil, fmt.Errorf("%w, so no release to tag", err)
+	case errors.Is(err, chain.ErrSeveralStreams):
+		return nil, fmt.Errorf("%w, and repo tag does not yet name one", err)
+	case err != nil:
+		return nil, err
 	}
-}
-
-// lineBranch finds the branch a release line lives on, and the series of
-// versions the line has in the stream. The line may be written without the v, or
-// be a branch of the project, which has the line it is the branch of, or none
-// when it is in no line.
-func lineBranch(p *chain.Project, st *chain.Stream, arg string) (branch, line, series string, err error) {
-	if b, ok := p.BranchOfLine(arg, ""); ok {
-		if series, ok := st.Series(arg); ok {
-			return b, arg, series, nil
-		}
-		if slices.ContainsFunc(p.Lines(), func(l string) bool { return strings.EqualFold(l, lines.Normalize(arg)) }) {
-			return b, arg, "", nil
-		}
+	if st.Scheme() != tagscheme.Semver {
+		return nil, fmt.Errorf("%s has tags of the %s scheme, which its own CI makes: repo tag makes semver tags only", p.Slug(), st.Scheme())
 	}
-	if slices.Contains(p.ReleaseBranches(), arg) {
-		line := p.LineOfBranch(arg)
-		series, _ := st.Series(line)
-		return arg, line, series, nil
-	}
-	have := p.Lines()
-	if len(have) == 0 {
-		have = p.ReleaseBranches()
-	}
-	return "", "", "", fmt.Errorf("%s has no release line or branch %q: it has %s", p.Slug(), arg, strings.Join(have, ", "))
+	return st, nil
 }
 
 // short abbreviates a commit for a message.

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Wiring only: the logic is tested in internal/platform/shellenv and internal/cli/shellsetup.
+// Wiring only: the logic is tested in internal/gero/shellenv and internal/cli/shellsetup.
 func TestShellInitPrintsCompletionAndTheWrapper(t *testing.T) {
 	for _, shell := range []string{"bash", "zsh", "fish", "powershell"} {
 		stdout, _, err := execRoot(t, "shell", "init", shell)

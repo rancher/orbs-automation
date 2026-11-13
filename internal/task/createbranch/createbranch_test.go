@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/platform/workdir"
+	"github.com/rancher/orbs-automation/internal/gero/authorship"
+	"github.com/rancher/orbs-automation/internal/gero/workdir"
 )
 
 var bg = context.Background()
@@ -31,13 +31,14 @@ type fakeGit struct {
 	existing   string // the commit the branch of that name is at; empty is none
 	collisions []string
 	mergeBase  string
-	commits    []git.BranchCommit
+	commits    []authorship.Commit
 	email      string
 	startErr   error
 	worktreeEr error
 
-	changes []string
-	reads   []string
+	changes   []string
+	reads     []string
+	committed []workdir.GitCommit
 }
 
 func (f *fakeGit) State(context.Context, string) (workdir.GitState, error) {
@@ -77,17 +78,20 @@ func (f *fakeGit) MergeBase(context.Context, string, string, string) (string, er
 	return f.mergeBase, nil
 }
 
-func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]git.BranchCommit, error) {
+func (f *fakeGit) CommitsSince(context.Context, string, string, string) ([]authorship.Commit, error) {
 	return f.commits, nil
 }
 
 func (f *fakeGit) Config(context.Context, string, string) (string, error) { return f.email, nil }
 
-func (f *fakeGit) Commit(context.Context, string, workdir.GitCommit) (string, error) { return "", nil }
-func (f *fakeGit) CommitFiles(context.Context, string, string) ([]string, error)     { return nil, nil }
-func (f *fakeGit) Checkout(context.Context, string, string) error                    { return nil }
-func (f *fakeGit) RemoveWorktree(context.Context, string, string) error              { return nil }
-func (f *fakeGit) Discard(context.Context, string, []string) error                   { return nil }
+func (f *fakeGit) Commit(_ context.Context, _ string, c workdir.GitCommit) (string, error) {
+	f.committed = append(f.committed, c)
+	return "", nil
+}
+func (f *fakeGit) CommitFiles(context.Context, string, string) ([]string, error) { return nil, nil }
+func (f *fakeGit) Checkout(context.Context, string, string) error                { return nil }
+func (f *fakeGit) RemoveWorktree(context.Context, string, string) error          { return nil }
+func (f *fakeGit) Discard(context.Context, string, []string) error               { return nil }
 
 // clean is a clone on main with nothing in the way, and the target where the
 // caller read it.
@@ -99,8 +103,8 @@ func input() Input {
 	return Input{CloneDir: "/src/rancher", Remote: "upstream", Target: "release/v2.15", Base: base, Branch: branch, TempDir: "/tmp/gero"}
 }
 
-func ours(hash string) git.BranchCommit {
-	return git.BranchCommit{Hash: hash, AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\n" + git.OurTrailer}
+func ours(hash string) authorship.Commit {
+	return authorship.Commit{Hash: hash, AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\n" + authorship.Trailer}
 }
 
 func TestRunACleanCloneIsWorkedInPlaceFromTheBase(t *testing.T) {
@@ -115,6 +119,34 @@ func TestRunACleanCloneIsWorkedInPlaceFromTheBase(t *testing.T) {
 	assert.Empty(t, out.Work.Reason)
 	assert.Equal(t, []string{"start /src/rancher " + branch + " " + base}, g.changes)
 	assert.Contains(t, g.reads, "fetch /src/rancher upstream release/v2.15")
+}
+
+func TestRunInPlaceLeavesOutTheUntrackedFilesTheEngineerAlreadyHad(t *testing.T) {
+	g := clean()
+	g.state.Untracked = []string{"notes.txt"}
+	out, err := Run(bg, g, input())
+	require.NoError(t, err)
+
+	_, err = out.Work.Commit(bg, workdir.GitCommit{Message: "m"})
+
+	require.NoError(t, err)
+	require.Len(t, g.committed, 1)
+	assert.Empty(t, g.committed[0].Stage)
+}
+
+func TestRunInPlaceWithStageUntrackedCommitsTheUntrackedFilesThatWereThereBefore(t *testing.T) {
+	g := clean()
+	g.state.Untracked = []string{"notes.txt"}
+	in := input()
+	in.StageUntracked = true
+	out, err := Run(bg, g, in)
+	require.NoError(t, err)
+
+	_, err = out.Work.Commit(bg, workdir.GitCommit{Message: "m"})
+
+	require.NoError(t, err)
+	require.Len(t, g.committed, 1)
+	assert.Equal(t, []string{"notes.txt"}, g.committed[0].Stage)
 }
 
 func TestRunADirtyCloneGetsAWorktreeNamedForTheBranch(t *testing.T) {
@@ -201,9 +233,9 @@ func TestRunABranchOfOursThatIsCurrentIsReusedAsItIs(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = base
-	g.commits = []git.BranchCommit{
-		{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\nbody\n\n" + git.OurTrailer},
-		{Hash: "bbbb", AuthorEmail: "dev@example.com", Message: "Run generate\n\n" + git.OurTrailer},
+	g.commits = []authorship.Commit{
+		{Hash: "aaaa", AuthorEmail: "dev@example.com", Message: "Update scc-operator\n\nbody\n\n" + authorship.Trailer},
+		{Hash: "bbbb", AuthorEmail: "dev@example.com", Message: "Run generate\n\n" + authorship.Trailer},
 	}
 
 	out, err := Run(bg, g, input())
@@ -220,7 +252,7 @@ func TestRunABranchOfOursThatTheTargetHasMovedOnFromIsBuiltAgain(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = "older000"
-	g.commits = []git.BranchCommit{ours("aaaa")}
+	g.commits = []authorship.Commit{ours("aaaa")}
 
 	out, err := Run(bg, g, input())
 
@@ -234,7 +266,7 @@ func TestRunRebuildBuildsAgainEvenWhenTheBranchIsCurrent(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = base
-	g.commits = []git.BranchCommit{ours("aaaa")}
+	g.commits = []authorship.Commit{ours("aaaa")}
 	in := input()
 	in.Rebuild = true
 
@@ -250,7 +282,7 @@ func TestRunABranchWithACommitThatIsNotOursIsNeverTouched(t *testing.T) {
 	g := clean()
 	g.existing = "tip22222"
 	g.mergeBase = base
-	g.commits = []git.BranchCommit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine\n\n" + git.OurTrailer}}
+	g.commits = []authorship.Commit{{Hash: "aaaa1111bbbb", AuthorEmail: "someone@example.com", Message: "Mine\n\n" + authorship.Trailer}}
 	in := input()
 	in.Rebuild = true
 
