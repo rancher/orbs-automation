@@ -561,3 +561,37 @@ func TestShipLooksAtNoMoreBranchesThanItCanAndSaysSo(t *testing.T) {
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "branches")
 }
+
+func TestShipSaysHowFarBehindAnotherActorsPRIs(t *testing.T) {
+	ws, _, ex, remote, _ := publishing(t)
+	theirs := existing(120, "rancher-bot[bot]", "v0.5.3")
+	theirs.HeadOwner, theirs.HeadRef = "rancher", "bot/scc-operator-v0.5.3-v2.15"
+	remote.open = pulls.Open{PRs: []pulls.PR{theirs}}
+	remote.behind = 3
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "also open: #120 by rancher-bot[bot]")
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "behind release/v2.15 by 3")
+}
+
+func TestShipReportsAPRThatTargetsAnotherBranchAndLeavesItAlone(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	bumpBranchOnTheHost(t, ws, "alice/scc-operator-v0.5.3-v2.15")
+	moved := existing(121, "danpock", "v0.5.2")
+	moved.HeadOwner, moved.HeadRef, moved.Base = "rancher", "alice/scc-operator-v0.5.3-v2.15", "release/v2.14"
+	remote.open = pulls.Open{}
+	remote.byHead = map[string][]pulls.PR{"rancher:alice/scc-operator-v0.5.3-v2.15": {moved}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	assert.False(t, lg.has("close #121"), "a PR of another target is never closed")
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "#121")
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "release/v2.14")
+}

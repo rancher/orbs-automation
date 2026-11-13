@@ -1,6 +1,8 @@
 package ship
 
 import (
+	"fmt"
+
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 )
@@ -33,6 +35,23 @@ type Publish struct {
 	// Also is the PRs of others with this bump's key at this version or a newer
 	// one. They are not touched, and are only reported.
 	Also []pulls.PR
+	// OtherBase is the PRs with this bump's marker that target another branch than
+	// this target's, such as one that was retargeted. They are a different bump,
+	// not an overlap: they are never closed, never block, and are only reported.
+	OtherBase []pulls.PR
+}
+
+// alsoNote is the report of a PR of someone else's that overlaps the bump, with
+// where it stands against the target's branch when that is known: behind is how
+// many commits the target has that the PR's branch does not.
+func alsoNote(p pulls.PR, base string, behind int, known bool) string {
+	return fmt.Sprintf("also open: #%d by %s (%s)", p.Number, p.Author, p.URL)
+}
+
+// otherBaseNote is the report of a PR that has the bump's marker but targets
+// another branch.
+func otherBaseNote(p pulls.PR, base string) string {
+	return ""
 }
 
 // decidePublish decides what to do for a bump, from the open PRs found for its

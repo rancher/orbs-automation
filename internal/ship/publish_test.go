@@ -183,3 +183,49 @@ func TestDecideWhoIsRunningDecidesWhichPRsAreMine(t *testing.T) {
 	assert.Equal(t, []int{101}, numbers(asDan.Supersede))
 	assert.Equal(t, []int{120}, numbers(asTheBot.Supersede), "in CI the bot's own are the eligible ones")
 }
+
+func withBase(p pulls.PR, base string) pulls.PR {
+	p.Base = base
+	return p
+}
+
+func TestDecideAPRThatTargetsAnotherBranchIsNotAnOverlap(t *testing.T) {
+	retargeted := withBase(pr(120, me, markerFor("v0.5.4")), "release/v2.14")
+	older := withBase(pr(101, me, markerFor("v0.5.3")), "release/v2.14")
+
+	got := decidePublish([]pulls.PR{retargeted, older}, me, markerFor("v0.5.4"))
+
+	assert.Equal(t, PublishCreate, got.Action, "the PR at this version is of another target, so nothing is open for this one")
+	assert.Empty(t, got.Supersede, "and an older one of another target is never closed")
+	assert.Equal(t, []int{120, 101}, numbers(got.OtherBase))
+}
+
+func TestDecideAPRThatTargetsThisBranchOrDoesNotSayIsAnOverlap(t *testing.T) {
+	got := decidePublish([]pulls.PR{
+		withBase(pr(120, me, markerFor("v0.5.4")), "release/v2.15"),
+		pr(101, me, markerFor("v0.5.3")), // a PR found without its base: the marker decides
+	}, me, markerFor("v0.5.4"))
+
+	assert.Equal(t, PublishAlreadyOpen, got.Action)
+	assert.Equal(t, []int{101}, numbers(got.Supersede))
+	assert.Empty(t, got.OtherBase)
+}
+
+func TestAlsoNoteSaysWhereThePRStandsWhenItIsKnown(t *testing.T) {
+	p := pulls.PR{Number: 99, Author: "alice", URL: "https://example/pull/99"}
+
+	assert.Equal(t, "also open: #99 by alice (https://example/pull/99)", alsoNote(p, "release/v2.15", 0, false), "not known: nothing is claimed")
+	assert.Equal(t, "also open: #99 by alice (https://example/pull/99), current with release/v2.15", alsoNote(p, "release/v2.15", 0, true))
+	assert.Equal(t, "also open: #99 by alice (https://example/pull/99), behind release/v2.15 by 3", alsoNote(p, "release/v2.15", 3, true))
+}
+
+func TestOtherBaseNoteNamesBothBranches(t *testing.T) {
+	p := withBase(pulls.PR{Number: 120, Author: "alice", URL: "https://example/pull/120"}, "release/v2.14")
+
+	got := otherBaseNote(p, "release/v2.15")
+
+	assert.Contains(t, got, "#120")
+	assert.Contains(t, got, "release/v2.14")
+	assert.Contains(t, got, "release/v2.15")
+	assert.Contains(t, got, "not an overlap")
+}
