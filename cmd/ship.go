@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/rancher/orbs-automation/cmd/shipflags"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/cli/ship"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
@@ -97,13 +98,8 @@ with both flags it is a dry run.`,
 			return ship.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
 		},
 	}
-	shipCmd.Flags().StringVar(&in.To, "to", "", "the consumer to ship to, when the project ships to several")
-	shipCmd.Flags().StringSliceVar(&in.Lines, "line", nil, "ship only to this Rancher line of the consumer (v2.15), on whichever branch it keeps that line, instead of every line the release goes to; repeat it or separate lines with commas for several")
-	shipCmd.Flags().BoolVar(&in.Prerelease, "prerelease", false, "let prereleases count")
-	shipCmd.Flags().BoolVar(&in.AllowDowngrade, "allow-downgrade", false, "ship a release older than what the consumer holds")
-	shipCmd.Flags().BoolVar(&in.Preview, "preview", false, "print the commit message, the PR body and the commit each step would make too")
+	shipflags.Bind(shipCmd, &in)
 	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
-	shipCmd.Flags().BoolVar(&in.Refresh, "refresh", false, "rebuild your open PR for this release and replace its branch if it differs")
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")

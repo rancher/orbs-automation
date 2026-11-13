@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/initcmd"
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,12 @@ go. The clone root is scanned too, so it need not be listed in repos.search.
 An existing file is not touched unless --force replaces it. --dry-run shows the
 file and writes nothing. The file is at $GERO_CONFIG, else
 $XDG_CONFIG_HOME/gero/config.yaml, else ~/.config/gero/config.yaml. Its first
-line points an editor at the JSON Schema of the file.`,
+line points an editor at the JSON Schema of the file.
+
+In CI it is the same file: the user file of whoever the job runs as, which is how
+a workflow tells gero where its checkouts are, with the flags given and nothing
+asked. CI reads a user file only when GERO_CONFIG names it, so set GERO_CONFIG to
+the file for this command and for the commands that follow.`,
 		Args: cobra.NoArgs,
 		// The file to write may be the one that cannot be loaded, so this loads
 		// without it when it has to, as gero doctor does.
@@ -56,7 +62,7 @@ line points an editor at the JSON Schema of the file.`,
 			if f := cmd.Flags().Lookup("central-config-dir"); f != nil && f.Changed {
 				o.CentralConfigDir = f.Value.String()
 			}
-			o.Interactive = termfacts.IsTerminal(os.Stdin)
+			o.Interactive = asksQuestions(settingsFrom(cmd), termfacts.IsTerminal(os.Stdin))
 			o.DryRun = settingsFrom(cmd).DryRun
 			o.In, o.Out = cmd.InOrStdin(), cmd.OutOrStdout()
 			o.Terminal = settingsFrom(cmd).Terminal
@@ -77,4 +83,11 @@ line points an editor at the JSON Schema of the file.`,
 	f.StringVar(&o.CloneRoot, "clone-root", "", "the one directory gero repo clone puts new clones in, repos.cloneRoot")
 	f.BoolVar(&o.Force, "force", false, "replace the user file if it exists")
 	root.AddCommand(cmd)
+}
+
+// asksQuestions says whether gero init may ask for a value it was not given:
+// only at a terminal, and never in CI or when non-interactive is set, so a job
+// that gives its flags gets the same file whether or not it has a terminal.
+func asksQuestions(s clicfg.Settings, terminal bool) bool {
+	return terminal && !s.CI && !s.NonInteractive
 }

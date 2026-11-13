@@ -26,7 +26,7 @@ One function in `internal/gero/clicfg` decides, once, and the result is `Setting
 | User file | Loaded | Ignored unless `GERO_CONFIG` is set | [CLI_CONFIG](CLI_CONFIG.md) |
 | `upstream` default | Remote matching the slug, else the only remote | `origin` | [WORKSPACE](WORKSPACE.md) |
 | Log handler | Text | JSON | [CLI_OUTPUT](CLI_OUTPUT.md) |
-| Interaction | Prompts when stdin and stdout are a TTY, unless `--non-interactive` | Never prompts; a write needs `--non-interactive` | [CLI_OUTPUT](CLI_OUTPUT.md) |
+| Interaction | Prompts when stdin and stdout are a TTY, unless `--non-interactive` | Never prompts; a write needs `--non-interactive`, except a CI-only command such as `ci:ship`, which never asks and has no flag for it | [CLI_OUTPUT](CLI_OUTPUT.md) |
 | `gero repl` | Runs, with a TTY | Refused ([REPL](REPL.md)) | [REPL](REPL.md) |
 | Ref and commit inputs | The repository | `GITHUB_REF`, `GITHUB_SHA` | [BRANCH_TAGS](BRANCH_TAGS.md) |
 | Token | `GH_TOKEN`, then the `gh` login | `GH_TOKEN` from the workflow | [GITHUB_ACCESS](GITHUB_ACCESS.md) |
@@ -63,7 +63,7 @@ The actor is who the commits and the PRs are attributed to. It is two things tha
 
 **Push uses the `git` binary, through `internal/platform/git/gitcli`.** A push needs what go-git does not carry: the engineer's SSH agent and `~/.ssh/config`, credential helpers and hooks on a workstation, and a token over HTTPS in CI. It is never forced, with prompts off (`GIT_TERMINAL_PROMPT=0`) so a missing credential fails at once. `execx` scrubs the environment, so a push passes on only the variables that reach the agent and the helpers, and never a token. Which remote a push goes to is in [PUSH_TO_REPO](PUSH_TO_REPO.md).
 
-The CI path, the token as a one-shot credential over HTTPS and never written to a remote URL or to disk, is not built and belongs to `gero ci:ship`.
+In CI the push authenticates with the token that opens the PRs (`GH_TOKEN`), as a one-shot credential over HTTPS: `gitcli.WithToken` puts it in the context, and `gitcli` hands it to the one `git` process as `http.<host>/.extraheader` through `GIT_CONFIG_COUNT` and its keys, so it is in no remote URL, no argument and no file. The key is first set empty, because a clone made by `actions/checkout` already has a header for the workflow's own token in the same list, and git would send both. Only a push carries it: a fetch uses what the clone's own configuration has, which for a checkout is its credentials.
 
 **Signing is off by default and opt-in for humans.** Signed commits are not required by the target repositories. An engineer who wants them sets `signCommits: true` in the user file (or `GERO_SIGN_COMMITS=true`, which beats the file). `gero ship` signs every commit it makes when it is on.
 
@@ -89,11 +89,10 @@ Domain code never reads the environment, so a test drives it with a `Settings` v
 
 ## Not built yet
 
-* The cross-repo token check (`cigate.RequireCrossRepoToken`) and the workstation-signs detection (`clicfg.WorkstationSigns`) exist, and no command calls them yet.
+* No command calls the workstation-signs detection, `clicfg.WorkstationSigns`.
 * The `auth status` fallback treats a 403 from `GET /user` as an installation token, which is unverified against a real one.
 * The preflight line that names workstation signs under a forced CI context.
 * `gero repo branch` and `gero repo tag` follow the one-confirmation and `--dry-run` rules but do not print the preflight line, which only `gero ship` prints.
-* The push of `gero ci:ship` without an engineer's credentials.
 
 ## Open questions
 

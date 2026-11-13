@@ -103,6 +103,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 		creds, err := github.Resolve(github.GoGh{}, "")
 		switch {
 		case err == nil:
+			ctx = pushContext(ctx, s, creds)
 			remote, err := newRemote(creds, s)
 			if err != nil {
 				return err

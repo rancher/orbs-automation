@@ -45,7 +45,7 @@ without manual intervention, with gh-style commands: gero <category> <action>.`,
 	home, _ := os.UserHomeDir()
 	root.PersistentPreRunE = loadSettings(os.Getenv, home)
 	root.AddGroup(&groups.CIGroup)
-	ci.RegisterSubcommands(root)
+	ci.RegisterSubcommands(root, settingsFrom)
 	for _, add := range []func(*cobra.Command){
 		addAuth, addCd, addConfig, addDoctor, addInit, addLines, addRepl, addRepo, addShell,
 		addShip, addSemver, addVersion, addWorkflows,

@@ -38,8 +38,8 @@ func Push(ctx context.Context, dir, remote, branch string) error {
 	return push(ctx, dir, remote, branch, "push", "--set-upstream", remote, branch)
 }
 
-// runAuthenticated runs git with the engineer's credentials (authEnv) and with
-// prompting on a terminal off.
+// runAuthenticated runs git with the engineer's credentials (authEnv), or the
+// token that ctx carries (WithToken), and with prompting on a terminal off.
 func runAuthenticated(ctx context.Context, args ...string) (execx.Result, error) {
 	env := execx.DefaultEnv()
 	for _, k := range authEnv {
@@ -47,6 +47,7 @@ func runAuthenticated(ctx context.Context, args ...string) (execx.Result, error)
 			env = append(env, k+"="+v)
 		}
 	}
+	env = append(env, tokenEnv(ctx)...)
 	env = append(env, "GIT_TERMINAL_PROMPT=0")
 	return execx.New("git").Run(ctx, execx.Cmd{Name: "git", Args: args, Env: env})
 }
