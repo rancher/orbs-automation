@@ -18,7 +18,10 @@ import (
 // the project's own title and branch prefix, so the state check can show exactly
 // what a run would put in the PR before anything is written.
 type Preview struct {
-	Branch        string   `json:"branch"`
+	Branch string `json:"branch"`
+	// Key is the end of the branch that gero builds (BranchKey), the same for
+	// every actor, which is how another PR of the bump is found.
+	Key           string   `json:"key"`
 	Title         string   `json:"title"`
 	Labels        []string `json:"labels,omitempty"`
 	CommitMessage string   `json:"commitMessage"`
@@ -100,7 +103,7 @@ func renderPreview(in previewInput) (Preview, error) {
 		return Preview{}, err
 	}
 	return Preview{
-		Branch: renderedPrefix + vars["key"], Title: title, Labels: prs.Labels,
+		Branch: renderedPrefix + vars["key"], Key: vars["key"], Title: title, Labels: prs.Labels,
 		CommitMessage: commit, Body: body, Steps: steps,
 	}, nil
 }

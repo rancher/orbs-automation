@@ -2,6 +2,7 @@ package ship
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
@@ -490,4 +491,73 @@ func TestShipSaysWhenAPRsBranchDoesNotMatchItsMarker(t *testing.T) {
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "#101")
 	assert.Contains(t, res.Warnings[0], "dan/my-own-name")
+}
+
+// bumpBranchOnTheHost makes a branch of the bump's name on the upstream, as a
+// run of anyone leaves behind, which the run reads with the rest of the refs.
+func bumpBranchOnTheHost(t *testing.T, ws *realWorkspace, name string) {
+	t.Helper()
+	runGit(t, ws.up, "branch", name, "release/v2.15")
+}
+
+func TestShipFindsAnOlderPROfMineByTheTailOfItsBranchWhenTheListingDoesNotReachIt(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	bumpBranchOnTheHost(t, ws, "alice/scc-operator-v0.5.2-v2.15")
+	older := existing(101, "danpock", "v0.5.2")
+	older.HeadOwner, older.HeadRef = "rancher", "alice/scc-operator-v0.5.2-v2.15"
+	remote.open = pulls.Open{Truncated: true} // the newest 100 did not include it
+	remote.byHead = map[string][]pulls.PR{"rancher:alice/scc-operator-v0.5.2-v2.15": {older}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status)
+	assert.True(t, lg.has("open head rancher/rancher rancher:alice/scc-operator-v0.5.2-v2.15"))
+	assert.True(t, lg.has("close #101"), "found by its branch, and superseded")
+}
+
+func TestShipReportsAnotherActorsNewerPRFoundByTheTailOfItsBranch(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	bumpBranchOnTheHost(t, ws, "bot/scc-operator-v0.5.9-v2.15")
+	theirs := existing(130, "rancher-bot[bot]", "v0.5.9")
+	theirs.HeadOwner, theirs.HeadRef = "rancher", "bot/scc-operator-v0.5.9-v2.15"
+	remote.open = pulls.Open{Truncated: true}
+	remote.byHead = map[string][]pulls.PR{"rancher:bot/scc-operator-v0.5.9-v2.15": {theirs}}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, ResultOpened, res.Status, "it is not mine, so it does not block")
+	assert.False(t, lg.has("close #130"))
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "#130")
+}
+
+func TestShipDoesNotAskTwiceForTheHeadItAlreadyAsksFor(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	bumpBranchOnTheHost(t, ws, botV215)
+	remote.open = pulls.Open{}
+
+	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, lg.count("open head rancher/rancher rancher:"+botV215), "once, for the exact head")
+}
+
+func TestShipLooksAtNoMoreBranchesThanItCanAndSaysSo(t *testing.T) {
+	ws, _, ex, remote, lg := publishing(t)
+	for i := 0; i < maxBumpBranches+1; i++ {
+		bumpBranchOnTheHost(t, ws, fmt.Sprintf("u%02d/scc-operator-v0.4.%d-v2.15", i, i))
+	}
+	remote.open = pulls.Open{}
+
+	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
+
+	require.NoError(t, err)
+	res := onlyResult(t, plan)
+	assert.Equal(t, maxBumpBranches, lg.count("open head rancher/rancher rancher:u"), "no more than the limit are asked for")
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, res.Warnings[0], "branches")
 }
