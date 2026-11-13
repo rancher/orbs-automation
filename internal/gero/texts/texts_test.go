@@ -21,7 +21,7 @@ func TestDefaultsOnlyUseTheClosedVariables(t *testing.T) {
 
 func TestDefaultTitleAndPrefix(t *testing.T) {
 	assert.Equal(t, "[{branch}] Update {source} to {tag}", DefaultTitle())
-	assert.Equal(t, "bot/{source}-", DefaultBranchPrefix())
+	assert.Equal(t, "bot/", DefaultBranchPrefix(), "the key that gero appends has the source in it")
 	assert.NotContains(t, DefaultTitle(), "\n", "a title is one line")
 }
 

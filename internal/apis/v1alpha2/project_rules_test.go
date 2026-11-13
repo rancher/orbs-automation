@@ -70,7 +70,7 @@ func TestAValidProjectHasNoFindings(t *testing.T) {
   finalDestination: true
   pullRequests:
     title: "[{branch}] Update {source} to {version}"
-    branchPrefix: "bot/{source}-"
+    branchPrefix: "bot/"
     labels: [status/auto-created]
     pushTo: fork
   branches:
@@ -97,6 +97,7 @@ func TestProjectRules(t *testing.T) {
 		{"external and managed", "  repo: {name: a/b, external: true, managedBy: orbs}\n", "spec.repo.external", "no managing team"},
 		{"pushTo that is neither", "  repo: {name: a/b}\n  pullRequests: {pushTo: origin}\n", "spec.pullRequests.pushTo", "fork or upstream"},
 		{"a title with an unknown placeholder", "  repo: {name: a/b}\n  pullRequests: {title: \"{nope}\"}\n", "spec.pullRequests.title", "unknown placeholder {nope}"},
+		{"a branch prefix that uses the key, which is appended to it", "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"{key}\"}\n", "spec.pullRequests.branchPrefix", "unknown placeholder {key}"},
 		{"a branch prefix with a malformed placeholder", "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"{a\"}\n", "spec.pullRequests.branchPrefix", "unclosed"},
 		{"a layout that is neither", "  repo: {name: a/b}\n  branches: {layout: weekly}\n", "spec.branches.layout", "single or perLine"},
 		{"lines with the single layout", "  repo: {name: a/b}\n  branches:\n    layout: single\n    lines: [{line: v2.16}]\n", "spec.branches.lines", "single"},
@@ -161,4 +162,30 @@ func TestARepoNameHasNoSpaces(t *testing.T) {
 
 	assert.Nil(t, p)
 	assert.True(t, hasError(rep, "spec.repo.name", "space"), "%v", rep.Findings)
+}
+
+func TestAPrefixThatRepeatsTheKeyIsAWarningAndStillValid(t *testing.T) {
+	rep := validateSet(t, doc("Project", "p", "", projectSpec+"  pullRequests: {branchPrefix: \"bot/{source}-{tag}-\"}\n"))
+
+	require.NoError(t, rep.Err())
+	got := warningsOf(rep, RuleBranchPrefixRedundantVar)
+	require.Len(t, got, 2, "one for each variable")
+	assert.Equal(t, "spec.pullRequests.branchPrefix", got[0].Path)
+	assert.Contains(t, got[0].Msg, "{source}")
+	assert.Contains(t, got[1].Msg, "{tag}")
+}
+
+func TestAPrefixThatSaysNothingTwiceHasNoWarning(t *testing.T) {
+	_, rep := loadProject(t, "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"auto/\"}\n")
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestAnAcknowledgementSilencesTheRedundantPrefixWarning(t *testing.T) {
+	spec := projectSpec + "  pullRequests: {branchPrefix: \"bot/{source}-\"}\n"
+	rep := validateSet(t, docAck("Project", "p", "", "  - {rule: branch-prefix-redundant-var, reason: the old names stay until the PRs of them are gone}\n", spec))
+
+	assert.NoError(t, rep.Err())
+	assert.Empty(t, rep.Warnings())
+	assert.Len(t, rep.Acknowledged(), 1)
 }

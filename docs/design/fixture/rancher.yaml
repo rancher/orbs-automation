@@ -7,7 +7,7 @@ name: rancher
 spec:
   repo: {name: rancher/rancher, managedBy: shared}
   finalDestination: true
-  pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/orbs]}
+  pullRequests: {title: "[{branch}] Update {source} to {version}", labels: [status/auto-created, team/orbs]}
   branches:
     layout: perLine
     lines:

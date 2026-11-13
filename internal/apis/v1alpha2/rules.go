@@ -19,12 +19,13 @@ const (
 	RuleStreamDiffersFromDestination = "stream-differs-from-destination"
 	RuleLocationsDiffer              = "locations-differ"
 	RuleStreamsOverlap               = "streams-overlap"
+	RuleBranchPrefixRedundantVar     = config.RuleBranchPrefixRedundantVar
 )
 
 // acknowledgeable are the rules whose warnings a document can acknowledge: the
 // ones of a document. The unknown key of a user file is not, and neither is an
 // acknowledgement that matches nothing.
-var acknowledgeable = []string{RuleCircularHolding, RuleDefaultBranchPastDevelopment, RuleStreamDiffersFromDestination, RuleLocationsDiffer, RuleStreamsOverlap}
+var acknowledgeable = []string{RuleCircularHolding, RuleDefaultBranchPastDevelopment, RuleStreamDiffersFromDestination, RuleLocationsDiffer, RuleStreamsOverlap, RuleBranchPrefixRedundantVar}
 
 // observed are the acknowledgeable rules that are raised by reading a repo and
 // not by validating the config, so validation never sees their warning and an

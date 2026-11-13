@@ -184,3 +184,23 @@ func TestCheckReversibleNamesTheModifier(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "upper")
 }
+
+func TestPrefixRepeats(t *testing.T) {
+	tests := []struct {
+		name, text string
+		want       []string
+	}{
+		{"the default prefix says nothing twice", "bot/", nil},
+		{"the producer", "bot/{source}-", []string{"source"}},
+		{"in the order of first use, once", "{project}/{tag}/{project}", []string{"project", "tag"}},
+		{"every spelling of the tag and the target", "{version}{branch}{targetBranch}", []string{"version", "branch", "targetBranch"}},
+		{"what the key does not say is the user's", "{consumer}-{sourceRepo}", nil},
+		{"a modifier does not hide it", "{tag|trimprefix:v}", []string{"tag"}},
+		{"a malformed text has none", "bot/{source", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, PrefixRepeats(tt.text))
+		})
+	}
+}

@@ -164,10 +164,12 @@ func parse(text string) ([]part, error) {
 //	file, from, to    what the strategy changed: the file, its old and new value
 //	companions        the releases that go with this one, such as "lasso to v0.2.10": empty when none
 //	changes           a list of what was changed, generated from the edits
+//	key               the bump's branch key, {source}-{tag}-{branch}: read-only, so a text can
+//	                  say it but a branchPrefix cannot (gero appends it to the prefix)
 //	marker            the hidden block that identifies the PR (PR body only)
 var TextVars = []string{
 	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
-	"consumer", "sourceReleaseURL", "file", "from", "to", "companions", "changes", "marker",
+	"consumer", "sourceReleaseURL", "file", "from", "to", "companions", "changes", "marker", "key",
 }
 
 // EnvVars are the variables an Edit's env values may use, read from the target the
@@ -265,3 +267,25 @@ func CheckReversible(text string) error {
 	}
 	return nil
 }
+
+// PrefixRepeats returns the variables of a branchPrefix that say what the key
+// gero appends to every branch name already says: the producer, the tag and the
+// target. They still render. A malformed text has none, for Validate to report.
+func PrefixRepeats(text string) []string {
+	names, err := Placeholders(text)
+	if err != nil {
+		return nil
+	}
+	var repeats []string
+	for _, n := range names {
+		if slices.Contains(keyVars, n) {
+			repeats = append(repeats, n)
+		}
+	}
+	return repeats
+}
+
+// keyVars are the variables whose values the key gero appends to a branch name
+// already holds: the producer's name (as project or source), the tag (as tag or
+// version) and the target branch (as branch or targetBranch).
+var keyVars = []string{"source", "project", "tag", "version", "branch", "targetBranch"}

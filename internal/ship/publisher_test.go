@@ -38,6 +38,17 @@ func (l *log) has(prefix string) bool {
 	return false
 }
 
+// count is how many calls start with prefix.
+func (l *log) count(prefix string) int {
+	n := 0
+	for _, c := range l.calls {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
 type pushOnly struct {
 	Git
 	log *log

@@ -162,17 +162,33 @@ func TestRenderPreviewUsesTheProjectsTitleLabelsAndPrefix(t *testing.T) {
 	got, err := renderPreview(in)
 	require.NoError(t, err)
 	assert.Equal(t, "Bump scc-operator (0.5.3) on release/v2.15", got.Title)
-	assert.Equal(t, "auto/scc-operator/v0.5.3-v2.15", got.Branch)
+	assert.Equal(t, "auto/scc-operator/scc-operator-v0.5.3-v2.15", got.Branch, "the key follows whatever the prefix says")
 	assert.Equal(t, []string{"status/auto-created", "team/orbs"}, got.Labels)
 }
 
 func TestRenderPreviewTheUsersPrefixReplacesTheProjectsWhole(t *testing.T) {
 	in := previewFixture(t)
-	in.consumer = projectWith(t, "rancher", "rancher/rancher", `{branchPrefix: "bot/{source}-"}`)
+	in.consumer = projectWith(t, "rancher", "rancher/rancher", `{branchPrefix: "auto/"}`)
 	in.userPrefix = "dan/"
 	got, err := renderPreview(in)
 	require.NoError(t, err)
-	assert.Equal(t, "dan/v0.5.3-v2.15", got.Branch, "what the user leaves out is their call")
+	assert.Equal(t, "dan/scc-operator-v0.5.3-v2.15", got.Branch, "the prefix is theirs, and the key is gero's")
+}
+
+func TestRenderPreviewAPrefixThatLeavesOutTheSourceStillEndsInTheKey(t *testing.T) {
+	in := previewFixture(t)
+	in.userPrefix = "dan-"
+	got, err := renderPreview(in)
+	require.NoError(t, err)
+	assert.Equal(t, "dan-scc-operator-v0.5.3-v2.15", got.Branch)
+}
+
+func TestRenderPreviewTheKeyIsAVariableOfTheTitle(t *testing.T) {
+	in := previewFixture(t)
+	in.consumer = projectWith(t, "rancher", "rancher/rancher", `{title: "Bump {key}"}`)
+	got, err := renderPreview(in)
+	require.NoError(t, err)
+	assert.Equal(t, "Bump scc-operator-v0.5.3-v2.15", got.Title)
 }
 
 func TestRenderPreviewListsThePostEditCommands(t *testing.T) {

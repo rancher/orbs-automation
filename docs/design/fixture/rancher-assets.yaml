@@ -6,7 +6,7 @@ kind: Project
 name: rancher-assets
 spec:
   repo: {name: rancher/rancher-assets, managedBy: release-team}
-  pullRequests: {title: "[{branch}] Update {source} to {version}", branchPrefix: "bot/{source}-", labels: [status/auto-created, team/release-team]}
+  pullRequests: {title: "[{branch}] Update {source} to {version}", labels: [status/auto-created, team/release-team]}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

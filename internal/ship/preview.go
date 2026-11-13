@@ -18,7 +18,10 @@ import (
 // the project's own title and branch prefix, so the state check can show exactly
 // what a run would put in the PR before anything is written.
 type Preview struct {
-	Branch        string   `json:"branch"`
+	Branch string `json:"branch"`
+	// Key is the end of the branch that gero builds (BranchKey), the same for
+	// every actor, which is how another PR of the bump is found.
+	Key           string   `json:"key"`
 	Title         string   `json:"title"`
 	Labels        []string `json:"labels,omitempty"`
 	CommitMessage string   `json:"commitMessage"`
@@ -53,15 +56,15 @@ type previewInput struct {
 	userPrefix string              // the user's branchPrefix setting, which replaces the project's whole
 }
 
-// renderPreview fills the texts. The branch name is a prefix, then the tag and
-// the target branch without release/: the prefix is the user's setting if set,
-// else the project's pullRequests.branchPrefix, else the default. The title is
+// renderPreview fills the texts. The branch name is a prefix, then the key
+// (BranchKey): the prefix is the user's setting if set, else the project's
+// pullRequests.branchPrefix, else the default, and may not use {key}, since the
+// key is what follows it. The title is
 // the project's pullRequests.title, else the default. An unknown placeholder in
 // either is an error, though config validation rejects it sooner.
 func renderPreview(in previewInput) (Preview, error) {
 	prs := in.consumer.PullRequests()
 	tag := in.release.Tag
-	branchLabel := strings.TrimPrefix(in.target.Branch, "release/")
 	marker := Marker{
 		Source: in.producer.Slug(), Consumer: in.consumer.Slug(),
 		Target: in.target.Branch, Version: tag,
@@ -72,7 +75,9 @@ func renderPreview(in previewInput) (Preview, error) {
 	vars["marker"] = marker.String()
 
 	prefix := firstNonEmpty(in.userPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
-	renderedPrefix, err := templates.Render(prefix, vars)
+	prefixVars := maps.Clone(vars)
+	delete(prefixVars, "key")
+	renderedPrefix, err := templates.Render(prefix, prefixVars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
 	}
@@ -98,7 +103,7 @@ func renderPreview(in previewInput) (Preview, error) {
 		return Preview{}, err
 	}
 	return Preview{
-		Branch: renderedPrefix + tag + "-" + branchLabel, Title: title, Labels: prs.Labels,
+		Branch: renderedPrefix + vars["key"], Key: vars["key"], Title: title, Labels: prs.Labels,
 		CommitMessage: commit, Body: body, Steps: steps,
 	}, nil
 }
@@ -146,6 +151,7 @@ func textVars(in previewInput) map[string]string {
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
+		"key":              BranchKey(in.producer.Name(), in.release.Tag, in.target.Branch),
 		"sourceReleaseURL": "https://github.com/" + in.producer.Slug() + "/releases/tag/" + in.release.Tag,
 		"file":             changedFiles(in.checks),
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),

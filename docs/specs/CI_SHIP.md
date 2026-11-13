@@ -78,4 +78,9 @@ What the push scripts took as environment becomes this:
 
 ## Open questions
 
-None yet.
+* **Running it from this repo on a dispatch event.** Today a producer's own release workflow runs `ci:ship` in its checkouts. The idea is a workflow in orbs-automation that runs it instead, with the producer sending a `repository_dispatch` through an action this repo provides, so Shell would ship to Rancher on a tag without its own gero step. Open:
+  * The event's name and payload, and which of `--to`, `--line`, `--prerelease` and `--refresh` it may carry.
+  * The payload is untrusted: it names a source and a tag, the source is checked against config, and the consumers come from config, never from the payload. Is that the whole rule?
+  * Who clones the producer and the consumers: the workflow's checkout steps, as in [Calling it from a workflow](#calling-it-from-a-workflow), or `gero`. Either needs a token that writes to every consumer.
+  * The token a producer's repo uses to send the event, and who owns it.
+  * What the sender learns. A dispatch returns nothing, so the result reaches the tracking issue, and the cron reconciler catches an event that never started a run ([IMPLEMENTATION](../IMPLEMENTATION.md#tracking-issue-state)).

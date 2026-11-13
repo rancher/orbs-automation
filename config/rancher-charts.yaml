@@ -7,7 +7,7 @@ name: rancher-charts
 spec:
   aliases: ["charts"]
   repo: {name: rancher/charts, managedBy: release-team}
-  pullRequests: {title: "[{branch}] {package} {chartVersion} {action}", branchPrefix: "bot/{source}-"}
+  pullRequests: {title: "[{branch}] {package} {chartVersion} {action}"}
   branches:
     layout: perLine
     stages: [dev, stable]
