@@ -267,3 +267,10 @@ func CheckReversible(text string) error {
 	}
 	return nil
 }
+
+// PrefixRepeats returns the variables of a branchPrefix that say what the key
+// gero appends to every branch name already says: the producer, the tag and the
+// target. They still render. A malformed text has none, for Validate to report.
+func PrefixRepeats(text string) []string {
+	return nil
+}

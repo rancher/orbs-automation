@@ -930,3 +930,21 @@ func TestLoadRejectsATeamThatIsNotASlug(t *testing.T) {
 		})
 	}
 }
+
+func TestAUserPrefixThatRepeatsTheKeyIsAWarning(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(nil), UserFile: strings.NewReader("branchPrefix: dan/{tag}-\n"), UserFileName: "config.yaml"})
+
+	require.NoError(t, err)
+	assert.Equal(t, "dan/{tag}-", s.BranchPrefix, "it still renders")
+	require.Len(t, s.Warnings, 1)
+	assert.Contains(t, s.Warnings[0], "branchPrefix")
+	assert.Contains(t, s.Warnings[0], "{tag}")
+	assert.Contains(t, s.Warnings[0], "[branch-prefix-redundant-var]")
+}
+
+func TestAUserPrefixThatSaysNothingTwiceHasNoWarning(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(nil), UserFile: strings.NewReader("branchPrefix: dan/\n"), UserFileName: "config.yaml"})
+
+	require.NoError(t, err)
+	assert.Empty(t, s.Warnings)
+}

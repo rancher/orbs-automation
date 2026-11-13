@@ -9,6 +9,11 @@ import (
 // RuleUnknownKey is the rule of the warning for a key a user file does not have.
 const RuleUnknownKey = "unknown-key"
 
+// RuleBranchPrefixRedundantVar is the rule of the warning for a branchPrefix that
+// says what the key gero appends to it says already, such as {tag}. A project and
+// the user file both raise it, so the id is here and not with either.
+const RuleBranchPrefixRedundantVar = "branch-prefix-redundant-var"
+
 // Severity says whether a finding makes the object invalid.
 type Severity int
 

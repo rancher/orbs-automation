@@ -70,7 +70,7 @@ func TestAValidProjectHasNoFindings(t *testing.T) {
   finalDestination: true
   pullRequests:
     title: "[{branch}] Update {source} to {version}"
-    branchPrefix: "bot/{source}-"
+    branchPrefix: "bot/"
     labels: [status/auto-created]
     pushTo: fork
   branches:
@@ -162,4 +162,30 @@ func TestARepoNameHasNoSpaces(t *testing.T) {
 
 	assert.Nil(t, p)
 	assert.True(t, hasError(rep, "spec.repo.name", "space"), "%v", rep.Findings)
+}
+
+func TestAPrefixThatRepeatsTheKeyIsAWarningAndStillValid(t *testing.T) {
+	_, rep := loadProject(t, "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"bot/{source}-{tag}-\"}\n")
+
+	require.NoError(t, rep.Err())
+	got := warningsOf(rep, RuleBranchPrefixRedundantVar)
+	require.Len(t, got, 2, "one for each variable")
+	assert.Equal(t, "spec.pullRequests.branchPrefix", got[0].Path)
+	assert.Contains(t, got[0].Msg, "{source}")
+	assert.Contains(t, got[1].Msg, "{tag}")
+}
+
+func TestAPrefixThatSaysNothingTwiceHasNoWarning(t *testing.T) {
+	_, rep := loadProject(t, "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"auto/\"}\n")
+
+	assert.Empty(t, rep.Findings)
+}
+
+func TestAnAcknowledgementSilencesTheRedundantPrefixWarning(t *testing.T) {
+	spec := projectSpec + "  pullRequests: {branchPrefix: \"bot/{source}-\"}\n"
+	rep := validateSet(t, docAck("Project", "p", "", "  - {rule: branch-prefix-redundant-var, reason: the old names stay until the PRs of them are gone}\n", spec))
+
+	assert.NoError(t, rep.Err())
+	assert.Empty(t, rep.Warnings())
+	assert.Len(t, rep.Acknowledged(), 1)
 }

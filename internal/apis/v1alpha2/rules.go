@@ -19,6 +19,7 @@ const (
 	RuleStreamDiffersFromDestination = "stream-differs-from-destination"
 	RuleLocationsDiffer              = "locations-differ"
 	RuleStreamsOverlap               = "streams-overlap"
+	RuleBranchPrefixRedundantVar     = config.RuleBranchPrefixRedundantVar
 )
 
 // acknowledgeable are the rules whose warnings a document can acknowledge: the
