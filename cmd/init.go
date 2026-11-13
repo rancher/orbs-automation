@@ -84,5 +84,5 @@ line points an editor at the JSON Schema of the file.`,
 // only at a terminal, and never in CI or when non-interactive is set, so a job
 // that gives its flags gets the same file whether or not it has a terminal.
 func asksQuestions(s clicfg.Settings, terminal bool) bool {
-	return terminal
+	return terminal && !s.CI && !s.NonInteractive
 }
