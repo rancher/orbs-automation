@@ -97,6 +97,7 @@ func TestProjectRules(t *testing.T) {
 		{"external and managed", "  repo: {name: a/b, external: true, managedBy: orbs}\n", "spec.repo.external", "no managing team"},
 		{"pushTo that is neither", "  repo: {name: a/b}\n  pullRequests: {pushTo: origin}\n", "spec.pullRequests.pushTo", "fork or upstream"},
 		{"a title with an unknown placeholder", "  repo: {name: a/b}\n  pullRequests: {title: \"{nope}\"}\n", "spec.pullRequests.title", "unknown placeholder {nope}"},
+		{"a branch prefix that uses the key, which is appended to it", "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"{key}\"}\n", "spec.pullRequests.branchPrefix", "unknown placeholder {key}"},
 		{"a branch prefix with a malformed placeholder", "  repo: {name: a/b}\n  pullRequests: {branchPrefix: \"{a\"}\n", "spec.pullRequests.branchPrefix", "unclosed"},
 		{"a layout that is neither", "  repo: {name: a/b}\n  branches: {layout: weekly}\n", "spec.branches.layout", "single or perLine"},
 		{"lines with the single layout", "  repo: {name: a/b}\n  branches:\n    layout: single\n    lines: [{line: v2.16}]\n", "spec.branches.lines", "single"},

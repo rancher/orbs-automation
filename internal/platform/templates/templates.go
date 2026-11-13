@@ -164,10 +164,12 @@ func parse(text string) ([]part, error) {
 //	file, from, to    what the strategy changed: the file, its old and new value
 //	companions        the releases that go with this one, such as "lasso to v0.2.10": empty when none
 //	changes           a list of what was changed, generated from the edits
+//	key               the bump's branch key, {source}-{tag}-{branch}: read-only, so a text can
+//	                  say it but a branchPrefix cannot (gero appends it to the prefix)
 //	marker            the hidden block that identifies the PR (PR body only)
 var TextVars = []string{
 	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
-	"consumer", "sourceReleaseURL", "file", "from", "to", "companions", "changes", "marker",
+	"consumer", "sourceReleaseURL", "file", "from", "to", "companions", "changes", "marker", "key",
 }
 
 // EnvVars are the variables an Edit's env values may use, read from the target the

@@ -146,6 +146,7 @@ func textVars(in previewInput) map[string]string {
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
+		"key":              BranchKey(in.producer.Name(), in.release.Tag, in.target.Branch),
 		"sourceReleaseURL": "https://github.com/" + in.producer.Slug() + "/releases/tag/" + in.release.Tag,
 		"file":             changedFiles(in.checks),
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
