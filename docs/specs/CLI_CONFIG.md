@@ -50,7 +50,7 @@ type Inputs struct {
 func Load(Inputs) (Settings, error)
 ```
 
-Keys are table-driven (file key, derived env var, flag name, default, validator). The file is decoded strictly (`KnownFields(true)`), which is why `go.yaml.in/yaml/v3` is a direct dependency ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). Global flags go through `clicfg`. Per-command flags stay in `cmd/` and reach `internal/cli/<cmd>` as an options struct.
+Keys are table-driven (file key, derived env var, flag name, default, validator). The file is decoded strictly (`KnownFields(true)`), which is why `go.yaml.in/yaml/v4` is a direct dependency ([DEPENDENCY_POLICY](DEPENDENCY_POLICY.md)). Global flags go through `clicfg`. Per-command flags stay in `cmd/` and reach `internal/cli/<cmd>` as an options struct.
 
 ## User file and keys
 

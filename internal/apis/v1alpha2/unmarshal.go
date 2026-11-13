@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // UnmarshalYAML reads a string as a one-element command and a list as it is.
