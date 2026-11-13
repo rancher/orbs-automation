@@ -3,6 +3,7 @@ package ship
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
@@ -531,8 +532,7 @@ func TestShipReportsAnotherActorsNewerPRFoundByTheTailOfItsBranch(t *testing.T) 
 	res := onlyResult(t, plan)
 	assert.Equal(t, ResultOpened, res.Status, "it is not mine, so it does not block")
 	assert.False(t, lg.has("close #130"))
-	require.NotEmpty(t, res.Warnings)
-	assert.Contains(t, res.Warnings[0], "#130")
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "also open: #130 by rancher-bot[bot]")
 }
 
 func TestShipDoesNotAskTwiceForTheHeadItAlreadyAsksFor(t *testing.T) {

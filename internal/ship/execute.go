@@ -267,16 +267,34 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 		return st
 	}
 	prs := open.PRs
-	// The listing reads only the newest, so also ask for the one head this run
-	// would push to, which is exact whatever the number of open PRs.
-	head := pub.headOwner(plan.Consumer) + ":" + tp.Preview.Branch
-	if byHead, err := pub.Remote.OpenForHead(ctx, plan.Consumer, head); err != nil {
-		st.warnings = append(st.warnings, fmt.Sprintf("could not look for the PR of %s: %v", tp.Preview.Branch, err))
-	} else {
+	addHead := func(head string) {
+		byHead, err := pub.Remote.OpenForHead(ctx, plan.Consumer, head)
+		if err != nil {
+			st.warnings = append(st.warnings, fmt.Sprintf("could not look for the PR of %s: %v", head, err))
+			return
+		}
 		for _, p := range byHead {
 			if !slices.ContainsFunc(prs, func(q pulls.PR) bool { return q.Number == p.Number }) {
 				prs = append(prs, p)
 			}
+		}
+	}
+	// The listing reads only the newest, so also ask for the one head this run
+	// would push to, which is exact whatever the number of open PRs.
+	ownHead := pub.headOwner(plan.Consumer) + ":" + tp.Preview.Branch
+	addHead(ownHead)
+	// And for the branches of this bump that anyone left on the upstream, found by
+	// the tail of their names in the refs the run already has: a PR of an older or
+	// a newer version is found whatever the prefix and however many PRs are open.
+	owner, _, _ := strings.Cut(plan.Consumer, "/")
+	branches := bumpBranches(r.consumerRefs.Branches, sourceOfKey(tp.Preview.Key, tp.Release, tp.Branch), tp.Branch)
+	if len(branches) > maxBumpBranches {
+		st.warnings = append(st.warnings, fmt.Sprintf("%d branches of this bump are on %s, so only the first %d were asked for their PR", len(branches), plan.Consumer, maxBumpBranches))
+		branches = branches[:maxBumpBranches]
+	}
+	for _, name := range branches {
+		if head := owner + ":" + name; head != ownHead {
+			addHead(head)
 		}
 	}
 	st.dec = decidePublish(prs, me, st.m)

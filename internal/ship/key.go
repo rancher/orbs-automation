@@ -30,7 +30,7 @@ const maxBumpBranches = 30
 // sourceOfKey is the producer's project name in a bump's key, which is what the
 // key says before the tail of the release and the target.
 func sourceOfKey(key, tag, target string) string {
-	return ""
+	return strings.TrimSuffix(key, "-"+BranchTail(tag, target))
 }
 
 // bumpBranches are the branches of a repository that are a branch of this bump,
@@ -38,5 +38,12 @@ func sourceOfKey(key, tag, target string) string {
 // the producer's name in front of the tag, whatever the prefix. It only reads the
 // names. A branch it finds is a hint: the PR of it is what its marker confirms.
 func bumpBranches(branches []git.Branch, source, target string) []string {
-	return nil
+	label := "-" + strings.TrimPrefix(target, "release/")
+	var out []string
+	for _, b := range branches {
+		if strings.HasSuffix(b.Name, label) && strings.Contains(b.Name, source+"-") {
+			out = append(out, b.Name)
+		}
+	}
+	return out
 }
