@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/initcmd"
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
+	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +57,7 @@ line points an editor at the JSON Schema of the file.`,
 			if f := cmd.Flags().Lookup("central-config-dir"); f != nil && f.Changed {
 				o.CentralConfigDir = f.Value.String()
 			}
-			o.Interactive = termfacts.IsTerminal(os.Stdin)
+			o.Interactive = asksQuestions(settingsFrom(cmd), termfacts.IsTerminal(os.Stdin))
 			o.DryRun = settingsFrom(cmd).DryRun
 			o.In, o.Out = cmd.InOrStdin(), cmd.OutOrStdout()
 			o.Terminal = settingsFrom(cmd).Terminal
@@ -77,4 +78,11 @@ line points an editor at the JSON Schema of the file.`,
 	f.StringVar(&o.CloneRoot, "clone-root", "", "the one directory gero repo clone puts new clones in, repos.cloneRoot")
 	f.BoolVar(&o.Force, "force", false, "replace the user file if it exists")
 	root.AddCommand(cmd)
+}
+
+// asksQuestions says whether gero init may ask for a value it was not given:
+// only at a terminal, and never in CI or when non-interactive is set, so a job
+// that gives its flags gets the same file whether or not it has a terminal.
+func asksQuestions(s clicfg.Settings, terminal bool) bool {
+	return terminal
 }

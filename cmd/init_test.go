@@ -107,3 +107,22 @@ func TestInitIsRefusedInTheREPL(t *testing.T) {
 	assert.Contains(t, err.Error(), "REPL")
 	assert.NoFileExists(t, path)
 }
+
+func TestInitAsksOnlyAtATerminalOutsideCI(t *testing.T) {
+	tests := []struct {
+		name     string
+		s        clicfg.Settings
+		terminal bool
+		want     bool
+	}{
+		{"workstation terminal", clicfg.Settings{}, true, true},
+		{"workstation without a terminal", clicfg.Settings{}, false, false},
+		{"CI forced at a terminal", clicfg.Settings{CI: true}, true, false},
+		{"non-interactive at a terminal", clicfg.Settings{NonInteractive: true}, true, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, asksQuestions(tt.s, tt.terminal))
+		})
+	}
+}
