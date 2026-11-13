@@ -38,7 +38,12 @@ go. The clone root is scanned too, so it need not be listed in repos.search.
 An existing file is not touched unless --force replaces it. --dry-run shows the
 file and writes nothing. The file is at $GERO_CONFIG, else
 $XDG_CONFIG_HOME/gero/config.yaml, else ~/.config/gero/config.yaml. Its first
-line points an editor at the JSON Schema of the file.`,
+line points an editor at the JSON Schema of the file.
+
+In CI it is the same file: the user file of whoever the job runs as, which is how
+a workflow tells gero where its checkouts are, with the flags given and nothing
+asked. CI reads a user file only when GERO_CONFIG names it, so set GERO_CONFIG to
+the file for this command and for the commands that follow.`,
 		Args: cobra.NoArgs,
 		// The file to write may be the one that cannot be loaded, so this loads
 		// without it when it has to, as gero doctor does.
