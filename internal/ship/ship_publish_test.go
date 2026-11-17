@@ -45,7 +45,7 @@ func TestShipPublishesAPlainRunAndClosesMyOlderPR(t *testing.T) {
 	require.NotNil(t, res.PR)
 	assert.Equal(t, 104, res.PR.Number)
 	assert.Equal(t, "upstream", res.Pushed)
-	assert.Equal(t, []PRRef{{101, "https://github.com/rancher/rancher/pull/101"}}, withoutURL(res.Superseded, "https://github.com/rancher/rancher/pull/101"))
+	assert.Equal(t, []PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}}, withoutURL(res.Superseded, "https://github.com/rancher/rancher/pull/101"))
 	assert.Equal(t, res.Tip(), runGit(t, ws.up, "rev-parse", botV215), "the branch is on the remote")
 	assert.Equal(t, "main", current(t, clone))
 	assert.Less(t, lg.index("open rancher/rancher release/v2.15"), lg.index("create "), "the open PRs are looked at before one is made")

@@ -71,7 +71,7 @@ var applyRelease = Release{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}
 
 func applyFor(sc scene) Apply {
 	return Apply{
-		Route: sc.route, Target: sc.target, Release: applyRelease, Message: "Update to v0.5.3\n\nbody",
+		Route: sc.route, Target: sc.target, Tag: applyRelease.Tag, Commit: applyRelease.Commit, Message: "Update to v0.5.3\n\nbody",
 		Runner: steprun.Runner{}, StepMessage: testStepMessage,
 	}
 }

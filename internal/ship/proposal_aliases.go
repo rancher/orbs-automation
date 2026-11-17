@@ -20,6 +20,12 @@ type (
 	Git            = proposal.Git
 	GitCLI         = proposal.GitCLI
 	PrepareRequest = proposal.PrepareRequest
+	ResultStatus   = proposal.ResultStatus
+	TargetResult   = proposal.TargetResult
+	PRRef          = proposal.PRRef
+	Apply          = proposal.Apply
+	CommitInfo     = proposal.CommitInfo
+	ApplyResult    = proposal.ApplyResult
 )
 
 const (
@@ -32,12 +38,26 @@ const (
 	Worktree           = proposal.Worktree
 	Existing           = proposal.Existing
 	maxBumpBranches    = proposal.MaxBumpBranches
+
+	ResultCommitted    = proposal.ResultCommitted
+	ResultWouldCommit  = proposal.ResultWouldCommit
+	ResultUpToDate     = proposal.ResultUpToDate
+	ResultFailed       = proposal.ResultFailed
+	ResultOpened       = proposal.ResultOpened
+	ResultAlreadyOpen  = proposal.ResultAlreadyOpen
+	ResultBlocked      = proposal.ResultBlocked
+	ResultRefreshed    = proposal.ResultRefreshed
+	ResultWouldRefresh = proposal.ResultWouldRefresh
 )
 
 var (
 	ErrBaseMoved        = proposal.ErrBaseMoved
 	ErrBranchExists     = proposal.ErrBranchExists
 	ErrBranchCheckedOut = proposal.ErrBranchCheckedOut
+	ErrDeclined         = proposal.ErrDeclined
+	ErrNoRemote         = proposal.ErrNoRemote
+	ErrNoClone          = proposal.ErrNoClone
+	ErrNothingChanged   = proposal.ErrNothingChanged
 
 	ParseMarker       = proposal.ParseMarker
 	RecordedKey       = proposal.RecordedKey
@@ -55,5 +75,8 @@ var (
 	sameBody          = proposal.SameBody
 	resolvePushTarget = proposal.ResolvePushTarget
 	short             = proposal.Short
+	refs              = proposal.Refs
+	finish            = proposal.Finish
+	tip               = proposal.Tip
 	geroBlocks        = proposal.GeroBlocks
 )

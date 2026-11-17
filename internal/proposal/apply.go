@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"context"
@@ -17,7 +17,8 @@ var ErrNothingChanged = bumpcommit.ErrNothingChanged
 type Apply struct {
 	Route   bump.Route  // the holdings of the producer in the consumer, with their edits
 	Target  bump.Target // the consumer branch and the holdings written there
-	Release Release     // the release being shipped
+	Tag     string      // the release being shipped, or empty for a change that is no release
+	Commit  string      // the commit the tag is at
 	Message string      // the commit message, as the preview showed it
 	// OnCommit, when set, is called with each commit as it is made.
 	OnCommit func(CommitInfo)
@@ -37,8 +38,8 @@ type CommitInfo = workdir.CommitInfo
 // ApplyResult is what a run did.
 type ApplyResult = bumpcommit.Output
 
-// tip is the newest commit, or "" when there is none.
-func tip(commits []CommitInfo) string {
+// Tip is the newest commit, or "" when there is none.
+func Tip(commits []CommitInfo) string {
 	if len(commits) == 0 {
 		return ""
 	}
@@ -51,7 +52,7 @@ func tip(commits []CommitInfo) string {
 // ErrNothingChanged.
 func (a Apply) Run(ctx context.Context, w *Work) (ApplyResult, error) {
 	return bumpcommit.Run(ctx, a.Runner, bumpcommit.Input{
-		Work: w, Route: a.Route, Target: a.Target, Tag: a.Release.Tag, Commit: a.Release.Commit, Message: a.Message,
+		Work: w, Route: a.Route, Target: a.Target, Tag: a.Tag, Commit: a.Commit, Message: a.Message,
 		StepMessage: a.StepMessage, StrategyMessage: a.StrategyMessage, OnCommit: a.OnCommit, Name: a.Name, Email: a.Email, Sign: a.Sign,
 	})
 }

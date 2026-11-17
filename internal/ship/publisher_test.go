@@ -216,7 +216,7 @@ func TestPublishPushesOpensLabelsThenClosesTheOlderOnesInThatOrder(t *testing.T)
 	assert.Equal(t, ResultOpened, c.res.Status)
 	assert.Equal(t, &PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}, c.res.PR)
 	assert.Equal(t, "origin", c.res.Pushed)
-	assert.Equal(t, []PRRef{{101, "https://github.com/rancher/rancher/pull/101"}, {90, "https://github.com/rancher/rancher/pull/90"}}, c.res.Superseded)
+	assert.Equal(t, []PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}, {Number: 90, URL: "https://github.com/rancher/rancher/pull/90"}}, c.res.Superseded)
 	assert.Empty(t, c.res.Warnings)
 }
 
@@ -349,7 +349,7 @@ func TestPublishFailingToCloseAnOlderPRIsAWarningAndTheOthersAreStillClosed(t *t
 	assert.Contains(t, c.res.Warnings[0], "#101")
 	assert.Contains(t, c.res.Warnings[0], "403 forbidden")
 	assert.True(t, c.lg.has("close #90"))
-	assert.Equal(t, []PRRef{{90, "https://github.com/rancher/rancher/pull/90"}}, c.res.Superseded, "only what was closed")
+	assert.Equal(t, []PRRef{{Number: 90, URL: "https://github.com/rancher/rancher/pull/90"}}, c.res.Superseded, "only what was closed")
 }
 
 func TestPublishFailingToCommentLeavesThatPROpen(t *testing.T) {
