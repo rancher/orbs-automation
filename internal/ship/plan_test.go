@@ -3,9 +3,10 @@ package ship
 import (
 	"context"
 	"errors"
-	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"strings"
 	"testing"
+
+	"github.com/rancher/orbs-automation/internal/tagscheme"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
