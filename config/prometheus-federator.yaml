@@ -40,3 +40,26 @@ kind: Artifact
 name: promfed-chart
 refs: {stream: prometheus-federator}
 spec: {kind: file, name: "prometheus-federator-{version}.tgz"}
+---
+# What PromFed holds of kuberlr: the major only, in build.yaml. Its own tooling takes the newest release of that major, so
+# this names no release: it holds the series the kuberlr stream has for the line (v2.16 is 9.x, written v9).
+# release/v7.x (v2.15) holds v9 where the stream says 8.x: the branch is wrong.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-kuberlr
+refs: {project: prometheus-federator, stream: kuberlr-kubectl}
+spec:
+  at: {file: build.yaml, key: kuberlrVersion, format: yaml}
+  holds: {kind: series, form: "v{major}"}
+---
+# build.yaml is not the whole change: pkg/buildconfig/constants.go is generated from it (KuberlrVersion), so the generator that
+# the repo's own go:generate names for it runs after the write. Nothing writes the holding without an Edit.
+apiVersion: gero/v1alpha2
+kind: Edit
+name: prometheus-federator-regenerate-buildconfig
+refs: {holding: [prometheus-federator-holds-kuberlr]}
+spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"
+  postEdit:
+    - {run: [go, run, pkg/codegen/buildconfig/writer.go, pkg/codegen/buildconfig/main.go]}
