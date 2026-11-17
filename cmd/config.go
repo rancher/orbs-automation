@@ -49,18 +49,26 @@ slug, or . for the project whose repository you are in) to look at only that.`,
 			return err
 		},
 	})
+	var graphOpts graphresolve.Options
 	graphCmd := &cobra.Command{
 		Use:   "graph [d2|mindmap]",
 		Short: "Draw the whole application config as a D2 diagram",
-		Long: `Draw every Project of the application config as a node, and every holding as
+		Long: `Draw the Projects of the application config as nodes, and every holding as
 a node between the Project that produces a release and the Project that holds
 it, so releases read as flowing one way from producers to consumers. A Project
 is marked managed, shared or external, the final destination is marked as the
 hub, and each holding's edge into its holder is labelled with the release lines
 it serves.
 
-The whole config is drawn, not one team's. The output is D2 source: render it
-with d2 graph.d2 graph.svg.
+Every Project that is not external is drawn, not one team's. The output is D2
+source: render it with d2 graph.d2 graph.svg.
+
+--external draws the external Projects too. --project chooses Projects by
+config name, owner/name slug or alias, with * as a wildcard, and may be given
+more than once: a pattern starting with ! leaves out what it matches, and naming
+a Project draws it even when it is external. A Project that is left out but that
+a drawn one holds something of, or makes something held by, is drawn as a faded
+boundary node.
 
 Name the type mindmap (gero config resolve graph mindmap) to draw the same config as a Mermaid mind map instead, a looser
 picture of what each Project produces and holds that GitHub and most Markdown
@@ -76,7 +84,7 @@ viewers render in place.`,
 			if len(args) > 0 {
 				kind = graphresolve.Kind(args[0])
 			}
-			out, err := graphresolve.Graph(settingsFrom(cmd), cwd, kind, graphresolve.Options{})
+			out, err := graphresolve.Graph(settingsFrom(cmd), cwd, kind, graphOpts)
 			if err != nil {
 				return err
 			}
@@ -84,6 +92,8 @@ viewers render in place.`,
 			return err
 		},
 	}
+	graphCmd.Flags().BoolVar(&graphOpts.External, "external", false, "also draw external Projects")
+	graphCmd.Flags().StringArrayVar(&graphOpts.Projects, "project", nil, "draw only the Projects matching this name, slug or alias (repeatable; * is a wildcard, a leading ! leaves out what matches)")
 	resolveCmd.AddCommand(graphCmd)
 	configCmd.AddCommand(
 		&cobra.Command{

@@ -67,14 +67,16 @@ func run(ws Workspace, format string, kind Kind, opts Options) (string, error) {
 // no edges, so a Project is a branch of the root, and what joins two Projects is
 // said on both of them: the artifact says where it reaches, and the holder says
 // what it holds and from whom.
-func mindmap(ws Workspace, _ Options) (string, error) {
+func mindmap(ws Workspace, opts Options) (string, error) {
 	g, err := ws.Chain()
 	if err != nil {
 		return "", err
 	}
-	holdings := holdingsOf(g)
-	projects := slices.Clone(g.Projects())
-	slices.SortFunc(projects, func(a, c *chain.Project) int { return strings.Compare(a.Slug(), c.Slug()) })
+	v, err := newView(g, opts)
+	if err != nil {
+		return "", err
+	}
+	holdings, projects := v.holdings, v.drawnProjects()
 
 	m := &mindmapWriter{}
 	m.b.WriteString("mindmap\n")
@@ -183,6 +185,7 @@ const (
 	classStream   = "stream"
 	classArtifact = "artifact"
 	classEdit     = "edit"
+	classBoundary = "boundary"
 )
 
 const header = `direction: down
@@ -200,35 +203,39 @@ classes: {
   stream: {style.fill: "#ffffff"; style.stroke-dash: 2}
   artifact: {shape: cylinder}
   edit: {style.fill: "#fde2e2"}
+  boundary: {style.fill: "#ffffff"; style.stroke-dash: 3; style.opacity: 0.5}
 }
 `
 
-func graph(ws Workspace, _ Options) (string, error) {
+func graph(ws Workspace, opts Options) (string, error) {
 	g, err := ws.Chain()
+	if err != nil {
+		return "", err
+	}
+	v, err := newView(g, opts)
 	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
 	b.WriteString(header)
 
-	projects := slices.Clone(g.Projects())
-	slices.SortFunc(projects, func(a, c *chain.Project) int { return strings.Compare(a.Slug(), c.Slug()) })
 	b.WriteString("\n")
-	for _, p := range projects {
+	for _, p := range v.projects {
+		if v.boundary[p] {
+			fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(p.Slug()), classBoundary, quote(p.Name()))
+			continue
+		}
 		writeProject(&b, p)
 	}
 
 	// What a pin makes is a holding of its holder as well: a consumer says nothing of
 	// lasso where it holds wrangler, and lasso still flows to it.
-	holdings := holdingsOf(g)
 	b.WriteString("\n")
-	for _, h := range holdings {
-		writeHolding(&b, g, h)
+	for _, h := range v.holdings {
+		writeHolding(&b, g, v, h)
 	}
-	follows := g.Edges(chain.EdgeFollows)
-	slices.SortStableFunc(follows, func(a, c chain.Edge) int { return strings.Compare(a.Holding.Name(), c.Holding.Name()) })
 	edits := map[string]*chain.Edit{}
-	for _, f := range follows {
+	for _, f := range v.follows {
 		edits[f.Edit.Name()] = f.Edit
 	}
 
@@ -236,7 +243,7 @@ func graph(ws Workspace, _ Options) (string, error) {
 	for _, name := range slices.Sorted(maps.Keys(edits)) {
 		fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(editKey(edits[name])), classEdit, quote(editLabel(edits[name])))
 	}
-	for _, f := range follows { // a follows edge points at the Holding; the diagram flows from it
+	for _, f := range v.follows { // a follows edge points at the Holding; the diagram flows from it
 		fmt.Fprintf(&b, "%s -> %s: {style.stroke-dash: 4}\n", quote(string(f.To)), quote(string(f.From)))
 	}
 	return b.String(), nil
@@ -279,17 +286,6 @@ func streamLabel(s *chain.Stream) string {
 
 func editKey(e *chain.Edit) string { return string(chain.EditID(e)) }
 
-// holdingsOf is every Holding, the ones the pins make as well, by name: what a pin
-// makes is a holding of its holder as much as one a document says.
-func holdingsOf(g *chain.Graph) []*chain.Holding {
-	var holdings []*chain.Holding
-	for _, e := range g.Edges(chain.EdgeHolds) {
-		holdings = append(holdings, e.Holding)
-	}
-	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
-	return holdings
-}
-
 // editLabel names the edit and says what it does: the strategy that needs code,
 // and how many steps run before and after the write.
 func editLabel(e *chain.Edit) string {
@@ -321,22 +317,22 @@ func artifactKey(a *chain.Artifact) string { return "artifact:" + a.Name() }
 
 // producerPath is where a holding's flow starts: the artifact, inside its stream
 // and project, for a release, and the project for a commit or a branch.
-func producerPath(h *chain.Holding) string {
+func producerPath(v *view, h *chain.Holding) string {
 	p := quote(h.Producer().Slug())
-	if a := h.Artifact(); a != nil {
+	if a := h.Artifact(); a != nil && !v.boundary[h.Producer()] {
 		return p + "." + quote(streamKey(a.Stream())) + "." + quote(artifactKey(a))
 	}
 	return p
 }
 
-func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
+func writeHolding(b *strings.Builder, g *chain.Graph, v *view, h *chain.Holding) {
 	id := quote(string(chain.HoldingID(h)))
 	label := h.Name() + "\n" + h.Kind()
 	if h.Virtual() {
 		label += ", pinned"
 	}
 	fmt.Fprintf(b, "%s: {class: [%s]; label: %s}\n", id, classHolding, quote(label))
-	fmt.Fprintf(b, "%s -> %s\n", producerPath(h), id)
+	fmt.Fprintf(b, "%s -> %s\n", producerPath(v, h), id)
 	var served []string
 	for _, l := range g.Lines() {
 		if h.AppliesTo(l.ID) {
