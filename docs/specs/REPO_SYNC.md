@@ -1,12 +1,20 @@
 # REPO_SYNC
 
-**Status:** implemented for series holdings; see [Not built yet](#not-built-yet). `gero repo sync [project]` brings what a project holds in line with config, and opens one pull request for each of its branches that has something to correct.
+**Status:** implemented for series holdings and release holdings; see [Not built yet](#not-built-yet). `gero repo sync [project]` brings what a project holds in line with config, and opens one pull request for each of its branches that has something to correct.
 
 ## Direction
 
 `gero ship` pushes: the project is the producer of a release, and the writes go into the downstream projects that hold it. `repo sync` pulls: the project is the holder, and the writes go into its own files, from what config says the held values should be. Both end in a pull request on the holder's branch, and both use the same work branch, push, PR identity and commit audit trail ([PUSH_TO_REPO](PUSH_TO_REPO.md)). What differs is where the wanted value comes from: a release the user named, for `ship`; config, for `sync`.
 
-`sync` is not for series holdings alone. A holding is brought in line when its kind has a way to say what its value should be for a line; a series is the first ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#holding)): the series its stream has for the line, written in the holding's form. Any holding a holder keeps, of a release, a commit or a branch, can later say the same, and then one `sync` brings in line everything a project holds.
+`sync` is not for series holdings alone. A holding is brought in line when its kind has a way to say what its value should be for a line ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#holding)):
+
+* **A series** is the series its stream has for the line, written in the holding's form.
+* **A release** is the newest stable release of its stream for the line, written with the holding's form: of the series the stream lists for the line, or of every tag a universal stream accepts (a stream of one minor, `tagPattern: "v1.35.*"`, follows that minor's patches). A holding that accepts all takes a prerelease too, and no other does. The order of two releases is the stream's scheme's, so a respin (`v1.35.0+k3s3`) is newer than the first release of its patch. A value held in another spelling of the same release is written in the form's.
+* **Never backwards is ship's rule.** `ship` does not move a holding to an older release. `sync` corrects what a config or a branch got wrong, so it writes the newest stable release of the stream whatever is held, a newer one or one of another minor included.
+* **A holding that pins another Artifact** (wrangler with lasso) is left to `ship`: its companion comes from a go.mod. `sync` reports it and writes nothing.
+* **Every release holding that has an Edit** is brought in line, and `--holding` (a name, repeated or separated by commas) limits the run to the ones named. Without an Edit a holding is only reported.
+
+Any holding of a commit or a branch can later say the same, and then one `sync` brings in line everything a project holds.
 
 ## What a run does
 
@@ -20,7 +28,8 @@
 
 ## Not built yet
 
-* Holdings of a release, a commit or a branch brought in line by `sync`: what the wanted value is for each (the newest release a line accepts, the head of a branch), and the PR text for it.
+* Holdings of a commit or a branch brought in line by `sync`: what the wanted value is for each (the head of a branch), and the PR text for it.
+* A release holding that pins another Artifact.
 * One command run across every project of a team.
 * `--refresh`, which needs the refresh of an open PR to move into the conveyor first ([PROPOSAL](PROPOSAL.md#not-built-yet)).
 
