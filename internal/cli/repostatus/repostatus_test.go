@@ -817,3 +817,15 @@ func TestRenderJSONCarriesTheSeries(t *testing.T) {
 	assert.Contains(t, out, `"want": "v8"`)
 	assert.Contains(t, out, `"upToDate": false`)
 }
+
+func TestStatusAStreamThatAllowsARetagSaysSoWhereNothingIsNew(t *testing.T) {
+	ws := fixture(t)
+	ws.docs = rancherDocs("  allowRetag: true\n")
+	ws.branches[0].Commit = "sha-v2.13.0-rc.10" // main's head is the rc
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v213 := byLine(got)["v2.13"]
+	assert.Equal(t, Next{Tag: "v2.13.0-rc.11", Kind: "prerelease", Available: false, Why: "no new commits, but --retag may"}, v213.Next[0])
+}
