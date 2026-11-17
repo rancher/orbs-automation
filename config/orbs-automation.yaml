@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# orbs-automation: owned, the gero tool itself. Plain v* tags, an RC first and the stable on the same commit; pushing a
+# tag starts its release workflow.
+apiVersion: gero/v1alpha2
+kind: Project
+name: orbs-automation
+spec:
+  repo: {name: rancher/orbs-automation, managedBy: orbs}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: orbs-automation
+refs: {project: orbs-automation}
+spec: {scheme: semver, tagPattern: "v*", requiresPrerelease: true, universal: true}
