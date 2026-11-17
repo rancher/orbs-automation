@@ -162,6 +162,7 @@ spec:
     - {line: v2.15, series: "0.8.x"}
   universal: false
   requiresPrerelease: true
+  allowRetag: true
 `)
 
 	assert.Equal(t, Refs{"project": {"shell"}}, s.GetRefs())
@@ -169,7 +170,7 @@ spec:
 		Scheme: "semver", TagPattern: "v*", TagExclude: []string{"*-hotfix*"},
 		Stages:             []Stage{{Name: "dev", Prerelease: true}, {Name: "stable"}},
 		Lines:              []StreamLine{{Line: "v2.16", Series: "0.9.x"}, {Line: "v2.15", Series: "0.8.x"}},
-		RequiresPrerelease: true,
+		RequiresPrerelease: true, AllowRetag: true,
 	}, s.Spec)
 }
 
