@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
@@ -40,11 +41,11 @@ func styledPlans() map[string]domain.Plan {
 		"each line":    eachLine(),
 		"acting":       actingPlan(true, "bot"),
 		"committed": withResults(withNoPush(previewPlan()),
-			committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")),
+			committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, "")),
 		"failed": withResults(previewPlan(),
-			&domain.TargetResult{Status: domain.ResultFailed, Error: "boom"}),
+			&proposal.TargetResult{Status: proposal.ResultFailed, Error: "boom"}),
 		"blocked": withResults(previewPlan(),
-			&domain.TargetResult{Status: domain.ResultBlocked, Error: "newer PR"}),
+			&proposal.TargetResult{Status: proposal.ResultBlocked, Error: "newer PR"}),
 	}
 }
 
@@ -195,7 +196,7 @@ func event(t *testing.T, st *style.Renderer, e domain.Event) string {
 
 func TestTheLinesOfWhatWasDoneNameTheirVerbInTheLookOfIt(t *testing.T) {
 	st := colored()
-	pr := &domain.PRRef{Number: 7, URL: "https://github.com/rancher/rancher/pull/7"}
+	pr := &proposal.PRRef{Number: 7, URL: "https://github.com/rancher/rancher/pull/7"}
 	rows := []struct {
 		name string
 		e    domain.Event
@@ -223,16 +224,16 @@ func TestTheLinesOfWhatWasDoneNameTheirVerbInTheLookOfIt(t *testing.T) {
 
 func TestTheResultLinesTakeTheLookOfTheirStatus(t *testing.T) {
 	st := colored()
-	pr := &domain.PRRef{Number: 7, URL: "https://x/7"}
+	pr := &proposal.PRRef{Number: 7, URL: "https://x/7"}
 	rows := []struct {
 		name   string
-		result domain.TargetResult
+		result proposal.TargetResult
 		styled string
 		role   style.Role
 	}{
-		{"already open", domain.TargetResult{Status: domain.ResultAlreadyOpen, PR: pr}, "already open", style.Dim},
-		{"would refresh", domain.TargetResult{Status: domain.ResultWouldRefresh, PR: pr}, "would refresh", style.Dim},
-		{"up to date", domain.TargetResult{Status: domain.ResultUpToDate}, "already up to date", style.Dim},
+		{"already open", proposal.TargetResult{Status: proposal.ResultAlreadyOpen, PR: pr}, "already open", style.Dim},
+		{"would refresh", proposal.TargetResult{Status: proposal.ResultWouldRefresh, PR: pr}, "would refresh", style.Dim},
+		{"up to date", proposal.TargetResult{Status: proposal.ResultUpToDate}, "already up to date", style.Dim},
 	}
 	for _, r := range rows {
 		res := r.result

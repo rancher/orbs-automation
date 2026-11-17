@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -74,7 +75,7 @@ type fakeWorkspace struct {
 	asked      []string
 	cloneDir   string // the engineer's clone, for Ship
 	cloneErr   error
-	push       PushSettings
+	push       proposal.PushSettings
 
 	graph    *chain.Graph
 	graphKey string
@@ -272,7 +273,7 @@ func (f *fakeWorkspace) CloneDir(string) (string, error) { return f.cloneDir, f.
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
 // PushSettings answers from the field.
-func (f *fakeWorkspace) PushSettings(string) PushSettings { return f.push }
+func (f *fakeWorkspace) PushSettings(string) proposal.PushSettings { return f.push }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
 	f.asked = append(f.asked, "refs "+slug)

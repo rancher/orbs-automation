@@ -1,6 +1,9 @@
 package ship
 
-import domain "github.com/rancher/orbs-automation/internal/ship"
+import (
+	"github.com/rancher/orbs-automation/internal/proposal"
+	domain "github.com/rancher/orbs-automation/internal/ship"
+)
 
 // replay returns the events a run of plan would have emitted, in the order it
 // would have emitted them. A finished plan can then be shown by the same code
@@ -37,10 +40,10 @@ func replay(plan domain.Plan) []domain.Event {
 		if r.Pushed != "" {
 			events = append(events, domain.Event{Kind: domain.EventPushed, Branch: t.Branch, Line: t.Line, Remote: r.Pushed, NewBranch: r.Branch})
 		}
-		if r.Status == domain.ResultOpened && r.PR != nil {
+		if r.Status == proposal.ResultOpened && r.PR != nil {
 			events = append(events, domain.Event{Kind: domain.EventPROpened, Branch: t.Branch, Line: t.Line, PR: r.PR})
 		}
-		if r.Status == domain.ResultRefreshed {
+		if r.Status == proposal.ResultRefreshed {
 			events = append(events, domain.Event{Kind: domain.EventRefreshed, Branch: t.Branch, Line: t.Line, PR: r.PR})
 		}
 		for i := range r.Superseded {

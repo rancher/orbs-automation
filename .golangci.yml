@@ -386,6 +386,36 @@ linters:
             - github.com/rancher/orbs-automation/internal/cli/proposer
             - github.com/rancher/orbs-automation/internal/cli/authstatus
             - github.com/rancher/orbs-automation/internal/cli/configresolve
+        # The sources of proposals do not know each other, and neither knows the sources above the
+        # conveyor: internal/proposal is below internal/ship and internal/reposync, which are
+        # built on it, so what both need is in the conveyor and a source never reaches into the
+        # other (docs/specs/PROJECT_LAYOUT.md).
+        proposal-below-sources:
+          list-mode: lax
+          files:
+            - "**/internal/proposal/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/ship
+              desc: internal/proposal is the conveyor that ship builds on, so it does not import ship (docs/specs/PROJECT_LAYOUT.md)
+            - pkg: github.com/rancher/orbs-automation/internal/reposync
+              desc: internal/proposal is the conveyor that reposync builds on, so it does not import reposync (docs/specs/PROJECT_LAYOUT.md)
+        ship-apart-from-reposync:
+          list-mode: lax
+          files:
+            - "**/internal/ship/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/reposync
+              desc: ship and reposync are separate sources of proposals; what both need goes in internal/proposal (docs/specs/PROJECT_LAYOUT.md)
+        reposync-apart-from-ship:
+          list-mode: lax
+          files:
+            - "**/internal/reposync/**"
+            - "!$test"
+          deny:
+            - pkg: github.com/rancher/orbs-automation/internal/ship
+              desc: ship and reposync are separate sources of proposals; what both need goes in internal/proposal (docs/specs/PROJECT_LAYOUT.md)
         # main.go only calls cmd.Execute(). The tools under tools/ are developer
         # commands that import the packages they work on.
         entrypoint:

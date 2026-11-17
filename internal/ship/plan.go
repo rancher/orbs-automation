@@ -130,10 +130,10 @@ type TargetPlan struct {
 	// worked out for a target that needs a PR.
 	Env     map[string]string `json:"env,omitempty"`
 	Error   string            `json:"error,omitempty"`   // why a failed target could not be checked
-	Preview *Preview          `json:"preview,omitempty"` // what a run would write; none when nothing would be
+	Preview *proposal.Preview `json:"preview,omitempty"` // what a run would write; none when nothing would be
 	// Result is what a run did for this target: set only by Ship, and only for a
 	// target that was ready.
-	Result *TargetResult `json:"result,omitempty"`
+	Result *proposal.TargetResult `json:"result,omitempty"`
 }
 
 // HoldingPlan is the state of one holding in a consumer branch.
@@ -207,9 +207,9 @@ type Plan struct {
 	Remote string `json:"remote,omitempty"`
 	// Push is where the branches are pushed, or would be, set when the run looks
 	// at the open PRs.
-	Push *PushTarget `json:"push,omitempty"`
+	Push *proposal.PushTarget `json:"push,omitempty"`
 	// Actor is who the run acts as, set by Ship before any work.
-	Actor *Actor `json:"actor,omitempty"`
+	Actor *proposal.Actor `json:"actor,omitempty"`
 }
 
 // ReleaseImages is the check of the images of one release.

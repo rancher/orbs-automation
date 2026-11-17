@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 )
 
@@ -24,7 +25,7 @@ type resolution struct {
 	tags     []git.Tag // the producer's, from the host
 	// committer is who the commits are made as when git's own configuration is not
 	// to decide: the bot's, in CI. Empty leaves it to git.
-	committer    Identity
+	committer    proposal.Identity
 	consumerRefs git.Refs
 	// derived is the companion each virtual Holding has for each release shipped,
 	// found once. It is shared by the copies of the resolution, so a run and its

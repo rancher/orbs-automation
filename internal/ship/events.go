@@ -65,15 +65,15 @@ type Event struct {
 	// Producer is the repository of a companion, for the ImagesChecked of its release,
 	// and empty for the release asked for.
 	Producer string
-	Images   *registry.Report // ImagesChecked
-	Place    Place            // TargetStarted: where the work is done
-	Reason   string           // TargetStarted: why that was a worktree
-	Commit   *CommitInfo      // Commit
-	Actor    *Actor           // Actor
-	Decision *Publish         // Decided
-	Remote   string           // Pushed: the remote's name
-	PR       *PRRef           // PROpened, Superseded
-	Result   *TargetResult    // TargetDone
+	Images   *registry.Report       // ImagesChecked
+	Place    proposal.Place         // TargetStarted: where the work is done
+	Reason   string                 // TargetStarted: why that was a worktree
+	Commit   *proposal.CommitInfo   // Commit
+	Actor    *proposal.Actor        // proposal.Actor
+	Decision *proposal.Decision     // Decided
+	Remote   string                 // Pushed: the remote's name
+	PR       *proposal.PRRef        // PROpened, Superseded
+	Result   *proposal.TargetResult // TargetDone
 }
 
 // Sink receives the events of a run as they happen, on the goroutine that runs

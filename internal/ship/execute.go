@@ -19,7 +19,7 @@ import (
 //
 // A target that fails is reported as failed and the others go on. The plan is
 // returned with every error that comes after the check, so it can be reported.
-func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, ex *Executor, sink Sink) (Plan, error) {
+func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, ex *proposal.Executor, sink Sink) (Plan, error) {
 	plan, res, err := check(ctx, ws, prober, in, sink)
 	if err != nil {
 		return plan, err
@@ -72,21 +72,21 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 // work, its result.
 type targetState struct {
 	tp       TargetPlan
-	m        Marker
-	dec      Publish
+	m        proposal.Marker
+	dec      proposal.Decision
 	warnings []string
-	done     *TargetResult // set when there is nothing to make: blocked, or the lookup failed
+	done     *proposal.TargetResult // set when there is nothing to make: blocked, or the lookup failed
 }
 
 // decideTarget looks at the open PRs of a target's branch, when there is a
 // publisher, and decides what to do about them. A PR of the actor's own at a newer
 // version blocks the target, and a failed lookup fails it, each before any work.
 // It only reads.
-func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string, plan Plan, tp TargetPlan, sink Sink) targetState {
-	st := targetState{tp: tp, m: Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: tp.Release}}
+func (r resolution) decideTarget(ctx context.Context, pub *proposal.Publisher, me string, plan Plan, tp TargetPlan, sink Sink) targetState {
+	st := targetState{tp: tp, m: proposal.Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: tp.Release}}
 	d := proposal.Decide(ctx, pub, me, proposal.DecideInput{
 		Repo: plan.Consumer, Subject: tp.Subject(), Marker: st.m, Branches: r.consumerRefs.Branches,
-		Blocked: func(newer Marker, p pulls.PR) string {
+		Blocked: func(newer proposal.Marker, p pulls.PR) string {
 			return fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", p.Number, newer.Version, tp.Branch, tp.Release)
 		},
 	}, asProposalSink(sink))
@@ -96,28 +96,28 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 
 // confirmation is what the run is about to do, and whether that is anything
 // that writes: a PR to open, or an older one to close.
-func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, bool) {
-	c := Confirmation{Consumer: plan.Consumer, Release: releaseTags(plan)}
+func confirmation(plan Plan, states []targetState, refresh bool) (proposal.Confirmation, bool) {
+	c := proposal.Confirmation{Consumer: plan.Consumer, Release: releaseTags(plan)}
 	if plan.Push != nil {
 		c.Push = *plan.Push
 	}
 	for _, st := range states {
-		if st.done != nil && st.dec.Action != PublishBlocked {
+		if st.done != nil && st.dec.Action != proposal.PublishBlocked {
 			continue // the lookup failed: nothing is decided for it
 		}
 		switch st.dec.Action {
-		case PublishBlocked:
+		case proposal.PublishBlocked:
 			c.Blocked = append(c.Blocked, st.tp.Key())
-		case PublishAlreadyOpen:
+		case proposal.PublishAlreadyOpen:
 			if refresh {
 				c.Refreshes = append(c.Refreshes, st.tp.Key())
 			} else {
 				c.Already = append(c.Already, st.tp.Key())
 			}
-			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
+			c.Closes = append(c.Closes, proposal.Refs(st.dec.Supersede)...)
 		default:
 			c.Opens = append(c.Opens, st.tp.Key())
-			c.Closes = append(c.Closes, refs(st.dec.Supersede)...)
+			c.Closes = append(c.Closes, proposal.Refs(st.dec.Supersede)...)
 		}
 	}
 	c.MayReplace = refresh && len(c.Opens) > 0
@@ -127,11 +127,11 @@ func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, 
 // workTarget does the work for one target that was decided, as the conveyor does for any
 // proposal: the write of the release in the consumer's holdings and the steps of the edits,
 // then, with a publisher, the push and the PR.
-func (r resolution) workTarget(ctx context.Context, ex *Executor, sess *proposal.Session, in Input, plan Plan, st targetState, sink Sink) *TargetResult {
+func (r resolution) workTarget(ctx context.Context, ex *proposal.Executor, sess *proposal.Session, in Input, plan Plan, st targetState, sink Sink) *proposal.TargetResult {
 	tp := st.tp
-	var refresh func(*TargetResult)
+	var refresh func(*proposal.TargetResult)
 	if in.Refresh {
-		refresh = func(result *TargetResult) {
+		refresh = func(result *proposal.TargetResult) {
 			r.refresh(ctx, ex, sess.Pub, sess.Clone, sess.Remote, in, plan, st, result, sink)
 		}
 	}
@@ -146,10 +146,10 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, sess *proposal
 // applier is the write of a release into a target's branch, as the conveyor runs it: the
 // holdings of the target, then the steps of the edits, each commit made as the run's
 // committer.
-func (r resolution) applier(ctx context.Context, ex *Executor, tp TargetPlan, release Release) func(*Work, func(CommitInfo)) (ApplyResult, error) {
+func (r resolution) applier(ctx context.Context, ex *proposal.Executor, tp TargetPlan, release Release) func(*proposal.Work, func(proposal.CommitInfo)) (proposal.ApplyResult, error) {
 	pv := previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}
-	return func(w *Work, onCommit func(CommitInfo)) (ApplyResult, error) {
-		return Apply{
+	return func(w *proposal.Work, onCommit func(proposal.CommitInfo)) (proposal.ApplyResult, error) {
+		return proposal.Apply{
 			Route: r.route, Target: r.targetOf(tp), Tag: release.Tag, Commit: release.Commit,
 			Message: tp.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign,
 			Name: r.committer.Name, Email: r.committer.Email, OnCommit: onCommit,
@@ -172,11 +172,11 @@ func (r resolution) applier(ctx context.Context, ex *Executor, tp TargetPlan, re
 // while the remote's branch is still where it was seen, the PR's title and body
 // are refreshed, and the refresh is recorded in the one comment gero keeps on the
 // PR. A dry run does everything but the replacing and says it would.
-func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, clone, remote string, in Input, plan Plan, st targetState, result *TargetResult, sink Sink) {
+func (r resolution) refresh(ctx context.Context, ex *proposal.Executor, pub *proposal.Publisher, clone, remote string, in Input, plan Plan, st targetState, result *proposal.TargetResult, sink Sink) {
 	tp, open, branch, g := st.tp, st.dec.Open, st.tp.Preview.Branch, ex.Git
 	skip := func(format string, args ...any) { result.Note = "not refreshed: " + fmt.Sprintf(format, args...) }
 	fail := func(format string, args ...any) {
-		result.Status, result.Error = ResultFailed, fmt.Sprintf(format, args...)
+		result.Status, result.Error = proposal.ResultFailed, fmt.Sprintf(format, args...)
 	}
 
 	if want := pub.HeadOwnerOf(plan.Consumer); open.HeadOwner != want {
@@ -236,8 +236,8 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		Apply: r.applier(ctx, ex, scratch, plan.ReleaseOf(tp.Release)),
 	}, asProposalSink(sink))
 	switch built.Status {
-	case ResultCommitted, ResultWouldCommit:
-	case ResultUpToDate:
+	case proposal.ResultCommitted, proposal.ResultWouldCommit:
+	case proposal.ResultUpToDate:
 		skip("a fresh build changes nothing, so there is nothing to put on the branch")
 		return
 	default:
@@ -274,7 +274,7 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 	}
 	result.Commits, result.Place, result.Reason = built.Commits, built.Place, built.Reason
 	if in.DryRun {
-		result.Status = ResultWouldRefresh
+		result.Status = proposal.ResultWouldRefresh
 		return
 	}
 	// The commit is pushed as it is and not by the name of the local branch, which
@@ -289,11 +289,11 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 	if err := g.DeleteBranch(ctx, clone, scratchName); err != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("could not remove the scratch branch %s: %v", scratchName, err))
 	}
-	result.Status, result.Pushed = ResultRefreshed, pub.Push.Remote
+	result.Status, result.Pushed = proposal.ResultRefreshed, pub.Push.Remote
 	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: pub.Push.Remote, NewBranch: branch})
 	emit(sink, Event{Kind: EventRefreshed, Branch: tp.Branch, Line: tp.Line, PR: result.PR})
 	pub.UpdateDescription(ctx, plan.Consumer, *open, tp.Subject(), result)
-	line := fmt.Sprintf("- Rebuilt on %s@%s (%s)", tp.Branch, short(base), stamp)
+	line := fmt.Sprintf("- Rebuilt on %s@%s (%s)", tp.Branch, proposal.Short(base), stamp)
 	if behind {
 		line += fmt.Sprintf(", was %d behind", result.BehindBy)
 	}

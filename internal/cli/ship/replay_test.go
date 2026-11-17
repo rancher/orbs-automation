@@ -3,6 +3,8 @@ package ship
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/proposal"
+
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,8 +48,8 @@ func TestReplayHasNoImagesEventWhenTheyWereNotChecked(t *testing.T) {
 
 func TestReplayOfARunThatCommitted(t *testing.T) {
 	p := previewPlan()
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
-	r.Commits = []domain.CommitInfo{{Hash: "abcdef0", Subject: "one"}, {Hash: "1234567", Subject: "two"}}
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, "")
+	r.Commits = []proposal.CommitInfo{{Hash: "abcdef0", Subject: "one"}, {Hash: "1234567", Subject: "two"}}
 	p = withResults(p, r)
 
 	events := replay(p)
@@ -57,18 +59,18 @@ func TestReplayOfARunThatCommitted(t *testing.T) {
 		domain.EventTargetStarted, domain.EventCommit, domain.EventCommit, domain.EventTargetDone, domain.EventDone,
 	}, kinds(events))
 	require.Len(t, events, 8)
-	assert.Equal(t, domain.InPlace, events[3].Place)
+	assert.Equal(t, proposal.InPlace, events[3].Place)
 	assert.Equal(t, "release/v2.15", events[3].Branch)
 	require.NotNil(t, events[4].Commit)
 	assert.Equal(t, "one", events[4].Commit.Subject)
 	assert.Equal(t, "two", events[5].Commit.Subject)
 	require.NotNil(t, events[6].Result)
-	assert.Equal(t, domain.ResultCommitted, events[6].Result.Status)
+	assert.Equal(t, proposal.ResultCommitted, events[6].Result.Status)
 }
 
 func TestReplayOfATargetThatFailedBeforeItStartedHasNoStartedEvent(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultFailed, Branch: "bot/x", Error: "moved"})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultFailed, Branch: "bot/x", Error: "moved"})
 
 	events := replay(p)
 
@@ -79,11 +81,11 @@ func TestReplayOfATargetThatFailedBeforeItStartedHasNoStartedEvent(t *testing.T)
 
 func TestReplayOfAPublishedTargetHasTheStepsOfPublishing(t *testing.T) {
 	p := previewPlan()
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
-	r.Status = domain.ResultOpened
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, "")
+	r.Status = proposal.ResultOpened
 	r.Pushed = "origin"
-	r.PR = &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}
-	r.Superseded = []domain.PRRef{{Number: 101}, {Number: 90}}
+	r.PR = &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}
+	r.Superseded = []proposal.PRRef{{Number: 101}, {Number: 90}}
 	p = withResults(p, r)
 
 	events := replay(p)
@@ -103,7 +105,7 @@ func TestReplayOfAPublishedTargetHasTheStepsOfPublishing(t *testing.T) {
 
 func TestReplayOfAnAlreadyOpenTargetHasNoStartedAndNoCommits(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104}, Superseded: []domain.PRRef{{Number: 101}}})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultAlreadyOpen, Branch: "bot/x", PR: &proposal.PRRef{Number: 104}, Superseded: []proposal.PRRef{{Number: 101}}})
 
 	events := replay(p)
 

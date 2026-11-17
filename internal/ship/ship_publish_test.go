@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,13 +15,13 @@ import (
 // publishing is a real run, as an engineer would make it, with the fake GitHub:
 // the branch is pushed to the clone's upstream remote, which is a repository on
 // disk.
-func publishing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *log) {
+func publishing(t *testing.T) (*realWorkspace, string, *proposal.Executor, *fakeRemote, *log) {
 	t.Helper()
 	ws, clone, ex := newShip(t)
 	lg := &log{}
 	remote := &fakeRemote{Log: lg, Labels: []string{"status/auto-created", "team/orbs"}}
-	ws.push = PushSettings{Upstream: "upstream"} // no fork, so the upstream is where it goes
-	ex.Publish = &Publisher{Git: GitCLI{}, Remote: remote}
+	ws.push = proposal.PushSettings{Upstream: "upstream"} // no fork, so the upstream is where it goes
+	ex.Publish = &proposal.Publisher{Git: proposal.GitCLI{}, Remote: remote}
 	return ws, clone, ex, remote, lg
 }
 
@@ -28,7 +29,7 @@ func realRun() Input { return Input{Team: testTeam, Project: "scc-operator", Lin
 
 // mine and others' PRs for the bump that the fixture ships, v0.5.3 to release/v2.15.
 func existing(number int, author, version string) pulls.PR {
-	return pr(number, author, Marker{
+	return pr(number, author, proposal.Marker{
 		Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: "release/v2.15", Version: version,
 	})
 }
@@ -41,11 +42,11 @@ func TestShipPublishesAPlainRunAndClosesMyOlderPR(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	require.NotNil(t, res.PR)
 	assert.Equal(t, 104, res.PR.Number)
 	assert.Equal(t, "upstream", res.Pushed)
-	assert.Equal(t, []PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}}, withoutURL(res.Superseded, "https://github.com/rancher/rancher/pull/101"))
+	assert.Equal(t, []proposal.PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}}, withoutURL(res.Superseded, "https://github.com/rancher/rancher/pull/101"))
 	assert.Equal(t, res.Tip(), runGit(t, ws.up, "rev-parse", botV215), "the branch is on the remote")
 	assert.Equal(t, "main", current(t, clone))
 	assert.Less(t, lg.Index("open rancher/rancher release/v2.15"), lg.Index("create "), "the open PRs are looked at before one is made")
@@ -54,10 +55,10 @@ func TestShipPublishesAPlainRunAndClosesMyOlderPR(t *testing.T) {
 }
 
 // withoutURL fills in the url of a reference, which the fake derives from the number.
-func withoutURL(refs []PRRef, url string) []PRRef {
-	out := make([]PRRef, len(refs))
+func withoutURL(refs []proposal.PRRef, url string) []proposal.PRRef {
+	out := make([]proposal.PRRef, len(refs))
 	for i, r := range refs {
-		out[i] = PRRef{Number: r.Number, URL: url}
+		out[i] = proposal.PRRef{Number: r.Number, URL: url}
 	}
 	return out
 }
@@ -70,7 +71,7 @@ func TestShipAnAlreadyOpenPRMakesNothingAndClosesTheOlderOnes(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	require.NotNil(t, res.PR)
 	assert.Equal(t, 104, res.PR.Number)
 	assert.False(t, branchExistsIn(t, clone, botV215), "no branch was made")
@@ -89,7 +90,7 @@ func TestShipANewerPROfMineBlocksOnlyThatTarget(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultBlocked, res.Status)
+	assert.Equal(t, proposal.ResultBlocked, res.Status)
 	assert.Contains(t, res.Error, "#110")
 	assert.Contains(t, res.Error, "v0.5.4")
 	assert.False(t, branchExistsIn(t, clone, botV215))
@@ -105,7 +106,7 @@ func TestShipAnotherAuthorsPRIsLeftAloneAndReported(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status, "it does not block")
+	assert.Equal(t, proposal.ResultOpened, res.Status, "it does not block")
 	assert.False(t, lg.Has("close #120"))
 	assert.False(t, lg.Has("comment #120"))
 	assert.True(t, lg.Has("close #101"))
@@ -122,7 +123,7 @@ func TestShipANoPushRunNeverLooksAtGitHub(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultCommitted, onlyResult(t, plan).Status)
 	assert.Empty(t, lg.Calls, "nothing was asked of GitHub and nothing was pushed")
 	assert.True(t, branchExistsIn(t, clone, botV215))
 }
@@ -137,7 +138,7 @@ func TestShipADryRunLooksButChangesNothingAndSaysWhatItWouldClose(t *testing.T) 
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultWouldCommit, res.Status)
+	assert.Equal(t, proposal.ResultWouldCommit, res.Status)
 	require.Len(t, res.WouldSupersede, 1)
 	assert.Equal(t, 101, res.WouldSupersede[0].Number)
 	assert.True(t, lg.Has("open rancher/rancher release/v2.15"), "reading is allowed")
@@ -162,7 +163,7 @@ func TestShipNotKnowingWhoIsRunningStopsBeforeAnyWork(t *testing.T) {
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
-	require.ErrorIs(t, err, ErrNoRemote)
+	require.ErrorIs(t, err, proposal.ErrNoRemote)
 	assert.Contains(t, err.Error(), "bad credentials")
 	assert.Equal(t, StatusReady, plan.Status, "the plan is still returned")
 	assert.False(t, branchExistsIn(t, clone, botV215))
@@ -176,7 +177,7 @@ func TestShipAFailedLookupOfOpenPRsFailsThatTargetBeforeAnyWork(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status)
+	assert.Equal(t, proposal.ResultFailed, res.Status)
 	assert.Contains(t, res.Error, "rate limited")
 	assert.False(t, branchExistsIn(t, clone, botV215))
 	assert.False(t, lg.Has("push"))
@@ -190,7 +191,7 @@ func TestShipAListingThatWasCutShortIsAWarning(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "newest")
 }
@@ -209,7 +210,7 @@ func TestShipEmitsTheStepsOfPublishingInOrder(t *testing.T) {
 	}, rec.kinds())
 	decided := rec.first(t, EventDecided)
 	require.NotNil(t, decided.Decision)
-	assert.Equal(t, PublishCreate, decided.Decision.Action)
+	assert.Equal(t, proposal.PublishCreate, decided.Decision.Action)
 }
 
 func TestShipPublishesTheBranchAnEarlierNoPushRunLeftWithoutBuildingItAgain(t *testing.T) {
@@ -219,14 +220,14 @@ func TestShipPublishesTheBranchAnEarlierNoPushRunLeftWithoutBuildingItAgain(t *t
 	first, err := Ship(bg, ws, &fakeProber{}, noPush, ex, nil)
 	require.NoError(t, err)
 	made := onlyResult(t, first)
-	require.Equal(t, ResultCommitted, made.Status)
+	require.Equal(t, proposal.ResultCommitted, made.Status)
 	tip := runGit(t, clone, "rev-parse", botV215)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status, "the branch from the first run is what was published")
+	assert.Equal(t, proposal.ResultOpened, res.Status, "the branch from the first run is what was published")
 	assert.Equal(t, made.Commits, res.Commits, "the same commits, not built again")
 	assert.Equal(t, tip, runGit(t, clone, "rev-parse", botV215))
 	assert.Equal(t, tip, runGit(t, ws.up, "rev-parse", botV215), "and it is on the remote")
@@ -246,8 +247,8 @@ func TestShipARerunOfANoPushRunReportsTheExistingBranch(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultCommitted, res.Status)
-	assert.Equal(t, Existing, res.Place)
+	assert.Equal(t, proposal.ResultCommitted, res.Status)
+	assert.Equal(t, proposal.Existing, res.Place)
 	assert.Equal(t, onlyResult(t, first).Commits, res.Commits)
 	assert.Equal(t, tip, runGit(t, clone, "rev-parse", botV215))
 }
@@ -268,7 +269,7 @@ func TestShipAnAlreadyOpenPRSaysHowFarBehindItIs(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	assert.Equal(t, 7, res.BehindBy)
 	assert.True(t, lg.Has("behind release/v2.15 danpock:"+botV215), "asked about the PR's own branch in the fork")
 	assert.False(t, branchExistsIn(t, clone, botV215), "and nothing was built: a rebuild needs --refresh")
@@ -294,7 +295,7 @@ func TestShipNotBeingAbleToTellHowFarBehindIsAWarning(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "behind")
 	assert.Contains(t, res.Warnings[0], "rate limited")
@@ -321,7 +322,7 @@ func TestShipAPRWithNoKnownHeadIsNotAskedAbout(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, onlyResult(t, plan).Status)
 	assert.False(t, lg.Has("behind"))
 }
 
@@ -336,7 +337,7 @@ func TestShipFindsMyPRByItsHeadWhenTheListingDoesNotReachIt(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status, "found by the exact head, whatever the listing reached")
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status, "found by the exact head, whatever the listing reached")
 	assert.True(t, lg.Has("open head rancher/rancher rancher:"+botV215))
 	assert.False(t, lg.Has("create"))
 	assert.False(t, branchExistsIn(t, clone, botV215))
@@ -350,7 +351,7 @@ func TestShipLooksForTheHeadInTheForkWhenPushingThere(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, onlyResult(t, plan).Status)
 	assert.True(t, lg.Has("open head rancher/rancher danpock:"+botV215))
 }
 
@@ -365,7 +366,7 @@ func TestShipAPRInBothTheListingAndTheHeadLookupIsOnePR(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	assert.False(t, lg.Has("close #104"), "it is not its own duplicate")
 	assert.Empty(t, res.Superseded)
 }
@@ -378,7 +379,7 @@ func TestShipAFailedLookupByHeadIsAWarningAndTheListingStillDecides(t *testing.T
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "rate limited")
 	assert.Contains(t, res.Warnings[0], botV215)
@@ -421,7 +422,7 @@ func TestShipAnEarlierAttemptsBranchOnTheRemoteStopsAPlainRunWithAWayForward(t *
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status)
+	assert.Equal(t, proposal.ResultFailed, res.Status)
 	assert.Contains(t, res.Error, "--refresh", "it says how to go on")
 	assert.Contains(t, res.Error, botV215)
 	assert.Equal(t, theirs, runGit(t, ws.up, "rev-parse", botV215), "the remote's branch is untouched")
@@ -438,7 +439,7 @@ func TestShipRefreshReplacesAnEarlierAttemptsBranchAndOpensThePR(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	assert.NotEqual(t, theirs, runGit(t, ws.up, "rev-parse", botV215))
 	assert.Equal(t, res.Tip(), runGit(t, ws.up, "rev-parse", botV215), "the branch is the one this run built")
 	assert.True(t, lg.Has("create"))
@@ -454,7 +455,7 @@ func TestShipWillNotReplaceABranchWithCommitsThatAreNotOurs(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status)
+	assert.Equal(t, proposal.ResultFailed, res.Status)
 	assert.Contains(t, res.Error, "someone@example.com", "whose commit it is")
 	assert.Equal(t, theirs, runGit(t, ws.up, "rev-parse", botV215), "even --refresh does not replace it")
 	assert.False(t, lg.Has("create"))
@@ -465,7 +466,7 @@ func TestShipABranchAlreadyOnTheRemoteAtTheSameCommitJustGetsItsPR(t *testing.T)
 	remote.CreateErr = errors.New("A pull request already exists, or GitHub is down")
 	first, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 	require.NoError(t, err)
-	require.Equal(t, ResultFailed, onlyResult(t, first).Status, "pushed, but the PR was not opened")
+	require.Equal(t, proposal.ResultFailed, onlyResult(t, first).Status, "pushed, but the PR was not opened")
 	pushed := runGit(t, ws.up, "rev-parse", botV215)
 	remote.CreateErr = nil
 	lg.Calls = nil
@@ -473,7 +474,7 @@ func TestShipABranchAlreadyOnTheRemoteAtTheSameCommitJustGetsItsPR(t *testing.T)
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultOpened, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultOpened, onlyResult(t, plan).Status)
 	assert.Equal(t, pushed, runGit(t, ws.up, "rev-parse", botV215), "nothing new to push")
 	assert.True(t, lg.Has("create"))
 }
@@ -488,7 +489,7 @@ func TestShipSaysWhenAPRsBranchDoesNotMatchItsMarker(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status, "the marker is the identity, so the run goes on")
+	assert.Equal(t, proposal.ResultOpened, res.Status, "the marker is the identity, so the run goes on")
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "#101")
 	assert.Contains(t, res.Warnings[0], "dan/my-own-name")
@@ -513,7 +514,7 @@ func TestShipFindsAnOlderPROfMineByTheTailOfItsBranchWhenTheListingDoesNotReachI
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	assert.True(t, lg.Has("open head rancher/rancher rancher:alice/scc-operator-v0.5.2-v2.15"))
 	assert.True(t, lg.Has("close #101"), "found by its branch, and superseded")
 }
@@ -530,7 +531,7 @@ func TestShipReportsAnotherActorsNewerPRFoundByTheTailOfItsBranch(t *testing.T) 
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status, "it is not mine, so it does not block")
+	assert.Equal(t, proposal.ResultOpened, res.Status, "it is not mine, so it does not block")
 	assert.False(t, lg.Has("close #130"))
 	assert.Contains(t, strings.Join(res.Warnings, "\n"), "also open: #130 by rancher-bot[bot]")
 }
@@ -548,7 +549,7 @@ func TestShipDoesNotAskTwiceForTheHeadItAlreadyAsksFor(t *testing.T) {
 
 func TestShipLooksAtNoMoreBranchesThanItCanAndSaysSo(t *testing.T) {
 	ws, _, ex, remote, lg := publishing(t)
-	for i := 0; i < maxBumpBranches+1; i++ {
+	for i := 0; i < proposal.MaxBumpBranches+1; i++ {
 		bumpBranchOnTheHost(t, ws, fmt.Sprintf("u%02d/scc-operator-v0.4.%d-v2.15", i, i))
 	}
 	remote.Open = pulls.Open{}
@@ -557,7 +558,7 @@ func TestShipLooksAtNoMoreBranchesThanItCanAndSaysSo(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, maxBumpBranches, lg.Count("open head rancher/rancher rancher:u"), "no more than the limit are asked for")
+	assert.Equal(t, proposal.MaxBumpBranches, lg.Count("open head rancher/rancher rancher:u"), "no more than the limit are asked for")
 	require.NotEmpty(t, res.Warnings)
 	assert.Contains(t, res.Warnings[0], "branches")
 }
@@ -573,7 +574,7 @@ func TestShipSaysHowFarBehindAnotherActorsPRIs(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	assert.Contains(t, strings.Join(res.Warnings, "\n"), "also open: #120 by rancher-bot[bot]")
 	assert.Contains(t, strings.Join(res.Warnings, "\n"), "behind release/v2.15 by 3")
 }
@@ -590,7 +591,7 @@ func TestShipReportsAPRThatTargetsAnotherBranchAndLeavesItAlone(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	assert.False(t, lg.Has("close #121"), "a PR of another target is never closed")
 	assert.Contains(t, strings.Join(res.Warnings, "\n"), "#121")
 	assert.Contains(t, strings.Join(res.Warnings, "\n"), "release/v2.14")

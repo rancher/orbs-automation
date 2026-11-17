@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,13 +16,13 @@ const scratchV215 = botV215 + ".refresh"
 
 // refreshing is a run that has already opened the PR once, so the branch is on
 // the remote and the fake GitHub reports its PR as open, and then asks to refresh.
-func refreshing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *log, Input) {
+func refreshing(t *testing.T) (*realWorkspace, string, *proposal.Executor, *fakeRemote, *log, Input) {
 	t.Helper()
 	ws, clone, ex, remote, lg := publishing(t)
 	ex.Now = func() time.Time { return time.Date(2026, 11, 6, 15, 4, 0, 0, time.UTC) }
 	first, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 	require.NoError(t, err)
-	require.Equal(t, ResultOpened, onlyResult(t, first).Status)
+	require.Equal(t, proposal.ResultOpened, onlyResult(t, first).Status)
 	open := existing(104, "danpock", "v0.5.3")
 	preview := first.Targets[0].Preview
 	open.Title, open.Body = preview.Title, preview.Body                           // as the PR was made
@@ -48,7 +49,7 @@ func TestRefreshOfABranchThatIsIdenticalToAFreshBuildChangesNothing(t *testing.T
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	assert.Contains(t, res.Note, "identical")
 	for _, write := range []string{"push", "update", "edit comment", "comment #104", "close"} {
 		assert.False(t, lg.Has(write), "nothing is written for an identical branch: %s", write)
@@ -80,7 +81,7 @@ func TestRefreshOfABranchThatIsBehindIsReplacedEvenWhenTheChangeIsIdentical(t *t
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	require.Equal(t, ResultRefreshed, res.Status, "behind is out of date, so it is rebuilt on the current head")
+	require.Equal(t, proposal.ResultRefreshed, res.Status, "behind is out of date, so it is rebuilt on the current head")
 	assert.Equal(t, 1, res.BehindBy)
 	newTip := runGit(t, ws.up, "rev-parse", botV215)
 	assert.NotEqual(t, oldTip, newTip)
@@ -99,7 +100,7 @@ func TestRefreshOfABranchThatIsBehindIsOnlyReportedWithoutTheFlag(t *testing.T) 
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	assert.Equal(t, 1, res.BehindBy)
 	assert.Equal(t, oldTip, runGit(t, ws.up, "rev-parse", botV215))
 	assert.False(t, lg.Has("update"))
@@ -119,11 +120,11 @@ func TestRefreshUpdatesAStaleDescriptionAndKeepsOtherHiddenBlocksWhenTheBranchIs
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status, "the branch is as it should be")
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status, "the branch is as it should be")
 	assert.Contains(t, res.Note, "description")
 	require.True(t, lg.Has("update #104"), "the title and body are brought up to date")
 	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", remote.UpdatedTitle)
-	assert.Equal(t, mergeBody(pr.Body, fresh), remote.UpdatedBody)
+	assert.Equal(t, proposal.MergeBody(pr.Body, fresh), remote.UpdatedBody)
 	assert.Contains(t, remote.UpdatedBody, trackerBlock, "what another part of gero put there stays")
 	assert.NotContains(t, remote.UpdatedBody, "an older text")
 	assert.Equal(t, oldTip, runGit(t, ws.up, "rev-parse", botV215), "and the branch is not pushed")
@@ -183,7 +184,7 @@ func TestRefreshOfAReplacedBranchMergesTheBodyToo(t *testing.T) {
 
 // ownMarker is the marker block of a body made by gero ship.
 func ownMarker(body string) string {
-	for _, b := range geroBlocks(body) {
+	for _, b := range proposal.GeroBlocks(body) {
 		if b.Kind == "ship" {
 			return b.Text
 		}
@@ -201,7 +202,7 @@ func TestRefreshOfABranchThatDiffersReplacesItAndRecordsIt(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultRefreshed, res.Status)
+	assert.Equal(t, proposal.ResultRefreshed, res.Status)
 	require.NotNil(t, res.PR)
 	assert.Equal(t, 104, res.PR.Number, "the same PR")
 	assert.Equal(t, "upstream", res.Pushed)
@@ -234,7 +235,7 @@ func TestRefreshReplacesABranchThatIsCheckedOutInTheClone(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	require.Equal(t, ResultRefreshed, res.Status, "error: %s", res.Error)
+	require.Equal(t, proposal.ResultRefreshed, res.Status, "error: %s", res.Error)
 	newTip := runGit(t, ws.up, "rev-parse", botV215)
 	assert.NotEqual(t, oldTip, newTip)
 	assert.Equal(t, res.Tip(), newTip, "the remote has the rebuilt commit")
@@ -255,7 +256,7 @@ func TestRefreshEditsTheOneCommentInPlaceAndDoesNotAddAnother(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultRefreshed, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultRefreshed, onlyResult(t, plan).Status)
 	assert.False(t, lg.Has("comment #104 "), "no second comment")
 	require.True(t, lg.Has("edit comment 55 "))
 	edited := lg.Calls[lg.Index("edit comment 55 ")]
@@ -290,7 +291,7 @@ func TestRefreshWillNotReplaceABranchWithACommitThatIsNotOurs(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	assert.Contains(t, res.Note, "not refreshed")
 	assert.Contains(t, res.Note, "trailer")
 	assert.Equal(t, handTip, runGit(t, ws.up, "rev-parse", botV215), "their commit is untouched")
@@ -306,7 +307,7 @@ func TestRefreshWillNotTouchABranchInAnotherRepository(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultAlreadyOpen, res.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, res.Status)
 	assert.Contains(t, res.Note, "not refreshed")
 	assert.Contains(t, res.Note, "someone-else")
 	assert.False(t, lg.Has("update"))
@@ -337,7 +338,7 @@ func TestRefreshADryRunSaysItWouldAndChangesNothing(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultWouldRefresh, res.Status)
+	assert.Equal(t, proposal.ResultWouldRefresh, res.Status)
 	assert.Len(t, res.Commits, 2)
 	for _, write := range []string{"push", "update", "edit comment", "comment #104", "close"} {
 		assert.False(t, lg.Has(write), "a dry run does not %s", write)
@@ -357,7 +358,7 @@ func TestRefreshAFailureToUpdateTheBodyOrRecordItIsAWarningAndTheBranchStaysRepl
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultRefreshed, res.Status)
+	assert.Equal(t, proposal.ResultRefreshed, res.Status)
 	require.Len(t, res.Warnings, 2)
 	assert.Contains(t, res.Warnings[0], "update refused")
 	assert.Contains(t, res.Warnings[1], "cannot list comments")
@@ -370,7 +371,7 @@ func TestWithoutRefreshAnOpenPRIsNotRebuiltEvenIfItWouldDiffer(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, onlyResult(t, plan).Status)
 	assert.False(t, lg.Has("push"))
 	assert.False(t, lg.Has("update"))
 }

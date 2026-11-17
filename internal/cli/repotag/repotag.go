@@ -18,8 +18,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/releasetag"
-	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/rancher/orbs-automation/internal/ui/style"
@@ -143,7 +143,7 @@ func ParseArgs(args []string) (project, line, tag string) {
 // the engineer that the host sees pushing the tag.
 func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
 	opts.Style = style.New(s.Terminal)
-	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, s.Output, s.DryRun, opts)
+	return run(ctx, w, workspace.Open(s, cwd), proposal.GitCLI{}, s.Output, s.DryRun, opts)
 }
 
 // run is Run over its dependencies. The head of the line's branch and the tags

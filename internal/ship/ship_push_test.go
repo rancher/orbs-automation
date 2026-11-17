@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/proposal"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +17,7 @@ func withFork(t *testing.T, ws *realWorkspace, clone string) (bare string) {
 	bare = filepath.Join(t.TempDir(), "fork.git")
 	runGit(t, t.TempDir(), "init", "--quiet", "--bare", bare)
 	runGit(t, clone, "remote", "add", "fork", bare)
-	ws.push = PushSettings{Fork: "fork", Upstream: "upstream", GitHubUser: "danpock"}
+	ws.push = proposal.PushSettings{Fork: "fork", Upstream: "upstream", GitHubUser: "danpock"}
 	return bare
 }
 
@@ -27,13 +29,13 @@ func TestShipPushesToTheForkWhenOneIsSetAndTheHeadNamesItsOwner(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	assert.Equal(t, "fork", res.Pushed)
 	assert.Equal(t, res.Tip(), runGit(t, bare, "rev-parse", botV215), "the branch is in the fork")
 	assert.NotContains(t, runGit(t, ws.up, "branch", "--list", botV215), "bot/", "and not in the upstream")
 	assert.True(t, lg.Has("create rancher/rancher head=danpock:"+botV215), "the head is the fork's owner and the branch")
 	require.NotNil(t, plan.Push)
-	assert.Equal(t, PushTarget{Role: RoleFork, Remote: "fork", Source: "a fork is set"}, *plan.Push)
+	assert.Equal(t, proposal.PushTarget{Role: proposal.RoleFork, Remote: "fork", Source: "a fork is set"}, *plan.Push)
 }
 
 func TestShipThePushToFlagBeatsTheForkAndPushesToTheUpstream(t *testing.T) {

@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/goproxy"
 	"github.com/rancher/orbs-automation/internal/platform/goreleases"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
@@ -128,7 +129,7 @@ func checkFormat(format string) error {
 }
 
 // runWith is runToStyled with no color, with the report returned as a string.
-func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input) (string, error) {
+func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, ex *proposal.Executor, format string, in domain.Input) (string, error) {
 	var buf bytes.Buffer
 	err := runToStyled(ctx, &buf, nil, ws, prober, ex, format, in, false, style.Plain())
 	return buf.String(), err
@@ -141,7 +142,7 @@ func runWith(ctx context.Context, ws domain.Workspace, prober registry.Prober, e
 // text, styled by st, and as one document at the end in json, which is never
 // styled. Errors that come after the check (no clone, a failed target, a
 // blocked release) are returned after the report is written.
-func runToStyled(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspace, prober registry.Prober, ex *domain.Executor, format string, in domain.Input, full bool, st *style.Renderer) error {
+func runToStyled(ctx context.Context, w io.Writer, log *slog.Logger, ws domain.Workspace, prober registry.Prober, ex *proposal.Executor, format string, in domain.Input, full bool, st *style.Renderer) error {
 	if err := checkFormat(format); err != nil {
 		return err
 	}
@@ -200,9 +201,9 @@ func failedErr(p domain.Plan) error {
 			continue
 		}
 		switch t.Result.Status {
-		case domain.ResultFailed:
+		case proposal.ResultFailed:
 			return ErrFailed
-		case domain.ResultBlocked:
+		case proposal.ResultBlocked:
 			blocked = true
 		}
 	}
