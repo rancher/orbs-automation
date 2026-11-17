@@ -19,9 +19,9 @@ import (
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
-// SeriesOptions is what the user asked to fix; the command fills it from its
+// SyncOptions is what the user asked to sync; the command fills it from its
 // arguments and flags.
-type SeriesOptions struct {
+type SyncOptions struct {
 	Project string   // the holder, by config name or slug
 	Holding string   // limit the run to one holding
 	Lines   []string // limit the run to these Rancher lines
@@ -34,12 +34,12 @@ type SeriesOptions struct {
 	In          io.Reader
 }
 
-// RunSeries fixes the series holdings of a project: it checks each line, makes the
-// commits for the ones an Edit follows and, unless --no-push or --dry-run, pushes them
-// and opens the PRs after asking once. The report is written to w, as text or as one
+// RunSync brings what a project holds in line with config: it checks each branch, makes
+// the commits for the corrections an Edit follows and, unless --no-push or --dry-run,
+// pushes each branch and opens its PR after asking once. The report is written to w, as text or as one
 // document in json, and it is written even when the error returned is ErrFailed or
 // ErrDeclined.
-func RunSeries(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, cwd string, opts SeriesOptions) error {
+func RunSync(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, cwd string, opts SyncOptions) error {
 	if err := checkFormat(s.Output); err != nil {
 		return err
 	}
@@ -68,27 +68,27 @@ func RunSeries(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Sett
 			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
 		}
 	}
-	in := domain.SeriesInput{
+	in := domain.SyncInput{
 		Project: opts.Project, Holding: opts.Holding, Lines: opts.Lines, BranchPrefix: s.BranchPrefix,
 		DryRun: s.DryRun, NoPush: opts.NoPush, PushTo: opts.PushTo, CI: s.CI,
 	}
-	return runSeriesTo(ctx, w, shipWorkspace{workspace.Open(s, cwd)}, ex, s.Output, in, opts.Preview, style.New(s.Terminal))
+	return runSyncTo(ctx, w, shipWorkspace{workspace.Open(s, cwd)}, ex, s.Output, in, opts.Preview, style.New(s.Terminal))
 }
 
-// runSeriesTo checks and fixes, with an executor, and writes the report. Errors that
+// runSyncTo checks and fixes, with an executor, and writes the report. Errors that
 // come after the check (no clone, a failed target, declined) are returned after it.
-func runSeriesTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *domain.Executor, format string, in domain.SeriesInput, full bool, st *style.Renderer) error {
+func runSyncTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *domain.Executor, format string, in domain.SyncInput, full bool, st *style.Renderer) error {
 	if err := checkFormat(format); err != nil {
 		return err
 	}
-	plan, err := domain.FixSeries(ctx, ws, in, ex)
+	plan, err := domain.Sync(ctx, ws, in, ex)
 	if errors.Is(err, workspace.ErrNotProject) {
-		return fmt.Errorf("%w: name the project whose series holdings to fix as the first argument", err)
+		return fmt.Errorf("%w: name the project to sync as the first argument", err)
 	}
-	if err != nil && len(plan.Targets) == 0 {
-		return err // nothing was found, so there is no report: "no series holding" would be untrue
+	if err != nil && len(plan.Branches) == 0 {
+		return err // nothing was found, so there is no report: "nothing to sync" would be untrue
 	}
-	out := renderSeriesText(plan, full, st)
+	out := renderSyncText(plan, full, st)
 	if format == clicfg.OutputJSON {
 		b, jerr := json.MarshalIndent(plan, "", "  ")
 		if jerr != nil {
@@ -102,47 +102,54 @@ func runSeriesTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *doma
 	if err != nil {
 		return err
 	}
-	return seriesFailed(plan)
+	return syncFailed(plan)
 }
 
-// seriesFailed is ErrFailed when a target failed, whether it could not be read or its
-// commit or push did: the exit code says the run did not do everything it was asked.
-func seriesFailed(p domain.SeriesPlan) error {
-	for _, t := range p.Targets {
-		if t.Status == domain.StatusFailed || (t.Result != nil && (t.Result.Status == domain.ResultFailed || t.Result.Status == domain.ResultBlocked)) {
+// syncFailed is ErrFailed when a row could not be read or a branch failed, whether its
+// commit or its push did: the exit code says the run did not do everything it was asked.
+func syncFailed(p domain.SyncPlan) error {
+	for _, b := range p.Branches {
+		if b.Status == domain.StatusFailed || (b.Result != nil && (b.Result.Status == domain.ResultFailed || b.Result.Status == domain.ResultBlocked)) {
 			return ErrFailed
+		}
+		for _, r := range b.Rows {
+			if r.Status == domain.StatusFailed {
+				return ErrFailed
+			}
 		}
 	}
 	return nil
 }
 
-// renderSeriesText is the report of a fix: a row for each line, and for each one that
-// was worked on what was done, with the texts of the PR when full.
-func renderSeriesText(p domain.SeriesPlan, full bool, view *style.Renderer) string {
+// renderSyncText is the report of a sync: a row for each holding on each line, and for
+// each branch that was worked on what was done, with the texts of the PR when full.
+func renderSyncText(p domain.SyncPlan, full bool, view *style.Renderer) string {
 	var b strings.Builder
-	b.WriteString(view.Style(style.Heading, "Series: "+p.Holder) + "\n")
-	if len(p.Targets) == 0 {
-		b.WriteString("  " + view.Style(style.Dim, "no series holding") + "\n")
+	b.WriteString(view.Style(style.Heading, "Sync: "+p.Holder) + "\n")
+	if len(p.Branches) == 0 {
+		b.WriteString("  " + view.Style(style.Dim, "nothing to sync: no holding that config brings in line") + "\n")
 		return b.String()
 	}
 	table := [][]string{{"  " + view.Style(style.Dim, "LINE"), view.Style(style.Dim, "BRANCH"), view.Style(style.Dim, "HOLDING"),
 		view.Style(style.Dim, "HOLDS"), view.Style(style.Dim, "WANTS"), view.Style(style.Dim, "STATUS")}}
-	for _, t := range p.Targets {
-		table = append(table, []string{"  " + t.Line, orDash(t.Branch), t.Holding, orDash(t.Current), orDash(t.Want), seriesStatus(view, t)})
+	for _, br := range p.Branches {
+		for _, r := range br.Rows {
+			table = append(table, []string{"  " + r.Line, orDash(r.Branch), r.Holding, orDash(r.Current), orDash(r.Want), syncStatus(view, r)})
+		}
 	}
 	b.WriteString(ui.Align(table, view.Width))
-	for _, t := range p.Targets {
-		if t.Result == nil && !(full && t.Preview != nil) {
+	for _, br := range p.Branches {
+		if br.Result == nil && !(full && br.Preview != nil) {
 			continue
 		}
-		b.WriteString("\n" + view.Style(style.Heading, t.Line+" on "+t.Branch) + "\n")
-		if t.Preview != nil {
-			b.WriteString("  branch  " + t.Preview.Branch + "\n  title   " + t.Preview.Title + "\n")
+		b.WriteString("\n" + view.Style(style.Heading, br.Branch) + "\n")
+		if br.Preview != nil {
+			b.WriteString("  branch  " + br.Preview.Branch + "\n  title   " + br.Preview.Title + "\n")
 			if full {
-				b.WriteString("\n" + indent(t.Preview.CommitMessage) + "\n" + indent(t.Preview.Body) + "\n")
+				b.WriteString("\n" + indent(br.Preview.CommitMessage) + "\n" + indent(br.Preview.Body) + "\n")
 			}
 		}
-		if r := t.Result; r != nil {
+		if r := br.Result; r != nil {
 			b.WriteString("  " + view.Style(statusRoleOf(r.Status), string(r.Status)))
 			if r.PR != nil {
 				b.WriteString(fmt.Sprintf(" #%d %s", r.PR.Number, r.PR.URL))
@@ -154,6 +161,9 @@ func renderSeriesText(p domain.SeriesPlan, full bool, view *style.Renderer) stri
 			for _, c := range r.Commits {
 				b.WriteString("  commit " + c.Hash[:min(7, len(c.Hash))] + " " + c.Subject + "\n")
 			}
+			for _, sup := range r.Superseded {
+				b.WriteString(fmt.Sprintf("  closed #%d, replaced by this\n", sup.Number))
+			}
 			for _, warning := range r.Warnings {
 				b.WriteString("  " + view.Style(style.Warn, warning) + "\n")
 			}
@@ -162,17 +172,17 @@ func renderSeriesText(p domain.SeriesPlan, full bool, view *style.Renderer) stri
 	return b.String()
 }
 
-// seriesStatus is how one line stands, in a few words.
-func seriesStatus(view *style.Renderer, t domain.SeriesTarget) string {
-	switch t.Status {
+// syncStatus is how one row stands, in a few words.
+func syncStatus(view *style.Renderer, r domain.SyncRow) string {
+	switch r.Status {
 	case domain.StatusUpToDate:
 		return view.Style(style.OK, "current")
 	case domain.StatusReady:
 		return view.Style(style.Warn, "differs, ready")
 	case domain.StatusBlocked:
-		return view.Style(style.Warn, "differs, left alone: "+t.Reason)
+		return view.Style(style.Warn, "differs, left alone: "+r.Reason)
 	}
-	return view.Style(style.Error, "unreadable: "+t.Reason)
+	return view.Style(style.Error, "unreadable: "+r.Reason)
 }
 
 func orDash(text string) string {

@@ -110,6 +110,14 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 * **M: Narrow `ship.Git` and `ship.Remote` to what each task calls.** Both carry every method any task needs. Done when each task takes an interface of its own.
 * **S: Add `--json` to `gero config validate` and `--output env` to `gero auth status`.** Done when each renders and exits as the text form does. [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md)
 
+### Repo sync
+
+`gero repo sync` is the pull side of `ship`: it brings what a project holds in line with config, one PR for each branch. It does series holdings now. [REPO_SYNC](specs/REPO_SYNC.md)
+
+* **L: Bring a release holding in line with `repo sync`.** Say what the wanted value is for a line: the newest release of the holding's stream that its `accept` and stage take. Done when a release holding that is behind is written in the same PR as a series holding of the branch, and a test shows both in one commit.
+* **M: Bring a commit or branch holding in line with `repo sync`.** The wanted value is the head of the producer's branch for the stage. Done when a differing commit holding is written by `sync` through an Edit.
+* **M: Run `repo sync` for every project a team owns.** Done when one command opens the PRs of each owned project and reports each by project.
+
 ### Doctor and the workstation
 
 * **M: Add the online checks to `gero doctor`:** the token can open PRs, access to the tracker repo, push access to each fork, and a clone far behind its upstream. [DOCTOR](specs/DOCTOR.md)

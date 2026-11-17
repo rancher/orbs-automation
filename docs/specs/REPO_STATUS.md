@@ -48,7 +48,7 @@ Shown only for a project that has a `series` holding: a file that names a series
 
 * **HOLDS** is the value read from the file and **WANTS** is the holding's form rendered over the stream's series for the line.
 * **STATUS** is `current`; `differs [series-differs]`; `differs, acknowledged: <reason>` when the holding's document acknowledges the rule for that line; or `unreadable: <why>`. A difference is a warning and never fails the command.
-* When an Edit follows the holding, a line that differs and is not acknowledged says the command that would fix it and the pull request it opens: `gero ship series` ([PUSH_TO_REPO](PUSH_TO_REPO.md#fixing-a-series-holding)), the branch, the value and the Edit.
+* When an Edit follows the holding, a line that differs and is not acknowledged says the command that would fix it and the pull request it opens: `gero repo sync` ([REPO_SYNC](REPO_SYNC.md)), the branch, the value and the Edit.
 * **Cost.** One ref listing for the project and one small file read for each line.
 
 ## JSON and failures
