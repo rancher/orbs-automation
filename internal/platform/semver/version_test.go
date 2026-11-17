@@ -12,13 +12,13 @@ func TestParse(t *testing.T) {
 		want Version
 		ok   bool
 	}{
-		{"v2.15.3", Version{2, 15, 3, ""}, true},
-		{"2.15.3", Version{2, 15, 3, ""}, true},
-		{"v2.15.0-rc.1", Version{2, 15, 0, "rc.1"}, true},
-		{"v2.15.0-alpha10", Version{2, 15, 0, "alpha10"}, true},
-		{"v1.0.0-rc.1+build.5", Version{1, 0, 0, "rc.1"}, true},
-		{"v1.0.0+build.5", Version{1, 0, 0, ""}, true},
-		{"v1.0.0-x-y.z", Version{1, 0, 0, "x-y.z"}, true},
+		{"v2.15.3", Version{Major: 2, Minor: 15, Patch: 3, Prerelease: ""}, true},
+		{"2.15.3", Version{Major: 2, Minor: 15, Patch: 3, Prerelease: ""}, true},
+		{"v2.15.0-rc.1", Version{Major: 2, Minor: 15, Patch: 0, Prerelease: "rc.1"}, true},
+		{"v2.15.0-alpha10", Version{Major: 2, Minor: 15, Patch: 0, Prerelease: "alpha10"}, true},
+		{"v1.0.0-rc.1+build.5", Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "rc.1", Build: "build.5"}, true},
+		{"v1.0.0+build.5", Version{Major: 1, Minor: 0, Patch: 0, Build: "build.5"}, true},
+		{"v1.0.0-x-y.z", Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "x-y.z"}, true},
 		{"v01.2.3", Version{}, false},
 		{"v1.2", Version{}, false},
 		{"v1.2.3.4", Version{}, false},
@@ -28,7 +28,7 @@ func TestParse(t *testing.T) {
 		{"V1.2.3", Version{}, false},
 		{"vv1.2.3", Version{}, false},
 		{"main-abc1234", Version{}, false},
-		{"v1.2.3-head-0123456", Version{1, 2, 3, "head-0123456"}, true},
+		{"v1.2.3-head-0123456", Version{Major: 1, Minor: 2, Patch: 3, Prerelease: "head-0123456"}, true},
 		{"", Version{}, false},
 	}
 	for _, tt := range tests {
@@ -41,8 +41,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestVersionIsPrerelease(t *testing.T) {
-	assert.True(t, Version{1, 0, 0, "rc.1"}.IsPrerelease())
-	assert.False(t, Version{1, 0, 0, ""}.IsPrerelease())
+	assert.True(t, Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "rc.1"}.IsPrerelease())
+	assert.False(t, Version{Major: 1, Minor: 0, Patch: 0, Prerelease: ""}.IsPrerelease())
 }
 
 func TestCompare(t *testing.T) {

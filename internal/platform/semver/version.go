@@ -11,6 +11,7 @@ import (
 type Version struct {
 	Major, Minor, Patch uint64
 	Prerelease          string // dot-separated identifiers, without the leading "-"
+	Build               string // dot-separated identifiers of the build metadata, without the leading "+"
 }
 
 // IsPrerelease reports whether the version has a prerelease part.
@@ -18,9 +19,9 @@ func (v Version) IsPrerelease() bool { return v.Prerelease != "" }
 
 // Parse reads tag as [v]MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. Numbers have no
 // leading zeros, and the identifiers are non-empty runs of [0-9A-Za-z-]. Build
-// metadata is checked and dropped, since it does not take part in ordering. ok
-// is false for anything else, which is not an error: repositories hold tags
-// that are not versions.
+// metadata is checked and kept in Build, and does not take part in precedence
+// except where Compare says. ok is false for anything else, which is not an
+// error: repositories hold tags that are not versions.
 func Parse(tag string) (v Version, ok bool) {
 	rest := strings.TrimPrefix(tag, "v")
 	rest, build, hasBuild := strings.Cut(rest, "+")
@@ -46,7 +47,7 @@ func Parse(tag string) (v Version, ok bool) {
 		}
 		n[i] = num
 	}
-	return Version{Major: n[0], Minor: n[1], Patch: n[2], Prerelease: pre}, true
+	return Version{Major: n[0], Minor: n[1], Patch: n[2], Prerelease: pre, Build: build}, true
 }
 
 // validIdentifiers reports whether s is dot-separated, non-empty identifiers of
