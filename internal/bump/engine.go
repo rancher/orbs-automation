@@ -123,25 +123,49 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 	return nil
 }
 
-// ErrNoEdit is returned for a series holding that no Edit follows: nothing writes
-// a holding until an Edit says what a write of it takes.
+// ErrNoEdit is returned for a pulled holding that no Edit follows: nothing writes a
+// holding until an Edit says what a write of it takes.
 var ErrNoEdit = errors.New("no Edit follows the holding")
 
-// SeriesRoute is the route that writes one series holding in its holder: the
-// holding alone, with the Edits that follow it. A series holding is no route of a
-// release, so the chain has none for it, and this is the one way to run it. It is an
-// error, ErrNoEdit, when no Edit follows the holding, and when the holding or its
-// edits cannot be used.
-func (e *Engine) SeriesRoute(h *chain.Holding) (Route, error) {
-	switch {
-	case h.Kind() != chain.HoldsSeries:
-		return Route{}, fmt.Errorf("Holding %q holds a %s, not a series", h.Name(), h.Kind())
-	case len(h.Edits()) == 0:
-		return Route{}, fmt.Errorf("%w: Holding %q is only read until one does", ErrNoEdit, h.Name())
-	case e.unusable[h]:
-		return Route{}, fmt.Errorf("Holding %q cannot be written: its format or an edit that follows it is not usable", h.Name())
+// PullRoute is the route that writes holdings of one holder that are brought in line
+// from where they hold, and not shipped from a producer's release: a series today,
+// and any holding that is pulled later. The holdings may be of several producers, so
+// the route has none of its own, and one run writes them all and runs the Edits that
+// follow them once. A pulled holding is no route of the chain, and this is the one way
+// to run it. It is an error, ErrNoEdit, when no Edit follows a holding, and when a
+// holding or its edits cannot be used, or the holdings are not all of one holder.
+func (e *Engine) PullRoute(holdings ...*chain.Holding) (Route, error) {
+	if len(holdings) == 0 {
+		return Route{}, errors.New("no holding to write")
 	}
-	return Route{Route: chain.Route{Producer: h.Producer(), Consumer: h.Holder(), Stream: h.Stream(), Holdings: []*chain.Holding{h}}, engine: e}, nil
+	var producer *chain.Project
+	for i, h := range holdings {
+		switch {
+		case h.Kind() != chain.HoldsSeries:
+			return Route{}, fmt.Errorf("Holding %q holds a %s, which is not pulled", h.Name(), h.Kind())
+		case h.Holder() != holdings[0].Holder():
+			return Route{}, fmt.Errorf("Holding %q is in %s, not %s like %q", h.Name(), h.Holder().Slug(), holdings[0].Holder().Slug(), holdings[0].Name())
+		case len(h.Edits()) == 0:
+			return Route{}, fmt.Errorf("%w: Holding %q is only read until one does", ErrNoEdit, h.Name())
+		case e.unusable[h]:
+			return Route{}, fmt.Errorf("Holding %q cannot be written: its format or an edit that follows it is not usable", h.Name())
+		}
+		if i == 0 {
+			producer = h.Producer()
+		} else if producer != h.Producer() {
+			producer = nil
+		}
+	}
+	return Route{Route: chain.Route{Producer: producer, Consumer: holdings[0].Holder(), Holdings: holdings}, engine: e}, nil
+}
+
+// producerSlug is the repository of the route's producer, and empty for a route of
+// holdings of several.
+func (r Route) producerSlug() string {
+	if r.Producer == nil {
+		return ""
+	}
+	return r.Producer.Slug()
 }
 
 // Route is one way out of a producer: the release holdings a consumer has of it, as
@@ -399,7 +423,7 @@ func (r Route) TargetsFor(line string) ([]Target, error) {
 	}
 	if noLine {
 		return nil, fmt.Errorf("%w: the release is in none of the release lines of %s, so there is no branch to follow it to",
-			ErrNoBranches, r.Producer.Slug())
+			ErrNoBranches, r.producerSlug())
 	}
 	if line != "" {
 		return nil, fmt.Errorf("%w: %s has no branch for the release line %s, which the release is in", ErrNoBranches, r.Consumer.Slug(), line)
@@ -591,7 +615,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	maps.Copy(env.Env, edits)
 	maps.Copy(env.Env, map[string]string{
 		"GERO_TAG": tag, "GERO_VERSION": newRelease(tag, pattern, "", "").Version, "GERO_TARGET_BRANCH": t.Branch,
-		"GERO_SOURCE_REPO": r.Producer.Slug(),
+		"GERO_SOURCE_REPO": r.producerSlug(),
 	})
 	checkpoint := func(u Unit) error {
 		if after == nil {
@@ -635,7 +659,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		got, err := applier.Apply(ctx, tree, StrategyInput{
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
-			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
+			Release: newRelease(tag, tagPatternOf(holdings[0]), r.producerSlug(), commit),
 			Line:    t.Line, Branch: t.Branch,
 			Dir: dir, Runner: withEnv(runner, edits), Changes: changesOf(ed, written),
 		})
@@ -663,7 +687,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 func (r Route) TargetsOn(line string) ([]Target, error) {
 	targets := r.targetsOnLine(line, r.Holdings)
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("%w: %s has no branch for the release line %s that a holding of %s is for", ErrNoBranches, r.Consumer.Slug(), line, r.Producer.Slug())
+		return nil, fmt.Errorf("%w: %s has no branch for the release line %s that a holding of %s is for", ErrNoBranches, r.Consumer.Slug(), line, r.producerSlug())
 	}
 	return targets, nil
 }

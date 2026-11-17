@@ -709,15 +709,15 @@ func seriesEngine(t *testing.T, extra ...string) (*Engine, *chain.Holding) {
 func TestASeriesHoldingIsWrittenOnlyWhenAnEditFollowsIt(t *testing.T) {
 	e, h := seriesEngine(t)
 
-	_, err := e.SeriesRoute(h)
+	_, err := e.PullRoute(h)
 
 	require.ErrorIs(t, err, ErrNoEdit)
 	assert.ErrorContains(t, err, `"h"`)
 }
 
-func TestASeriesRouteRunsTheEditAroundTheWriteOfTheSeries(t *testing.T) {
+func TestAPullRouteRunsTheEditAroundTheWriteOfTheSeries(t *testing.T) {
 	e, h := seriesEngine(t, chaintest.Doc("Edit", "regen", "{holding: [h]}", "  postEdit:\n    - {run: [make, generate]}\n"))
-	route, err := e.SeriesRoute(h)
+	route, err := e.PullRoute(h)
 	require.NoError(t, err)
 	tree := files{"build.yaml": "prodVersion: v9\n"}
 	var order []string
@@ -730,6 +730,7 @@ func TestASeriesRouteRunsTheEditAroundTheWriteOfTheSeries(t *testing.T) {
 	})
 
 	require.NoError(t, err)
+	require.NotNil(t, route.Producer)
 	assert.Equal(t, "prod", route.Producer.Name())
 	assert.Equal(t, "cons", route.Consumer.Name())
 	assert.True(t, res.Changed)
@@ -740,4 +741,39 @@ func TestASeriesRouteRunsTheEditAroundTheWriteOfTheSeries(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chk, 1)
 	assert.True(t, chk[0].UpToDate)
+}
+
+func TestAPullRouteOfHoldingsOfTwoProducersWritesBothAndRunsEachEditOnce(t *testing.T) {
+	e, h := seriesEngine(t,
+		chaintest.Doc("Project", "other", "", "  repo: {name: acme/other, managedBy: orbs}\n"),
+		chaintest.Doc("Stream", "other", "{project: other}", "  lines:\n    - {line: v2.16, series: \"4.x\"}\n    - {line: v2.15, series: \"3.x\"}\n"),
+		chaintest.Doc("Holding", "h2", "{project: cons, stream: other}", "  at: {file: build.yaml, key: otherVersion}\n  holds: {kind: series, form: \"r{major}\"}\n"),
+		chaintest.Doc("Edit", "regen", "{holding: [h, h2]}", "  postEdit:\n    - {run: [make, generate]}\n"),
+	)
+	g := e.graph
+	h2 := g.Holdings()[1]
+	route, err := e.PullRoute(h, h2)
+	require.NoError(t, err)
+	tree := files{"build.yaml": "prodVersion: v9\notherVersion: r4\n"}
+	var order []string
+	rec := &recorder{order: &order}
+
+	res, err := route.Run(bg, tree, rec, Target{Branch: "rel-v2.15", Line: "v2.15", Holdings: route.Holdings}, "", "", "/work", nil)
+
+	require.NoError(t, err)
+	assert.Nil(t, route.Producer, "two producers: the route has none of its own")
+	assert.Equal(t, "prodVersion: v8\notherVersion: r3\n", tree["build.yaml"])
+	assert.Len(t, res.Changes, 2)
+	assert.Equal(t, []string{"run make generate"}, order, "the one Edit that follows both runs once")
+}
+
+func TestAPullRouteRefusesHoldingsOfAnotherKindOrHolder(t *testing.T) {
+	e, h := seriesEngine(t, chaintest.Doc("Edit", "regen", "{holding: [h]}", "  postEdit:\n    - {run: [make, generate]}\n"))
+
+	_, err := e.PullRoute()
+	require.Error(t, err)
+
+	other := holdings(t, imageHolding)[0]
+	_, err = e.PullRoute(h, other)
+	require.Error(t, err, "a release holding is shipped, not pulled")
 }

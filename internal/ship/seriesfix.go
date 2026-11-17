@@ -95,7 +95,7 @@ func FixSeries(ctx context.Context, ws Workspace, in SeriesInput, ex *Executor) 
 		return plan, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
 	}
 	for _, h := range holdings {
-		route, routeErr := engine.SeriesRoute(h)
+		route, routeErr := engine.PullRoute(h)
 		for _, line := range seriesLinesOf(holder, h) {
 			if len(in.Lines) > 0 && !slices.ContainsFunc(in.Lines, func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) }) {
 				continue
