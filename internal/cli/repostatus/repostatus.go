@@ -72,6 +72,9 @@ type Status struct {
 	// left out for a project with none, or when the options skip them.
 	Consumers []ship.ConsumerHoldings `json:"consumers,omitempty"`
 	Sources   []ship.SourceHoldings   `json:"sources,omitempty"`
+	// Series is what this project holds of the series of a stream, which names no
+	// release, against the series its stream has for each line.
+	Series []ship.SeriesHolding `json:"series,omitempty"`
 	// TraceError is why the consumers or the sources could not be worked out at all,
 	// such as an update method that is not usable.
 	TraceError string `json:"traceError,omitempty"`
