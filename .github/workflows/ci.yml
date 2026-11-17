@@ -2,6 +2,16 @@ name: CI Tests
 
 on:
   workflow_call:
+  # A push to main is the only run where github.ref is a branch the actions support.
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - '.github/CODEOWNERS'
+      - 'LICENSE'
   pull_request:
     paths-ignore:
       - 'docs/**'
