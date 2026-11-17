@@ -147,7 +147,7 @@ func (r resolution) specs(in Input) (selection, error) {
 	if in.Arg == "" && r.followsLines() {
 		return r.eachLine(in)
 	}
-	release, err := ResolveRelease(r.scheme, r.producer.Slug(), r.tags, in.Arg, in.Prerelease, acceptsAll(r.route))
+	release, err := tagscheme.ResolveRelease(r.scheme, r.producer.Slug(), r.tags, in.Arg, in.Prerelease, acceptsAll(r.route))
 	if err != nil {
 		return selection{}, err
 	}
@@ -236,7 +236,7 @@ func (r resolution) eachLine(in Input) (selection, error) {
 		}
 	}
 	for _, line := range names {
-		release, err := ResolveRelease(r.scheme, r.producer.Slug(), r.tags, line, in.Prerelease, acceptsAll(r.route))
+		release, err := tagscheme.ResolveRelease(r.scheme, r.producer.Slug(), r.tags, line, in.Prerelease, acceptsAll(r.route))
 		if err != nil {
 			if sel.named {
 				return selection{}, err
