@@ -21,18 +21,147 @@ type Workspace interface {
 	Chain() (*chain.Graph, error)
 }
 
+// Kind is the kind of diagram to draw.
+type Kind string
+
+const (
+	// KindD2 is the flow diagram, written as D2.
+	KindD2 Kind = "d2"
+	// KindMindmap is the mind map, written as Mermaid.
+	KindMindmap Kind = "mindmap"
+)
+
+// Kinds lists the kinds Graph can draw, the default first.
+var Kinds = []Kind{KindD2, KindMindmap}
+
 // Graph draws the central config found from s and the working directory cwd as
-// D2 source.
-func Graph(s clicfg.Settings, cwd string) (string, error) {
-	return run(workspace.Open(s, cwd), s.Output)
+// a diagram of the kind asks for.
+func Graph(s clicfg.Settings, cwd string, kind Kind) (string, error) {
+	return run(workspace.Open(s, cwd), s.Output, kind)
 }
 
-// run draws the config as the output format asks for.
-func run(ws Workspace, format string) (string, error) {
+// run draws the config as the output format and the kind ask for.
+func run(ws Workspace, format string, kind Kind) (string, error) {
 	if format != clicfg.OutputText {
-		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2", format)
+		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2 or Mermaid", format)
 	}
-	return graph(ws)
+	switch kind {
+	case KindD2:
+		return graph(ws)
+	case KindMindmap:
+		return mindmap(ws)
+	}
+	return "", fmt.Errorf("graph type %q is not supported by config resolve graph", kind)
+}
+
+// mindmap draws the config as a Mermaid mind map. A mind map is a tree and has
+// no edges, so a Project is a branch of the root, and what joins two Projects is
+// said on both of them: the artifact says where it reaches, and the holder says
+// what it holds and from whom.
+func mindmap(ws Workspace) (string, error) {
+	g, err := ws.Chain()
+	if err != nil {
+		return "", err
+	}
+	holdings := append(slices.Clone(g.Holdings()), g.Virtual()...)
+	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
+	projects := slices.Clone(g.Projects())
+	slices.SortFunc(projects, func(a, c *chain.Project) int { return strings.Compare(a.Slug(), c.Slug()) })
+
+	m := &mindmapWriter{}
+	m.b.WriteString("mindmap\n")
+	m.node(1, `root(("gero config"))`)
+	for _, p := range projects {
+		m.project(g, p, holdings)
+	}
+	return m.b.String(), nil
+}
+
+type mindmapWriter struct {
+	b strings.Builder
+	n int
+}
+
+// node writes a line at depth, which is the indentation in steps of two spaces.
+func (m *mindmapWriter) node(depth int, text string) {
+	m.b.WriteString(strings.Repeat("  ", depth) + text + "\n")
+}
+
+// label writes text as a node of its own, with an id no other node has.
+func (m *mindmapWriter) label(depth int, text string) {
+	m.n++
+	text = strings.NewReplacer(`"`, "'", "\n", " ").Replace(text)
+	m.node(depth, fmt.Sprintf(`n%d["%s"]`, m.n, text))
+}
+
+func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*chain.Holding) {
+	var marks []string
+	switch {
+	case p.External():
+		marks = append(marks, classExternal)
+	case p.Shared():
+		marks = append(marks, classShared)
+	case p.ManagedBy() != "":
+		marks = append(marks, "managed by "+p.ManagedBy())
+	}
+	if p.FinalDestination() {
+		marks = append(marks, classHub)
+	}
+	text := p.Name()
+	if len(marks) > 0 {
+		text += " (" + strings.Join(marks, ", ") + ")"
+	}
+	m.label(2, text)
+	for _, st := range p.Streams() {
+		m.label(3, streamLabel(st))
+		for _, a := range st.Artifacts() {
+			m.label(4, "artifact "+a.Name()+": "+a.Ref())
+			for _, h := range holdings {
+				if h.Artifact() == a {
+					m.label(5, reaches(g, h))
+				}
+			}
+		}
+	}
+	for _, h := range holdings {
+		if h.Producer() == p && h.Artifact() == nil {
+			m.label(3, reaches(g, h))
+		}
+	}
+	first := true
+	for _, h := range holdings {
+		if h.Holder() != p {
+			continue
+		}
+		if first {
+			m.label(3, "holds")
+			first = false
+		}
+		kind := h.Kind()
+		if h.Virtual() {
+			kind += ", pinned"
+		}
+		m.label(4, fmt.Sprintf("%s: %s from %s", h.Name(), kind, h.Producer().Name()))
+		for _, e := range h.Edits() {
+			m.label(5, "edit "+editLabel(e))
+		}
+	}
+}
+
+// reaches says where a holding takes what its producer makes: its holder, by
+// the holding, for the lines it serves.
+func reaches(g *chain.Graph, h *chain.Holding) string {
+	text := "to " + h.Holder().Name() + " via " + h.Name()
+	var served []string
+	for _, l := range g.Lines() {
+		if h.AppliesTo(l.ID) {
+			served = append(served, l.ID)
+		}
+	}
+	if len(served) > 0 {
+		text += " (" + strings.Join(served, ", ") + ")"
+	}
+	return text
 }
 
 // The classes of a node. A Project has one of managed, shared and external, and
