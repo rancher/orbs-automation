@@ -128,8 +128,10 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 var ErrNoEdit = errors.New("no Edit follows the holding")
 
 // PullRoute is the route that writes holdings of one holder that are brought in line
-// from where they hold, and not shipped from a producer's release: a series today,
-// and any holding that is pulled later. The holdings may be of several producers, so
+// from where they hold, and not shipped from a producer's release: a series, and a release
+// that the caller chose from the producer's tags (Target.Pulled). A holding that pins
+// another Artifact is not pulled: its companion comes from a go.mod, and is ship's.
+// The holdings may be of several producers, so
 // the route has none of its own, and one run writes them all and runs the Edits that
 // follow them once. A pulled holding is no route of the chain, and this is the one way
 // to run it. It is an error, ErrNoEdit, when no Edit follows a holding, and when a
@@ -141,7 +143,11 @@ func (e *Engine) PullRoute(holdings ...*chain.Holding) (Route, error) {
 	var producer *chain.Project
 	for i, h := range holdings {
 		switch {
-		case h.Kind() != chain.HoldsSeries:
+		case h.Virtual():
+			return Route{}, fmt.Errorf("Holding %q is virtual: its release is the one the pin it follows resolves, which ship writes", h.Name())
+		case h.Kind() == chain.HoldsRelease && len(h.Pinned()) > 0:
+			return Route{}, fmt.Errorf("Holding %q pins another Artifact, whose release comes from a go.mod: ship writes it", h.Name())
+		case h.Kind() != chain.HoldsSeries && h.Kind() != chain.HoldsRelease:
 			return Route{}, fmt.Errorf("Holding %q holds a %s, which is not pulled", h.Name(), h.Kind())
 		case h.Holder() != holdings[0].Holder():
 			return Route{}, fmt.Errorf("Holding %q is in %s, not %s like %q", h.Name(), h.Holder().Slug(), holdings[0].Holder().Slug(), holdings[0].Name())
@@ -156,7 +162,7 @@ func (e *Engine) PullRoute(holdings ...*chain.Holding) (Route, error) {
 			producer = nil
 		}
 	}
-	return Route{Route: chain.Route{Producer: producer, Consumer: holdings[0].Holder(), Holdings: holdings}, engine: e}, nil
+	return Route{Route: chain.Route{Producer: producer, Consumer: holdings[0].Holder(), Holdings: holdings}, engine: e, pull: true}, nil
 }
 
 // producerSlug is the repository of the route's producer, and empty for a route of
@@ -181,6 +187,7 @@ type Route struct {
 	// runner, so the engine reads no host. Nil means no list: such a go.mod is an error.
 	GoReleases GoReleases
 	engine     *Engine
+	pull       bool // a route of PullRoute: its release holdings are written with Target.Pulled
 }
 
 // GoReleases is the list of Go releases, as far as the engine needs it.
@@ -355,9 +362,16 @@ type Target struct {
 // Artifact that follows the route's holding, the tag that was derived for it. A
 // virtual holding of the route's own producer is shipped as any other: when lasso is
 // shipped, what its pins make in a consumer is written with the tag of the run.
-func (t Target) releaseOf(producer *chain.Project, h *chain.Holding, tag, commit string) (Release, error) {
+func (t Target) releaseOf(producer *chain.Project, pull bool, h *chain.Holding, tag, commit string) (Release, error) {
 	if h.Kind() == chain.HoldsSeries {
 		return Release{}, nil // a series holds no release: its value is the stream's series for the line
+	}
+	if pull {
+		rel, ok := t.Pulled[h]
+		if !ok {
+			return Release{}, fmt.Errorf("Holding %q is pulled and no release was chosen for it", h.Name())
+		}
+		return rel, nil
 	}
 	if !h.Virtual() || h.Producer() == producer {
 		return ReleaseOf(h, tag, commit)
@@ -582,7 +596,7 @@ type HoldingCheck struct {
 func (r Route) Check(ctx context.Context, src Tree, t Target, tag, commit string) ([]HoldingCheck, error) {
 	var out []HoldingCheck
 	for _, h := range r.holdingsOf(t) {
-		rel, err := t.releaseOf(r.Producer, h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, r.pull, h, tag, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -641,7 +655,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	var res Result
 	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
-		rel, err := t.releaseOf(r.Producer, h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, r.pull, h, tag, commit)
 		if err != nil {
 			return res, err
 		}
