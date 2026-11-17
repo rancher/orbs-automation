@@ -42,8 +42,8 @@ type SeriesLine struct {
 	// difference is expected.
 	Suggest      string `json:"suggest,omitempty"`
 	Acknowledged string `json:"acknowledged,omitempty"`
-	// Left is why a difference is not one to correct: the holding holds a newer release than
-	// the newest stable one, or it pins another Artifact, which ship writes.
+	// Left is why a difference is not one to correct here: the holding pins another Artifact,
+	// whose release comes from a go.mod and which ship writes.
 	Left string `json:"left,omitempty"`
 }
 
@@ -184,10 +184,6 @@ func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Re
 		return out
 	}
 	out.Change = check.Change.Description
-	if out.release != nil && check.Relation == bump.RelationOlder {
-		out.Left = "it holds a newer release than the newest stable one, and a sync never moves a holding backwards"
-		return out
-	}
 	out.Acknowledged, _ = h.Acknowledgement(rule, line)
 	if edits := h.Edits(); len(edits) > 0 && out.Acknowledged == "" {
 		out.Suggest = fmt.Sprintf("run `gero repo sync %s --line %s` to open a pull request on %s that writes %s, with Edit %s", holder.Name(), line, branch, out.Want, edits[0].Name())

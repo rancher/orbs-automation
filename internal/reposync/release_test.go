@@ -113,16 +113,16 @@ func TestSyncRewritesTheSpellingOfARelease(t *testing.T) {
 	assert.Equal(t, "v1.35.10+k3s1", row.Want)
 }
 
-func TestSyncNeverMovesAReleaseHoldingBackwards(t *testing.T) {
-	held := "prodVersion: v9\nextVersion: v1.35.12+k3s1\nother: 1\n"
+func TestSyncMovesAReleaseHoldingBackwardsWhenItIsWrong(t *testing.T) {
+	held := "prodVersion: v9\nextVersion: v1.35.12+k3s1\nother: 1\n" // newer than any stable release there is
 	ws, _ := newReleaseWS(t, held, extTags)
 
 	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
 	row := rowOf(t, branchOf(t, plan, "main"))
-	assert.Equal(t, StatusBlocked, row.Status)
-	assert.Contains(t, row.Reason, "newer")
+	assert.Equal(t, StatusReady, row.Status, "ship never moves a holding backwards; sync is what corrects one that is wrong")
+	assert.Equal(t, "v1.35.10+k3s1", row.Want)
 }
 
 func TestSyncAReleaseHoldingWithNoStableReleaseIsReportedNotWritten(t *testing.T) {
@@ -165,4 +165,16 @@ func TestSyncCanBeLimitedToNamedHoldings(t *testing.T) {
 
 	_, err = Run(bg, ws, Input{NoPush: true, Holdings: []string{"cons-holds-ext", "nope"}}, nil)
 	require.ErrorContains(t, err, "nope")
+}
+
+func TestSyncCorrectsAReleaseHoldingThatIsInAnotherSeriesEvenIfItIsNewer(t *testing.T) {
+	held := "prodVersion: v9\nextVersion: v1.36.2+k3s1\nother: 1\n" // the minor above the one this stream follows
+	ws, _ := newReleaseWS(t, held, extTags)
+
+	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
+
+	require.NoError(t, err)
+	row := rowOf(t, branchOf(t, plan, "main"))
+	assert.Equal(t, StatusReady, row.Status, "a holding on the wrong minor is corrected, not held back for being newer")
+	assert.Equal(t, "v1.35.10+k3s1", row.Want)
 }
