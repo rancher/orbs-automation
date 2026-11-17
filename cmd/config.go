@@ -76,7 +76,7 @@ viewers render in place.`,
 			if len(args) > 0 {
 				kind = graphresolve.Kind(args[0])
 			}
-			out, err := graphresolve.Graph(settingsFrom(cmd), cwd, kind)
+			out, err := graphresolve.Graph(settingsFrom(cmd), cwd, kind, graphresolve.Options{})
 			if err != nil {
 				return err
 			}

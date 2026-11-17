@@ -34,22 +34,31 @@ const (
 // Kinds lists the kinds Graph can draw, the default first.
 var Kinds = []Kind{KindD2, KindMindmap}
 
+// Options chooses which projects are drawn (docs/specs/CONFIG_GRAPH.md, "Filtering").
+type Options struct {
+	// External puts the external projects in.
+	External bool
+	// Projects are patterns on a project's name, slug and aliases; one that starts
+	// with ! leaves out what it matches.
+	Projects []string
+}
+
 // Graph draws the central config found from s and the working directory cwd as
-// a diagram of the kind asks for.
-func Graph(s clicfg.Settings, cwd string, kind Kind) (string, error) {
-	return run(workspace.Open(s, cwd), s.Output, kind)
+// a diagram of the kind asks for, of the projects the options choose.
+func Graph(s clicfg.Settings, cwd string, kind Kind, opts Options) (string, error) {
+	return run(workspace.Open(s, cwd), s.Output, kind, opts)
 }
 
 // run draws the config as the output format and the kind ask for.
-func run(ws Workspace, format string, kind Kind) (string, error) {
+func run(ws Workspace, format string, kind Kind, opts Options) (string, error) {
 	if format != clicfg.OutputText {
 		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2 or Mermaid", format)
 	}
 	switch kind {
 	case KindD2:
-		return graph(ws)
+		return graph(ws, opts)
 	case KindMindmap:
-		return mindmap(ws)
+		return mindmap(ws, opts)
 	}
 	return "", fmt.Errorf("graph type %q is not supported by config resolve graph", kind)
 }
@@ -58,7 +67,7 @@ func run(ws Workspace, format string, kind Kind) (string, error) {
 // no edges, so a Project is a branch of the root, and what joins two Projects is
 // said on both of them: the artifact says where it reaches, and the holder says
 // what it holds and from whom.
-func mindmap(ws Workspace) (string, error) {
+func mindmap(ws Workspace, _ Options) (string, error) {
 	g, err := ws.Chain()
 	if err != nil {
 		return "", err
@@ -194,7 +203,7 @@ classes: {
 }
 `
 
-func graph(ws Workspace) (string, error) {
+func graph(ws Workspace, _ Options) (string, error) {
 	g, err := ws.Chain()
 	if err != nil {
 		return "", err
