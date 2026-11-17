@@ -89,6 +89,8 @@ No answer is stored in the config that can be worked out from it. There is no im
 
 The config is a network: the documents are nodes, and a `refs` name is a foreign key from one to another. Two kinds are joins more than things. A Holding joins a holder Project to a producer and carries the payload of the join (where it is held, what of the producer, for which lines); an Edit joins to the Holdings it follows. The graph reads them so, with typed edges and the queries a graph has, not one hand-walked grouping for each command.
 
+Read as a relational database, the entities are the tables, a Holding is the junction table, and the graph is the join across them. `gero config resolve graph er` draws those tables and how they relate, before any data ([CONFIG_GRAPH](../specs/CONFIG_GRAPH.md#er)): the place to start for a reader new to the model.
+
 * **A node is named `kind:name`**: `project:rancher`, `artifact:lasso`, `holding:rancher-wrangler`, `edit:go-bump`. The prefix keeps a Project and an Artifact of one name apart, and a name reads the same in a finding, a test and a diagram.
 * **An edge is one of three kinds**, each with the document it was made from as its payload:
 

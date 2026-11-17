@@ -51,7 +51,7 @@ slug, or . for the project whose repository you are in) to look at only that.`,
 	})
 	var graphOpts graphresolve.Options
 	graphCmd := &cobra.Command{
-		Use:   "graph [d2|mindmap]",
+		Use:   "graph [d2|mindmap|er]",
 		Short: "Draw the whole application config as a D2 diagram",
 		Long: `Draw the Projects of the application config as nodes, and every holding as
 a node between the Project that produces a release and the Project that holds
@@ -80,7 +80,12 @@ only the streams, artifacts and holdings that are for it.
 
 Name the type mindmap (gero config resolve graph mindmap) to draw the same config as a Mermaid mind map instead, a looser
 picture of what each Project produces and holds that GitHub and most Markdown
-viewers render in place.`,
+viewers render in place.
+
+Name the type er (gero config resolve graph er) to draw the schema the config is
+made of as a Mermaid entity-relationship diagram: the entities as tables and how
+they relate, with a Holding as the junction between two Projects. It draws no
+data, so it takes none of the filters above and refuses them.`,
 		Args:      cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
 		ValidArgs: kindNames(),
 		RunE: func(cmd *cobra.Command, args []string) error {
