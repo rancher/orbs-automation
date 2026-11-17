@@ -236,3 +236,68 @@ func TestGraphDrawsAnEditOnceWhenItFollowsAHoldingAndWhatItsPinMakes(t *testing.
 	assert.Contains(t, out, `"holding:rancher-holds-wrangler" -> "edit:tidy"`)
 	assert.Contains(t, out, `"holding:rancher-holds-wrangler+lasso-module" -> "edit:tidy"`)
 }
+
+func mindmapOf(t *testing.T, g *chain.Graph) string {
+	t.Helper()
+	out, err := run(fakeWorkspace{g: g}, clicfg.OutputText, KindMindmap)
+	require.NoError(t, err)
+	return out
+}
+
+func regexpQuote(s string) string { return strings.NewReplacer("(", `\(`, ")", `\)`).Replace(s) }
+
+func TestMindmapStartsAsAMermaidMindmapWithOneRoot(t *testing.T) {
+	out := mindmapOf(t, shipping(t))
+	assert.True(t, strings.HasPrefix(out, "mindmap\n  root((\""), out)
+	assert.Equal(t, 1, strings.Count(out, "\n  root(("), "one root")
+}
+
+func TestMindmapHangsEachProjectOffTheRoot(t *testing.T) {
+	out := mindmapOf(t, shipping(t))
+	for _, text := range []string{
+		"rancher (managed, hub)", "shell (managed)", "scc (shared)", "upstream (external)",
+	} {
+		assert.Regexp(t, `\n    n\d+\["`+regexpQuote(text)+`"\]\n`, out, text)
+	}
+}
+
+func TestMindmapNestsStreamsAndArtifactsInTheirProject(t *testing.T) {
+	out := mindmapOf(t, shipping(t))
+	assert.Regexp(t, `\n    n\d+\["shell \(managed\)"\]\n      n\d+\["stream shell"\]\n        n\d+\["artifact shell-image: rancher/shell"\]\n`, out)
+}
+
+func TestMindmapShowsWhereAnArtifactReachesAndWhatAProjectHolds(t *testing.T) {
+	out := mindmapOf(t, shipping(t))
+	assert.Contains(t, out, `["to rancher via rancher-holds-shell (v2.13, v2.12)"]`)
+	assert.Regexp(t, `\n      n\d+\["holds"\]\n        n\d+\["rancher-holds-shell: release from shell"\]\n`, out)
+}
+
+func TestMindmapDrawsWhatAPinMakes(t *testing.T) {
+	out := mindmapOf(t, pinned(t))
+	assert.Contains(t, out, "release, pinned")
+}
+
+func TestMindmapKeepsQuotesOutOfLabels(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.13"),
+		project("odd", "  repo: {name: rancher/odd, managedBy: rancher}\n"),
+	)
+	assert.NotContains(t, strings.ReplaceAll(mindmapOf(t, g), `["`, ""), `""`)
+}
+
+func TestMindmapIsTheSameEachTime(t *testing.T) {
+	g := shipping(t)
+	assert.Equal(t, mindmapOf(t, g), mindmapOf(t, g))
+}
+
+func TestMindmapReturnsTheWorkspaceError(t *testing.T) {
+	_, err := run(fakeWorkspace{err: errors.New("boom")}, clicfg.OutputText, KindMindmap)
+	assert.EqualError(t, err, "boom")
+}
+
+func TestRunRefusesAnUnknownKind(t *testing.T) {
+	out, err := run(fakeWorkspace{g: shipping(t)}, clicfg.OutputText, Kind("pie"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"pie"`)
+	assert.Empty(t, out)
+}
