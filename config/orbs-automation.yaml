@@ -13,3 +13,9 @@ kind: Stream
 name: orbs-automation
 refs: {project: orbs-automation}
 spec: {scheme: semver, tagPattern: "v*", requiresPrerelease: true, universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: orbs-automation-binary
+refs: {stream: orbs-automation}
+spec: {kind: file, name: gero}
