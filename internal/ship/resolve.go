@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 )
 
@@ -24,7 +25,7 @@ type resolution struct {
 	tags     []git.Tag // the producer's, from the host
 	// committer is who the commits are made as when git's own configuration is not
 	// to decide: the bot's, in CI. Empty leaves it to git.
-	committer    Identity
+	committer    proposal.Identity
 	consumerRefs git.Refs
 	// derived is the companion each virtual Holding has for each release shipped,
 	// found once. It is shared by the copies of the resolution, so a run and its
@@ -146,7 +147,7 @@ func (r resolution) specs(in Input) (selection, error) {
 	if in.Arg == "" && r.followsLines() {
 		return r.eachLine(in)
 	}
-	release, err := ResolveRelease(r.scheme, r.producer.Slug(), r.tags, in.Arg, in.Prerelease, acceptsAll(r.route))
+	release, err := tagscheme.ResolveRelease(r.scheme, r.producer.Slug(), r.tags, in.Arg, in.Prerelease, acceptsAll(r.route))
 	if err != nil {
 		return selection{}, err
 	}
@@ -235,7 +236,7 @@ func (r resolution) eachLine(in Input) (selection, error) {
 		}
 	}
 	for _, line := range names {
-		release, err := ResolveRelease(r.scheme, r.producer.Slug(), r.tags, line, in.Prerelease, acceptsAll(r.route))
+		release, err := tagscheme.ResolveRelease(r.scheme, r.producer.Slug(), r.tags, line, in.Prerelease, acceptsAll(r.route))
 		if err != nil {
 			if sel.named {
 				return selection{}, err

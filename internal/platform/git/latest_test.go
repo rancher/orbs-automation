@@ -70,3 +70,16 @@ func TestLatestNewest(t *testing.T) {
 	assert.Equal(t, pre, Latest{Prerelease: pre}.Newest())
 	assert.Nil(t, Latest{}.Newest())
 }
+
+func TestLatestReleasesOfK3sTakesTheNewestPatchAndTheNewestRespin(t *testing.T) {
+	all := tags(
+		"v1.35.0+k3s1", "v1.35.0+k3s3", "v1.35.9+k3s1", "v1.35.10-rc1+k3s1", "v1.35.10+k3s1", "v1.35.9-rc2+k3s1",
+		"v1.36.0+k3s1", "v1.34.9+k3s2", "v1.34.9+k3s1",
+	)
+
+	assert.Equal(t, tagNamed("v1.35.10+k3s1"), LatestReleases(all, "v1.35.*").Stable, "10 beats 9, and no release candidate wins")
+	assert.Nil(t, LatestReleases(all, "v1.35.*").Prerelease, "an older candidate is history")
+	assert.Equal(t, tagNamed("v1.34.9+k3s2"), LatestReleases(all, "v1.34.*").Stable, "a respin beats the first release of a patch")
+	assert.Equal(t, tagNamed("v1.35.0+k3s3"), LatestReleases(tags("v1.35.0+k3s1", "v1.35.0+k3s3"), "v1.35.*").Stable, "whichever order the tags come in")
+	assert.Equal(t, tagNamed("v1.35.0+k3s3"), LatestReleases(tags("v1.35.0+k3s3", "v1.35.0+k3s1"), "v1.35.*").Stable)
+}

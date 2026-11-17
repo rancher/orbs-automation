@@ -272,9 +272,15 @@ func TestAHoldingRefsWhatItsKindHolds(t *testing.T) {
 	a := doc("Artifact", "a", "{stream: s}", artifactSpec)
 	commit := "  at: {file: f.yaml, key: .a}\n  holds: {kind: commit}\n"
 	branch := "  at: {file: f.yaml, key: .a}\n  holds: {kind: branch}\n"
+	series := "  at: {file: f.yaml, key: .a}\n  holds: {kind: series, form: \"v{major}\"}\n"
 	tests := []struct {
 		name, holding, path, want string
 	}{
+		{"a series with no stream", doc("Holding", "h", "{project: p}", series), "refs.stream", "required"},
+		{"a series with an artifact", doc("Holding", "h", "{project: p, stream: s, artifact: a}", series), "refs.artifact", "series"},
+		{"a series with a from", doc("Holding", "h", "{project: p, stream: s, from: q}", series), "refs.from", "series"},
+		{"a release with a stream", doc("Holding", "h", "{project: p, artifact: a, stream: s}", holdingSpec), "refs.stream", "release"},
+		{"a commit with a stream", doc("Holding", "h", "{project: p, from: q, stream: s}", commit), "refs.stream", "commit"},
 		{"a release with no artifact", doc("Holding", "h", "{project: p}", holdingSpec), "refs.artifact", "required"},
 		{"a release with a from", doc("Holding", "h", "{project: p, artifact: a, from: q}", holdingSpec), "refs.from", "release"},
 		{"a commit with no from", doc("Holding", "h", "{project: p}", commit), "refs.from", "required"},
@@ -289,6 +295,32 @@ func TestAHoldingRefsWhatItsKindHolds(t *testing.T) {
 			assert.True(t, hasSetError(rep, `Holding "h"`, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
 		})
 	}
+}
+
+func TestASeriesHoldingNeedsAStreamWithASeries(t *testing.T) {
+	lines := doc("RancherLines", "rancher", "", "  lines:\n    - id: v2.16\n    - id: v2.15\n")
+	p := doc("Project", "p", "", projectSpec)
+	q := doc("Project", "q", "", "  repo: {name: acme/b}\n")
+	perLine := doc("Stream", "s", "{project: q}", "  lines: [{line: v2.16, series: 9.x}, {line: v2.15, series: 8.x}]\n")
+	universal := doc("Stream", "s", "{project: q}", streamSpec)
+	series := "  at: {file: f.yaml, key: .a}\n  holds: {kind: series, form: \"v{major}\"}\n"
+	h := doc("Holding", "h", "{project: p, stream: s}", series)
+
+	rep := validateSet(t, lines, p, q, perLine, h)
+	assert.Empty(t, rep.Findings, "a series of a stream with series per line is fine")
+
+	rep = validateSet(t, lines, p, q, universal, h)
+	assert.True(t, hasSetError(rep, `Holding "h"`, "refs.stream", "series"), "a universal stream has no series to hold, got %v", rep.Findings)
+
+	rep = validateSet(t, lines, p, doc("Stream", "s", "{project: p}", "  lines: [{line: v2.16, series: 9.x}]\n"), h)
+	assert.True(t, hasSetError(rep, `Holding "h"`, "refs.stream", "own project"), "a project holds nothing of itself, got %v", rep.Findings)
+
+	rep = validateSet(t, lines, p, q, perLine, doc("Holding", "h", "{project: p, stream: s}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: series, form: \"{minor}\"}\n"))
+	assert.True(t, hasSetError(rep, `Holding "h"`, "spec.holds.form", "minor"), "{minor} of a series with no minor, got %v", rep.Findings)
+
+	minorOfV214 := doc("Stream", "s", "{project: q}", "  lines: [{line: v2.16, series: 9.x}, {line: v2.15, series: 7.1.x}]\n")
+	rep = validateSet(t, lines, p, q, minorOfV214, doc("Holding", "h", "{project: p, stream: s}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: series, form: \"{minor}\", lines: {until: v2.15}}\n"))
+	assert.Empty(t, rep.Findings, "a series with no minor is for a line the holding is not for")
 }
 
 func TestAHoldingOfTheRightRefsIsFine(t *testing.T) {
@@ -437,6 +469,27 @@ func TestAModuleNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
 		rep := validateSet(t, append(base, doc("Artifact", "m2", "{stream: s1}", module))...)
 
 		assert.True(t, hasSetError(rep, `Artifact "m2"`, "spec.name", `already an artifact of Stream "s1"`), "%v", rep.Findings)
+	})
+}
+
+func TestAFileNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
+	const file = "  kind: file\n  name: k3s\n"
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Stream", "s1", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec+"  tagPattern: \"w*\"\n"),
+		doc("Artifact", "f1", "{stream: s1}", file),
+	}
+
+	t.Run("one file in the streams of two minors is fine", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "f2", "{stream: s2}", file))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("twice in one stream is not", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "f2", "{stream: s1}", file))...)
+
+		assert.True(t, hasSetError(rep, `Artifact "f2"`, "spec.name", `already an artifact of Stream "s1"`), "%v", rep.Findings)
 	})
 }
 

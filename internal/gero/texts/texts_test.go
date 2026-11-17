@@ -102,3 +102,19 @@ func TestEveryCommitMessageEndsWithTheTrailerAuthorshipLooksFor(t *testing.T) {
 		assert.True(t, ours, "%s: %s", name, why)
 	}
 }
+
+func TestSyncTextsOnlyUseTheirVariablesAndKeepTheTrailers(t *testing.T) {
+	for name, text := range map[string]string{
+		"title": SyncTitle(), "commit message": SyncCommitMessage(), "body": SyncBody(),
+		"step commit message": SyncStepCommitMessage(), "strategy commit message": SyncStrategyCommitMessage(),
+	} {
+		require.NotEmpty(t, text, name)
+		assert.NoError(t, templates.Validate(text, SyncVars), name)
+	}
+	assert.NotContains(t, SyncTitle(), "\n", "a title is one line")
+	for name, text := range map[string]string{"commit": SyncCommitMessage(), "step": SyncStepCommitMessage(), "strategy": SyncStrategyCommitMessage()} {
+		lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+		assert.Equal(t, authorship.Trailer, lines[len(lines)-1], "%s: the trailer block is last, so a later run knows the branch is its own", name)
+	}
+	assert.Contains(t, SyncBody(), "{marker}")
+}

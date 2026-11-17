@@ -3,6 +3,8 @@ package ship
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/proposal"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -125,7 +127,7 @@ func TestShipRunsToTheEndForAnotherTeamsProducerBecauseItSkipsTheStep(t *testing
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultCommitted, onlyResult(t, plan).Status, "the step from the producer was never run")
+	assert.Equal(t, proposal.ResultCommitted, onlyResult(t, plan).Status, "the step from the producer was never run")
 	require.Len(t, plan.Notes, 1)
 	assert.Contains(t, plan.Notes[0], "may be incomplete")
 }
@@ -138,6 +140,6 @@ func TestShipStopsAtAStepFromAProducerTheTeamOwnsThatIsNotBuilt(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status, "what is refused for the team's own producer is only skipped for another team's")
+	assert.Equal(t, proposal.ResultFailed, res.Status, "what is refused for the team's own producer is only skipped for another team's")
 	assert.Contains(t, res.Error, "not supported yet")
 }

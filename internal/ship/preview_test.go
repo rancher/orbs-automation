@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/apis/v1alpha2"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -141,9 +142,9 @@ func TestAPullRequestTitleWithTheVersionOfAPrefixedReleaseHasNoPrefix(t *testing
 func TestRenderPreviewBodyCarriesTheMarker(t *testing.T) {
 	got, err := renderPreview(previewFixture(t))
 	require.NoError(t, err)
-	m, ok := ParseMarker(got.Body)
+	m, ok := proposal.ParseMarker(got.Body)
 	require.True(t, ok)
-	assert.Equal(t, Marker{Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: "release/v2.15", Version: "v0.5.3"}, m)
+	assert.Equal(t, proposal.Marker{Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: "release/v2.15", Version: "v0.5.3"}, m)
 }
 
 func TestRenderPreviewTheDevelopmentBranch(t *testing.T) {

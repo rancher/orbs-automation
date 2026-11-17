@@ -3,7 +3,6 @@ package ship
 import (
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -11,36 +10,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/texts"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
+	"github.com/rancher/orbs-automation/internal/proposal"
 )
-
-// Preview is the text a bump would write: the branch, the PR's title, labels and
-// body, and the commit message. It is rendered from the embedded templates, or
-// the project's own title and branch prefix, so the state check can show exactly
-// what a run would put in the PR before anything is written.
-type Preview struct {
-	Branch string `json:"branch"`
-	// Key is the end of the branch that gero builds (BranchKey), the same for
-	// every actor, which is how another PR of the bump is found.
-	Key           string   `json:"key"`
-	Title         string   `json:"title"`
-	Labels        []string `json:"labels,omitempty"`
-	CommitMessage string   `json:"commitMessage"`
-	Body          string   `json:"body"`
-	// Steps are the steps that run around the write, in the order they run, each
-	// with the commit it makes when it changes files. Whether it does is only known
-	// once it has run, so these are the commits that may be made besides the write's.
-	Steps []StepPreview `json:"steps,omitempty"`
-}
-
-// StepPreview is a step of the bump and the commit it would make.
-type StepPreview struct {
-	Phase string `json:"phase"` // where it runs: preEdit or postEdit
-	Edit  string `json:"edit"`  // the edit it is a step of
-	Run   string `json:"run"`   // the command
-	// BeforeEdit says the step runs before the write, so its commit comes first.
-	BeforeEdit    bool   `json:"beforeEdit,omitempty"`
-	CommitMessage string `json:"commitMessage"`
-}
 
 // previewInput is everything the texts are made from.
 type previewInput struct {
@@ -62,10 +33,10 @@ type previewInput struct {
 // key is what follows it. The title is
 // the project's pullRequests.title, else the default. An unknown placeholder in
 // either is an error, though config validation rejects it sooner.
-func renderPreview(in previewInput) (Preview, error) {
+func renderPreview(in previewInput) (proposal.Preview, error) {
 	prs := in.consumer.PullRequests()
 	tag := in.release.Tag
-	marker := Marker{
+	marker := proposal.Marker{
 		Source: in.producer.Slug(), Consumer: in.consumer.Slug(),
 		Target: in.target.Branch, Version: tag,
 	}
@@ -74,35 +45,35 @@ func renderPreview(in previewInput) (Preview, error) {
 	vars["changes"] = changes(in)
 	vars["marker"] = marker.String()
 
-	prefix := firstNonEmpty(in.userPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
+	prefix := proposal.FirstNonEmpty(in.userPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
 	prefixVars := maps.Clone(vars)
 	delete(prefixVars, "key")
 	renderedPrefix, err := templates.Render(prefix, prefixVars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
+		return proposal.Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
 	}
 	defaultTitle, defaultCommit := texts.DefaultTitle(), texts.CommitMessage()
 	if len(in.pins) > 0 { // lasso goes with wrangler: the title and the commit say so
 		defaultTitle, defaultCommit = texts.DefaultTitleWith(), texts.CommitMessageWith()
 	}
-	titleTemplate := firstNonEmpty(prs.Title, defaultTitle)
+	titleTemplate := proposal.FirstNonEmpty(prs.Title, defaultTitle)
 	title, err := templates.Render(titleTemplate, vars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("title %q: %w", titleTemplate, err)
+		return proposal.Preview{}, fmt.Errorf("title %q: %w", titleTemplate, err)
 	}
 	commit, err := templates.Render(defaultCommit, vars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("commit message: %w", err)
+		return proposal.Preview{}, fmt.Errorf("commit message: %w", err)
 	}
 	body, err := templates.Render(texts.Body(), vars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("body: %w", err)
+		return proposal.Preview{}, fmt.Errorf("body: %w", err)
 	}
 	steps, err := stepPreviews(in)
 	if err != nil {
-		return Preview{}, err
+		return proposal.Preview{}, err
 	}
-	return Preview{
+	return proposal.Preview{
 		Branch: renderedPrefix + vars["key"], Key: vars["key"], Title: title, Labels: prs.Labels,
 		CommitMessage: commit, Body: body, Steps: steps,
 	}, nil
@@ -110,14 +81,14 @@ func renderPreview(in previewInput) (Preview, error) {
 
 // stepPreviews is the commit each step would make, if it changes files, with the
 // message a run gives it (stepMessage), so the preview shows what will be written.
-func stepPreviews(in previewInput) ([]StepPreview, error) {
-	var out []StepPreview
+func stepPreviews(in previewInput) ([]proposal.StepPreview, error) {
+	var out []proposal.StepPreview
 	for _, ref := range in.steps {
 		message, err := stepMessage(in)(bump.Unit{Kind: bump.UnitStep, Phase: ref.Phase, Edit: ref.Edit, Index: ref.Index, Run: ref.Step.Run})
 		if err != nil {
 			return nil, fmt.Errorf("commit message for %s: %w", strings.Join(ref.Step.Run, " "), err)
 		}
-		out = append(out, StepPreview{
+		out = append(out, proposal.StepPreview{
 			Phase: string(ref.Phase), Edit: ref.Edit, Run: strings.Join(ref.Step.Run, " "),
 			BeforeEdit: ref.Phase == bump.PreEdit, CommitMessage: message,
 		})
@@ -151,7 +122,7 @@ func textVars(in previewInput) map[string]string {
 		"branch":           strings.TrimPrefix(in.target.Branch, "release/"),
 		"targetBranch":     in.target.Branch,
 		"consumer":         in.consumer.Slug(),
-		"key":              BranchKey(in.producer.Name(), in.release.Tag, in.target.Branch),
+		"key":              proposal.BranchKey(in.producer.Name(), in.release.Tag, in.target.Branch),
 		"sourceReleaseURL": "https://github.com/" + in.producer.Slug() + "/releases/tag/" + in.release.Tag,
 		"file":             changedFiles(in.checks),
 		"from":             joined(in.checks, func(c bump.HoldingCheck) string { return c.Current }),
@@ -173,18 +144,6 @@ func stepMessage(in previewInput) func(bump.Unit) (string, error) {
 	}
 }
 
-// blankLines is two or more blank lines in a row.
-var blankLines = regexp.MustCompile(`\n{3,}`)
-
-// bullets lists changes, one bullet each.
-func bullets(changes []bump.Change) string {
-	lines := make([]string, len(changes))
-	for i, c := range changes {
-		lines[i] = "- " + c.Description
-	}
-	return strings.Join(lines, "\n")
-}
-
 // strategyMessage returns the function that makes the commit message of a
 // strategy that changed files: which strategy ran and what it changed, from the
 // embedded template.
@@ -193,13 +152,13 @@ func strategyMessage(in previewInput) func(bump.Unit) (string, error) {
 		vars := textVars(in)
 		vars["strategy"] = u.Strategy
 		vars["edit"] = u.Edit
-		vars["changes"] = bullets(u.Changes)
+		vars["changes"] = proposal.Bullets(u.Changes)
 		msg, err := templates.Render(texts.StrategyCommitMessage(), vars)
 		if err != nil {
 			return "", err
 		}
 		// A strategy that names no change leaves two blank lines where the list was.
-		return blankLines.ReplaceAllString(msg, "\n\n"), nil
+		return proposal.CollapseBlankLines(msg), nil
 	}
 }
 
@@ -264,13 +223,4 @@ func managedByWords(p *chain.Project) string {
 		return "which " + team + " manages"
 	}
 	return "which no team names"
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }

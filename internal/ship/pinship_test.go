@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,9 +34,9 @@ func (w pinWorkspace) UpstreamFile(c context.Context, slug, ref, path string) ([
 	return w.host.UpstreamFile(c, slug, ref, path)
 }
 
-func (pinWorkspace) CloneDir(string) (string, error)  { return "", nil }
-func (pinWorkspace) Remote(string) (string, error)    { return "upstream", nil }
-func (pinWorkspace) PushSettings(string) PushSettings { return PushSettings{} }
+func (pinWorkspace) CloneDir(string) (string, error)           { return "", nil }
+func (pinWorkspace) Remote(string) (string, error)             { return "upstream", nil }
+func (pinWorkspace) PushSettings(string) proposal.PushSettings { return proposal.PushSettings{} }
 
 // broGoMod is bro's go.mod holding wrangler at v1.7.1 and lasso at the version given.
 func broGoMod(la string) string {

@@ -15,6 +15,7 @@ func TestTheNamesTheDomainUsesAreTheOnesTheConfigAccepts(t *testing.T) {
 		v1alpha2.LayoutSingle:            chain.LayoutSingle,
 		v1alpha2.LayoutPerLine:           chain.LayoutPerLine,
 		v1alpha2.HoldsRelease:            chain.HoldsRelease,
+		v1alpha2.HoldsSeries:             chain.HoldsSeries,
 		v1alpha2.AcceptAll:               chain.AcceptAll,
 		v1alpha2.RegistryDockerHub:       chain.RegistryDockerHub,
 		v1alpha2.RegistryPrimeStaging:    chain.RegistryPrimeStaging,

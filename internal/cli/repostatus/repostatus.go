@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/releasetag"
+	"github.com/rancher/orbs-automation/internal/reposync"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -72,6 +73,9 @@ type Status struct {
 	// left out for a project with none, or when the options skip them.
 	Consumers []ship.ConsumerHoldings `json:"consumers,omitempty"`
 	Sources   []ship.SourceHoldings   `json:"sources,omitempty"`
+	// Series is what this project holds of the series of a stream, which names no
+	// release, against the series its stream has for each line.
+	Series []reposync.SeriesHolding `json:"series,omitempty"`
 	// TraceError is why the consumers or the sources could not be worked out at all,
 	// such as an update method that is not usable.
 	TraceError string `json:"traceError,omitempty"`
@@ -219,6 +223,9 @@ func trace(ctx context.Context, ws ship.Reader, p *chain.Project, opts Options, 
 		st.Sources, err = ship.Sources(ctx, ws, p)
 		note(err)
 	}
+	var err error
+	st.Series, err = reposync.SeriesHoldings(ctx, ws, p)
+	note(err)
 	st.TraceError = strings.Join(problems, "; ")
 }
 
@@ -471,10 +478,56 @@ func renderText(st Status, view *style.Renderer) string {
 	for _, c := range st.Consumers {
 		renderHoldings(&b, view, heading("Consumers", c.Name, c.Consumer, c.Stream, several(st.Consumers, c.Consumer, func(h ship.ConsumerHoldings) string { return h.Consumer })), c.Error, c.Targets)
 	}
+	for _, sh := range st.Series {
+		renderSeries(&b, view, sh)
+	}
 	if st.TraceError != "" {
 		b.WriteString("\n" + view.Style(style.Warn, "could not trace: "+st.TraceError) + "\n")
 	}
 	return b.String()
+}
+
+// renderSeries is the section of one series holding: what each line's branch holds
+// against the series its stream has for the line, and the pull request that would
+// fix a difference.
+func renderSeries(b *strings.Builder, view *style.Renderer, sh reposync.SeriesHolding) {
+	b.WriteString("\n" + view.Style(style.Heading, fmt.Sprintf("Series: %s, stream %s (%s)", sh.Name, sh.Stream, sh.Producer)) + "\n")
+	table := [][]string{heads(view, true, "BRANCH", "HOLDS", "WANTS", "STATUS")}
+	for _, l := range sh.Lines {
+		table = append(table, row(true, l.Line, []string{
+			dashed(view, orDash(l.Branch)), dashed(view, orDash(l.Current)), dashed(view, orDash(l.Want)), styledBy(view, holdRole, seriesStatusText(l)),
+		}))
+	}
+	b.WriteString(ui.Align(table, view.Width))
+	for _, l := range sh.Lines {
+		if l.Suggest != "" {
+			b.WriteString("  " + view.Style(style.Dim, l.Line+": ") + l.Suggest + "\n")
+		}
+	}
+}
+
+// seriesStatusText says how one line stands: current, a difference that the
+// warning series-differs names (or the reason a document gives for it), or why the
+// branch could not be read.
+func seriesStatusText(l reposync.SeriesLine) string {
+	switch {
+	case l.Error != "":
+		return "unreadable: " + l.Error
+	case l.UpToDate:
+		return "current"
+	case l.Left != "":
+		return "differs, left alone: " + l.Left
+	case l.Acknowledged != "":
+		return "differs, acknowledged: " + l.Acknowledged
+	}
+	return "differs [series-differs]"
+}
+
+func orDash(text string) string {
+	if text == "" {
+		return "-"
+	}
+	return text
 }
 
 // several says whether a project is in the list more than once: it is taken from
@@ -634,7 +687,7 @@ func localRole(text string) (style.Role, bool) {
 		return style.OK, true
 	case strings.HasPrefix(text, "diverged"), strings.HasPrefix(text, "unreadable"):
 		return style.Error, true
-	case strings.HasPrefix(text, "behind"), strings.HasPrefix(text, "ahead"), text == "no local branch":
+	case strings.HasPrefix(text, "behind"), strings.HasPrefix(text, "ahead"), strings.HasPrefix(text, "differs"), text == "no local branch":
 		return style.Warn, true
 	case text == "-":
 		return style.Dim, true

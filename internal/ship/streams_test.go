@@ -3,6 +3,8 @@ package ship
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/proposal"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -111,6 +113,6 @@ func TestShipWritesTheStreamTheConsumerHoldsForTheLineGivenAsTheArgument(t *test
 	require.Len(t, plan.Releases, 1)
 	assert.Equal(t, "v0.5.3", plan.Releases[0].Tag, "the latest stable tag of the stream held for v2.15, and not of the other")
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultCommitted, res.Status)
+	assert.Equal(t, proposal.ResultCommitted, res.Status)
 	assert.Equal(t, newImage, runGit(t, clone, "show", res.Branch+":build.yaml")+"\n")
 }

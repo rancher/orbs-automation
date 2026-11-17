@@ -5,16 +5,18 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/proposal"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var dan = Identity{Name: "Dan Pock", Email: "dan@example.com"}
+var dan = proposal.Identity{Name: "Dan Pock", Email: "dan@example.com"}
 
 // identifying is an Identify that returns id, and says which clone it was asked
 // about.
-func identifying(id Identity, asked *string) func(context.Context, string) (Identity, error) {
-	return func(_ context.Context, clone string) (Identity, error) {
+func identifying(id proposal.Identity, asked *string) func(context.Context, string) (proposal.Identity, error) {
+	return func(_ context.Context, clone string) (proposal.Identity, error) {
 		if asked != nil {
 			*asked = clone
 		}
@@ -32,7 +34,7 @@ func TestShipSaysWhoItActsAsBeforeAnyWorkIsDone(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, plan.Actor)
-	assert.Equal(t, Actor{Identity: dan}, *plan.Actor, "not signing, and no GitHub login as nothing is opened")
+	assert.Equal(t, proposal.Actor{Identity: dan}, *plan.Actor, "not signing, and no GitHub login as nothing is opened")
 	assert.Equal(t, clone, asked, "asked about the clone the commits are made in, whose own config may differ")
 	kinds := rec.kinds()
 	actor, started := indexOf(kinds, EventActor), indexOf(kinds, EventTargetStarted)
@@ -58,8 +60,8 @@ func TestShipSaysWhetherTheCommitsAreSignedAndWhichAccountOpensThePRs(t *testing
 
 func TestShipFailsBeforeWritingAnythingWhenItCannotSayWhoItIs(t *testing.T) {
 	ws, clone, ex := newShip(t)
-	ex.Identify = func(context.Context, string) (Identity, error) {
-		return Identity{}, errors.New("git has no user.email")
+	ex.Identify = func(context.Context, string) (proposal.Identity, error) {
+		return proposal.Identity{}, errors.New("git has no user.email")
 	}
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
@@ -79,7 +81,7 @@ func TestShipDoesNotAskWhoItIsWhenThereIsNothingToDo(t *testing.T) {
 	put(t, ws.up, "build.yaml", newImage)
 	runGit(t, ws.up, "commit", "--quiet", "-am", "already there")
 	asked := false
-	ex.Identify = func(context.Context, string) (Identity, error) { asked = true; return dan, nil }
+	ex.Identify = func(context.Context, string) (proposal.Identity, error) { asked = true; return dan, nil }
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
@@ -92,7 +94,7 @@ func TestShipDoesNotAskWhoItIsWhenThereIsNothingToDo(t *testing.T) {
 func TestShipInCICommitsAsTheBotNotAsWhateverGitHas(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	runGit(t, clone, "config", "user.email", "someone@example.com")
-	bot := Identity{Name: "rancher-bot[bot]", Email: "123+rancher-bot[bot]@users.noreply.github.com"}
+	bot := proposal.Identity{Name: "rancher-bot[bot]", Email: "123+rancher-bot[bot]@users.noreply.github.com"}
 	ex.Identify = identifying(bot, nil)
 	in := shipIn("v2.15")
 	in.CI = true
@@ -100,7 +102,7 @@ func TestShipInCICommitsAsTheBotNotAsWhateverGitHas(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	require.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+	require.Equal(t, proposal.ResultCommitted, onlyResult(t, plan).Status)
 	assert.Equal(t, bot.Email, runGit(t, clone, "log", "-1", "--format=%ae", botV215))
 	assert.Equal(t, bot.Name, runGit(t, clone, "log", "-1", "--format=%an", botV215))
 	assert.Equal(t, bot.Email, runGit(t, clone, "log", "-1", "--format=%ce", botV215), "the committer too")
@@ -109,12 +111,12 @@ func TestShipInCICommitsAsTheBotNotAsWhateverGitHas(t *testing.T) {
 func TestShipOnAWorkstationLeavesTheAuthorToGit(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	runGit(t, clone, "config", "user.email", "mine@example.com")
-	ex.Identify = identifying(Identity{Name: "Someone Else", Email: "other@example.com"}, nil)
+	ex.Identify = identifying(proposal.Identity{Name: "Someone Else", Email: "other@example.com"}, nil)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
 	require.NoError(t, err)
-	require.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+	require.Equal(t, proposal.ResultCommitted, onlyResult(t, plan).Status)
 	assert.Equal(t, "mine@example.com", runGit(t, clone, "log", "-1", "--format=%ae", botV215),
 		"what is shown is what git reads in the clone, so there is nothing to override")
 }

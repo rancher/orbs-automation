@@ -232,7 +232,7 @@ Table tests with a fake GitHub client, a local bare repository as the remote, an
 
 * A way to name a step's commit, or fold it into the previous one, which is the first knob to add if a project needs it; built only if someone asks.
 * `gero ci:ship` ([CI_SHIP](CI_SHIP.md)).
-* Closing superseded PRs, the plan and the publish steps as tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/ship`, and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
+* Closing superseded PRs, the plan and the publish steps as tasks. Making the branch is the `createbranch` task, the edit and its commits are `bumpcommit`, pushing is `pushbranch` and opening and labelling the PR is `createpr`; the other steps work today inside `internal/proposal`, the conveyor that `ship` shares with `repo sync` ([PROPOSAL](PROPOSAL.md)), and moving each to `internal/task/` changes no behavior and none of this spec, apart from this list ([PROJECT_LAYOUT](PROJECT_LAYOUT.md#tasks-single-actions-that-compose)).
 * `from: producer` and `from: central` for steps, which need the producer's checkout and the bundle.
 * `--line` across lines that are held on different streams (`--line v2.15,v2.16` for wrangler into BRO): it is refused today, since one run ships one release, and fanning out needs a resolution of each route of its own.
 * A warning on `gero ship lasso` when its tag is below what the consumer's wrangler requires, which needs the go.mod of the wrangler the consumer holds.

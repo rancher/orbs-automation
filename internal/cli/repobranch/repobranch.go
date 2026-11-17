@@ -13,7 +13,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
-	"github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -70,7 +70,7 @@ func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts O
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	opts.Style = style.New(s.Terminal)
-	return run(ctx, w, workspace.Open(s, cwd), ship.GitCLI{}, tmp, s.Output, s.DryRun, opts)
+	return run(ctx, w, workspace.Open(s, cwd), proposal.GitCLI{}, tmp, s.Output, s.DryRun, opts)
 }
 
 func run(ctx context.Context, w io.Writer, ws Workspace, g createbranch.Git, tmp, format string, dryRun bool, opts Options) error {

@@ -76,7 +76,7 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 	var errs []error
 	seen := map[*chain.Edit]bool{}
 	for _, h := range g.Holdings() {
-		if h.Kind() != chain.HoldsRelease {
+		if h.Kind() != chain.HoldsRelease && h.Kind() != chain.HoldsSeries {
 			continue
 		}
 		for _, at := range h.Locations() {
@@ -123,6 +123,57 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 	return nil
 }
 
+// ErrNoEdit is returned for a pulled holding that no Edit follows: nothing writes a
+// holding until an Edit says what a write of it takes.
+var ErrNoEdit = errors.New("no Edit follows the holding")
+
+// PullRoute is the route that writes holdings of one holder that are brought in line
+// from where they hold, and not shipped from a producer's release: a series, and a release
+// that the caller chose from the producer's tags (Target.Pulled). A holding that pins
+// another Artifact is not pulled: its companion comes from a go.mod, and is ship's.
+// The holdings may be of several producers, so
+// the route has none of its own, and one run writes them all and runs the Edits that
+// follow them once. A pulled holding is no route of the chain, and this is the one way
+// to run it. It is an error, ErrNoEdit, when no Edit follows a holding, and when a
+// holding or its edits cannot be used, or the holdings are not all of one holder.
+func (e *Engine) PullRoute(holdings ...*chain.Holding) (Route, error) {
+	if len(holdings) == 0 {
+		return Route{}, errors.New("no holding to write")
+	}
+	var producer *chain.Project
+	for i, h := range holdings {
+		switch {
+		case h.Virtual():
+			return Route{}, fmt.Errorf("Holding %q is virtual: its release is the one the pin it follows resolves, which ship writes", h.Name())
+		case h.Kind() == chain.HoldsRelease && len(h.Pinned()) > 0:
+			return Route{}, fmt.Errorf("Holding %q pins another Artifact, whose release comes from a go.mod: ship writes it", h.Name())
+		case h.Kind() != chain.HoldsSeries && h.Kind() != chain.HoldsRelease:
+			return Route{}, fmt.Errorf("Holding %q holds a %s, which is not pulled", h.Name(), h.Kind())
+		case h.Holder() != holdings[0].Holder():
+			return Route{}, fmt.Errorf("Holding %q is in %s, not %s like %q", h.Name(), h.Holder().Slug(), holdings[0].Holder().Slug(), holdings[0].Name())
+		case len(h.Edits()) == 0:
+			return Route{}, fmt.Errorf("%w: Holding %q is only read until one does", ErrNoEdit, h.Name())
+		case e.unusable[h]:
+			return Route{}, fmt.Errorf("Holding %q cannot be written: its format or an edit that follows it is not usable", h.Name())
+		}
+		if i == 0 {
+			producer = h.Producer()
+		} else if producer != h.Producer() {
+			producer = nil
+		}
+	}
+	return Route{Route: chain.Route{Producer: producer, Consumer: holdings[0].Holder(), Holdings: holdings}, engine: e, pull: true}, nil
+}
+
+// producerSlug is the repository of the route's producer, and empty for a route of
+// holdings of several.
+func (r Route) producerSlug() string {
+	if r.Producer == nil {
+		return ""
+	}
+	return r.Producer.Slug()
+}
+
 // Route is one way out of a producer: the release holdings a consumer has of it, as
 // the chain says (chain.Route), and what the engine adds to run them.
 type Route struct {
@@ -136,6 +187,7 @@ type Route struct {
 	// runner, so the engine reads no host. Nil means no list: such a go.mod is an error.
 	GoReleases GoReleases
 	engine     *Engine
+	pull       bool // a route of PullRoute: its release holdings are written with Target.Pulled
 }
 
 // GoReleases is the list of Go releases, as far as the engine needs it.
@@ -299,6 +351,10 @@ type Target struct {
 	// pinned module that the pinning release requires, which the caller derived from
 	// its file. The engine reads no host. A virtual Holding with no entry is an error.
 	Pinned map[*chain.Holding]string
+	// Pulled is the release each release holding of a pull route is written with, which
+	// the caller chose from the producer's tags: a route that pulls ships no release of
+	// its own. A pulled holding with no entry is an error.
+	Pulled map[*chain.Holding]Release
 }
 
 // releaseOf is the release a holding of the target holds: the tag of the run for a
@@ -306,7 +362,17 @@ type Target struct {
 // Artifact that follows the route's holding, the tag that was derived for it. A
 // virtual holding of the route's own producer is shipped as any other: when lasso is
 // shipped, what its pins make in a consumer is written with the tag of the run.
-func (t Target) releaseOf(producer *chain.Project, h *chain.Holding, tag, commit string) (Release, error) {
+func (t Target) releaseOf(producer *chain.Project, pull bool, h *chain.Holding, tag, commit string) (Release, error) {
+	if h.Kind() == chain.HoldsSeries {
+		return Release{}, nil // a series holds no release: its value is the stream's series for the line
+	}
+	if pull {
+		rel, ok := t.Pulled[h]
+		if !ok {
+			return Release{}, fmt.Errorf("Holding %q is pulled and no release was chosen for it", h.Name())
+		}
+		return rel, nil
+	}
 	if !h.Virtual() || h.Producer() == producer {
 		return ReleaseOf(h, tag, commit)
 	}
@@ -375,7 +441,7 @@ func (r Route) TargetsFor(line string) ([]Target, error) {
 	}
 	if noLine {
 		return nil, fmt.Errorf("%w: the release is in none of the release lines of %s, so there is no branch to follow it to",
-			ErrNoBranches, r.Producer.Slug())
+			ErrNoBranches, r.producerSlug())
 	}
 	if line != "" {
 		return nil, fmt.Errorf("%w: %s has no branch for the release line %s, which the release is in", ErrNoBranches, r.Consumer.Slug(), line)
@@ -530,7 +596,7 @@ type HoldingCheck struct {
 func (r Route) Check(ctx context.Context, src Tree, t Target, tag, commit string) ([]HoldingCheck, error) {
 	var out []HoldingCheck
 	for _, h := range r.holdingsOf(t) {
-		rel, err := t.releaseOf(r.Producer, h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, r.pull, h, tag, commit)
 		if err != nil {
 			return nil, err
 		}
@@ -567,7 +633,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	maps.Copy(env.Env, edits)
 	maps.Copy(env.Env, map[string]string{
 		"GERO_TAG": tag, "GERO_VERSION": newRelease(tag, pattern, "", "").Version, "GERO_TARGET_BRANCH": t.Branch,
-		"GERO_SOURCE_REPO": r.Producer.Slug(),
+		"GERO_SOURCE_REPO": r.producerSlug(),
 	})
 	checkpoint := func(u Unit) error {
 		if after == nil {
@@ -589,7 +655,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 	var res Result
 	written := map[*chain.Holding][]Change{} // what each holding wrote
 	for _, h := range holdings {
-		rel, err := t.releaseOf(r.Producer, h, tag, commit)
+		rel, err := t.releaseOf(r.Producer, r.pull, h, tag, commit)
 		if err != nil {
 			return res, err
 		}
@@ -611,7 +677,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 		}
 		got, err := applier.Apply(ctx, tree, StrategyInput{
 			Edit: ed.Name(), Producer: r.Producer, Consumer: r.Consumer,
-			Release: newRelease(tag, tagPatternOf(holdings[0]), r.Producer.Slug(), commit),
+			Release: newRelease(tag, tagPatternOf(holdings[0]), r.producerSlug(), commit),
 			Line:    t.Line, Branch: t.Branch,
 			Dir: dir, Runner: withEnv(runner, edits), Changes: changesOf(ed, written),
 		})
@@ -639,7 +705,7 @@ func (r Route) Run(ctx context.Context, tree WritableTree, runner StepRunner, t 
 func (r Route) TargetsOn(line string) ([]Target, error) {
 	targets := r.targetsOnLine(line, r.Holdings)
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("%w: %s has no branch for the release line %s that a holding of %s is for", ErrNoBranches, r.Consumer.Slug(), line, r.Producer.Slug())
+		return nil, fmt.Errorf("%w: %s has no branch for the release line %s that a holding of %s is for", ErrNoBranches, r.Consumer.Slug(), line, r.producerSlug())
 	}
 	return targets, nil
 }

@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# ob-charts-tool: owned, a CLI with a Go sub-package, helmtools, tagged on its own (helmtools/v0.1.2). Two streams, as in
+# the monorepo example: the tool's plain v* tags, and the helmtools sub-tags. Neither is described as held yet.
+apiVersion: gero/v1alpha2
+kind: Project
+name: ob-charts-tool
+spec:
+  repo: {name: rancher/ob-charts-tool, managedBy: orbs}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: ob-charts-tool
+refs: {project: ob-charts-tool}
+spec: {scheme: semver, tagPattern: "v*", universal: true}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: ob-charts-tool-helmtools
+refs: {project: ob-charts-tool}
+spec: {scheme: semver, tagPattern: "helmtools/v*", universal: true}

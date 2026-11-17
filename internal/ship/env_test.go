@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -142,13 +143,13 @@ func TestShipRunsTheStepsInTheToolchainTheBranchPins(t *testing.T) {
 	ws.links[0].Post = []stepSpec{{Run: "regen"}}
 	ws.links[0].Env = "    GOTOOLCHAIN: \"{goToolchain}\"\n"
 	rec := &envRecorder{}
-	ex := &Executor{Git: GitCLI{}, Runner: rec, TempDir: t.TempDir()}
+	ex := &proposal.Executor{Git: proposal.GitCLI{}, Runner: rec, TempDir: t.TempDir()}
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, map[string]string{"GOTOOLCHAIN": "go1.26.10"}, plan.Targets[0].Env)
-	assert.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultCommitted, onlyResult(t, plan).Status)
 	require.Len(t, rec.runs, 1)
 	assert.Equal(t, "regen", rec.runs[0])
 	assert.Equal(t, "go1.26.10", rec.envs[0]["GOTOOLCHAIN"], "the step ran in the toolchain the branch pins, whatever the engineer's Go is")

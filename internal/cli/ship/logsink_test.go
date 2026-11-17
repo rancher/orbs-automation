@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/stretchr/testify/assert"
@@ -45,9 +46,9 @@ func TestLogSinkRecordsEachEventWithItsAttributes(t *testing.T) {
 		domain.Event{Kind: domain.EventResolved, Plan: &header},
 		domain.Event{Kind: domain.EventTargetChecked, Branch: "release/v2.15", Target: &target},
 		domain.Event{Kind: domain.EventImagesChecked, Images: &registry.Report{Rows: []registry.Row{{Status: "found"}}}},
-		domain.Event{Kind: domain.EventTargetStarted, Branch: "release/v2.15", Place: domain.Worktree, Reason: "a dry run never moves your checkout"},
-		domain.Event{Kind: domain.EventCommit, Branch: "release/v2.15", Commit: &domain.CommitInfo{Hash: "abcdef0123", Subject: "Update"}},
-		domain.Event{Kind: domain.EventTargetDone, Branch: "release/v2.15", Result: &domain.TargetResult{Status: domain.ResultCommitted, Branch: "bot/x"}},
+		domain.Event{Kind: domain.EventTargetStarted, Branch: "release/v2.15", Place: proposal.Worktree, Reason: "a dry run never moves your checkout"},
+		domain.Event{Kind: domain.EventCommit, Branch: "release/v2.15", Commit: &proposal.CommitInfo{Hash: "abcdef0123", Subject: "Update"}},
+		domain.Event{Kind: domain.EventTargetDone, Branch: "release/v2.15", Result: &proposal.TargetResult{Status: proposal.ResultCommitted, Branch: "bot/x"}},
 		domain.Event{Kind: domain.EventDone, Plan: &p},
 	)
 
@@ -83,7 +84,7 @@ func TestLogSinkRecordsEachEventWithItsAttributes(t *testing.T) {
 func TestLogSinkAFailedTargetIsAWarningWithTheError(t *testing.T) {
 	recs := logged(t, slog.LevelInfo, domain.Event{
 		Kind: domain.EventTargetDone, Branch: "release/v2.15",
-		Result: &domain.TargetResult{Status: domain.ResultFailed, Error: "method postEdit[0] ./gen: exit status 1"},
+		Result: &proposal.TargetResult{Status: proposal.ResultFailed, Error: "method postEdit[0] ./gen: exit status 1"},
 	})
 
 	require.Len(t, recs, 1)
@@ -143,12 +144,12 @@ func TestSinksSendEachEventToEverySinkInOrderAndSkipNil(t *testing.T) {
 
 func TestLogSinkRecordsTheDecisionAndEachStepOfPublishing(t *testing.T) {
 	recs := logged(t, slog.LevelInfo,
-		domain.Event{Kind: domain.EventDecided, Branch: "release/v2.15", Decision: &domain.Publish{
-			Action: domain.PublishCreate, Supersede: []pulls.PR{{Number: 101}, {Number: 90}},
+		domain.Event{Kind: domain.EventDecided, Branch: "release/v2.15", Decision: &proposal.Decision{
+			Action: proposal.PublishCreate, Supersede: []pulls.PR{{Number: 101}, {Number: 90}},
 		}},
 		domain.Event{Kind: domain.EventPushed, Branch: "release/v2.15", Remote: "origin"},
-		domain.Event{Kind: domain.EventPROpened, Branch: "release/v2.15", PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}},
-		domain.Event{Kind: domain.EventSuperseded, Branch: "release/v2.15", PR: &domain.PRRef{Number: 101}},
+		domain.Event{Kind: domain.EventPROpened, Branch: "release/v2.15", PR: &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}},
+		domain.Event{Kind: domain.EventSuperseded, Branch: "release/v2.15", PR: &proposal.PRRef{Number: 101}},
 	)
 
 	require.Len(t, recs, 4)
@@ -169,8 +170,8 @@ func TestLogSinkRecordsTheDecisionAndEachStepOfPublishing(t *testing.T) {
 }
 
 func TestLogSinkABlockedDecisionIsAWarning(t *testing.T) {
-	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventDecided, Branch: "release/v2.15", Decision: &domain.Publish{
-		Action: domain.PublishBlocked, Newer: &pulls.PR{Number: 110},
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventDecided, Branch: "release/v2.15", Decision: &proposal.Decision{
+		Action: proposal.PublishBlocked, Newer: &pulls.PR{Number: 110},
 	}})
 
 	require.Len(t, recs, 1)
@@ -180,8 +181,8 @@ func TestLogSinkABlockedDecisionIsAWarning(t *testing.T) {
 }
 
 func TestLogSinkATargetDoneRecordsThePRAndTheWarnings(t *testing.T) {
-	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventTargetDone, Branch: "release/v2.15", Result: &domain.TargetResult{
-		Status: domain.ResultOpened, Branch: "bot/x", PR: &domain.PRRef{Number: 104}, Warnings: []string{"a", "b"},
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventTargetDone, Branch: "release/v2.15", Result: &proposal.TargetResult{
+		Status: proposal.ResultOpened, Branch: "bot/x", PR: &proposal.PRRef{Number: 104}, Warnings: []string{"a", "b"},
 	}})
 
 	require.Len(t, recs, 1)
@@ -190,7 +191,7 @@ func TestLogSinkATargetDoneRecordsThePRAndTheWarnings(t *testing.T) {
 }
 
 func TestLogSinkRecordsARefresh(t *testing.T) {
-	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventRefreshed, Branch: "release/v2.15", PR: &domain.PRRef{Number: 104, URL: "u"}})
+	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventRefreshed, Branch: "release/v2.15", PR: &proposal.PRRef{Number: 104, URL: "u"}})
 
 	require.Len(t, recs, 1)
 	assert.Equal(t, "refreshed", recs[0]["msg"])
@@ -199,7 +200,7 @@ func TestLogSinkRecordsARefresh(t *testing.T) {
 }
 
 func TestLogSinkRecordsWhoTheRunActsAs(t *testing.T) {
-	a := &domain.Actor{Identity: domain.Identity{Name: "Dan Pock", Email: "dan@example.com"}, Login: "danpock", Signing: true}
+	a := &proposal.Actor{Identity: proposal.Identity{Name: "Dan Pock", Email: "dan@example.com"}, Login: "danpock", Signing: true}
 
 	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventActor, Actor: a})
 
@@ -211,7 +212,7 @@ func TestLogSinkRecordsWhoTheRunActsAs(t *testing.T) {
 }
 
 func TestLogSinkRecordsHowManyFilesACommitChanged(t *testing.T) {
-	c := &domain.CommitInfo{Hash: "abcdef0123", Subject: "Update", Files: []string{"build.yaml", "go.mod"}}
+	c := &proposal.CommitInfo{Hash: "abcdef0123", Subject: "Update", Files: []string{"build.yaml", "go.mod"}}
 
 	recs := logged(t, slog.LevelInfo, domain.Event{Kind: domain.EventCommit, Branch: "release/v2.15", Commit: c})
 

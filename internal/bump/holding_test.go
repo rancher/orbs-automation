@@ -620,3 +620,160 @@ func TestAHoldingInTheRegexFormatThatMatchesNothingIsAnErrorNamingThePattern(t *
 	assert.Contains(t, err.Error(), "charts/values.yaml")
 	assert.Contains(t, err.Error(), "matches nowhere")
 }
+
+// seriesHolding is a consumer, perLine, that holds the series of a stream: build.yaml
+// says kuberlrVersion in the form given, for the lines the stream has a series for.
+func seriesHolding(t *testing.T, form string, lines ...string) *chain.Holding {
+	t.Helper()
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14"),
+		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
+		chaintest.Doc("Stream", "prod", "{project: prod}", "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n    - {line: v2.14, series: \"7.1.x\"}\n"),
+		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: rel-v2.15}, {line: v2.14, branch: rel-v2.14}]\n"),
+		chaintest.Doc("Holding", "h", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: kuberlrVersion}\n  holds: {kind: series, form: \""+form+"\""+strings.Join(lines, "")+"}\n"),
+	)
+	return g.Holdings()[0]
+}
+
+func TestSeriesFormOfIsTheFormRenderedForTheSeriesOfTheLine(t *testing.T) {
+	for _, tt := range []struct{ form, line, lines, want string }{
+		{"v{major}", "v2.16", "", "v9"},
+		{"v{major}", "v2.15", "", "v8"},
+		{"{series}", "v2.16", "", "9.x"},
+		{"v{minor}", "v2.14", ", lines: {until: v2.14}", "v7.1"},
+	} {
+		got, err := SeriesFormOf(seriesHolding(t, tt.form, tt.lines), tt.line)
+
+		require.NoError(t, err, tt.form)
+		assert.Equal(t, tt.want, got, "%s for %s", tt.form, tt.line)
+	}
+}
+
+func TestSeriesFormOfALineWithNoSeriesOrNoMinorIsAnError(t *testing.T) {
+	_, err := SeriesFormOf(seriesHolding(t, "v{major}"), "v2.13")
+	require.ErrorContains(t, err, "v2.13")
+
+	// the holding is for v2.14 and older, so v2.16 is a line it is asked about by mistake
+	_, err = SeriesFormOf(seriesHolding(t, "{minor}", ", lines: {until: v2.14}"), "v2.16")
+	require.ErrorContains(t, err, "minor")
+}
+
+func TestCheckHoldingOfASeriesSaysWhatIsHeldAndWhatTheLineWants(t *testing.T) {
+	h := seriesHolding(t, "v{major}")
+
+	got, err := CheckHolding(bg, files{"build.yaml": "kuberlrVersion: v9\n"}, h, "v2.16", "main", Release{})
+	require.NoError(t, err)
+	assert.True(t, got.UpToDate)
+	assert.Equal(t, "v9", got.Want)
+	assert.Equal(t, "v9", got.Current)
+
+	got, err = CheckHolding(bg, files{"build.yaml": "kuberlrVersion: v9\n"}, h, "v2.15", "rel-v2.15", Release{})
+	require.NoError(t, err)
+	assert.False(t, got.UpToDate, "v2.15 wants 8.x and holds 9")
+	assert.Equal(t, "v8", got.Want)
+	require.Len(t, got.Changes(), 1)
+	assert.Equal(t, "Updated `kuberlrVersion` in `build.yaml` from `v9` to `v8`", got.Changes()[0].Description)
+}
+
+func TestApplyHoldingOfASeriesWritesOnlyWhenTheSeriesIsNotHeld(t *testing.T) {
+	h := seriesHolding(t, "v{major}")
+	tree := files{"build.yaml": "kuberlrVersion: v9 # keep\nother: 1\n"}
+
+	same, err := ApplyHolding(bg, tree, h, "v2.16", "main", Release{})
+	require.NoError(t, err)
+	assert.False(t, same.Changed, "v9 is the series of v2.16: a new patch of it changes nothing")
+
+	got, err := ApplyHolding(bg, tree, h, "v2.15", "rel-v2.15", Release{})
+	require.NoError(t, err)
+	assert.True(t, got.Changed)
+	assert.Equal(t, "kuberlrVersion: v8 # keep\nother: 1\n", tree["build.yaml"])
+}
+
+// seriesEngine is a consumer, perLine, that holds the series of a stream, with
+// the extra documents (an Edit) added.
+func seriesEngine(t *testing.T, extra ...string) (*Engine, *chain.Holding) {
+	t.Helper()
+	docs := append([]string{
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
+		chaintest.Doc("Stream", "prod", "{project: prod}", "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n"),
+		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: rel-v2.15}]\n"),
+		chaintest.Doc("Holding", "h", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: prodVersion}\n  holds: {kind: series, form: \"v{major}\"}\n"),
+	}, extra...)
+	g := chaintest.Load(t, docs...)
+	e, err := NewEngine(Builtin(), g)
+	require.NoError(t, err)
+	return e, g.Holdings()[0]
+}
+
+func TestASeriesHoldingIsWrittenOnlyWhenAnEditFollowsIt(t *testing.T) {
+	e, h := seriesEngine(t)
+
+	_, err := e.PullRoute(h)
+
+	require.ErrorIs(t, err, ErrNoEdit)
+	assert.ErrorContains(t, err, `"h"`)
+}
+
+func TestAPullRouteRunsTheEditAroundTheWriteOfTheSeries(t *testing.T) {
+	e, h := seriesEngine(t, chaintest.Doc("Edit", "regen", "{holding: [h]}", "  postEdit:\n    - {run: [make, generate]}\n"))
+	route, err := e.PullRoute(h)
+	require.NoError(t, err)
+	tree := files{"build.yaml": "prodVersion: v9\n"}
+	var order []string
+	rec := &recorder{order: &order}
+	target := Target{Branch: "rel-v2.15", Line: "v2.15", Holdings: route.Holdings}
+
+	res, err := route.Run(bg, tree, rec, target, "", "", "/work", func(_ context.Context, u Unit) error {
+		order = append(order, "unit "+string(u.Kind))
+		return nil
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, route.Producer)
+	assert.Equal(t, "prod", route.Producer.Name())
+	assert.Equal(t, "cons", route.Consumer.Name())
+	assert.True(t, res.Changed)
+	assert.Equal(t, "prodVersion: v8\n", tree["build.yaml"], "the series of v2.15, written as the form says")
+	assert.Equal(t, []string{"unit edit", "run make generate", "unit step"}, order)
+
+	chk, err := route.Check(bg, tree, target, "", "")
+	require.NoError(t, err)
+	require.Len(t, chk, 1)
+	assert.True(t, chk[0].UpToDate)
+}
+
+func TestAPullRouteOfHoldingsOfTwoProducersWritesBothAndRunsEachEditOnce(t *testing.T) {
+	e, h := seriesEngine(t,
+		chaintest.Doc("Project", "other", "", "  repo: {name: acme/other, managedBy: orbs}\n"),
+		chaintest.Doc("Stream", "other", "{project: other}", "  lines:\n    - {line: v2.16, series: \"4.x\"}\n    - {line: v2.15, series: \"3.x\"}\n"),
+		chaintest.Doc("Holding", "h2", "{project: cons, stream: other}", "  at: {file: build.yaml, key: otherVersion}\n  holds: {kind: series, form: \"r{major}\"}\n"),
+		chaintest.Doc("Edit", "regen", "{holding: [h, h2]}", "  postEdit:\n    - {run: [make, generate]}\n"),
+	)
+	g := e.graph
+	h2 := g.Holdings()[1]
+	route, err := e.PullRoute(h, h2)
+	require.NoError(t, err)
+	tree := files{"build.yaml": "prodVersion: v9\notherVersion: r4\n"}
+	var order []string
+	rec := &recorder{order: &order}
+
+	res, err := route.Run(bg, tree, rec, Target{Branch: "rel-v2.15", Line: "v2.15", Holdings: route.Holdings}, "", "", "/work", nil)
+
+	require.NoError(t, err)
+	assert.Nil(t, route.Producer, "two producers: the route has none of its own")
+	assert.Equal(t, "prodVersion: v8\notherVersion: r3\n", tree["build.yaml"])
+	assert.Len(t, res.Changes, 2)
+	assert.Equal(t, []string{"run make generate"}, order, "the one Edit that follows both runs once")
+}
+
+func TestAPullRouteRefusesHoldingsOfAnotherKindOrHolder(t *testing.T) {
+	e, h := seriesEngine(t, chaintest.Doc("Edit", "regen", "{holding: [h]}", "  postEdit:\n    - {run: [make, generate]}\n"))
+
+	_, err := e.PullRoute()
+	require.Error(t, err)
+
+	other := holdings(t, imageHolding)[0]
+	_, err = e.PullRoute(h, other)
+	require.Error(t, err, "a release holding is shipped, not pulled")
+}

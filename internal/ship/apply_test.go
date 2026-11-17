@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/steprun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -69,9 +70,9 @@ func invocationSteps(t *testing.T, pre, post []stepSpec) scene {
 
 var applyRelease = Release{Tag: "v0.5.3", Commit: "sha-v0.5.3", Stable: true}
 
-func applyFor(sc scene) Apply {
-	return Apply{
-		Route: sc.route, Target: sc.target, Release: applyRelease, Message: "Update to v0.5.3\n\nbody",
+func applyFor(sc scene) proposal.Apply {
+	return proposal.Apply{
+		Route: sc.route, Target: sc.target, Tag: applyRelease.Tag, Commit: applyRelease.Commit, Message: "Update to v0.5.3\n\nbody",
 		Runner: steprun.Runner{}, StepMessage: testStepMessage,
 	}
 }
@@ -98,9 +99,9 @@ func filesOf(t *testing.T, dir, commit string) []string {
 	return strings.Fields(runGit(t, dir, "show", "--name-only", "--format=", commit))
 }
 
-func prepareMain(t *testing.T, up, clone string, dry bool) *Work {
+func prepareMain(t *testing.T, up, clone string, dry bool) *proposal.Work {
 	t.Helper()
-	return mustPrepare(t, PrepareRequest{
+	return mustPrepare(t, proposal.PrepareRequest{
 		CloneDir: clone, Remote: "upstream", Target: "main", Base: runGit(t, up, "rev-parse", "main"),
 		Branch: applyBranch, DryRun: dry, TempDir: t.TempDir(),
 	})
@@ -128,7 +129,7 @@ func TestApplyRunsThePostEditStepsInTheWorkDirectoryAndCommitsWhatTheyMake(t *te
 	clone := engineer(t, up)
 	put(t, clone, "notes.txt", "engineer's own")
 	w := prepareMain(t, up, clone, false)
-	require.Equal(t, InPlace, w.Place)
+	require.Equal(t, proposal.InPlace, w.Place)
 	inv := invocationFor(t, []stepSpec{{Run: "./scripts/gen.sh"}})
 
 	res, err := applyFor(inv).Run(bg, w)
@@ -147,7 +148,7 @@ func TestApplyInAWorktreeLeavesTheEngineersCheckoutAlone(t *testing.T) {
 	up := applyRemote(t)
 	clone := engineer(t, up)
 	w := prepareMain(t, up, clone, true)
-	require.Equal(t, Worktree, w.Place)
+	require.Equal(t, proposal.Worktree, w.Place)
 
 	_, err := applyFor(invocationFor(t, nil)).Run(bg, w)
 
@@ -167,7 +168,7 @@ func TestApplyWhenTheFileAlreadyHoldsTheValueChangesNothing(t *testing.T) {
 
 	res, err := applyFor(invocationFor(t, nil)).Run(bg, w)
 
-	require.ErrorIs(t, err, ErrNothingChanged)
+	require.ErrorIs(t, err, proposal.ErrNothingChanged)
 	assert.Empty(t, res.Commits)
 	assert.Equal(t, before, runGit(t, w.Dir, "rev-parse", "HEAD"), "no commit was made")
 }

@@ -74,6 +74,9 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 		if names := doc.Refs["artifact"]; len(names) == 1 {
 			h.artifact = artifacts[names[0]]
 			h.producer = h.artifact.stream.project
+		} else if names := doc.Refs["stream"]; len(names) == 1 {
+			h.stream = streams[names[0]]
+			h.producer = h.stream.project
 		} else {
 			h.producer = g.byName[strings.ToLower(doc.Refs["from"][0])]
 		}

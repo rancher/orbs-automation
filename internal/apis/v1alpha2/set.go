@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
@@ -31,6 +32,7 @@ var refKeys = map[string]map[string]refKey{
 		"project":  {target: KindProject, required: true},
 		"artifact": {target: KindArtifact},
 		"from":     {target: KindProject},
+		"stream":   {target: KindStream},
 	},
 	KindEdit: {"holding": {target: KindHolding, required: true, list: true}},
 }
@@ -267,7 +269,8 @@ func (s *set) knownLines() {
 }
 
 // holdingRefs reports a Holding whose refs do not match what it holds: a release
-// refs an artifact, and a commit or a branch refs the project it is taken from.
+// refs an artifact, a commit or a branch refs the project it is taken from, and a
+// series refs the stream whose series it holds, which must have one for a line.
 func (s *set) holdingRefs() {
 	for _, o := range s.objs {
 		h, ok := o.(*Holding)
@@ -275,22 +278,65 @@ func (s *set) holdingRefs() {
 			continue
 		}
 		kind := h.Spec.Holds.Kind
-		want, other := "artifact", "from"
-		if kind != HoldsRelease {
-			want, other = "from", "artifact"
+		want := "from"
+		switch kind {
+		case HoldsRelease:
+			want = "artifact"
+		case HoldsSeries:
+			want = "stream"
 		}
 		r := s.at(o)
-		if len(h.Refs[want]) == 0 {
-			r.Errorf("refs."+want, "required for a holding of a %s", kind)
-		}
-		if len(h.Refs[other]) > 0 {
-			r.Errorf("refs."+other, "not for a holding of a %s: it refs %s", kind, want)
+		for _, ref := range []string{"artifact", "from", "stream"} {
+			switch {
+			case ref == want && len(h.Refs[ref]) == 0:
+				r.Errorf("refs."+ref, "required for a holding of a %s", kind)
+			case ref != want && len(h.Refs[ref]) > 0:
+				r.Errorf("refs."+ref, "not for a holding of a %s: it refs %s", kind, want)
+			}
 		}
 		if holder, prod := s.holder(h), s.producer(h); holder != nil && holder == prod {
 			r.Errorf("refs."+want, "Project %q holds something of its own project", holder.Name)
 		}
+		if kind == HoldsSeries {
+			s.seriesHolding(r, h)
+		}
 		s.add(r)
 	}
+}
+
+// seriesHolding reports a series holding of a stream that has no series to hold,
+// or whose form asks, for a line it is for, for a part that line's series does not have.
+func (s *set) seriesHolding(r *config.Report, h *Holding) {
+	names := h.Refs["stream"]
+	if len(names) != 1 {
+		return
+	}
+	st, _ := s.index[KindStream][names[0]].(*Stream)
+	if st == nil {
+		return
+	}
+	if st.Spec.Universal || len(st.Spec.Lines) == 0 {
+		r.Errorf("refs.stream", "Stream %q has no series for a line, so a series holding has nothing to hold", st.Name)
+		return
+	}
+	uses, _ := templates.Placeholders(h.Spec.Holds.Form)
+	if !slices.Contains(uses, "minor") {
+		return
+	}
+	for _, l := range st.Spec.Lines {
+		if !h.Spec.Holds.Lines.Contains(l.Line) {
+			continue // the holding is not for this line
+		}
+		if parsed, ok := semver.ParseSeries(l.Series); !ok || !hasMinor(parsed) {
+			r.Errorf("spec.holds.form", "uses {minor}, and the series %q of Stream %q for %s has none", l.Series, st.Name, l.Line)
+		}
+	}
+}
+
+// hasMinor reports whether a series has a minor ("9.1.x" does, "9.x" does not).
+func hasMinor(s semver.Series) bool {
+	_, ok := s.Minor()
+	return ok
 }
 
 // project returns the Project a ref names, or nil.
@@ -308,11 +354,18 @@ func (s *set) holder(h *Holding) *Project {
 }
 
 // producer returns the Project a Holding holds something of: the one its
-// artifact's stream is of, or the one it is taken from. It is nil when the refs
+// artifact's stream is of, the one a stream is of, or the one it is taken from. It is nil when the refs
 // do not lead to one.
 func (s *set) producer(h *Holding) *Project {
 	if names := h.Refs["from"]; len(names) == 1 {
 		return s.project(names[0])
+	}
+	if names := h.Refs["stream"]; len(names) == 1 {
+		st, _ := s.index[KindStream][names[0]].(*Stream)
+		if st == nil || len(st.Refs["project"]) != 1 {
+			return nil
+		}
+		return s.project(st.Refs["project"][0])
 	}
 	names := h.Refs["artifact"]
 	if len(names) != 1 {
@@ -426,8 +479,9 @@ func (s *set) rancherLines() {
 }
 
 // artifacts reports an Artifact of a kind and name that an earlier Artifact of
-// the same Project has. A Go module is the exception: the same module is an
-// Artifact of each minor's Stream, so for it the name is unique within a Stream.
+// the same Project has. A Go module and a file are the exception: the same module,
+// or the same file of a release (the k3s binary), is an Artifact of each minor's
+// Stream, so for them the name is unique within a Stream.
 func (s *set) artifacts() {
 	type key struct{ scope, kind, name string }
 	seen := map[key]string{}
@@ -441,7 +495,7 @@ func (s *set) artifacts() {
 			continue
 		}
 		scope, scopeKind := st.Refs["project"][0], "Project"
-		if a.Spec.Kind == ArtifactGoMod {
+		if a.Spec.Kind == ArtifactGoMod || a.Spec.Kind == ArtifactFile {
 			scope, scopeKind = st.Name, "Stream"
 		}
 		k := key{scopeKind + " " + scope, a.Spec.Kind, a.Spec.Name}

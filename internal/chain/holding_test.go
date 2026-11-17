@@ -248,3 +248,29 @@ func TestAProjectKnowsWhetherItFindsItsLinesInItsTags(t *testing.T) {
 		}
 	}
 }
+
+func TestASeriesHoldingKnowsItsStreamAndProducer(t *testing.T) {
+	g := chaintest.Load(t, pair(
+		holding("holds-series", "{project: hold, stream: prod}", at+"  holds: {kind: series, form: \"v{major}\"}\n"),
+	)...)
+
+	require.Len(t, g.Holdings(), 1)
+	h := g.Holdings()[0]
+	assert.Equal(t, "series", h.Kind())
+	assert.Equal(t, "prod", h.Producer().Name())
+	assert.Nil(t, h.Artifact())
+	require.NotNil(t, h.Stream())
+	assert.Equal(t, "prod", h.Stream().Name())
+	assert.Equal(t, "prod", g.Project("prod").Sourced()[0].Producer().Name())
+}
+
+func TestASeriesHoldingAppliesToTheLinesTheStreamHasASeriesFor(t *testing.T) {
+	g := chaintest.Load(t, pair(
+		holding("holds-series", "{project: hold, stream: prod}", at+"  holds: {kind: series, form: \"v{major}\"}\n"),
+	)...)
+	h := g.Holdings()[0]
+
+	assert.True(t, h.AppliesTo("v2.15"), "the holder lists it and the stream has a series for it")
+	assert.False(t, h.AppliesTo("v2.16"), "the stream has no series for it")
+	assert.False(t, h.AppliesTo("v2.14"), "the holder does not list it")
+}

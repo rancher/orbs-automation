@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -30,7 +31,7 @@ type projectSpec struct {
 	FinalDestination      bool          // the project releases end in
 	Title                 string        // pullRequests.title
 	PushTo                string        // pullRequests.pushTo
-	Labels, BotLabels     []string      // pullRequests.labels and botLabels
+	Labels, BotLabels     []string      // pullRequests.Labels and botLabels
 	Lines                 []lineSpec    // the lines it lists, on a branch each; none is a single branch
 	Stream                string        // a producer's stream, as the lines of its spec
 	Scheme                string        // a producer's stream scheme; semver when empty
@@ -74,7 +75,7 @@ type fakeWorkspace struct {
 	asked      []string
 	cloneDir   string // the engineer's clone, for Ship
 	cloneErr   error
-	push       PushSettings
+	push       proposal.PushSettings
 
 	graph    *chain.Graph
 	graphKey string
@@ -272,7 +273,7 @@ func (f *fakeWorkspace) CloneDir(string) (string, error) { return f.cloneDir, f.
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
 // PushSettings answers from the field.
-func (f *fakeWorkspace) PushSettings(string) PushSettings { return f.push }
+func (f *fakeWorkspace) PushSettings(string) proposal.PushSettings { return f.push }
 
 func (f *fakeWorkspace) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
 	f.asked = append(f.asked, "refs "+slug)

@@ -6,8 +6,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -365,7 +367,7 @@ func (h *humanSink) endImages() {
 
 // actor says who the run acts as, before anything is written: the identity of
 // its commits, whether they are signed, and the account the PRs are opened by.
-func (h *humanSink) actor(a *domain.Actor) {
+func (h *humanSink) actor(a *proposal.Actor) {
 	signing := "commits not signed"
 	if a.Signing {
 		signing = "commits signed"
@@ -436,9 +438,9 @@ func (h *humanSink) decided(e domain.Event) {
 		closing = " " + numbers(d.Supersede) + " will be closed"
 	}
 	switch d.Action {
-	case domain.PublishBlocked:
+	case proposal.PublishBlocked:
 		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  %s: blocked by #%d, which is newer", name(e), d.Newer.Number)))
-	case domain.PublishAlreadyOpen:
+	case proposal.PublishAlreadyOpen:
 		h.out.Line(fmt.Sprintf("  %s: already open as #%d%s", name(e), d.Open.Number, strings.Replace(closing, " #", ", and #", 1)))
 	default:
 		if closing != "" {
@@ -489,11 +491,11 @@ func (h *humanSink) done(e domain.Event) {
 	h.startWork()
 	r := e.Result
 	switch r.Status {
-	case domain.ResultFailed:
+	case proposal.ResultFailed:
 		h.out.Line(h.st.Style(style.Error, fmt.Sprintf("  %s: failed: %s", name(e), r.Error)))
-	case domain.ResultBlocked:
+	case proposal.ResultBlocked:
 		h.out.Line(h.st.Style(style.Warn, fmt.Sprintf("  %s: blocked: %s", name(e), r.Error)))
-	case domain.ResultAlreadyOpen:
+	case proposal.ResultAlreadyOpen:
 		behind := ""
 		if r.BehindBy > 0 {
 			hint := "; --refresh to rebuild"
@@ -507,7 +509,7 @@ func (h *humanSink) done(e domain.Event) {
 			note = " (" + r.Note + ")"
 		}
 		h.out.Line(fmt.Sprintf("  %s: %s #%d %s%s%s", name(e), h.status("already open"), r.PR.Number, r.PR.URL, behind, note))
-	case domain.ResultWouldRefresh:
+	case proposal.ResultWouldRefresh:
 		h.out.Line(fmt.Sprintf("  %s: %s #%d", name(e), h.status("would refresh"), r.PR.Number))
 	default:
 		h.out.Line(fmt.Sprintf("  %s: %s", name(e), h.status(string(r.Status))))
@@ -544,7 +546,7 @@ func (h *humanSink) links(p *domain.Plan) {
 			continue
 		}
 		switch r.Status {
-		case domain.ResultOpened, domain.ResultRefreshed, domain.ResultAlreadyOpen:
+		case proposal.ResultOpened, proposal.ResultRefreshed, proposal.ResultAlreadyOpen:
 			rows = append(rows, []string{string(r.Status), t.Key(), t.Branch, r.PR.URL})
 		}
 	}
@@ -595,7 +597,7 @@ func (h *humanSink) results(p *domain.Plan) {
 		h.out.Row(row...)
 	}
 	h.out.EndTable()
-	text := func(field func(*domain.TargetResult) string) func(domain.TargetPlan) []string {
+	text := func(field func(*proposal.TargetResult) string) func(domain.TargetPlan) []string {
 		return func(t domain.TargetPlan) []string {
 			if t.Result == nil || field(t.Result) == "" {
 				return nil
@@ -603,11 +605,11 @@ func (h *humanSink) results(p *domain.Plan) {
 			return []string{field(t.Result)}
 		}
 	}
-	for _, g := range groupTargets(p.Targets, text(func(r *domain.TargetResult) string { return r.Reason })) {
+	for _, g := range groupTargets(p.Targets, text(func(r *proposal.TargetResult) string { return r.Reason })) {
 		h.out.Line(fmt.Sprintf("  worktree (%s): %s", strings.Join(g.branches, ", "), g.text))
 	}
-	for _, status := range []domain.ResultStatus{domain.ResultFailed, domain.ResultBlocked} {
-		only := func(r *domain.TargetResult) string {
+	for _, status := range []proposal.ResultStatus{proposal.ResultFailed, proposal.ResultBlocked} {
+		only := func(r *proposal.TargetResult) string {
 			if r.Status != status {
 				return ""
 			}
@@ -619,7 +621,7 @@ func (h *humanSink) results(p *domain.Plan) {
 	}
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil && len(r.WouldSupersede) > 0 {
-			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Key(), refNumbers(r.WouldSupersede)))
+			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Key(), proposer.RefNumbers(r.WouldSupersede)))
 		}
 	}
 	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string {
@@ -635,7 +637,7 @@ func (h *humanSink) results(p *domain.Plan) {
 	}
 	var review []string
 	for _, t := range p.Targets {
-		if r := t.Result; r != nil && r.Status == domain.ResultCommitted {
+		if r := t.Result; r != nil && r.Status == proposal.ResultCommitted {
 			rng := fmt.Sprintf("%s/%s", p.Remote, t.Branch)
 			review = append(review,
 				fmt.Sprintf("  git -C %s log --oneline %s..%s", p.Clone, rng, r.Branch),
@@ -651,17 +653,8 @@ func (h *humanSink) results(p *domain.Plan) {
 	}
 }
 
-// refNumbers lists PR references by number: #101, #90.
-func refNumbers(refs []domain.PRRef) string {
-	out := make([]string, len(refs))
-	for i, r := range refs {
-		out[i] = fmt.Sprintf("#%d", r.Number)
-	}
-	return strings.Join(out, ", ")
-}
-
 // statusRoleOf is statusRole for a status that is known to have one.
-func statusRoleOf(status domain.ResultStatus) style.Role {
+func statusRoleOf(status proposal.ResultStatus) style.Role {
 	role, _ := statusRole(string(status))
 	return role
 }
@@ -690,13 +683,13 @@ func trailer(p *domain.Plan) string {
 	}
 	opened := 0
 	for _, t := range p.Targets {
-		if t.Result != nil && t.Result.Status == domain.ResultOpened {
+		if t.Result != nil && t.Result.Status == proposal.ResultOpened {
 			opened++
 		}
 	}
 	refreshed := 0
 	for _, t := range p.Targets {
-		if t.Result != nil && t.Result.Status == domain.ResultRefreshed {
+		if t.Result != nil && t.Result.Status == proposal.ResultRefreshed {
 			refreshed++
 		}
 	}
@@ -732,7 +725,7 @@ func filesText(files []string) string {
 
 // stepsText lists the commits the steps of a bump may make, in the order they run,
 // with where each fits around the edit and what ran it.
-func stepsText(steps []domain.StepPreview) string {
+func stepsText(steps []proposal.StepPreview) string {
 	lines := []string{"a step's commit is made only if it changes files"}
 	for _, s := range steps {
 		when, _, _ := strings.Cut(s.CommitMessage, "\n")

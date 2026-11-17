@@ -79,7 +79,7 @@ func TestFieldsAreNamedByTheirYAMLKeyAndAreNotRequired(t *testing.T) {
 
 func TestAFieldWithAFixedSetOfValuesListsThem(t *testing.T) {
 	docs := built(t)
-	assert.Equal(t, []any{"release", "commit", "branch"}, dig(t, docs["v1alpha2/holding.schema.json"], "$defs", "Holds", "properties", "kind", "enum"))
+	assert.Equal(t, []any{"release", "commit", "branch", "series"}, dig(t, docs["v1alpha2/holding.schema.json"], "$defs", "Holds", "properties", "kind", "enum"))
 	assert.Equal(t, []any{"single", "perLine"}, dig(t, docs["v1alpha2/project.schema.json"], "$defs", "Branches", "properties", "layout", "enum"))
 	assert.Equal(t, []any{"dockerhub", "prime-staging", "prime-production"}, dig(t, docs["v1alpha2/artifact.schema.json"], "$defs", "ArtifactSpec", "properties", "registries", "items", "enum"), "for a list, the values of an item")
 }

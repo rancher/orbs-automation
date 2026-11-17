@@ -14,6 +14,7 @@ import (
 	"testing/fstest"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
@@ -91,8 +92,8 @@ func (f *fakeWorkspace) CloneDir(string) (string, error) { return "/clone", f.cl
 
 func (f *fakeWorkspace) Remote(string) (string, error) { return "upstream", nil }
 
-func (f *fakeWorkspace) PushSettings(string) domain.PushSettings {
-	return domain.PushSettings{Upstream: "upstream"}
+func (f *fakeWorkspace) PushSettings(string) proposal.PushSettings {
+	return proposal.PushSettings{Upstream: "upstream"}
 }
 
 type fakeProber struct{ result ociregistry.Result }
@@ -178,7 +179,7 @@ func previewPlan() domain.Plan {
 		Targets: []domain.TargetPlan{{
 			Target:  domain.Target{Branch: "release/v2.15", Commit: "2222222bbbbbbbb"},
 			Release: "v0.5.3", Holdings: hp("a", "b"), Status: domain.StatusReady,
-			Preview: &domain.Preview{
+			Preview: &proposal.Preview{
 				Branch: "bot/scc-operator-v0.5.3-v2.15", Title: "[v2.15] Update scc-operator to v0.5.3",
 				Labels:        []string{"status/auto-created", "team/orbs"},
 				CommitMessage: "Update scc-operator to v0.5.3\n\nAutomation: gero ship\n",
@@ -370,21 +371,21 @@ func TestRenderTextNoPushWithNoCommitsSaysSo(t *testing.T) {
 }
 
 // withResults is the plan with one result per target that has a PR.
-func withResults(p domain.Plan, results ...*domain.TargetResult) domain.Plan {
+func withResults(p domain.Plan, results ...*proposal.TargetResult) domain.Plan {
 	for i, r := range results {
 		p.Targets[i].Result = r
 	}
 	return p
 }
 
-func committed(branch, commit string, place domain.Place, reason string) *domain.TargetResult {
-	return &domain.TargetResult{Status: domain.ResultCommitted, Branch: branch, Commits: []domain.CommitInfo{{Hash: commit, Subject: "s"}}, Place: place, Reason: reason}
+func committed(branch, commit string, place proposal.Place, reason string) *proposal.TargetResult {
+	return &proposal.TargetResult{Status: proposal.ResultCommitted, Branch: branch, Commits: []proposal.CommitInfo{{Hash: commit, Subject: "s"}}, Place: place, Reason: reason}
 }
 
 func TestRenderTextShowsTheCommitsAndHowToReviewThem(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, ""))
 
 	out := renderText(p, false)
 
@@ -402,8 +403,8 @@ func TestRenderTextShowsTheCommitsAndHowToReviewThem(t *testing.T) {
 func TestRenderTextADryRunShowsWouldCommitAndNoReview(t *testing.T) {
 	p := previewPlan()
 	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.Worktree, "a dry run never moves your checkout")
-	r.Status = domain.ResultWouldCommit
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.Worktree, "a dry run never moves your checkout")
+	r.Status = proposal.ResultWouldCommit
 	p = withResults(p, r)
 
 	out := renderText(p, false)
@@ -420,13 +421,13 @@ func TestRenderTextGroupsTheReasonForAWorktreeAcrossBranches(t *testing.T) {
 	ready := p.Targets[1]
 	second := ready
 	second.Branch = "release/v2.13"
-	second.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-v2.13", Title: "t"}
+	second.Preview = &proposal.Preview{Branch: "bot/scc-operator-v0.5.3-v2.13", Title: "t"}
 	p.Targets = []domain.TargetPlan{ready, second}
 	p.Status, p.Clone, p.Remote, p.NoPush = domain.StatusReady, "/src/rancher", "upstream", true
 	reason := "the clone has uncommitted changes"
 	p = withResults(p,
-		committed("bot/scc-operator-v0.5.3-v2.15", "1111111aaaa", domain.Worktree, reason),
-		committed("bot/scc-operator-v0.5.3-v2.13", "2222222bbbb", domain.Worktree, reason))
+		committed("bot/scc-operator-v0.5.3-v2.15", "1111111aaaa", proposal.Worktree, reason),
+		committed("bot/scc-operator-v0.5.3-v2.13", "2222222bbbb", proposal.Worktree, reason))
 
 	out := renderText(p, false)
 
@@ -437,8 +438,8 @@ func TestRenderTextGroupsTheReasonForAWorktreeAcrossBranches(t *testing.T) {
 func TestRenderTextShowsAFailedCommitAndWhy(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	p = withResults(p, &domain.TargetResult{
-		Status: domain.ResultFailed, Branch: "bot/scc-operator-v0.5.3-v2.15",
+	p = withResults(p, &proposal.TargetResult{
+		Status: proposal.ResultFailed, Branch: "bot/scc-operator-v0.5.3-v2.15",
 		Error: "method postEdit[0] ./scripts/gen.sh: exit status 1: no go toolchain",
 	})
 
@@ -451,7 +452,7 @@ func TestRenderTextShowsAFailedCommitAndWhy(t *testing.T) {
 func TestRenderTextAnUpToDateResultHasNoBranch(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultUpToDate, Branch: "bot/scc-operator-v0.5.3-v2.15"})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultUpToDate, Branch: "bot/scc-operator-v0.5.3-v2.15"})
 
 	out := renderText(p, false)
 
@@ -461,10 +462,10 @@ func TestRenderTextAnUpToDateResultHasNoBranch(t *testing.T) {
 
 func TestRunReportsFailedTargetsAndReturnsErrFailed(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultFailed, Branch: "b", Error: "boom"})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultFailed, Branch: "b", Error: "boom"})
 
 	assert.ErrorIs(t, failedErr(p), ErrFailed)
-	p.Targets[0].Result.Status = domain.ResultCommitted
+	p.Targets[0].Result.Status = proposal.ResultCommitted
 	assert.NoError(t, failedErr(p))
 	p.Targets[0].Result = nil
 	assert.NoError(t, failedErr(p))
@@ -491,9 +492,9 @@ func TestRunWithAnExecutorAndNoCloneReportsThePlanAndTheError(t *testing.T) {
 	opts.NoPush = true
 
 	out, err := runWith(context.Background(), ws, fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
-		&domain.Executor{}, clicfg.OutputText, opts)
+		&proposal.Executor{}, clicfg.OutputText, opts)
 
-	require.ErrorIs(t, err, domain.ErrNoClone)
+	require.ErrorIs(t, err, proposal.ErrNoClone)
 	assert.Contains(t, err.Error(), "repos.search")
 	assert.Contains(t, out, "ready", "the report is still written")
 	assert.Contains(t, out, "bot/scc-operator-v0.5.3-main")
@@ -522,7 +523,7 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 		Rows:     []registry.Row{{Image: "rancher/scc-operator", Label: "Docker Hub", Status: "found", Reference: "docker.io/rancher/scc-operator:v0.5.3"}},
 		Warnings: p.Warnings,
 	}}}
-	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, ""))
 
 	out := renderText(p, false)
 
@@ -544,8 +545,8 @@ func TestRenderTextSectionsFollowTheOrderOfTheProcessing(t *testing.T) {
 func TestRenderTextListsEachCommitUnderItsBranchWithItsSubject(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
-	r.Commits = []domain.CommitInfo{
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, "")
+	r.Commits = []proposal.CommitInfo{
 		{Hash: "abcdef0123456789", Subject: "Update scc-operator to v0.5.3"},
 		{Hash: "1234567890abcdef", Subject: "Run `./scripts/generate-buildconfig`"},
 	}
@@ -564,7 +565,7 @@ func TestRenderTextListsEachCommitUnderItsBranchWithItsSubject(t *testing.T) {
 func TestRenderTextACommitlessResultListsNoCommits(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultUpToDate, Branch: "bot/x"})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultUpToDate, Branch: "bot/x"})
 
 	out := renderText(p, false)
 
@@ -683,12 +684,12 @@ func TestInputFromTheActorIsTheBotInCIAndTheEngineerOtherwise(t *testing.T) {
 }
 
 // published is a target whose branch was pushed and PR opened.
-func published() *domain.TargetResult {
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
-	r.Status = domain.ResultOpened
+func published() *proposal.TargetResult {
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, "")
+	r.Status = proposal.ResultOpened
 	r.Pushed = "origin"
-	r.PR = &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}
-	r.Superseded = []domain.PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}}
+	r.PR = &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}
+	r.Superseded = []proposal.PRRef{{Number: 101, URL: "https://github.com/rancher/rancher/pull/101"}}
 	return r
 }
 
@@ -714,7 +715,7 @@ func TestRenderTextShowsEachStepOfPublishingAndTheLinkToThePR(t *testing.T) {
 
 func TestRenderTextAnAlreadyOpenTargetNamesThePR(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultAlreadyOpen, Branch: "bot/x", PR: &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"}})
 
 	out := renderText(p, false)
 
@@ -724,7 +725,7 @@ func TestRenderTextAnAlreadyOpenTargetNamesThePR(t *testing.T) {
 
 func TestRenderTextABlockedTargetSaysWhy(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultBlocked, Branch: "bot/x", Error: "#110 already ships v0.5.4 to release/v2.15, which is newer than v0.5.3"})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultBlocked, Branch: "bot/x", Error: "#110 already ships v0.5.4 to release/v2.15, which is newer than v0.5.3"})
 
 	out := renderText(p, false)
 
@@ -738,7 +739,7 @@ func TestRenderTextWarningsOfAResultAreGroupedAcrossBranches(t *testing.T) {
 	ready := p.Targets[1]
 	second := ready
 	second.Branch = "release/v2.13"
-	second.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-v2.13", Title: "t"}
+	second.Preview = &proposal.Preview{Branch: "bot/scc-operator-v0.5.3-v2.13", Title: "t"}
 	p.Targets = []domain.TargetPlan{ready, second}
 	p.Clone, p.Remote = "/src/rancher", "upstream"
 	a, b := published(), published()
@@ -756,9 +757,9 @@ func TestRenderTextWarningsOfAResultAreGroupedAcrossBranches(t *testing.T) {
 func TestRenderTextADryRunSaysWhatItWouldClose(t *testing.T) {
 	p := previewPlan()
 	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.Worktree, "a dry run never moves your checkout")
-	r.Status = domain.ResultWouldCommit
-	r.WouldSupersede = []domain.PRRef{{Number: 101}, {Number: 90}}
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.Worktree, "a dry run never moves your checkout")
+	r.Status = proposal.ResultWouldCommit
+	r.WouldSupersede = []proposal.PRRef{{Number: 101}, {Number: 90}}
 	p = withResults(p, r)
 
 	out := renderText(p, false)
@@ -769,7 +770,7 @@ func TestRenderTextADryRunSaysWhatItWouldClose(t *testing.T) {
 func TestRenderTextWhereItPushesIsShown(t *testing.T) {
 	p := previewPlan()
 	p.Clone, p.Remote = "/src/rancher", "upstream"
-	p.Push = &domain.PushTarget{Role: domain.RoleFork, Remote: "origin", Source: "a fork is set"}
+	p.Push = &proposal.PushTarget{Role: proposal.RoleFork, Remote: "origin", Source: "a fork is set"}
 	p = withResults(p, published())
 
 	out := renderText(p, false)
@@ -783,7 +784,7 @@ func TestRenderTextTheDecisionAboutEachTargetsExistingPRsIsShown(t *testing.T) {
 	events := replay(p)
 	events = append([]domain.Event{events[0]}, append([]domain.Event{{
 		Kind: domain.EventDecided, Branch: "release/v2.15",
-		Decision: &domain.Publish{Action: domain.PublishCreate, Supersede: []pulls.PR{{Number: 101}, {Number: 90}}},
+		Decision: &proposal.Decision{Action: proposal.PublishCreate, Supersede: []pulls.PR{{Number: 101}, {Number: 90}}},
 	}}, events[1:]...)...)
 	var buf bytes.Buffer
 	stream := ui.NewStream(&buf)
@@ -798,7 +799,7 @@ func TestRenderTextTheDecisionAboutEachTargetsExistingPRsIsShown(t *testing.T) {
 }
 
 // quietRemote is a GitHub with no open PRs, which is asked nothing it cannot answer.
-type quietRemote struct{ domain.Remote }
+type quietRemote struct{ proposal.Remote }
 
 func (quietRemote) Me(context.Context) (string, error) { return "danpock", nil }
 
@@ -808,10 +809,10 @@ func (quietRemote) OpenForBase(context.Context, string, string, int) (pulls.Open
 
 func (quietRemote) OpenForHead(context.Context, string, string) ([]pulls.PR, error) { return nil, nil }
 
-func declining() *domain.Executor {
-	return &domain.Executor{
-		Publish: &domain.Publisher{Remote: quietRemote{}},
-		Confirm: func(context.Context, domain.Confirmation) (bool, error) { return false, nil },
+func declining() *proposal.Executor {
+	return &proposal.Executor{
+		Publish: &proposal.Publisher{Remote: quietRemote{}},
+		Confirm: func(context.Context, proposal.Confirmation) (bool, error) { return false, nil },
 	}
 }
 
@@ -821,7 +822,7 @@ func TestRunToADeclinedRunShowsWhatWasDecidedAndReturnsTheError(t *testing.T) {
 	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		declining(), clicfg.OutputText, in)
 
-	require.ErrorIs(t, err, domain.ErrDeclined)
+	require.ErrorIs(t, err, proposal.ErrDeclined)
 	assert.Contains(t, out.String(), "v2.16: a new PR", "what it was going to do was shown before it asked")
 	assert.Contains(t, out.String(), "Nothing was written.")
 }
@@ -832,7 +833,7 @@ func TestRunToADeclinedRunInJSONStillWritesThePlan(t *testing.T) {
 	err := runPlain(context.Background(), &out, nil, readyWorkspace(), fakeProber{result: ociregistry.Result{Status: ociregistry.Found}},
 		declining(), clicfg.OutputJSON, in)
 
-	require.ErrorIs(t, err, domain.ErrDeclined)
+	require.ErrorIs(t, err, proposal.ErrDeclined)
 	var plan domain.Plan
 	require.NoError(t, json.Unmarshal(out.Bytes(), &plan), out.String())
 	assert.Equal(t, "rancher/scc-operator", plan.Producer)
@@ -850,23 +851,23 @@ func TestRunToAnErrorBeforeAnyPlanIsJustTheError(t *testing.T) {
 
 func TestAResultThatIsBlockedMakesTheRunBlocked(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultBlocked, Branch: "b", Error: "#110 is newer"})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultBlocked, Branch: "b", Error: "#110 is newer"})
 
 	assert.ErrorIs(t, failedErr(p), ErrBlocked)
 
-	p.Targets[0].Result.Status = domain.ResultFailed
+	p.Targets[0].Result.Status = proposal.ResultFailed
 	assert.ErrorIs(t, failedErr(p), ErrFailed, "a failure outranks")
-	p.Targets[0].Result.Status = domain.ResultAlreadyOpen
+	p.Targets[0].Result.Status = proposal.ResultAlreadyOpen
 	assert.NoError(t, failedErr(p), "already open is fine")
-	p.Targets[0].Result.Status = domain.ResultOpened
+	p.Targets[0].Result.Status = proposal.ResultOpened
 	assert.NoError(t, failedErr(p))
 }
 
 func TestRenderTextAnAlreadyOpenPRThatIsBehindSaysSoAndHowToRebuildIt(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{
-		Status: domain.ResultAlreadyOpen, Branch: "bot/x", BehindBy: 7,
-		PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
+	p = withResults(p, &proposal.TargetResult{
+		Status: proposal.ResultAlreadyOpen, Branch: "bot/x", BehindBy: 7,
+		PR: &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
 	})
 
 	out := renderText(p, false)
@@ -876,7 +877,7 @@ func TestRenderTextAnAlreadyOpenPRThatIsBehindSaysSoAndHowToRebuildIt(t *testing
 
 func TestRenderTextAnAlreadyOpenPRThatIsCurrentHasNoBehindNote(t *testing.T) {
 	p := previewPlan()
-	p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104}})
+	p = withResults(p, &proposal.TargetResult{Status: proposal.ResultAlreadyOpen, Branch: "bot/x", PR: &proposal.PRRef{Number: 104}})
 
 	out := renderText(p, false)
 
@@ -888,11 +889,11 @@ func TestInputFromCarriesRefresh(t *testing.T) {
 	assert.False(t, inputFrom(clicfg.Settings{}, Options{}).Refresh)
 }
 
-func refreshed() *domain.TargetResult {
-	return &domain.TargetResult{
-		Status: domain.ResultRefreshed, Branch: "bot/scc-operator-v0.5.3-v2.15", Pushed: "origin", Place: domain.InPlace,
-		PR:      &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
-		Commits: []domain.CommitInfo{{Hash: "abcdef0123456789", Subject: "Update"}, {Hash: "1234567890abcdef", Subject: "Run gen"}},
+func refreshed() *proposal.TargetResult {
+	return &proposal.TargetResult{
+		Status: proposal.ResultRefreshed, Branch: "bot/scc-operator-v0.5.3-v2.15", Pushed: "origin", Place: proposal.InPlace,
+		PR:      &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
+		Commits: []proposal.CommitInfo{{Hash: "abcdef0123456789", Subject: "Update"}, {Hash: "1234567890abcdef", Subject: "Run gen"}},
 	}
 }
 
@@ -914,7 +915,7 @@ func TestRenderTextADryRunThatWouldRefreshSaysSo(t *testing.T) {
 	p := previewPlan()
 	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
 	r := refreshed()
-	r.Status, r.Pushed = domain.ResultWouldRefresh, ""
+	r.Status, r.Pushed = proposal.ResultWouldRefresh, ""
 	p = withResults(p, r)
 
 	out := renderText(p, false)
@@ -925,7 +926,7 @@ func TestRenderTextADryRunThatWouldRefreshSaysSo(t *testing.T) {
 func TestRenderTextTheNoteOnAnAlreadyOpenPRIsShown(t *testing.T) {
 	for _, note := range []string{"identical to a fresh build", "not refreshed: commit 1187df75 is by t@example.com, not dev@example.com"} {
 		p := previewPlan()
-		p = withResults(p, &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 104}, Note: note})
+		p = withResults(p, &proposal.TargetResult{Status: proposal.ResultAlreadyOpen, Branch: "bot/x", PR: &proposal.PRRef{Number: 104}, Note: note})
 
 		out := renderText(p, false)
 
@@ -950,17 +951,17 @@ func TestReplayOfARefreshedTargetHasTheRefreshedEventAfterThePush(t *testing.T) 
 func TestRenderTextEndsWithTheLinksToThePRsThatWereOpenedRefreshedOrAlreadyOpen(t *testing.T) {
 	p := previewPlanWithTargets()
 	ready := p.Targets[1]
-	mk := func(branch string, r *domain.TargetResult) domain.TargetPlan {
+	mk := func(branch string, r *proposal.TargetResult) domain.TargetPlan {
 		t := ready
 		t.Branch = branch
-		t.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-" + branch, Title: "t"}
+		t.Preview = &proposal.Preview{Branch: "bot/scc-operator-v0.5.3-" + branch, Title: "t"}
 		t.Result = r
 		return t
 	}
 	opened := published()
 	again := refreshed()
-	open := &domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/x", PR: &domain.PRRef{Number: 90, URL: "https://github.com/rancher/rancher/pull/90"}}
-	failed := &domain.TargetResult{Status: domain.ResultFailed, Branch: "bot/y", Error: "push rejected"}
+	open := &proposal.TargetResult{Status: proposal.ResultAlreadyOpen, Branch: "bot/x", PR: &proposal.PRRef{Number: 90, URL: "https://github.com/rancher/rancher/pull/90"}}
+	failed := &proposal.TargetResult{Status: proposal.ResultFailed, Branch: "bot/y", Error: "push rejected"}
 	p.Targets = []domain.TargetPlan{mk("release/v2.15", opened), mk("main", again), mk("release/v2.14", open), mk("release/v2.13", failed)}
 	p.Clone, p.Remote = "/src/rancher", "upstream"
 
@@ -987,7 +988,7 @@ func TestRenderTextEndsWithTheLinksToThePRsThatWereOpenedRefreshedOrAlreadyOpen(
 func TestRenderTextHasNoListOfPRsWhenThereAreNone(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, ""))
 
 	assert.NotContains(t, renderText(p, false), "Pull requests")
 	assert.NotContains(t, renderText(previewPlan(), false), "Pull requests")
@@ -997,7 +998,7 @@ func TestRenderTextADryRunListsNoPRs(t *testing.T) {
 	p := previewPlan()
 	p.DryRun, p.Clone, p.Remote = true, "/src/rancher", "upstream"
 	r := refreshed()
-	r.Status = domain.ResultWouldRefresh
+	r.Status = proposal.ResultWouldRefresh
 	p = withResults(p, r)
 
 	assert.NotContains(t, renderText(p, false), "Pull requests", "nothing was opened, so there is nothing to click")
@@ -1052,7 +1053,7 @@ func TestRenderTextABranchInNoLineIsKeyedByItsBranch(t *testing.T) {
 
 func TestRenderTextTheSummaryTablesAndGroupsAreKeyedByLine(t *testing.T) {
 	p := onLines()
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.Worktree, "the clone has uncommitted changes")
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.Worktree, "the clone has uncommitted changes")
 	p.NoPush = true
 	p = withResults(p, r)
 
@@ -1090,9 +1091,9 @@ func TestRenderTextWarningsAndBlockedAreGroupedByLine(t *testing.T) {
 func TestRenderTextADryRunsWouldCloseIsKeyedByLine(t *testing.T) {
 	p := onLines()
 	p.DryRun = true
-	r := committed("bot/x", "abcdef0123456789", domain.Worktree, "a dry run never moves your checkout")
-	r.Status = domain.ResultWouldCommit
-	r.WouldSupersede = []domain.PRRef{{Number: 101}}
+	r := committed("bot/x", "abcdef0123456789", proposal.Worktree, "a dry run never moves your checkout")
+	r.Status = proposal.ResultWouldCommit
+	r.WouldSupersede = []proposal.PRRef{{Number: 101}}
 	p = withResults(p, r)
 
 	out := renderText(p, false)
@@ -1132,10 +1133,10 @@ func TestLogSinkRecordsTheLineAndWhatWasPushed(t *testing.T) {
 	assert.False(t, hasLine, "no line attribute for a branch in no line")
 }
 
-func behind() *domain.TargetResult {
-	return &domain.TargetResult{
-		Status: domain.ResultAlreadyOpen, Branch: "bot/x", BehindBy: 7,
-		PR: &domain.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
+func behind() *proposal.TargetResult {
+	return &proposal.TargetResult{
+		Status: proposal.ResultAlreadyOpen, Branch: "bot/x", BehindBy: 7,
+		PR: &proposal.PRRef{Number: 104, URL: "https://github.com/rancher/rancher/pull/104"},
 	}
 }
 
@@ -1178,12 +1179,12 @@ func TestRenderTextAMixOfWorkAndNoWorkShowsWhereWithADashForNoWork(t *testing.T)
 	ready := p.Targets[1]
 	second := ready
 	second.Branch, second.Line = "release/v2.14", "v2.14"
-	second.Preview = &domain.Preview{Branch: "bot/scc-operator-v0.5.3-v2.14", Title: "t"}
+	second.Preview = &proposal.Preview{Branch: "bot/scc-operator-v0.5.3-v2.14", Title: "t"}
 	ready.Line = "v2.15"
 	p.Targets = []domain.TargetPlan{ready, second}
 	p.Clone, p.Remote, p.NoPush = "/src/rancher", "upstream", true
-	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""),
-		&domain.TargetResult{Status: domain.ResultAlreadyOpen, Branch: "bot/scc-operator-v0.5.3-v2.14", PR: &domain.PRRef{Number: 90}})
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, ""),
+		&proposal.TargetResult{Status: proposal.ResultAlreadyOpen, Branch: "bot/scc-operator-v0.5.3-v2.14", PR: &proposal.PRRef{Number: 90}})
 
 	out := renderText(p, false)
 
@@ -1236,13 +1237,13 @@ func TestRenderTextOfASingleReleasePlanIsAsItWas(t *testing.T) {
 
 func actingPlan(signing bool, login string) domain.Plan {
 	p := previewPlan()
-	p.Actor = &domain.Actor{Identity: domain.Identity{Name: "Dan Pock", Email: "dan@example.com"}, Login: login, Signing: signing}
+	p.Actor = &proposal.Actor{Identity: proposal.Identity{Name: "Dan Pock", Email: "dan@example.com"}, Login: login, Signing: signing}
 	return p
 }
 
 func TestRenderTextSaysWhoTheRunActsAsAfterWhatItWillOpenAndBeforeTheWork(t *testing.T) {
 	p := actingPlan(false, "danpock")
-	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, ""))
+	p = withResults(p, committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, ""))
 
 	out := renderText(p, false)
 
@@ -1271,12 +1272,12 @@ func TestReplayOfAPlanWithAnActorHasTheEvent(t *testing.T) {
 func TestRenderTextShowsTheFilesEachCommitChangedUnderIt(t *testing.T) {
 	p := previewPlan()
 	p.NoPush, p.Clone, p.Remote = true, "/src/rancher", "upstream"
-	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", domain.InPlace, "")
+	r := committed("bot/scc-operator-v0.5.3-v2.15", "abcdef0123456789", proposal.InPlace, "")
 	var many []string
 	for i := 1; i <= 12; i++ {
 		many = append(many, fmt.Sprintf("generated/f%d.go", i))
 	}
-	r.Commits = []domain.CommitInfo{
+	r.Commits = []proposal.CommitInfo{
 		{Hash: "abcdef0123456789", Subject: "Update scc-operator to v0.5.3", Files: []string{"build.yaml"}},
 		{Hash: "1234567890abcdef", Subject: "Run `./scripts/generate-buildconfig`", Files: many},
 		{Hash: "fedcba9876543210", Subject: "Run `go mod tidy`", Files: []string{"go.mod", "go.sum"}},
@@ -1307,7 +1308,7 @@ func TestFilesText(t *testing.T) {
 func TestRenderTextWithThePreviewShowsTheCommitEachStepWouldMake(t *testing.T) {
 	p := previewPlan()
 	p.Targets[0].Line = "v2.15"
-	p.Targets[0].Preview.Steps = []domain.StepPreview{
+	p.Targets[0].Preview.Steps = []proposal.StepPreview{
 		{Phase: "method preEdit", Run: "scripts/prepare", BeforeEdit: true, CommitMessage: "Run `scripts/prepare`\n\nPart of updating scc-operator to v0.5.3: the method preEdit step.\n\nAutomation: gero ship\n"},
 		{Phase: "edge postEdit", Run: "scripts/generate-buildconfig", CommitMessage: "Run `scripts/generate-buildconfig`\n\nAutomation: gero ship\n"},
 	}
@@ -1326,7 +1327,7 @@ func TestRenderTextWithThePreviewShowsTheCommitEachStepWouldMake(t *testing.T) {
 
 func TestRenderTextWithoutThePreviewFlagLeavesTheStepCommitsOut(t *testing.T) {
 	p := previewPlan()
-	p.Targets[0].Preview.Steps = []domain.StepPreview{{Phase: "edge postEdit", Run: "gen", CommitMessage: "Run `gen`"}}
+	p.Targets[0].Preview.Steps = []proposal.StepPreview{{Phase: "edge postEdit", Run: "gen", CommitMessage: "Run `gen`"}}
 
 	assert.NotContains(t, renderText(p, false), "Step commits")
 }

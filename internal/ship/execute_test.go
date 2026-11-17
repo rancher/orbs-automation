@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 
@@ -74,13 +75,13 @@ func (w *realWorkspace) UpstreamFile(_ context.Context, _, ref, path string) ([]
 	return []byte(runGit(w.t, w.up, "show", ref+":"+path) + "\n"), nil
 }
 
-func newShip(t *testing.T) (*realWorkspace, string, *Executor) {
+func newShip(t *testing.T) (*realWorkspace, string, *proposal.Executor) {
 	t.Helper()
 	up := shipRemote(t)
 	clone := engineer(t, up)
 	ws := &realWorkspace{fakeWorkspace: fixture(t), t: t, up: up}
 	ws.cloneDir = clone
-	return ws, clone, &Executor{Git: GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
+	return ws, clone, &proposal.Executor{Git: proposal.GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
 }
 
 func shipIn(line string) Input {
@@ -88,7 +89,7 @@ func shipIn(line string) Input {
 }
 
 // onlyResult is the result of the one target, which the test requires.
-func onlyResult(t *testing.T, p Plan) *TargetResult {
+func onlyResult(t *testing.T, p Plan) *proposal.TargetResult {
 	t.Helper()
 	require.Len(t, p.Targets, 1)
 	require.NotNil(t, p.Targets[0].Result, "the target has a result")
@@ -118,9 +119,9 @@ func TestShipNoPushCommitsOnANewBranchInTheCloneAndGoesBack(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultCommitted, res.Status)
+	assert.Equal(t, proposal.ResultCommitted, res.Status)
 	assert.Equal(t, botV215, res.Branch)
-	assert.Equal(t, InPlace, res.Place)
+	assert.Equal(t, proposal.InPlace, res.Place)
 	assert.Equal(t, res.Tip(), runGit(t, clone, "rev-parse", botV215))
 	assert.Equal(t, newImage, runGit(t, clone, "show", botV215+":build.yaml")+"\n")
 	assert.NotEmpty(t, res.Changes)
@@ -138,8 +139,8 @@ func TestShipDryRunCommitsInAWorktreeAndLeavesNothingBehind(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultWouldCommit, res.Status)
-	assert.Equal(t, Worktree, res.Place)
+	assert.Equal(t, proposal.ResultWouldCommit, res.Status)
+	assert.Equal(t, proposal.Worktree, res.Place)
 	assert.Contains(t, res.Reason, "dry run")
 	assert.NotEmpty(t, res.Tip())
 	assert.NotEmpty(t, res.Changes)
@@ -158,8 +159,8 @@ func TestShipUsesAWorktreeForADirtyCloneAndKeepsTheBranch(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultCommitted, res.Status)
-	assert.Equal(t, Worktree, res.Place)
+	assert.Equal(t, proposal.ResultCommitted, res.Status)
+	assert.Equal(t, proposal.Worktree, res.Place)
 	assert.Contains(t, res.Reason, "uncommitted")
 	assert.Equal(t, res.Tip(), runGit(t, clone, "rev-parse", botV215))
 	assert.Equal(t, "defaultSccOperatorImage: mine\n", slurp(t, filepath.Join(clone, "build.yaml")), "the engineer's edit is untouched")
@@ -178,15 +179,15 @@ func TestShipMakesACommitForEachTargetAndFailsOnlyTheOneThatFails(t *testing.T) 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn(""), ex, nil)
 
 	require.NoError(t, err)
-	results := map[string]*TargetResult{}
+	results := map[string]*proposal.TargetResult{}
 	for _, tp := range plan.Targets {
 		require.NotNil(t, tp.Result, tp.Branch)
 		results[tp.Branch] = tp.Result
 	}
 	ok, bad := results["release/v2.15"], results["release/v2.14"]
-	assert.Equal(t, ResultCommitted, ok.Status)
+	assert.Equal(t, proposal.ResultCommitted, ok.Status)
 	assert.Equal(t, "v0.5.3", runGit(t, clone, "show", botV215+":generated/tag.txt"), "the step ran and its output is committed")
-	assert.Equal(t, ResultFailed, bad.Status)
+	assert.Equal(t, proposal.ResultFailed, bad.Status)
 	assert.Contains(t, bad.Error, "postEdit[0]")
 	assert.False(t, branchExistsIn(t, clone, botV214), "the failed target leaves no branch")
 	assert.Equal(t, "main", current(t, clone))
@@ -221,7 +222,7 @@ func TestShipAMovedBranchIsAFailureThatSaysToRunAgain(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status)
+	assert.Equal(t, proposal.ResultFailed, res.Status)
 	assert.Contains(t, res.Error, "moved")
 	assert.Contains(t, res.Error, "run it again")
 	assert.False(t, branchExistsIn(t, clone, botV215))
@@ -240,7 +241,7 @@ func TestShipARerunWithCommitsOnTheBranchIsAFailureNamingIt(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status)
+	assert.Equal(t, proposal.ResultFailed, res.Status)
 	assert.Contains(t, res.Error, botV215)
 }
 
@@ -260,11 +261,11 @@ func TestShipMakesNoCommitWhenSomethingBlocksTheRelease(t *testing.T) {
 
 func TestShipWithNoCloneIsAnErrorWhenThereIsAnythingToCommit(t *testing.T) {
 	ws, _, ex := newShip(t)
-	ws.cloneErr = ErrNoClone
+	ws.cloneErr = proposal.ErrNoClone
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
-	require.ErrorIs(t, err, ErrNoClone)
+	require.ErrorIs(t, err, proposal.ErrNoClone)
 	assert.Equal(t, StatusReady, plan.Status, "the plan is still returned")
 	assert.Nil(t, plan.Targets[0].Result)
 }
@@ -312,7 +313,7 @@ func TestShipCommitsTheEditAndEachStepSeparatelyWithTheirOwnMessages(t *testing.
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	require.Equal(t, ResultCommitted, res.Status)
+	require.Equal(t, proposal.ResultCommitted, res.Status)
 	require.Len(t, res.Commits, 2)
 	assert.Equal(t, "Update scc-operator to v0.5.3", res.Commits[0].Subject, "the preview's commit message")
 	assert.Equal(t, "Run `./scripts/gen.sh`", res.Commits[1].Subject)
@@ -348,7 +349,7 @@ func TestShipSignsTheCommitsWhenAskedAndFailsWhenItCannot(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultFailed, res.Status, "asked for signed, so never an unsigned one instead")
+	assert.Equal(t, proposal.ResultFailed, res.Status, "asked for signed, so never an unsigned one instead")
 	assert.False(t, branchExistsIn(t, clone, botV215), "and nothing is left behind")
 }
 
@@ -359,5 +360,5 @@ func TestShipDoesNotSignByDefault(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultCommitted, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultCommitted, onlyResult(t, plan).Status)
 }

@@ -1,18 +1,36 @@
 # TODO
 
-The work that is accepted, by milestone. Nothing is here that has not been checked against the code and decided. The milestones are those of [PHASES](PHASES.md); the detail of each part is in its [spec](specs/README.md).
+Two kinds of item, in two places, so that what can be picked up is never mixed with what must be run.
 
-**Reading an item.** It starts with a verb, names one result, and says what makes it done. The letter is its size: **S** is hours, **M** a day or two, **L** includes design and may need a spec first. *(no code)* needs knowledge of the repos or the release process, and *(needs a real run)* cannot be shown by a test. To take one, open an issue that names it so we do not collide.
+* **Build** items are in the milestone sections: known work that nobody has started, and that can be picked up. Each ends in a test or a result you can name. Nothing is here that has not been checked against the code and decided. The milestones are those of [PHASES](PHASES.md); the detail of each part is in its [spec](specs/README.md).
+* **Verify** items are in [Verify in a real run](#verify-in-a-real-run): things that are built, or configured, and that only a run of `gero` against real repos, a real host or a real token can show to work. They are not work to pick up: run them, and report. What a run finds is either "it works", and the item is deleted, or a defect, and it becomes a Build item in the milestone it belongs to.
 
-**Keeping it true.** When an item is built, delete it here and delete its line from the spec's **Not built yet** list, in the same change.
+**Reading a build item.** It starts with a verb, names one result, and says what makes it done. The letter is its size: **S** is hours, **M** a day or two, **L** includes design and may need a spec first. *(no code)* needs knowledge of the repos or the release process. To take one, open an issue that names it so we do not collide.
 
-| Milestone | Means |
+**Reading a verify item.** It names the command to run, what to check in the result, and what a failure should become. It has no size and nobody takes it: whoever runs it says so on the issue.
+
+**Keeping it true.** When a build item is built, delete it here and delete its line from the spec's **Not built yet** list, in the same change. When a verify item is run and passes, delete it. When it fails, delete it and add the defect as a build item.
+
+| Section | Means |
 |---|---|
+| [Verify in a real run](#verify-in-a-real-run) | Built or configured, shown only by running `gero` for real; not work to pick up |
 | [Before V1](#before-v1) | Needed for v1.0.0 |
 | [After V1](#after-v1) | The v1.x releases, soon after |
 | [Before V2](#before-v2) | Needed for the v2.0.0 gate |
 | [Moonshot and wishlist](#moonshot-and-wishlist) | Wanted, with no date |
 | [On request](#on-request) | Built only if someone asks |
+
+---
+
+## Verify in a real run
+
+Each is built and passes its tests, which use fakes. What follows is what a test cannot show. Run it, and report on the issue.
+
+* **`repo sync` is safe to run again for PromFed.** After the PRs of a first run are open, run `gero repo sync prometheus-federator` again: it says each PR is already open and makes none. Then change what it would write (a new k3s patch, or a holding edited) and run it a third time: the earlier PR of that branch is commented on and closed, and one replaces it. [REPO_SYNC](specs/REPO_SYNC.md)
+* **PromFed's `promfed-chart` Artifact names the file the repo publishes.** Compare `prometheus-federator-{version}.tgz` with the assets of a release of `rancher/prometheus-federator`. A different name is a fix to `config/prometheus-federator.yaml`.
+* **`repo sync` reads the tags of k3s in a reasonable time.** k3s has thousands of tags, listed once for a run. Check the time of the run above and that the host does not rate-limit it.
+* **`ship` and `ci:ship` behave as before the move to `internal/proposal`.** `repo sync` runs on the same conveyor and has been run for real, which shows the commit, push and PR path. What is left is `ship`'s own: run `gero ship <project> --dry-run --no-push` and `--refresh` on a project with open bump PRs, and a `ci:ship` run in a workflow, and compare the report and the JSON with what an earlier build prints. A difference is a defect. [PROPOSAL](specs/PROPOSAL.md)
+* **`auth status` reports a real installation token's 403.** Run `gero auth status` in CI with an installation token that cannot reach the consumer: it says why, and exits as documented. Tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ---
 
@@ -27,7 +45,6 @@ The work that is accepted, by milestone. Nothing is here that has not been check
 * **M: Run steps `from: producer` and `from: central`.** `steprun` refuses both. Done when a step runs a script from the producer's checkout or from the bundle, in `ci:ship` only. [APP_CONFIG](specs/APP_CONFIG.md)
 * **S: Print the preflight line that names workstation signs under a forced CI context,** in `gero ship` and `ci:ship`. It only warns. `clicfg.WorkstationSigns` has no caller. Done when forcing the CI context on a workstation prints the line. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 * **M: Move `shell` onto `ci:ship`, and remove the push scripts of `shell` and `scc-operator`.** Both workflows install a pinned, signed `gero`. Done when neither repo has a push script.
-* **S (needs a real run): Check the `auth status` 403 path against a real installation token.** It is tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ### Tracing the chain
 
@@ -91,7 +108,7 @@ A repo provides workflow templates and configs, and `gero` renders them with the
 * **S: Warn in `gero ship lasso` when the tag is below what the consumer's wrangler requires.** Needs the go.mod of the wrangler the consumer holds. Done when shipping an older lasso than that wrangler needs says so on the target. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
 * **M: Let `gero ship --line` take lines held on different streams,** such as `wrangler --line v2.15,v2.16 --to bro`, as one plan for each stream. It is refused today. Done when each line gets the release of its own stream in one run. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
 * **M: Enforce `requiresPrerelease` for tags made by hand or by a workflow.** `gero repo tag` enforces it only for its own tags. Done when a stable tag without a prior prerelease is reported wherever it was made. [IMPLEMENTATION](IMPLEMENTATION.md)
-* **M: Move closing superseded PRs, the plan and the publish steps out of `internal/ship` into `internal/task`.** Behaviour does not change. Done when `ship` calls tasks for each step and its tests still pass. [PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md)
+* **M: Move closing superseded PRs, the plan and the publish steps out of `internal/proposal` into `internal/task`.** Behaviour does not change. Done when the conveyor calls tasks for each step and the tests of `ship` and `repo sync` still pass. [PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md)
 * **S: Print the preflight line in `gero repo branch` and `gero repo tag`,** which do not print one. Done when both name the acting identity and how it signs. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ### Checks over the chain
@@ -109,6 +126,15 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 * **M: Give every command the logger through the context.** `ship` builds its own in `cmd/` and no other command logs. Done when one logger is built and handed down. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
 * **M: Narrow `ship.Git` and `ship.Remote` to what each task calls.** Both carry every method any task needs. Done when each task takes an interface of its own.
 * **S: Add `--json` to `gero config validate` and `--output env` to `gero auth status`.** Done when each renders and exits as the text form does. [CLI_FRAMEWORK](specs/CLI_FRAMEWORK.md)
+
+### Repo sync
+
+`gero repo sync` is the pull side of `ship`: it brings what a project holds in line with config, one PR for each branch. It does series holdings and release holdings now. [REPO_SYNC](specs/REPO_SYNC.md)
+
+* **L: Pull a release holding that pins another Artifact with `repo sync`.** The companion (lasso with wrangler) comes from the go.mod of the release that is written, which `ship` derives; `sync` leaves the holding to it. Done when `sync` writes the pinned module in the same PR, with the release the pin resolves. [REPO_SYNC](specs/REPO_SYNC.md)
+* **M: Move the refresh of an open PR into `internal/proposal`.** Its logic is `ship`'s today, and `repo sync` has no `--refresh` for want of it. Done when `ship` calls the conveyor for it, its refresh tests pass as they were, and `repo sync --refresh` rebuilds a stale PR of its own. [PROPOSAL](specs/PROPOSAL.md)
+* **M: Bring a commit or branch holding in line with `repo sync`.** The wanted value is the head of the producer's branch for the stage. Needs "Read a commit or a branch that a repo holds, at a ref" under Tracing the chain first: the engine skips both kinds today. Done when a differing commit holding is written by `sync` through an Edit.
+* **M: Run `repo sync` for every project a team owns.** Done when one command opens the PRs of each owned project and reports each by project.
 
 ### Doctor and the workstation
 

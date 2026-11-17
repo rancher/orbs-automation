@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/proposal"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +17,7 @@ func withFork(t *testing.T, ws *realWorkspace, clone string) (bare string) {
 	bare = filepath.Join(t.TempDir(), "fork.git")
 	runGit(t, t.TempDir(), "init", "--quiet", "--bare", bare)
 	runGit(t, clone, "remote", "add", "fork", bare)
-	ws.push = PushSettings{Fork: "fork", Upstream: "upstream", GitHubUser: "danpock"}
+	ws.push = proposal.PushSettings{Fork: "fork", Upstream: "upstream", GitHubUser: "danpock"}
 	return bare
 }
 
@@ -27,13 +29,13 @@ func TestShipPushesToTheForkWhenOneIsSetAndTheHeadNamesItsOwner(t *testing.T) {
 
 	require.NoError(t, err)
 	res := onlyResult(t, plan)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	assert.Equal(t, "fork", res.Pushed)
 	assert.Equal(t, res.Tip(), runGit(t, bare, "rev-parse", botV215), "the branch is in the fork")
 	assert.NotContains(t, runGit(t, ws.up, "branch", "--list", botV215), "bot/", "and not in the upstream")
-	assert.True(t, lg.has("create rancher/rancher head=danpock:"+botV215), "the head is the fork's owner and the branch")
+	assert.True(t, lg.Has("create rancher/rancher head=danpock:"+botV215), "the head is the fork's owner and the branch")
 	require.NotNil(t, plan.Push)
-	assert.Equal(t, PushTarget{Role: RoleFork, Remote: "fork", Source: "a fork is set"}, *plan.Push)
+	assert.Equal(t, proposal.PushTarget{Role: proposal.RoleFork, Remote: "fork", Source: "a fork is set"}, *plan.Push)
 }
 
 func TestShipThePushToFlagBeatsTheForkAndPushesToTheUpstream(t *testing.T) {
@@ -48,7 +50,7 @@ func TestShipThePushToFlagBeatsTheForkAndPushesToTheUpstream(t *testing.T) {
 	assert.Equal(t, "upstream", onlyResult(t, plan).Pushed)
 	assert.Equal(t, onlyResult(t, plan).Tip(), runGit(t, ws.up, "rev-parse", botV215))
 	assert.Empty(t, runGit(t, bare, "branch", "--list", botV215))
-	assert.True(t, lg.has("create rancher/rancher head="+botV215+" "), "the bare branch for the upstream")
+	assert.True(t, lg.Has("create rancher/rancher head="+botV215+" "), "the bare branch for the upstream")
 	require.NotNil(t, plan.Push)
 	assert.Equal(t, "--push-to", plan.Push.Source)
 }
@@ -85,7 +87,7 @@ func TestShipInCIPushesToTheUpstreamWhateverTheSettingsSayAndLabelsAsTheBot(t *t
 	ws.links[0].Consumer.PushTo = "fork"
 	ws.links[0].Consumer.Labels = []string{"status/auto-created"}
 	ws.links[0].Consumer.BotLabels = []string{"origin/bot"}
-	remote.labels = []string{"status/auto-created", "origin/bot"}
+	remote.Labels = []string{"status/auto-created", "origin/bot"}
 	in := realRun()
 	in.CI = true
 
@@ -95,20 +97,20 @@ func TestShipInCIPushesToTheUpstreamWhateverTheSettingsSayAndLabelsAsTheBot(t *t
 	assert.Equal(t, "upstream", onlyResult(t, plan).Pushed)
 	require.NotNil(t, plan.Push)
 	assert.Equal(t, "CI always pushes to the upstream", plan.Push.Source)
-	assert.True(t, lg.has("add labels #104 status/auto-created,origin/bot"), "the bot's labels are added in CI")
+	assert.True(t, lg.Has("add labels #104 status/auto-created,origin/bot"), "the bot's labels are added in CI")
 }
 
 func TestShipAnEngineersPRDoesNotGetTheBotLabels(t *testing.T) {
 	ws, _, ex, remote, lg := publishing(t)
 	ws.links[0].Consumer.Labels = []string{"status/auto-created"}
 	ws.links[0].Consumer.BotLabels = []string{"origin/bot"}
-	remote.labels = []string{"status/auto-created", "origin/bot"}
+	remote.Labels = []string{"status/auto-created", "origin/bot"}
 
 	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
-	assert.True(t, lg.has("add labels #104 status/auto-created"))
-	assert.False(t, lg.has("add labels #104 status/auto-created,origin/bot"))
+	assert.True(t, lg.Has("add labels #104 status/auto-created"))
+	assert.False(t, lg.Has("add labels #104 status/auto-created,origin/bot"))
 }
 
 func TestShipAForkPushWithNoGitHubUserStopsBeforeAnyWork(t *testing.T) {
@@ -122,7 +124,7 @@ func TestShipAForkPushWithNoGitHubUserStopsBeforeAnyWork(t *testing.T) {
 	assert.Contains(t, err.Error(), "githubUser")
 	assert.Equal(t, StatusReady, plan.Status, "the plan is still returned")
 	assert.False(t, branchExistsIn(t, clone, botV215))
-	assert.False(t, lg.has("push"))
+	assert.False(t, lg.Has("push"))
 }
 
 func TestShipARoleWithNoRemoteStopsBeforeAnyWorkAndSaysWhatToSet(t *testing.T) {

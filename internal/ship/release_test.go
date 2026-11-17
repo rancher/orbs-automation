@@ -17,7 +17,7 @@ func resolveRelease(t *testing.T, p projectSpec, all []git.Tag, arg string, prer
 	require.NoError(t, err)
 	scheme, err := tagscheme.ForProject(project)
 	require.NoError(t, err)
-	return ResolveRelease(scheme, project.Slug(), all, arg, prerelease, accept == "all")
+	return tagscheme.ResolveRelease(scheme, project.Slug(), all, arg, prerelease, accept == "all")
 }
 
 var sccTags = tags("v0.5.2", "v0.5.3-rc.1", "v0.5.3", "v0.6.0-rc.1", "main-abc1234")
@@ -43,7 +43,7 @@ func TestResolveReleaseAnExplicitTag(t *testing.T) {
 
 func TestResolveReleaseATagThatDoesNotExist(t *testing.T) {
 	_, err := resolveRelease(t, universal(), sccTags, "v9.9.9", false, "stable")
-	assert.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorIs(t, err, tagscheme.ErrNoRelease)
 	assert.ErrorContains(t, err, "v9.9.9")
 }
 
@@ -66,27 +66,27 @@ func TestResolveReleaseALine(t *testing.T) {
 
 func TestResolveReleaseALineWithNoTags(t *testing.T) {
 	_, err := resolveRelease(t, lined(), tags("v9.0.0"), "v2.15", false, "stable")
-	assert.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorIs(t, err, tagscheme.ErrNoRelease)
 	assert.ErrorContains(t, err, "v2.15")
 }
 
 func TestResolveReleaseNeitherATagNorALine(t *testing.T) {
 	_, err := resolveRelease(t, lined(), tags("v9.0.0"), "latest", false, "stable")
-	assert.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorIs(t, err, tagscheme.ErrNoRelease)
 	assert.ErrorContains(t, err, "neither a tag nor a release line")
 
 	_, err = resolveRelease(t, universal(), sccTags, "v2.15", false, "stable")
-	assert.ErrorIs(t, err, ErrNoRelease, "a project with no lines has no line to name")
+	assert.ErrorIs(t, err, tagscheme.ErrNoRelease, "a project with no lines has no line to name")
 }
 
 func TestResolveReleaseNothingReleasedYet(t *testing.T) {
 	_, err := resolveRelease(t, universal(), tags("main-abc1234"), "", false, "stable")
-	assert.ErrorIs(t, err, ErrNoRelease)
+	assert.ErrorIs(t, err, tagscheme.ErrNoRelease)
 }
 
 func TestResolveReleaseAPrereleaseTag(t *testing.T) {
 	_, err := resolveRelease(t, universal(), sccTags, "v0.6.0-rc.1", false, "stable")
-	assert.ErrorIs(t, err, ErrPrerelease, "the consumer takes stable releases only")
+	assert.ErrorIs(t, err, tagscheme.ErrPrerelease, "the consumer takes stable releases only")
 	assert.ErrorContains(t, err, "--prerelease")
 
 	got, err := resolveRelease(t, universal(), sccTags, "v0.6.0-rc.1", true, "stable")
@@ -109,7 +109,7 @@ func TestResolveReleaseAStreamWithOnlyPrereleasesNamesTheFlag(t *testing.T) {
 
 	_, err := resolveRelease(t, universal(), rcs, "", false, "stable")
 
-	require.ErrorIs(t, err, ErrNoRelease)
+	require.ErrorIs(t, err, tagscheme.ErrNoRelease)
 	assert.ErrorContains(t, err, "no stable release")
 	assert.ErrorContains(t, err, "v0.7.0-rc.2", "it names the newest there is")
 	assert.ErrorContains(t, err, "--prerelease")
@@ -122,6 +122,6 @@ func TestResolveReleaseAStreamWithOnlyPrereleasesNamesTheFlag(t *testing.T) {
 func TestResolveReleaseAStreamWithNoTagsAtAllSaysNone(t *testing.T) {
 	_, err := resolveRelease(t, universal(), nil, "", false, "stable")
 
-	require.ErrorIs(t, err, ErrNoRelease)
+	require.ErrorIs(t, err, tagscheme.ErrNoRelease)
 	assert.ErrorContains(t, err, "has no release tags")
 }

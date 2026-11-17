@@ -7,11 +7,13 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/cli/branchtags"
 	"github.com/rancher/orbs-automation/internal/cli/imagesexist"
+	"github.com/rancher/orbs-automation/internal/cli/logging"
 	"github.com/rancher/orbs-automation/internal/cli/repobranch"
 	"github.com/rancher/orbs-automation/internal/cli/repoclone"
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/rancher/orbs-automation/internal/cli/repolist"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
+	"github.com/rancher/orbs-automation/internal/cli/reposync"
 	"github.com/rancher/orbs-automation/internal/cli/repotag"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/spf13/cobra"
@@ -314,6 +316,7 @@ is not found or a registry could not be reached.`,
 		},
 	})
 	repoCmd.AddCommand(imagesCmd)
+	repoCmd.AddCommand(syncCommand())
 	repoCmd.AddCommand(
 		infoCmd,
 		listCmd,
@@ -347,4 +350,65 @@ else from the git repository in the current directory.`,
 		},
 	)
 	root.AddCommand(repoCmd)
+}
+
+// syncCommand is gero repo sync: bring what a project holds in line with config.
+func syncCommand() *cobra.Command {
+	var in reposync.Options
+	cmd := &cobra.Command{
+		Use:   "sync [project]",
+		Short: "Bring what a project holds in line with config, one pull request for each branch",
+		Long: `Check what a project holds against what config says it should, and open a pull
+request for each of its branches that has something to correct, with every
+correction of the branch in it.
+
+Where gero ship pushes a release down to the projects that hold it, sync pulls: it
+reads the project's own files and brings them in line. Today that is its series
+holdings, files that name a series and no release (prometheus-federator's
+kuberlrVersion: v9), which another tool reads to pick the newest release of it. A
+holding is written only when an Edit follows it: nothing is written until an Edit says
+what a write of it takes, so one with none is reported and left alone. gero repo status
+says where a holding differs.
+
+<project> is the project whose files are checked, by its config name or owner/name
+slug; leave it out for the project whose repository you are in. A pull request has
+one base branch, so a project with a branch for each Rancher line gets one for each
+branch that differs, and a branch with several corrections gets them all in one:
+the write of every holding, then each step of the Edits that follow them, run once.
+--holding limits the run to the holdings named and --line to the Rancher lines.
+
+It works as gero ship does: in your own clone, on a new branch (or a worktree when the
+clone is dirty); it asks once before it pushes the branches and opens the PRs, and --yes
+goes on without asking. A later sync that finds other corrections closes your own
+earlier pull request for the branch. --no-push stops after the commits and --dry-run
+does everything but write.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			if len(args) > 0 {
+				in.Project = args[0]
+			}
+			s := settingsFrom(cmd)
+			in.Yes = s.NonInteractive
+			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
+			in.In, in.Interactive = cmd.InOrStdin(), termfacts.IsTerminal(os.Stdin)
+			return reposync.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
+		},
+	}
+	flags := cmd.Flags()
+	flags.StringSliceVar(&in.Holdings, "holding", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
+	flags.StringSliceVar(&in.Lines, "line", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
+	flags.BoolVar(&in.Preview, "preview", false, "print the commit message and the PR body too")
+	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
+	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
+	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
+	return cmd
 }

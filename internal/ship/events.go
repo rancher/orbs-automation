@@ -1,6 +1,9 @@
 package ship
 
-import "github.com/rancher/orbs-automation/internal/registry"
+import (
+	"github.com/rancher/orbs-automation/internal/proposal"
+	"github.com/rancher/orbs-automation/internal/registry"
+)
 
 // EventKind says what happened.
 type EventKind string
@@ -62,15 +65,15 @@ type Event struct {
 	// Producer is the repository of a companion, for the ImagesChecked of its release,
 	// and empty for the release asked for.
 	Producer string
-	Images   *registry.Report // ImagesChecked
-	Place    Place            // TargetStarted: where the work is done
-	Reason   string           // TargetStarted: why that was a worktree
-	Commit   *CommitInfo      // Commit
-	Actor    *Actor           // Actor
-	Decision *Publish         // Decided
-	Remote   string           // Pushed: the remote's name
-	PR       *PRRef           // PROpened, Superseded
-	Result   *TargetResult    // TargetDone
+	Images   *registry.Report       // ImagesChecked
+	Place    proposal.Place         // TargetStarted: where the work is done
+	Reason   string                 // TargetStarted: why that was a worktree
+	Commit   *proposal.CommitInfo   // Commit
+	Actor    *proposal.Actor        // proposal.Actor
+	Decision *proposal.Decision     // Decided
+	Remote   string                 // Pushed: the remote's name
+	PR       *proposal.PRRef        // PROpened, Superseded
+	Result   *proposal.TargetResult // TargetDone
 }
 
 // Sink receives the events of a run as they happen, on the goroutine that runs
@@ -84,4 +87,23 @@ func emit(sink Sink, e Event) {
 	if sink != nil {
 		sink.Event(e)
 	}
+}
+
+// proposalSink passes the events of the proposal conveyor to a Sink of ship, as its own: the
+// kinds are the same words.
+type proposalSink struct{ Sink }
+
+func (s proposalSink) Event(e proposal.Event) {
+	s.Sink.Event(Event{
+		Kind: EventKind(e.Kind), Branch: e.Branch, Line: e.Line, NewBranch: e.NewBranch, Remote: e.Remote, PR: e.PR,
+		Place: e.Place, Reason: e.Reason, Commit: e.Commit, Decision: e.Decision,
+	})
+}
+
+// asProposalSink is sink for the conveyor, and none for none.
+func asProposalSink(sink Sink) proposal.Sink {
+	if sink == nil {
+		return nil
+	}
+	return proposalSink{sink}
 }

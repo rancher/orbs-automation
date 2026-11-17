@@ -30,7 +30,7 @@ type At struct {
 
 // Holds is what the place holds of a producer.
 type Holds struct {
-	Kind   string      `yaml:"kind"` // release, commit or branch
+	Kind   string      `yaml:"kind"` // release, commit, branch or series
 	Form   string      `yaml:"form"` // a template: how the text is written
 	Lines  lines.Range `yaml:"lines"`
 	Stage  string      `yaml:"stage"`

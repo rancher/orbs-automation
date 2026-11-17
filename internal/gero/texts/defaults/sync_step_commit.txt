@@ -1,0 +1,5 @@
+Run `{command}`
+
+Part of syncing {holdings} on {line}: the {phase} step.
+
+Automation: gero ship

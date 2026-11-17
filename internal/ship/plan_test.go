@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/tagscheme"
+
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
 	"github.com/rancher/orbs-automation/internal/bump"
@@ -79,7 +81,7 @@ func TestCheckAnExplicitTagAndALine(t *testing.T) {
 
 func TestCheckARefusedPrerelease(t *testing.T) {
 	_, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.6.0-rc.1", Lines: []string{"v2.16"}})
-	assert.ErrorIs(t, err, ErrPrerelease)
+	assert.ErrorIs(t, err, tagscheme.ErrPrerelease)
 
 	got, err := Check(ctx, withDevLine(fixture(t)), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", Arg: "v0.6.0-rc.1", Lines: []string{"v2.16"}, Prerelease: true})
 	require.NoError(t, err)
@@ -587,7 +589,7 @@ func TestCheckALinedProducerSkipsALineWithNoReleaseButNamingItIsAnError(t *testi
 	assert.Contains(t, got.Notes[0], "v2.16", "and it says so")
 
 	_, err = Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "kuberlr", Lines: []string{"v2.16"}})
-	require.ErrorIs(t, err, ErrNoRelease)
+	require.ErrorIs(t, err, tagscheme.ErrNoRelease)
 	assert.ErrorContains(t, err, "v2.16")
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/reposync"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
@@ -775,4 +776,44 @@ func TestRenderTextNamesTheStreamOfAConsumerThatTakesSeveralOfThem(t *testing.T)
 	assert.Contains(t, out, "Consumers: backup-restore-operator (rancher/backup-restore-operator), stream wrangler-v3-7\n")
 	assert.Contains(t, out, "Consumers: backup-restore-operator (rancher/backup-restore-operator), stream wrangler-v3-3\n")
 	assert.Contains(t, out, "Consumers: rancher (rancher/rancher)\n", "rancher takes one stream, so it needs none named")
+}
+
+func seriesStatus() Status {
+	return Status{Slug: "rancher/prometheus-federator", Series: []reposync.SeriesHolding{{
+		Name: "prometheus-federator-holds-kuberlr", Producer: "rancher/kuberlr-kubectl", Stream: "kuberlr-kubectl",
+		Edits: []string{"promfed-edit"},
+		Lines: []reposync.SeriesLine{
+			{Line: "v2.16", Branch: "main", File: "build.yaml", Current: "v9", Want: "v9", UpToDate: true},
+			{Line: "v2.15", Branch: "release/v7.x", File: "build.yaml", Current: "v9", Want: "v8",
+				Suggest: "open a pull request on release/v7.x of rancher/prometheus-federator that writes v8, with Edit promfed-edit"},
+			{Line: "v2.14", Branch: "release/v6.x", File: "build.yaml", Current: "v7", Want: "v7.1", Acknowledged: "held on purpose"},
+			{Line: "v2.13", Branch: "release/v5.x", Error: "read build.yaml: file not found"},
+		},
+	}}}
+}
+
+func TestRenderTextHasASeriesSectionForWhatTheProjectHoldsOfAStream(t *testing.T) {
+	out := renderText(seriesStatus(), nil)
+
+	_, section, found := strings.Cut(out, "\nSeries: prometheus-federator-holds-kuberlr, stream kuberlr-kubectl (rancher/kuberlr-kubectl)\n")
+	require.True(t, found, out)
+	for _, want := range []string{"HOLDS", "WANTS", "v2.16", "main", "current", "v2.15", "release/v7.x", "differs [series-differs]",
+		"differs, acknowledged: held on purpose", "unreadable: read build.yaml: file not found",
+		"open a pull request on release/v7.x of rancher/prometheus-federator that writes v8, with Edit promfed-edit"} {
+		assert.Contains(t, section, want)
+	}
+	assert.NotContains(t, section, "that writes v7.1", "an acknowledged difference is not suggested")
+}
+
+func TestRenderTextHasNoSeriesSectionForAProjectWithNone(t *testing.T) {
+	assert.NotContains(t, renderText(Status{Slug: "rancher/rancher"}, nil), "Series:")
+}
+
+func TestRenderJSONCarriesTheSeries(t *testing.T) {
+	out, err := renderJSON(seriesStatus())
+
+	require.NoError(t, err)
+	assert.Contains(t, out, `"series": [`)
+	assert.Contains(t, out, `"want": "v8"`)
+	assert.Contains(t, out, `"upToDate": false`)
 }

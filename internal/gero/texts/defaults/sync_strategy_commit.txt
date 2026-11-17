@@ -1,0 +1,7 @@
+Run {strategy}
+
+{changes}
+
+Part of syncing {holdings} on {line}: the {strategy} strategy of edit {edit}.
+
+Automation: gero ship

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParse(t *testing.T) {
@@ -12,13 +13,13 @@ func TestParse(t *testing.T) {
 		want Version
 		ok   bool
 	}{
-		{"v2.15.3", Version{2, 15, 3, ""}, true},
-		{"2.15.3", Version{2, 15, 3, ""}, true},
-		{"v2.15.0-rc.1", Version{2, 15, 0, "rc.1"}, true},
-		{"v2.15.0-alpha10", Version{2, 15, 0, "alpha10"}, true},
-		{"v1.0.0-rc.1+build.5", Version{1, 0, 0, "rc.1"}, true},
-		{"v1.0.0+build.5", Version{1, 0, 0, ""}, true},
-		{"v1.0.0-x-y.z", Version{1, 0, 0, "x-y.z"}, true},
+		{"v2.15.3", Version{Major: 2, Minor: 15, Patch: 3, Prerelease: ""}, true},
+		{"2.15.3", Version{Major: 2, Minor: 15, Patch: 3, Prerelease: ""}, true},
+		{"v2.15.0-rc.1", Version{Major: 2, Minor: 15, Patch: 0, Prerelease: "rc.1"}, true},
+		{"v2.15.0-alpha10", Version{Major: 2, Minor: 15, Patch: 0, Prerelease: "alpha10"}, true},
+		{"v1.0.0-rc.1+build.5", Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "rc.1", Build: "build.5"}, true},
+		{"v1.0.0+build.5", Version{Major: 1, Minor: 0, Patch: 0, Build: "build.5"}, true},
+		{"v1.0.0-x-y.z", Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "x-y.z"}, true},
 		{"v01.2.3", Version{}, false},
 		{"v1.2", Version{}, false},
 		{"v1.2.3.4", Version{}, false},
@@ -28,7 +29,7 @@ func TestParse(t *testing.T) {
 		{"V1.2.3", Version{}, false},
 		{"vv1.2.3", Version{}, false},
 		{"main-abc1234", Version{}, false},
-		{"v1.2.3-head-0123456", Version{1, 2, 3, "head-0123456"}, true},
+		{"v1.2.3-head-0123456", Version{Major: 1, Minor: 2, Patch: 3, Prerelease: "head-0123456"}, true},
 		{"", Version{}, false},
 	}
 	for _, tt := range tests {
@@ -41,8 +42,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestVersionIsPrerelease(t *testing.T) {
-	assert.True(t, Version{1, 0, 0, "rc.1"}.IsPrerelease())
-	assert.False(t, Version{1, 0, 0, ""}.IsPrerelease())
+	assert.True(t, Version{Major: 1, Minor: 0, Patch: 0, Prerelease: "rc.1"}.IsPrerelease())
+	assert.False(t, Version{Major: 1, Minor: 0, Patch: 0, Prerelease: ""}.IsPrerelease())
 }
 
 func TestCompare(t *testing.T) {
@@ -88,4 +89,39 @@ func TestCompareNumbersAreNumeric(t *testing.T) {
 	a, _ := Parse("v2.9.0")
 	b, _ := Parse("v2.15.0")
 	assert.Equal(t, -1, Compare(a, b), "9 < 15, not text order")
+}
+
+func TestCompareBreaksATieByTheNumberOfTheBuildRevision(t *testing.T) {
+	for name, tt := range map[string]struct {
+		a, b string
+		want int
+	}{
+		"a respin of k3s is newer":         {"v1.35.0+k3s1", "v1.35.0+k3s3", -1},
+		"the other way round":              {"v1.35.0+k3s3", "v1.35.0+k3s1", 1},
+		"by number, not by text":           {"v1.35.0+k3s9", "v1.35.0+k3s10", -1},
+		"rke2 revisions are the same":      {"v1.35.0+rke2r1", "v1.35.0+rke2r2", -1},
+		"the same revision is equal":       {"v1.35.0+k3s2", "v1.35.0+k3s2", 0},
+		"dotted build identifiers":         {"v1.0.0+build.5", "v1.0.0+build.7", -1},
+		"builds of another kind are equal": {"v1.0.0+one", "v1.0.0+two", 0},
+		"no build is equal to a build":     {"v1.0.0", "v1.0.0+k3s1", 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, ok := Parse(tt.a)
+			require.True(t, ok)
+			b, ok := Parse(tt.b)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.want, Compare(a, b))
+		})
+	}
+}
+
+func TestBuildNeverOverridesTheVersionOrThePrerelease(t *testing.T) {
+	older, _ := Parse("v1.35.0+k3s3")
+	newer, _ := Parse("v1.35.1+k3s1")
+	assert.Equal(t, -1, Compare(older, newer), "a higher patch wins whatever the revision")
+
+	rc, _ := Parse("v1.35.1-rc2+k3s9")
+	stable, _ := Parse("v1.35.1+k3s1")
+	assert.Equal(t, -1, Compare(rc, stable), "a prerelease is below its release whatever the revision")
 }

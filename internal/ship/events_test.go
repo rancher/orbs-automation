@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
+	"github.com/rancher/orbs-automation/internal/proposal"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/stretchr/testify/assert"
@@ -44,7 +45,7 @@ func (r *recording) first(t *testing.T, kind EventKind) Event {
 
 // twoTargets is a run with release/v2.15 to commit, with a step that makes a
 // second commit, and release/v2.14 already up to date.
-func twoTargets(t *testing.T) (*realWorkspace, *Executor) {
+func twoTargets(t *testing.T) (*realWorkspace, *proposal.Executor) {
 	t.Helper()
 	ws, _, ex := newShip(t)
 	runGit(t, ws.up, "checkout", "--quiet", "release/v2.14")
@@ -90,7 +91,7 @@ func TestShipEmitsTheEventsInTheOrderTheWorkHappens(t *testing.T) {
 	require.NotNil(t, rec.first(t, EventImagesChecked).Images)
 	started := rec.first(t, EventTargetStarted)
 	assert.Equal(t, "release/v2.15", started.Branch)
-	assert.Equal(t, InPlace, started.Place)
+	assert.Equal(t, proposal.InPlace, started.Place)
 	commits := rec.of(EventCommit)
 	require.Len(t, commits, 2)
 	require.NotNil(t, commits[0].Commit)
@@ -100,7 +101,7 @@ func TestShipEmitsTheEventsInTheOrderTheWorkHappens(t *testing.T) {
 	assert.Equal(t, "release/v2.15", commits[0].Branch)
 	done := rec.first(t, EventTargetDone)
 	require.NotNil(t, done.Result)
-	assert.Equal(t, ResultCommitted, done.Result.Status)
+	assert.Equal(t, proposal.ResultCommitted, done.Result.Status)
 	assert.Equal(t, "release/v2.15", done.Branch)
 
 	final := rec.first(t, EventDone)
@@ -152,7 +153,7 @@ func TestShipAFailureAfterACommitStillEndsTheTarget(t *testing.T) {
 		EventTargetStarted, EventCommit, EventCommit, EventTargetDone, EventDone,
 	}, rec.kinds(), "the commits made before the failure were reported as they were made")
 	require.NotNil(t, rec.first(t, EventTargetDone).Result)
-	assert.Equal(t, ResultFailed, rec.first(t, EventTargetDone).Result.Status)
+	assert.Equal(t, proposal.ResultFailed, rec.first(t, EventTargetDone).Result.Status)
 }
 
 func TestShipAnErrorBeforeThePlanEmitsNoDone(t *testing.T) {
@@ -182,7 +183,7 @@ func TestShipTargetsThatCouldNotBeReadAreStillReported(t *testing.T) {
 
 func TestShipEveryEventAboutATargetNamesItsLineAndAPushNamesTheBranch(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
 	rec := &recording{}
 
 	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, rec)

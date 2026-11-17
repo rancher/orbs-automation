@@ -1,0 +1,147 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# prometheus-federator: owned, one release stream for each line, as BRO. The line-to-branch table is in the repo's README.
+# release/v3.x and older serve lines past v2.12, which are not in config. What it produces and who holds it are not described yet.
+apiVersion: gero/v1alpha2
+kind: Project
+name: prometheus-federator
+spec:
+  aliases: ["promfed"]
+  repo: {name: rancher/prometheus-federator, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}                                  # branch omitted: main, while the line is in development
+      - {line: v2.15, branch: release/v7.x}
+      - {line: v2.14, branch: release/v6.x}
+      - {line: v2.13, branch: release/v5.x}
+      - {line: v2.12, branch: release/v4.x}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: prometheus-federator
+refs: {project: prometheus-federator}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.16, series: "8.x"}
+    - {line: v2.15, series: "7.x"}
+    - {line: v2.14, series: "6.x"}
+    - {line: v2.13, series: "5.x"}
+    - {line: v2.12, series: "4.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: promfed-image
+refs: {stream: prometheus-federator}
+spec: {kind: image, name: rancher/prometheus-federator}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: promfed-chart
+refs: {stream: prometheus-federator}
+spec: {kind: file, name: "prometheus-federator-{version}.tgz"}
+---
+# What PromFed holds of kuberlr: the major only, in build.yaml. Its own tooling takes the newest release of that major, so
+# this names no release: it holds the series the kuberlr stream has for the line (v2.16 is 9.x, written v9).
+# release/v7.x (v2.15) holds v9 where the stream says 8.x: the branch is wrong.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-kuberlr
+refs: {project: prometheus-federator, stream: kuberlr-kubectl}
+spec:
+  at: {file: build.yaml, key: kuberlrVersion, format: yaml}
+  holds: {kind: series, form: "v{major}"}
+---
+# What PromFed holds of k3s in build.yaml: the newest stable patch of the minor each end of its test range is on, for each Rancher
+# line. The minors are those of the line's Kubernetes range, and gero repo sync moves the patch; the file holds the git tag, with a +.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-31-min
+refs: {project: prometheus-federator, artifact: k3s-1-31-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMinVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.12, until: v2.12}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-32-min
+refs: {project: prometheus-federator, artifact: k3s-1-32-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMinVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.13, until: v2.13}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-33-min
+refs: {project: prometheus-federator, artifact: k3s-1-33-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMinVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.14, until: v2.14}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-34-min
+refs: {project: prometheus-federator, artifact: k3s-1-34-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMinVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.15, until: v2.15}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-35-min
+refs: {project: prometheus-federator, artifact: k3s-1-35-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMinVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.16, until: v2.16}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-33-max
+refs: {project: prometheus-federator, artifact: k3s-1-33-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMaxVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.12, until: v2.12}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-34-max
+refs: {project: prometheus-federator, artifact: k3s-1-34-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMaxVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.13, until: v2.13}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-35-max
+refs: {project: prometheus-federator, artifact: k3s-1-35-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMaxVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.14, until: v2.14}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-36-max
+refs: {project: prometheus-federator, artifact: k3s-1-36-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMaxVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.15, until: v2.15}}
+---
+apiVersion: gero/v1alpha2
+kind: Holding
+name: prometheus-federator-holds-k3s-1-37-max
+refs: {project: prometheus-federator, artifact: k3s-1-37-binary}
+spec:
+  at: {file: build.yaml, key: k3sTestingMaxVersion, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.16, until: v2.16}}
+---
+# build.yaml is not the whole change: pkg/buildconfig/constants.go is generated from it (KuberlrVersion), so the generator that
+# the repo's own go:generate names for it runs after the write. Nothing writes the holding without an Edit.
+apiVersion: gero/v1alpha2
+kind: Edit
+name: prometheus-federator-regenerate-buildconfig
+refs: {holding: [prometheus-federator-holds-kuberlr, prometheus-federator-holds-k3s-1-31-min, prometheus-federator-holds-k3s-1-32-min, prometheus-federator-holds-k3s-1-33-min, prometheus-federator-holds-k3s-1-34-min, prometheus-federator-holds-k3s-1-35-min, prometheus-federator-holds-k3s-1-33-max, prometheus-federator-holds-k3s-1-34-max, prometheus-federator-holds-k3s-1-35-max, prometheus-federator-holds-k3s-1-36-max, prometheus-federator-holds-k3s-1-37-max]}
+spec:
+  env:
+    GOTOOLCHAIN: "{goToolchain}"
+  postEdit:
+    - {run: [go, run, pkg/codegen/buildconfig/writer.go, pkg/codegen/buildconfig/main.go]}

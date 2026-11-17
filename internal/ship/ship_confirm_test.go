@@ -6,18 +6,19 @@ import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // asked records the confirmations it was given, and answers them.
 type asked struct {
-	got    []Confirmation
+	got    []proposal.Confirmation
 	answer bool
 	err    error
 }
 
-func (a *asked) confirm(_ context.Context, c Confirmation) (bool, error) {
+func (a *asked) confirm(_ context.Context, c proposal.Confirmation) (bool, error) {
 	a.got = append(a.got, c)
 	return a.answer, a.err
 }
@@ -27,22 +28,22 @@ func everyBranch() Input { return Input{Team: testTeam, Project: "scc-operator"}
 
 // onBase is an existing PR of the actor's for the bump to a base.
 func onBase(base string, number int, author, version string) pulls.PR {
-	return pr(number, author, Marker{Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: base, Version: version})
+	return pr(number, author, proposal.Marker{Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: base, Version: version})
 }
 
 func TestShipAsksOnceBeforeAnythingIsWrittenAndSaysWhatWillBeDone(t *testing.T) {
 	ws, clone, ex, remote, lg := publishing(t)
-	remote.openBy = map[string]pulls.Open{
+	remote.OpenBy = map[string]pulls.Open{
 		"release/v2.15": {PRs: []pulls.PR{onBase("release/v2.15", 101, "danpock", "v0.5.2")}},
 		"release/v2.14": {PRs: []pulls.PR{onBase("release/v2.14", 104, "danpock", "v0.5.3")}},
 	}
 	q := &asked{answer: true}
-	ex.Confirm = func(ctx context.Context, c Confirmation) (bool, error) {
+	ex.Confirm = func(ctx context.Context, c proposal.Confirmation) (bool, error) {
 		// Nothing has been written when the question is asked: no branch, no push.
 		assert.False(t, branchExistsIn(t, clone, botV215), "no branch yet")
-		assert.False(t, lg.has("push"))
-		assert.False(t, lg.has("create"))
-		assert.False(t, lg.has("close"))
+		assert.False(t, lg.Has("push"))
+		assert.False(t, lg.Has("create"))
+		assert.False(t, lg.Has("close"))
 		return q.confirm(ctx, c)
 	}
 
@@ -68,14 +69,14 @@ func TestShipDecliningWritesNothingAndReturnsThePlan(t *testing.T) {
 
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
-	require.ErrorIs(t, err, ErrDeclined)
+	require.ErrorIs(t, err, proposal.ErrDeclined)
 	assert.Equal(t, StatusReady, plan.Status, "the plan is still returned")
 	assert.Nil(t, plan.Targets[0].Result, "no work was done")
 	assert.False(t, branchExistsIn(t, clone, botV215), "not even a local branch")
 	assert.Equal(t, "main", current(t, clone))
-	assert.False(t, lg.has("push"))
-	assert.False(t, lg.has("create"))
-	assert.False(t, lg.has("close"))
+	assert.False(t, lg.Has("push"))
+	assert.False(t, lg.Has("create"))
+	assert.False(t, lg.Has("close"))
 }
 
 func TestShipAnErrorFromTheQuestionStopsBeforeAnyWork(t *testing.T) {
@@ -92,7 +93,7 @@ func TestShipAnErrorFromTheQuestionStopsBeforeAnyWork(t *testing.T) {
 
 func TestShipIsNotAskedWhenNothingWouldBeWritten(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3")}} // already open, nothing older
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3")}} // already open, nothing older
 	q := &asked{answer: true}
 	ex.Confirm = q.confirm
 
@@ -100,12 +101,12 @@ func TestShipIsNotAskedWhenNothingWouldBeWritten(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Empty(t, q.got)
-	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, onlyResult(t, plan).Status)
 }
 
 func TestShipIsNotAskedWhenEverythingIsBlocked(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(110, "danpock", "v0.5.4")}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(110, "danpock", "v0.5.4")}}
 	q := &asked{answer: true}
 	ex.Confirm = q.confirm
 
@@ -117,18 +118,18 @@ func TestShipIsNotAskedWhenEverythingIsBlocked(t *testing.T) {
 
 func TestShipAClosingOfOlderPRsAloneIsAWriteThatIsAskedAbout(t *testing.T) {
 	ws, _, ex, remote, lg := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3"), existing(101, "danpock", "v0.5.2")}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3"), existing(101, "danpock", "v0.5.2")}}
 	q := &asked{answer: false}
 	ex.Confirm = q.confirm
 
 	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
-	require.ErrorIs(t, err, ErrDeclined)
+	require.ErrorIs(t, err, proposal.ErrDeclined)
 	require.Len(t, q.got, 1)
 	assert.Empty(t, q.got[0].Opens)
 	assert.Equal(t, []string{"v2.15"}, q.got[0].Already)
 	assert.Len(t, q.got[0].Closes, 1)
-	assert.False(t, lg.has("close"), "declined, so the older PR is still open")
+	assert.False(t, lg.Has("close"), "declined, so the older PR is still open")
 }
 
 func TestShipIsNotAskedForADryRunOrANoPushRun(t *testing.T) {
@@ -153,7 +154,7 @@ func TestShipWithNoConfirmGoesOn(t *testing.T) {
 	plan, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, ResultOpened, onlyResult(t, plan).Status)
+	assert.Equal(t, proposal.ResultOpened, onlyResult(t, plan).Status)
 }
 
 func TestShipEveryTargetIsDecidedBeforeTheFirstOneStarts(t *testing.T) {
@@ -187,7 +188,7 @@ func TestShipTheQuestionSaysWhenARefreshMayReplaceABranchOnTheRemote(t *testing.
 
 	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
-	require.ErrorIs(t, err, ErrDeclined)
+	require.ErrorIs(t, err, proposal.ErrDeclined)
 	require.Len(t, q.got, 1)
 	assert.Equal(t, []string{"v2.15"}, q.got[0].Opens)
 	assert.True(t, q.got[0].MayReplace)
@@ -200,7 +201,7 @@ func TestShipTheQuestionDoesNotSayItWithoutRefresh(t *testing.T) {
 
 	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, nil)
 
-	require.ErrorIs(t, err, ErrDeclined)
+	require.ErrorIs(t, err, proposal.ErrDeclined)
 	require.Len(t, q.got, 1)
 	assert.False(t, q.got[0].MayReplace)
 }

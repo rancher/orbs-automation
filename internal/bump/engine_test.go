@@ -611,3 +611,71 @@ func TestTargetsOnALineLeavesOutAHoldingThatDoesNotApplyToIt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"rel-v2.16 (v2.16): cons-lined", "dev-v2.16 (v2.16): late"}, branches(got))
 }
+
+func holdingNamed(t *testing.T, g *chain.Graph, name string) *chain.Holding {
+	t.Helper()
+	for _, h := range g.Holdings() {
+		if h.Name() == name {
+			return h
+		}
+	}
+	require.Failf(t, "no holding", "%s", name)
+	return nil
+}
+
+func TestAPullRouteWritesAReleaseHoldingWithTheReleaseItWasGiven(t *testing.T) {
+	e, g, err := buildEngine(t, d("Edit", "regen", "{holding: [cons-image]}", "  postEdit:\n    - {run: gen}\n"))
+	require.NoError(t, err)
+	h := holdingNamed(t, g, "cons-image")
+	route, err := e.PullRoute(h)
+	require.NoError(t, err)
+	rel, err := ReleaseOf(h, "v1.2.0", "abc")
+	require.NoError(t, err)
+	tree := files{"build.yaml": consFiles}
+	var order []string
+	target := Target{Branch: "dev-v2.16", Line: "v2.16", Holdings: route.Holdings, Pulled: map[*chain.Holding]Release{h: rel}}
+
+	res, err := route.Run(bg, tree, &recorder{order: &order}, target, "", "", "/work", nil)
+
+	require.NoError(t, err)
+	assert.True(t, res.Changed)
+	assert.Contains(t, tree["build.yaml"], "image: acme/prod:v1.2.0", "the release it was given, with the form of the holding")
+	assert.Equal(t, []string{"run gen"}, order)
+
+	chk, err := route.Check(bg, tree, target, "", "")
+	require.NoError(t, err)
+	assert.True(t, chk[0].UpToDate)
+}
+
+func TestAPullRouteRefusesAReleaseHoldingWithNoReleaseToWrite(t *testing.T) {
+	e, g, err := buildEngine(t, d("Edit", "regen", "{holding: [cons-image]}", "  postEdit:\n    - {run: gen}\n"))
+	require.NoError(t, err)
+	route, err := e.PullRoute(holdingNamed(t, g, "cons-image"))
+	require.NoError(t, err)
+
+	_, err = route.Run(bg, files{"build.yaml": consFiles}, &recorder{order: new([]string)}, Target{Branch: "dev-v2.16", Line: "v2.16", Holdings: route.Holdings}, "", "", "/work", nil)
+
+	require.Error(t, err, "a pulled release holding is written with the release the caller chose, and none was given")
+}
+
+func TestAPullRouteLeavesToShipAHoldingThatPinsAnotherArtifact(t *testing.T) {
+	g := pinGraph(t, chaintest.Doc("Edit", "tidy", "{holding: [bro-holds-wr]}", "  postEdit:\n    - {run: gen}\n"))
+	e, err := NewEngine(Builtin(), g)
+	require.NoError(t, err)
+
+	_, err = e.PullRoute(holdingNamed(t, g, "bro-holds-wr"))
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "pins")
+}
+
+func TestAPullRouteRefusesAVirtualHolding(t *testing.T) {
+	g := pinGraph(t, chaintest.Doc("Edit", "tidy", "{holding: [bro-holds-wr]}", "  postEdit:\n    - {run: gen}\n"))
+	e, err := NewEngine(Builtin(), g)
+	require.NoError(t, err)
+	require.Len(t, g.Virtual(), 1)
+
+	_, err = e.PullRoute(g.Virtual()[0])
+
+	require.Error(t, err)
+}
