@@ -107,13 +107,23 @@ jobs:
         run: |
           test "${{ steps.stable.outputs.HAS_PRERELEASE }}" = false
           test "${{ steps.stable.outputs.HAS_BUILD_META }}" = false
-      - name: Name the build tags of a release branch
+      # The runner sets GITHUB_REF and GITHUB_SHA itself inside a composite action, and
+      # a step's env cannot override them, so the action sees this run's real ref.
+      - name: Name the build tags of main
         id: build-tags
+        if: github.ref == 'refs/heads/main'
         uses: ./actions/build-tags
-        env:
-          GITHUB_REF: refs/heads/release/v2.x
-          GITHUB_SHA: abcdef1234567890
-      - name: Check the build tags
+      - name: Check the build tags of main
+        if: github.ref == 'refs/heads/main'
         run: |
-          test "${{ steps.build-tags.outputs.branch_tag }}" = v2.x-head
-          test "${{ steps.build-tags.outputs.branch_static_tag }}" = v2.x-head-abcdef1
+          test "${{ steps.build-tags.outputs.branch_tag }}" = head
+          test "${{ steps.build-tags.outputs.branch_static_tag }}" = "main-${GITHUB_SHA:0:7}"
+      # Any other ref is unsupported, so the action must fail rather than pass bad output on.
+      - name: Name the build tags of an unsupported ref
+        id: unsupported
+        if: github.ref != 'refs/heads/main'
+        continue-on-error: true
+        uses: ./actions/build-tags
+      - name: Check the unsupported ref failed
+        if: github.ref != 'refs/heads/main'
+        run: test "${{ steps.unsupported.outcome }}" = failure

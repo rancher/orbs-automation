@@ -23,4 +23,4 @@ Composite GitHub Actions in `actions/` that call `gero`. They replace the action
 
 ## Test plan
 
-The `actions` job of the CI workflow builds `gero`, puts it on the `PATH`, and runs each action from the checkout (`uses: ./actions/<name>`) against known input: a prerelease tag with build metadata, a stable tag, and a release-branch ref and commit. It asserts the outputs. The commands' behavior is tested in their own specs; this job tests the wiring.
+The `actions` job of the CI workflow builds `gero`, puts it on the `PATH`, and runs each action from the checkout (`uses: ./actions/<name>`). `classify-tag` runs against a prerelease tag with build metadata and a stable tag, and the job asserts the outputs. `build-tags` runs against the run's real ref, because the runner sets `GITHUB_REF` and `GITHUB_SHA` inside a composite action and a step's `env` cannot override them: on `main` it asserts the outputs, and on any other ref it asserts the action fails. The commands' behavior is tested in their own specs; this job tests the wiring.
