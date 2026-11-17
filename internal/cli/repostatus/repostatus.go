@@ -323,7 +323,7 @@ func fill(t *Target, p *chain.Project, refs git.Refs, clone Clone) {
 		}
 		c := releasetag.Choice{
 			Newest: newest, Pattern: stream.TagPattern(), Series: t.Series, Commit: t.Head,
-			RequiresPrerelease: stream.RequiresPrerelease(),
+			RequiresPrerelease: stream.RequiresPrerelease(), AllowRetag: stream.AllowRetag(),
 		}
 		t.State, t.Next = string(releasetag.StateOf(c)), nextOf(c)
 	}
@@ -355,10 +355,12 @@ func nextOf(c releasetag.Choice) []Next {
 		switch {
 		case errors.Is(cand.Err, releasetag.ErrNoBase):
 			continue
-		case !open && (i > 0 || cand.Err != nil):
+		case !open && i > 0:
+			continue
+		case !open && cand.Err != nil && !(c.AllowRetag && errors.Is(cand.Err, releasetag.ErrNothingNew)):
 			continue
 		}
-		n := Next{Tag: cand.Tag, Kind: string(cand.Kind), Available: cand.Err == nil, Why: why(cand.Err)}
+		n := Next{Tag: cand.Tag, Kind: string(cand.Kind), Available: cand.Err == nil, Why: why(cand.Err, c.AllowRetag)}
 		if cand.Promotes != nil {
 			n.Promotes = cand.Promotes.Name
 		}
@@ -368,10 +370,12 @@ func nextOf(c releasetag.Choice) []Next {
 }
 
 // why says in a few words why a tag may not be made now.
-func why(err error) string {
+func why(err error, allowRetag bool) string {
 	switch {
 	case err == nil:
 		return ""
+	case errors.Is(err, releasetag.ErrNothingNew) && allowRetag:
+		return "no new commits, but --retag may"
 	case errors.Is(err, releasetag.ErrNothingNew):
 		return "no new commits"
 	case errors.Is(err, releasetag.ErrMovedSincePrerelease):
