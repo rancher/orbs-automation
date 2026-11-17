@@ -86,3 +86,11 @@ func InSeries(tag, series string) bool {
 	s, ok := ParseSeries(series)
 	return ok && s.Contains(v)
 }
+
+// Major is the first position of the series when it is a number: "9" for "9.x"
+// and "0" for "0.9.x". It is false when the first position is x.
+func (s Series) Major() (string, bool) { return "", false }
+
+// Minor is the first two positions when both are numbers: "9.1" for "9.1.x" and
+// "0.9" for "0.9.x". It is false for a series that has no minor, such as "9.x".
+func (s Series) Minor() (string, bool) { return "", false }

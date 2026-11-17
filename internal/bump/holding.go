@@ -122,6 +122,12 @@ func FormOf(h *chain.Holding, rel Release) (string, error) {
 	return value, nil
 }
 
+// SeriesFormOf renders how a series holding writes the series its stream has for the
+// line: its form, over the series, its major and its minor.
+func SeriesFormOf(h *chain.Holding, line string) (string, error) {
+	return "", nil
+}
+
 // resolveHolding finds the places and the value a holding wants for a target. It
 // refuses a holding with no location for the line, and a format that is not
 // built, before anything is read or written.
