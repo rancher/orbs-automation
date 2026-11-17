@@ -24,7 +24,7 @@ The optional argument, `gero config resolve graph [d2|mindmap]`, picks what is d
 
 A Mermaid mind map, which GitHub and most Markdown viewers render in place. It shows the same config as a looser picture, one branch per project, where the D2 diagram is a strict flow.
 
-* **A mind map is a tree with no edges**, so what joins two projects is said on both of them. The root is the config and each project is a branch of it, in slug order, labelled with its name and its stewardship (`managed`, `shared` or `external`, and `hub` for the final destination).
+* **A mind map is a tree with no edges**, so what joins two projects is said on both of them. The root is the config and each project is a branch of it, in slug order, labelled with its name and, in brackets, who looks after it: `managed by <team>`, `shared` or `external`, and `hub` for the final destination. A project nobody manages has no brackets.
 * **A project's streams hold its artifacts**, as in D2. Under an artifact is a node for each holding that takes it: `to <holder> via <holding>`, with the release lines it serves in brackets. A holding of a commit or a branch has the same node under its producer project.
 * **A project's `holds` branch lists its holdings**, each as `<holding>: <kind> from <producer>`, with `, pinned` for what a pin makes, and the edits that follow it beneath.
 * **Every node is a single line with an id of its own**, and quotes in a label are written as apostrophes, so a name never breaks the syntax.

@@ -95,17 +95,23 @@ func (m *mindmapWriter) label(depth int, text string) {
 }
 
 func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*chain.Holding) {
-	class := classManaged
+	var marks []string
 	switch {
 	case p.External():
-		class = classExternal
+		marks = append(marks, classExternal)
 	case p.Shared():
-		class = classShared
+		marks = append(marks, classShared)
+	case p.ManagedBy() != "":
+		marks = append(marks, "managed by "+p.ManagedBy())
 	}
 	if p.FinalDestination() {
-		class += ", " + classHub
+		marks = append(marks, classHub)
 	}
-	m.label(2, fmt.Sprintf("%s (%s)", p.Name(), class))
+	text := p.Name()
+	if len(marks) > 0 {
+		text += " (" + strings.Join(marks, ", ") + ")"
+	}
+	m.label(2, text)
 	for _, st := range p.Streams() {
 		m.label(3, streamLabel(st))
 		for _, a := range st.Artifacts() {

@@ -255,7 +255,7 @@ func TestMindmapStartsAsAMermaidMindmapWithOneRoot(t *testing.T) {
 func TestMindmapHangsEachProjectOffTheRoot(t *testing.T) {
 	out := mindmapOf(t, shipping(t))
 	for _, text := range []string{
-		"rancher (managed, hub)", "shell (managed)", "scc (shared)", "upstream (external)",
+		"rancher (managed by rancher, hub)", "shell (managed by rancher)", "scc (shared)", "upstream (external)",
 	} {
 		assert.Regexp(t, `\n    n\d+\["`+regexpQuote(text)+`"\]\n`, out, text)
 	}
@@ -263,7 +263,7 @@ func TestMindmapHangsEachProjectOffTheRoot(t *testing.T) {
 
 func TestMindmapNestsStreamsAndArtifactsInTheirProject(t *testing.T) {
 	out := mindmapOf(t, shipping(t))
-	assert.Regexp(t, `\n    n\d+\["shell \(managed\)"\]\n      n\d+\["stream shell v\*"\]\n        n\d+\["artifact shell-image: rancher/shell"\]\n`, out)
+	assert.Regexp(t, `\n    n\d+\["shell \(managed by rancher\)"\]\n      n\d+\["stream shell v\*"\]\n        n\d+\["artifact shell-image: rancher/shell"\]\n`, out)
 }
 
 func TestMindmapShowsWhereAnArtifactReachesAndWhatAProjectHolds(t *testing.T) {
