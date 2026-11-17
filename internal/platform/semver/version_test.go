@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParse(t *testing.T) {
@@ -88,4 +89,39 @@ func TestCompareNumbersAreNumeric(t *testing.T) {
 	a, _ := Parse("v2.9.0")
 	b, _ := Parse("v2.15.0")
 	assert.Equal(t, -1, Compare(a, b), "9 < 15, not text order")
+}
+
+func TestCompareBreaksATieByTheNumberOfTheBuildRevision(t *testing.T) {
+	for name, tt := range map[string]struct {
+		a, b string
+		want int
+	}{
+		"a respin of k3s is newer":         {"v1.35.0+k3s1", "v1.35.0+k3s3", -1},
+		"the other way round":              {"v1.35.0+k3s3", "v1.35.0+k3s1", 1},
+		"by number, not by text":           {"v1.35.0+k3s9", "v1.35.0+k3s10", -1},
+		"rke2 revisions are the same":      {"v1.35.0+rke2r1", "v1.35.0+rke2r2", -1},
+		"the same revision is equal":       {"v1.35.0+k3s2", "v1.35.0+k3s2", 0},
+		"dotted build identifiers":         {"v1.0.0+build.5", "v1.0.0+build.7", -1},
+		"builds of another kind are equal": {"v1.0.0+one", "v1.0.0+two", 0},
+		"no build is equal to a build":     {"v1.0.0", "v1.0.0+k3s1", 0},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, ok := Parse(tt.a)
+			require.True(t, ok)
+			b, ok := Parse(tt.b)
+			require.True(t, ok)
+
+			assert.Equal(t, tt.want, Compare(a, b))
+		})
+	}
+}
+
+func TestBuildNeverOverridesTheVersionOrThePrerelease(t *testing.T) {
+	older, _ := Parse("v1.35.0+k3s3")
+	newer, _ := Parse("v1.35.1+k3s1")
+	assert.Equal(t, -1, Compare(older, newer), "a higher patch wins whatever the revision")
+
+	rc, _ := Parse("v1.35.1-rc2+k3s9")
+	stable, _ := Parse("v1.35.1+k3s1")
+	assert.Equal(t, -1, Compare(rc, stable), "a prerelease is below its release whatever the revision")
 }
