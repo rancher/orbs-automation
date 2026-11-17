@@ -41,6 +41,8 @@ type Options struct {
 	// Projects are patterns on a project's name, slug and aliases; one that starts
 	// with ! leaves out what it matches.
 	Projects []string
+	// Teams keep the projects whose managedBy is one of them.
+	Teams []string
 }
 
 // Graph draws the central config found from s and the working directory cwd as
