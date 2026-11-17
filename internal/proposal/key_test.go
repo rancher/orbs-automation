@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"testing"
@@ -34,8 +34,8 @@ func TestBranchKeyEndsInTheTail(t *testing.T) {
 }
 
 func TestSourceOfKeyIsWhatComesBeforeTheTail(t *testing.T) {
-	assert.Equal(t, "scc-operator", sourceOfKey("scc-operator-v0.5.3-v2.15", "v0.5.3", "release/v2.15"))
-	assert.Equal(t, "rancher-assets", sourceOfKey("rancher-assets-v0.1.0-rc.1-main", "v0.1.0-rc.1", "main"))
+	assert.Equal(t, "scc-operator", SourceOfKey("scc-operator-v0.5.3-v2.15", "v0.5.3", "release/v2.15"))
+	assert.Equal(t, "rancher-assets", SourceOfKey("rancher-assets-v0.1.0-rc.1-main", "v0.1.0-rc.1", "main"))
 }
 
 func names(bs []git.Branch) []string {
@@ -53,7 +53,7 @@ func TestBumpBranchesAreThoseOfAnyVersionAndAnyPrefix(t *testing.T) {
 		{Name: "scc-operator-v0.5.4-rc.1-v2.15"},
 		{Name: "dan-scc-operator-v0.5.3-v2.15"},
 	}
-	assert.Equal(t, names(all), bumpBranches(all, "scc-operator", "release/v2.15"))
+	assert.Equal(t, names(all), BumpBranches(all, "scc-operator", "release/v2.15"))
 }
 
 func TestBumpBranchesLeaveOutWhatIsNotThisBump(t *testing.T) {
@@ -66,10 +66,10 @@ func TestBumpBranchesLeaveOutWhatIsNotThisBump(t *testing.T) {
 		{Name: "main"},                           // and the default
 		{Name: "bot/scc-operator-v0.5.3-v2.15"},  // the one that is
 	}
-	assert.Equal(t, []string{"bot/scc-operator-v0.5.3-v2.15"}, bumpBranches(branches, "scc-operator", "release/v2.15"))
+	assert.Equal(t, []string{"bot/scc-operator-v0.5.3-v2.15"}, BumpBranches(branches, "scc-operator", "release/v2.15"))
 }
 
 func TestBumpBranchesOfTheDefaultBranchUseItsName(t *testing.T) {
 	branches := []git.Branch{{Name: "bot/scc-operator-v0.5.3-main"}, {Name: "bot/scc-operator-v0.5.3-v2.15"}}
-	assert.Equal(t, []string{"bot/scc-operator-v0.5.3-main"}, bumpBranches(branches, "scc-operator", "main"))
+	assert.Equal(t, []string{"bot/scc-operator-v0.5.3-main"}, BumpBranches(branches, "scc-operator", "main"))
 }

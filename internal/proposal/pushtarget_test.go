@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"testing"
@@ -10,14 +10,14 @@ import (
 var both = PushRemotes{Fork: "origin", Upstream: "upstream"}
 
 func TestPushTargetWithNoChoiceIsTheForkWhenOneIsSet(t *testing.T) {
-	got, err := resolvePushTarget(PushChoice{}, both, false)
+	got, err := ResolvePushTarget(PushChoice{}, both, false)
 
 	require.NoError(t, err)
 	assert.Equal(t, PushTarget{Role: RoleFork, Remote: "origin", Source: "a fork is set"}, got)
 }
 
 func TestPushTargetWithNoChoiceAndNoForkIsTheUpstream(t *testing.T) {
-	got, err := resolvePushTarget(PushChoice{}, PushRemotes{Upstream: "upstream"}, false)
+	got, err := ResolvePushTarget(PushChoice{}, PushRemotes{Upstream: "upstream"}, false)
 
 	require.NoError(t, err)
 	assert.Equal(t, PushTarget{Role: RoleUpstream, Remote: "upstream", Source: "no fork is set"}, got)
@@ -37,7 +37,7 @@ func TestPushTargetTheNearestLayerWins(t *testing.T) {
 		{"a layer that says fork", PushChoice{UserDefault: "fork"}, RoleFork, "pushTo in the user file"},
 	}
 	for _, c := range cases {
-		got, err := resolvePushTarget(c.choice, both, false)
+		got, err := ResolvePushTarget(c.choice, both, false)
 
 		require.NoError(t, err, c.name)
 		assert.Equal(t, c.want, got.Role, c.name)
@@ -48,31 +48,31 @@ func TestPushTargetTheNearestLayerWins(t *testing.T) {
 }
 
 func TestPushTargetInCIIsAlwaysTheUpstream(t *testing.T) {
-	got, err := resolvePushTarget(PushChoice{Flag: "fork", UserRepo: "fork", Project: "fork", UserDefault: "fork"}, both, true)
+	got, err := ResolvePushTarget(PushChoice{Flag: "fork", UserRepo: "fork", Project: "fork", UserDefault: "fork"}, both, true)
 
 	require.NoError(t, err)
 	assert.Equal(t, PushTarget{Role: RoleUpstream, Remote: "upstream", Source: "CI always pushes to the upstream"}, got)
 }
 
 func TestPushTargetARoleWithNoRemoteSaysWhatToSet(t *testing.T) {
-	_, err := resolvePushTarget(PushChoice{Flag: "fork"}, PushRemotes{Upstream: "upstream"}, false)
+	_, err := ResolvePushTarget(PushChoice{Flag: "fork"}, PushRemotes{Upstream: "upstream"}, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fork")
 	assert.Contains(t, err.Error(), "--push-to upstream", "and how to get past it")
 
-	_, err = resolvePushTarget(PushChoice{UserDefault: "upstream"}, PushRemotes{Fork: "origin"}, false)
+	_, err = ResolvePushTarget(PushChoice{UserDefault: "upstream"}, PushRemotes{Fork: "origin"}, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "upstream")
 
-	_, err = resolvePushTarget(PushChoice{}, PushRemotes{}, false)
+	_, err = ResolvePushTarget(PushChoice{}, PushRemotes{}, false)
 	require.Error(t, err, "no remote at all")
 
-	_, err = resolvePushTarget(PushChoice{}, PushRemotes{Fork: "origin"}, true)
+	_, err = ResolvePushTarget(PushChoice{}, PushRemotes{Fork: "origin"}, true)
 	require.Error(t, err, "CI with no upstream remote")
 }
 
 func TestPushTargetAValueThatIsNeitherRoleIsAnErrorNamingTheLayer(t *testing.T) {
-	_, err := resolvePushTarget(PushChoice{Project: "forks"}, both, false)
+	_, err := ResolvePushTarget(PushChoice{Project: "forks"}, both, false)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "forks")
@@ -81,7 +81,7 @@ func TestPushTargetAValueThatIsNeitherRoleIsAnErrorNamingTheLayer(t *testing.T) 
 }
 
 func TestPushTargetAnInvalidLayerThatIsOverriddenIsNotChecked(t *testing.T) {
-	got, err := resolvePushTarget(PushChoice{Flag: "upstream", Project: "forks"}, both, false)
+	got, err := ResolvePushTarget(PushChoice{Flag: "upstream", Project: "forks"}, both, false)
 
 	require.NoError(t, err, "only the layer that decides is read")
 	assert.Equal(t, RoleUpstream, got.Role)

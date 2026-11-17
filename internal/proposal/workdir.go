@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"context"
@@ -186,8 +186,8 @@ func Prepare(ctx context.Context, g Git, req PrepareRequest) (*Work, error) {
 	return out.Work, err
 }
 
-// short abbreviates a commit for a message.
-func short(commit string) string {
+// Short abbreviates a commit for a message.
+func Short(commit string) string {
 	if len(commit) > 8 {
 		return commit[:8]
 	}

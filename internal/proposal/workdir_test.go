@@ -1,9 +1,7 @@
-package ship
+package proposal
 
 import (
-	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,63 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var bg = context.Background()
-
-func runGit(t *testing.T, dir string, args ...string) string {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(cmd.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "git %v\n%s", args, out)
-	return strings.TrimSpace(string(out))
-}
-
-func put(t *testing.T, dir, rel, content string) {
-	t.Helper()
-	path := filepath.Join(dir, rel)
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
-}
-
-func slurp(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(t, err)
-	return string(data)
-}
-
-// remote is a consumer on the host: main holds build.yaml, and release/v1 adds
-// app/gen.go.
-func remote(t *testing.T) string {
-	t.Helper()
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git binary not available")
-	}
-	dir := t.TempDir()
-	runGit(t, dir, "init", "--quiet", "--initial-branch=main")
-	put(t, dir, "build.yaml", "image: old\n")
-	runGit(t, dir, "add", ".")
-	runGit(t, dir, "commit", "--quiet", "-m", "first")
-	runGit(t, dir, "checkout", "--quiet", "-b", "release/v1")
-	put(t, dir, "app/gen.go", "package app\n")
-	runGit(t, dir, "add", ".")
-	runGit(t, dir, "commit", "--quiet", "-m", "release")
-	runGit(t, dir, "checkout", "--quiet", "main")
-	return dir
-}
-
-// engineer is the engineer's clone of remote, with the remote named upstream.
-func engineer(t *testing.T, up string) string {
-	t.Helper()
-	dir := filepath.Join(t.TempDir(), "rancher")
-	runGit(t, t.TempDir(), "clone", "--quiet", "--origin", "upstream", up, dir)
-	runGit(t, dir, "config", "user.name", "Dev")
-	runGit(t, dir, "config", "user.email", "dev@example.com")
-	return dir
-}
-
 // request prepares release/v1 as the new branch bot/x-v1, from the commit the
 // remote has for it now.
 func request(t *testing.T, up, clone string) PrepareRequest {
@@ -80,8 +21,6 @@ func request(t *testing.T, up, clone string) PrepareRequest {
 		Base: runGit(t, up, "rev-parse", "release/v1"), Branch: "bot/x-v1", TempDir: t.TempDir(),
 	}
 }
-
-func current(t *testing.T, dir string) string { return runGit(t, dir, "branch", "--show-current") }
 
 func branchExists(t *testing.T, dir string) bool {
 	t.Helper()

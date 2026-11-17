@@ -42,11 +42,11 @@ func seriesRepo(t *testing.T) string {
 
 // seriesWS is the holder served from a real repository, with the engineer's clone.
 type seriesWS struct {
-	t      *testing.T
-	graph  *chain.Graph
-	up     string
-	clone  string
-	push   PushSettings
+	t     *testing.T
+	graph *chain.Graph
+	up    string
+	clone string
+	push  PushSettings
 }
 
 // seriesDocs is the holder and its two streams, with the Edit following the holdings
@@ -79,10 +79,10 @@ func newSeriesWS(t *testing.T, edit bool) (*seriesWS, *Executor) {
 }
 
 func (w *seriesWS) Project(string) (*chain.Project, error) { return w.graph.Project("cons"), nil }
-func (w *seriesWS) Bump() (*bump.Engine, error)                { return bump.NewEngine(bump.Builtin(), w.graph) }
-func (w *seriesWS) CloneDir(string) (string, error)            { return w.clone, nil }
-func (w *seriesWS) Remote(string) (string, error)              { return "upstream", nil }
-func (w *seriesWS) PushSettings(string) PushSettings           { return w.push }
+func (w *seriesWS) Bump() (*bump.Engine, error)            { return bump.NewEngine(bump.Builtin(), w.graph) }
+func (w *seriesWS) CloneDir(string) (string, error)        { return w.clone, nil }
+func (w *seriesWS) Remote(string) (string, error)          { return "upstream", nil }
+func (w *seriesWS) PushSettings(string) PushSettings       { return w.push }
 
 func (w *seriesWS) UpstreamRefs(context.Context, string) (git.Refs, error) {
 	var refs git.Refs

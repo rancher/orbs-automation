@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"fmt"
@@ -41,10 +41,10 @@ type Publish struct {
 	OtherBase []pulls.PR
 }
 
-// alsoNote is the report of a PR of someone else's that overlaps the bump, with
+// AlsoNote is the report of a PR of someone else's that overlaps the bump, with
 // where it stands against the target's branch when that is known: behind is how
 // many commits the target has that the PR's branch does not.
-func alsoNote(p pulls.PR, base string, behind int, known bool) string {
+func AlsoNote(p pulls.PR, base string, behind int, known bool) string {
 	note := fmt.Sprintf("also open: #%d by %s (%s)", p.Number, p.Author, p.URL)
 	switch {
 	case !known:
@@ -55,26 +55,26 @@ func alsoNote(p pulls.PR, base string, behind int, known bool) string {
 	return fmt.Sprintf("%s, behind %s by %d", note, base, behind)
 }
 
-// otherBaseNote is the report of a PR that has the bump's marker but targets
+// OtherBaseNote is the report of a PR that has the bump's marker but targets
 // another branch.
-func otherBaseNote(p pulls.PR, base string) string {
+func OtherBaseNote(p pulls.PR, base string) string {
 	return fmt.Sprintf("#%d by %s (%s) targets %s, not %s, so it is a different bump and not an overlap: left alone", p.Number, p.Author, p.URL, p.Base, base)
 }
 
-// decidePublish decides what to do for a bump, from the open PRs found for its
+// DecidePublish decides what to do for a bump, from the open PRs found for its
 // base branch, newest first. Only PRs with the bump's key (source, consumer and
 // target) count, and only those opened by me, the login that is running, are the
 // actor's own to close; the others are never touched and do not block, though a
 // same or newer one is reported. A version that cannot be ordered against this
 // one is not acted on.
-func decidePublish(open []pulls.PR, me string, m Marker) Publish {
-	return decidePublishBy(open, me, m, compareVersions)
+func DecidePublish(open []pulls.PR, me string, m Marker) Publish {
+	return DecidePublishBy(open, me, m, CompareVersions)
 }
 
-// decidePublishBy is decidePublish with the order of two versions given: negative
+// DecidePublishBy is DecidePublish with the order of two versions given: negative
 // when a is older than b, and false when they cannot be ordered. A sync has no versions
 // to order, only the fingerprint of what it writes.
-func decidePublishBy(open []pulls.PR, me string, m Marker, compare func(a, b string) (int, bool)) Publish {
+func DecidePublishBy(open []pulls.PR, me string, m Marker, compare func(a, b string) (int, bool)) Publish {
 	var out Publish
 	var older []pulls.PR
 	for _, p := range open {
@@ -123,9 +123,9 @@ func decidePublishBy(open []pulls.PR, me string, m Marker, compare func(a, b str
 	return out
 }
 
-// compareVersions orders two tags by SemVer precedence: negative when a is older
+// CompareVersions orders two tags by SemVer precedence: negative when a is older
 // than b. ok is false when either is not a version.
-func compareVersions(a, b string) (order int, ok bool) {
+func CompareVersions(a, b string) (order int, ok bool) {
 	va, okA := semver.Parse(a)
 	vb, okB := semver.Parse(b)
 	if !okA || !okB {

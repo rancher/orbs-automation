@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"fmt"
@@ -98,11 +98,11 @@ func RecordedKey(body string) (key string, ok bool) {
 	return "", false
 }
 
-// markerWarnings says where a PR with this marker departs from what gero would
+// MarkerWarnings says where a PR with this marker departs from what gero would
 // have written: the key its marker records is not the one its fields give, or its
 // branch does not end in the key of the name. Neither stops the run; the marker
 // is the identity, and these are for the report.
-func markerWarnings(p pulls.PR, m Marker) []string {
+func MarkerWarnings(p pulls.PR, m Marker) []string {
 	var out []string
 	if key, ok := RecordedKey(p.Body); ok && key != m.Key() {
 		out = append(out, fmt.Sprintf("#%d: the key its marker records, %s, is not the one its fields give, %s", p.Number, key, m.Key()))

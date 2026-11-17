@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"errors"
@@ -39,13 +39,13 @@ type PushTarget struct {
 	Source string   `json:"source"` // the layer that decided, for the report
 }
 
-// resolvePushTarget decides where to push. In CI the answer is always the
+// ResolvePushTarget decides where to push. In CI the answer is always the
 // upstream. Otherwise the first layer that says is used, from the flag outward,
 // and with none the fork when one is set and the upstream when it is not. A role
 // with no remote set, and a value that is neither role, are errors that say what
 // to set. Only the layer that decides is read, so a bad value in one that is
 // overridden is not an error.
-func resolvePushTarget(c PushChoice, r PushRemotes, ci bool) (PushTarget, error) {
+func ResolvePushTarget(c PushChoice, r PushRemotes, ci bool) (PushTarget, error) {
 	if ci {
 		return target(RoleUpstream, "CI always pushes to the upstream", r)
 	}

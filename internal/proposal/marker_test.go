@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"strings"
@@ -61,29 +61,29 @@ func headed(head string, m Marker, recorded string) pulls.PR {
 }
 
 func TestMarkerWarningsHasNoneWhenTheBranchAndTheKeyAgree(t *testing.T) {
-	assert.Empty(t, markerWarnings(headed("bot/scc-operator-v0.5.3-v2.15", marker, ""), marker))
-	assert.Empty(t, markerWarnings(headed("dan/whatever-the-prefix-v0.5.3-v2.15", marker, ""), marker), "the prefix is anyone's")
+	assert.Empty(t, MarkerWarnings(headed("bot/scc-operator-v0.5.3-v2.15", marker, ""), marker))
+	assert.Empty(t, MarkerWarnings(headed("dan/whatever-the-prefix-v0.5.3-v2.15", marker, ""), marker), "the prefix is anyone's")
 }
 
 func TestMarkerWarningsSaysWhenTheBranchWasRenamed(t *testing.T) {
-	got := markerWarnings(headed("dan/my-own-name", marker, ""), marker)
+	got := MarkerWarnings(headed("dan/my-own-name", marker, ""), marker)
 	require.Len(t, got, 1)
 	assert.Contains(t, got[0], "#7")
 	assert.Contains(t, got[0], "dan/my-own-name")
 }
 
 func TestMarkerWarningsSaysWhenTheRecordedKeyIsNotTheFieldsKey(t *testing.T) {
-	got := markerWarnings(headed("bot/scc-operator-v0.5.3-v2.15", marker, "rancher/other|rancher/rancher|release/v2.15"), marker)
+	got := MarkerWarnings(headed("bot/scc-operator-v0.5.3-v2.15", marker, "rancher/other|rancher/rancher|release/v2.15"), marker)
 	require.Len(t, got, 1)
 	assert.Contains(t, got[0], "#7")
 	assert.Contains(t, got[0], "key")
 }
 
 func TestMarkerWarningsAreSilentWithoutAHeadOrAKey(t *testing.T) {
-	assert.Empty(t, markerWarnings(headed("", marker, ""), marker), "no head to compare")
+	assert.Empty(t, MarkerWarnings(headed("", marker, ""), marker), "no head to compare")
 	old := pulls.PR{Number: 7, HeadRef: "bot/scc-operator-v0.5.3-v2.15",
 		Body: "<!-- gero:ship v1\nsource: rancher/scc-operator\nconsumer: rancher/rancher\ntarget: release/v2.15\nversion: v0.5.3\n-->"}
-	assert.Empty(t, markerWarnings(old, marker), "a marker from before the key says nothing to disagree with")
+	assert.Empty(t, MarkerWarnings(old, marker), "a marker from before the key says nothing to disagree with")
 }
 
 func TestMarkerRoundTrips(t *testing.T) {

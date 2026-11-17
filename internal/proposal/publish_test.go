@@ -1,9 +1,10 @@
-package ship
+package proposal
 
 import (
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal/proposaltest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ func markerFor(version string) Marker {
 
 // pr is an open PR by author with the marker of a bump at a version.
 func pr(number int, author string, m Marker) pulls.PR {
-	return pulls.PR{Number: number, Author: author, Body: "## Summary\n\n" + m.String()}
+	return proposaltest.PR(number, author, m.String())
 }
 
 func numbers(prs []pulls.PR) []int {
@@ -29,7 +30,7 @@ func numbers(prs []pulls.PR) []int {
 }
 
 func TestDecideNothingOpenIsCreate(t *testing.T) {
-	got := decidePublish(nil, me, markerFor("v0.5.4"))
+	got := DecidePublish(nil, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Empty(t, got.Supersede)
@@ -39,7 +40,7 @@ func TestDecideNothingOpenIsCreate(t *testing.T) {
 func TestDecideAnOlderPROfMineIsSuperseded(t *testing.T) {
 	open := []pulls.PR{pr(101, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede))
@@ -48,7 +49,7 @@ func TestDecideAnOlderPROfMineIsSuperseded(t *testing.T) {
 func TestDecideEveryOlderPROfMineIsSuperseded(t *testing.T) {
 	open := []pulls.PR{pr(101, me, markerFor("v0.5.3")), pr(90, me, markerFor("v0.5.2")), pr(80, me, markerFor("v0.5.0-rc.1"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101, 90, 80}, numbers(got.Supersede), "all of them, in the order given")
@@ -57,7 +58,7 @@ func TestDecideEveryOlderPROfMineIsSuperseded(t *testing.T) {
 func TestDecideThePRAtTheSameVersionIsAlreadyOpen(t *testing.T) {
 	open := []pulls.PR{pr(104, me, markerFor("v0.5.4"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishAlreadyOpen, got.Action)
 	require.NotNil(t, got.Open)
@@ -68,7 +69,7 @@ func TestDecideThePRAtTheSameVersionIsAlreadyOpen(t *testing.T) {
 func TestDecideAlreadyOpenStillClosesTheOlderOnes(t *testing.T) {
 	open := []pulls.PR{pr(104, me, markerFor("v0.5.4")), pr(101, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishAlreadyOpen, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede))
@@ -77,7 +78,7 @@ func TestDecideAlreadyOpenStillClosesTheOlderOnes(t *testing.T) {
 func TestDecideTwoOfMineAtTheSameVersionKeepsTheNewest(t *testing.T) {
 	open := []pulls.PR{pr(106, me, markerFor("v0.5.4")), pr(104, me, markerFor("v0.5.4"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishAlreadyOpen, got.Action)
 	require.NotNil(t, got.Open)
@@ -88,7 +89,7 @@ func TestDecideTwoOfMineAtTheSameVersionKeepsTheNewest(t *testing.T) {
 func TestDecideANewerPROfMineBlocksTheTargetAndTouchesNothing(t *testing.T) {
 	open := []pulls.PR{pr(110, me, markerFor("v0.5.5")), pr(101, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishBlocked, got.Action)
 	require.NotNil(t, got.Newer)
@@ -99,12 +100,12 @@ func TestDecideANewerPROfMineBlocksTheTargetAndTouchesNothing(t *testing.T) {
 func TestDecideAPrereleaseIsOlderThanItsRelease(t *testing.T) {
 	open := []pulls.PR{pr(101, me, markerFor("v0.5.4-rc.1"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede), "the rc is replaced by the release")
 
-	got = decidePublish([]pulls.PR{pr(102, me, markerFor("v0.5.4"))}, me, markerFor("v0.5.4-rc.2"))
+	got = DecidePublish([]pulls.PR{pr(102, me, markerFor("v0.5.4"))}, me, markerFor("v0.5.4-rc.2"))
 	assert.Equal(t, PublishBlocked, got.Action, "and the release is newer than a later rc")
 }
 
@@ -114,7 +115,7 @@ func TestDecideThePRsOfOthersAreNeverTouched(t *testing.T) {
 		pr(119, "alice", markerFor("v0.5.2")),
 	}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action, "they do not block")
 	assert.Empty(t, got.Supersede, "and are not closed")
@@ -127,7 +128,7 @@ func TestDecideASameOrNewerPROfAnotherAuthorIsReportedAndLeftAlone(t *testing.T)
 		pr(121, "alice", markerFor("v0.5.5")),
 	}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{120, 121}, numbers(got.Also))
@@ -140,7 +141,7 @@ func TestDecideMixesMineAndOthers(t *testing.T) {
 		pr(101, me, markerFor("v0.5.3")),
 	}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{101}, numbers(got.Supersede), "only mine")
@@ -159,7 +160,7 @@ func TestDecideOnlyThisBumpsKeyCounts(t *testing.T) {
 		{Number: 5, Author: me, Body: "<!-- gero:ship v9\nsource: rancher/scc-operator\n-->"},
 	}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Empty(t, got.Supersede, "different source, target or consumer, or no readable marker: not this bump")
@@ -168,7 +169,7 @@ func TestDecideOnlyThisBumpsKeyCounts(t *testing.T) {
 func TestDecideAVersionThatIsNotSemverIsLeftAlone(t *testing.T) {
 	open := []pulls.PR{pr(101, me, markerFor("nightly-1")), pr(102, me, markerFor("v0.5.3"))}
 
-	got := decidePublish(open, me, markerFor("v0.5.4"))
+	got := DecidePublish(open, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action)
 	assert.Equal(t, []int{102}, numbers(got.Supersede), "what cannot be ordered is not closed on a guess")
@@ -177,8 +178,8 @@ func TestDecideAVersionThatIsNotSemverIsLeftAlone(t *testing.T) {
 func TestDecideWhoIsRunningDecidesWhichPRsAreMine(t *testing.T) {
 	open := []pulls.PR{pr(120, "rancher-bot[bot]", markerFor("v0.5.3")), pr(101, me, markerFor("v0.5.3"))}
 
-	asDan := decidePublish(open, me, markerFor("v0.5.4"))
-	asTheBot := decidePublish(open, "rancher-bot[bot]", markerFor("v0.5.4"))
+	asDan := DecidePublish(open, me, markerFor("v0.5.4"))
+	asTheBot := DecidePublish(open, "rancher-bot[bot]", markerFor("v0.5.4"))
 
 	assert.Equal(t, []int{101}, numbers(asDan.Supersede))
 	assert.Equal(t, []int{120}, numbers(asTheBot.Supersede), "in CI the bot's own are the eligible ones")
@@ -193,7 +194,7 @@ func TestDecideAPRThatTargetsAnotherBranchIsNotAnOverlap(t *testing.T) {
 	retargeted := withBase(pr(120, me, markerFor("v0.5.4")), "release/v2.14")
 	older := withBase(pr(101, me, markerFor("v0.5.3")), "release/v2.14")
 
-	got := decidePublish([]pulls.PR{retargeted, older}, me, markerFor("v0.5.4"))
+	got := DecidePublish([]pulls.PR{retargeted, older}, me, markerFor("v0.5.4"))
 
 	assert.Equal(t, PublishCreate, got.Action, "the PR at this version is of another target, so nothing is open for this one")
 	assert.Empty(t, got.Supersede, "and an older one of another target is never closed")
@@ -201,7 +202,7 @@ func TestDecideAPRThatTargetsAnotherBranchIsNotAnOverlap(t *testing.T) {
 }
 
 func TestDecideAPRThatTargetsThisBranchOrDoesNotSayIsAnOverlap(t *testing.T) {
-	got := decidePublish([]pulls.PR{
+	got := DecidePublish([]pulls.PR{
 		withBase(pr(120, me, markerFor("v0.5.4")), "release/v2.15"),
 		pr(101, me, markerFor("v0.5.3")), // a PR found without its base: the marker decides
 	}, me, markerFor("v0.5.4"))
@@ -214,15 +215,15 @@ func TestDecideAPRThatTargetsThisBranchOrDoesNotSayIsAnOverlap(t *testing.T) {
 func TestAlsoNoteSaysWhereThePRStandsWhenItIsKnown(t *testing.T) {
 	p := pulls.PR{Number: 99, Author: "alice", URL: "https://example/pull/99"}
 
-	assert.Equal(t, "also open: #99 by alice (https://example/pull/99)", alsoNote(p, "release/v2.15", 0, false), "not known: nothing is claimed")
-	assert.Equal(t, "also open: #99 by alice (https://example/pull/99), current with release/v2.15", alsoNote(p, "release/v2.15", 0, true))
-	assert.Equal(t, "also open: #99 by alice (https://example/pull/99), behind release/v2.15 by 3", alsoNote(p, "release/v2.15", 3, true))
+	assert.Equal(t, "also open: #99 by alice (https://example/pull/99)", AlsoNote(p, "release/v2.15", 0, false), "not known: nothing is claimed")
+	assert.Equal(t, "also open: #99 by alice (https://example/pull/99), current with release/v2.15", AlsoNote(p, "release/v2.15", 0, true))
+	assert.Equal(t, "also open: #99 by alice (https://example/pull/99), behind release/v2.15 by 3", AlsoNote(p, "release/v2.15", 3, true))
 }
 
 func TestOtherBaseNoteNamesBothBranches(t *testing.T) {
 	p := withBase(pulls.PR{Number: 120, Author: "alice", URL: "https://example/pull/120"}, "release/v2.14")
 
-	got := otherBaseNote(p, "release/v2.15")
+	got := OtherBaseNote(p, "release/v2.15")
 
 	assert.Contains(t, got, "#120")
 	assert.Contains(t, got, "release/v2.14")

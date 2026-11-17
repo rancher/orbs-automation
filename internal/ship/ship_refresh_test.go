@@ -184,8 +184,8 @@ func TestRefreshOfAReplacedBranchMergesTheBodyToo(t *testing.T) {
 // ownMarker is the marker block of a body made by gero ship.
 func ownMarker(body string) string {
 	for _, b := range geroBlocks(body) {
-		if b.kind == "ship" {
-			return b.text
+		if b.Kind == "ship" {
+			return b.Text
 		}
 	}
 	return ""
