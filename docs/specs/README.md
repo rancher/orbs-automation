@@ -30,6 +30,7 @@ Small, focused documents for how `gero` is built. [VISION](../VISION.md) is why,
 | [TESTING](TESTING.md) | How the CLI layer is tested |
 | [CHECK_SEMVER](CHECK_SEMVER.md) | Port of the shared `check-semver` script: decisions, command, library, test plan |
 | [BRANCH_TAGS](BRANCH_TAGS.md) | Port of the shared `branch-tags.sh` script: behavior, command, library, test plan |
+| [ACTIONS](ACTIONS.md) | The composite actions in `actions/`: thin wrappers over `gero` commands that keep the inputs and outputs of the actions the ORBS repos carry |
 
 ## Conventions
 

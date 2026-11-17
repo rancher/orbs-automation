@@ -2,6 +2,16 @@ name: CI Tests
 
 on:
   workflow_call:
+  # A push to main is the only run where github.ref is a branch the actions support.
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+      - '.github/CODEOWNERS'
+      - 'LICENSE'
   pull_request:
     paths-ignore:
       - 'docs/**'
@@ -73,3 +83,57 @@ jobs:
           test -n "$want"
           test "$want" = "$got"
           head -n 4 .bundle/gero-config-bundle.yaml
+
+  actions:
+    name: Composite actions
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.27
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Put gero on the PATH
+        run: |
+          go build -o /usr/local/bin/gero .
+      - name: Classify a tag
+        id: classify
+        uses: ./actions/classify-tag
+        with:
+          tag: v1.2.3-rc.1+build.5
+      - name: Check the classification
+        run: |
+          test "${{ steps.classify.outputs.HAS_PRERELEASE }}" = true
+          test "${{ steps.classify.outputs.HAS_BUILD_META }}" = true
+      - name: Classify a stable tag
+        id: stable
+        uses: ./actions/classify-tag
+        with:
+          tag: v1.2.3
+      - name: Check the stable classification
+        run: |
+          test "${{ steps.stable.outputs.HAS_PRERELEASE }}" = false
+          test "${{ steps.stable.outputs.HAS_BUILD_META }}" = false
+      # The runner sets GITHUB_REF and GITHUB_SHA itself inside a composite action, and
+      # a step's env cannot override them, so the action sees this run's real ref.
+      - name: Name the build tags of main
+        id: build-tags
+        if: github.ref == 'refs/heads/main'
+        uses: ./actions/build-tags
+      - name: Check the build tags of main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          test "${{ steps.build-tags.outputs.branch_tag }}" = head
+          test "${{ steps.build-tags.outputs.branch_static_tag }}" = "main-${GITHUB_SHA:0:7}"
+      # Any other ref is unsupported, so the action must fail rather than pass bad output on.
+      - name: Name the build tags of an unsupported ref
+        id: unsupported
+        if: github.ref != 'refs/heads/main'
+        continue-on-error: true
+        uses: ./actions/build-tags
+      - name: Check the unsupported ref failed
+        if: github.ref != 'refs/heads/main'
+        run: test "${{ steps.unsupported.outcome }}" = failure

@@ -1,0 +1,24 @@
+name: build-tags
+description: Name the tags of a head build of a branch (main or release/*), using `gero repo build-tags`
+
+# The previous static tag is read from the checkout's tags, so the calling
+# workflow must fetch them (actions/checkout with fetch-depth: 0, or fetch-tags).
+
+outputs:
+  branch_tag:
+    description: The rolling branch tag for this build
+    value: ${{ steps.build-tags.outputs.branch_tag }}
+  branch_static_tag:
+    description: The fixed branch tag for this commit
+    value: ${{ steps.build-tags.outputs.branch_static_tag }}
+  prev_static_tag:
+    description: The previous fixed branch tag, empty when there is none
+    value: ${{ steps.build-tags.outputs.prev_static_tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Name the build tags
+      id: build-tags
+      shell: bash
+      run: gero repo build-tags >> "$GITHUB_OUTPUT"
