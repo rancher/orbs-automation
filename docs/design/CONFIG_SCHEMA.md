@@ -175,7 +175,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * Every line named is in `RancherLines`; a stream's series do not overlap
 * A holding's `from`, `artifact` or `stream` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
 * A selector's `since` is not after its `until`
-* Projects that hold something of one another in a cycle, of two or of any longer ring, are a warning: the dependency is circular. It is one warning for each set of projects that all reach one another through their holdings, naming them in the order of the cycle, and it is raised on the last Holding of the set in the order read, the one that closes it
+* Projects that hold something of one another in a cycle, of two or of any longer ring, are a warning: the dependency is circular. It is one warning for each set of projects that all reach one another through their holdings, naming them in the order of the cycle, and it is raised on the last Holding of that cycle in the order read, the one that closes it
 * A repo that is `external` has no `managedBy`: no team manages a repo outside the organization
 * Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
 * A calver stream is on a project whose layout is `single`; a project holds nothing of itself

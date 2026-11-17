@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/graph"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
@@ -382,12 +383,13 @@ func (s *set) producer(h *Holding) *Project {
 	return s.project(st.Refs["project"][0])
 }
 
-// circular warns, once for each pair, of two projects that each hold something
-// of the other, on the holding that completes the pair.
+// circular warns, once for each ring of projects that hold something of one
+// another, of two or of more, on the last Holding of the ring in the order read.
+// A ring is found as the shortest way round from the first project of each set of
+// projects that all reach one another.
 func (s *set) circular() {
-	type edge struct{ holder, producer string }
-	seen := map[edge]string{} // the edge to the first Holding that makes it
-	warned := map[edge]bool{}
+	g := graph.New[string, *Holding]()
+	order := map[*Holding]int{}
 	for _, o := range s.objs {
 		h, ok := o.(*Holding)
 		if !ok || len(h.Refs["project"]) != 1 {
@@ -398,17 +400,27 @@ func (s *set) circular() {
 		if prod == nil || prod.Name == holder {
 			continue
 		}
-		producer := prod.Name
-		back, pair := edge{producer, holder}, edge{holder, producer}
-		if first, ok := seen[back]; ok && !warned[back] && !warned[pair] {
-			warned[pair] = true
-			r := s.at(o)
-			r.Warnf(RuleCircularHolding, "refs", "Project %q holds something of Project %q, which holds something of it (Holding %q): the dependency is circular", holder, producer, first)
-			s.add(r)
+		order[h] = len(order)
+		g.AddEdge(holder, prod.Name, h)
+	}
+	for _, ring := range g.Cycles() {
+		var closing *Holding
+		var path []string
+		for i, name := range ring {
+			next := ring[(i+1)%len(ring)]
+			path = append(path, fmt.Sprintf("Project %q holds something of Project %q", name, next))
+			for _, e := range g.Out(name) {
+				if e.To == next {
+					if closing == nil || order[e.Payload] > order[closing] {
+						closing = e.Payload
+					}
+					break
+				}
+			}
 		}
-		if _, ok := seen[pair]; !ok {
-			seen[pair] = h.Name
-		}
+		r := s.at(closing)
+		r.Warnf(RuleCircularHolding, "refs", "%s: the dependency is circular", strings.Join(path, ", which "))
+		s.add(r)
 	}
 }
 
@@ -855,9 +867,18 @@ func (s *set) pins() {
 		}
 		s.add(r)
 	}
+	pins := graph.New[string, struct{}]()
+	for _, o := range s.objs {
+		if a, ok := o.(*Artifact); ok {
+			pins.AddNode(a.Name)
+			for _, name := range pinned[a.Name] {
+				pins.AddEdge(a.Name, name, struct{}{})
+			}
+		}
+	}
 	for _, o := range s.objs {
 		a, ok := o.(*Artifact)
-		if !ok || !circles(pinned, a.Name) {
+		if !ok || !slices.Contains(pins.Reachable(a.Name), a.Name) {
 			continue
 		}
 		r := s.at(o)
@@ -937,27 +958,6 @@ func (s *set) pinOverlaps() {
 		}
 		s.add(r)
 	}
-}
-
-// circles reports whether following the pins from an Artifact comes back to it.
-func circles(pinned map[string][]string, from string) bool {
-	seen := map[string]bool{}
-	var walk func(name string) bool
-	walk = func(name string) bool {
-		for _, next := range pinned[name] {
-			if next == from {
-				return true
-			}
-			if !seen[next] {
-				seen[next] = true
-				if walk(next) {
-					return true
-				}
-			}
-		}
-		return false
-	}
-	return walk(from)
 }
 
 // goBumpHoldings reports an Edit with the strategy goBump, which tidies go.mod
