@@ -94,7 +94,10 @@ func emit(sink Sink, e Event) {
 type proposalSink struct{ Sink }
 
 func (s proposalSink) Event(e proposal.Event) {
-	s.Sink.Event(Event{Kind: EventKind(e.Kind), Branch: e.Branch, Line: e.Line, NewBranch: e.NewBranch, Remote: e.Remote, PR: e.PR})
+	s.Sink.Event(Event{
+		Kind: EventKind(e.Kind), Branch: e.Branch, Line: e.Line, NewBranch: e.NewBranch, Remote: e.Remote, PR: e.PR,
+		Place: e.Place, Reason: e.Reason, Commit: e.Commit, Decision: e.Decision,
+	})
 }
 
 // asProposalSink is sink for the conveyor, and none for none.

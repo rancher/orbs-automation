@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha1" //nolint:gosec // a fingerprint of what a sync writes, not a secret
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/texts"
 	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/proposal"
 )
@@ -137,7 +135,7 @@ func Sync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor) (SyncPl
 	if ex == nil {
 		return plan, nil
 	}
-	return plan, runSync(ctx, ws, in, ex, holder, &plan)
+	return plan, runSync(ctx, ws, in, ex, holder, refs, &plan)
 }
 
 // pulledHoldingsOf are the holdings of a project that are brought in line from config
@@ -381,8 +379,9 @@ func syncStrategyMessage(vars map[string]string) func(bump.Unit) (string, error)
 }
 
 // runSync makes the commit of each ready branch and, with a publisher, pushes it and
-// opens its PR, after the one question when the run writes to GitHub.
-func runSync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor, holder *chain.Project, plan *SyncPlan) error {
+// opens its PR, after the one question when the run writes to GitHub. The conveyor of
+// internal/proposal does what a release's run does too: begin, decide, ask, enact.
+func runSync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor, holder *chain.Project, refs git.Refs, plan *SyncPlan) error {
 	var ready []int
 	for i, b := range plan.Branches {
 		if b.Status == StatusReady && b.Preview != nil {
@@ -392,61 +391,39 @@ func runSync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor, hold
 	if len(ready) == 0 {
 		return nil
 	}
-	clone, err := ws.CloneDir(holder.Slug())
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrNoClone, err)
-	}
-	remote, err := ws.Remote(holder.Slug())
+	sess, err := proposal.Begin(ctx, ws, ex, proposal.SessionInput{Repo: holder, PushTo: in.PushTo, CI: in.CI, NoPush: in.NoPush})
 	if err != nil {
 		return err
 	}
-	plan.Clone, plan.Remote = clone, remote
-	var pub *Publisher
-	var me string
-	if ex.Publish != nil && !in.NoPush {
-		if pub, me, plan.Push, err = proposal.PublisherFor(ctx, ws, ex, holder, clone, in.PushTo, in.CI, false); err != nil {
-			return err
-		}
-	}
-	var committer Identity
-	if ex.Identify != nil {
-		actor, err := proposal.ActorFor(ctx, ex, clone, me)
-		if err != nil {
-			return err
-		}
-		plan.Actor = actor
-		if in.CI {
-			committer = actor.Identity
-		}
-	}
-	states := make([]syncState, len(ready))
+	plan.Clone, plan.Remote, plan.Push, plan.Actor = sess.Clone, sess.Remote, sess.Push, sess.Actor
+	decided := make([]proposal.Decided, len(ready))
 	for k, i := range ready {
-		states[k] = decideSync(ctx, pub, me, holder.Slug(), plan.Branches[i])
+		b := plan.Branches[i]
+		decided[k] = proposal.Decide(ctx, sess.Pub, sess.Me, proposal.DecideInput{
+			Repo: holder.Slug(), Subject: b.subject(), Marker: b.marker(holder.Slug()), Compare: sameFingerprint,
+			Branches: refs.Branches, Noun: "sync",
+		}, nil)
 	}
-	if pub != nil && !in.DryRun && ex.Confirm != nil {
-		if c, writes := syncConfirmation(holder.Slug(), plan, ready, states); writes {
-			ok, err := ex.Confirm(ctx, c)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return ErrDeclined
-			}
-		}
+	c, writes := syncConfirmation(holder.Slug(), plan, ready, decided)
+	if err := sess.Confirm(ctx, ex, in.DryRun, c, writes); err != nil {
+		return err
 	}
 	for k, i := range ready {
-		plan.Branches[i].Result = workSync(ctx, ex, pub, clone, remote, in, holder.Slug(), plan.Branches[i], states[k], committer)
+		b := plan.Branches[i]
+		plan.Branches[i].Result = proposal.Enact(ctx, ex, proposal.EnactInput{
+			Repo: holder.Slug(), Session: sess, Subject: b.subject(), Marker: b.marker(holder.Slug()), Decided: decided[k],
+			DryRun: in.DryRun, CI: in.CI,
+			Apply: func(w *Work, onCommit func(CommitInfo)) (ApplyResult, error) {
+				vars := map[string]string{"holdings": holdingsOf(b), "line": b.line()}
+				return Apply{
+					Route: b.route, Target: bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready},
+					Message: b.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign, Name: sess.Committer.Name, Email: sess.Committer.Email,
+					OnCommit: onCommit, StepMessage: syncStepMessage(vars), StrategyMessage: syncStrategyMessage(vars),
+				}.Run(ctx, w)
+			},
+		}, nil)
 	}
 	return nil
-}
-
-// syncState is what was found out about one branch before any work: the decision about
-// its PR, and what to warn about.
-type syncState struct {
-	dec      Publish
-	m        Marker
-	warnings []string
-	done     *TargetResult // set when there is nothing to make: the lookup failed
 }
 
 // sameFingerprint orders two syncs of a branch: the same fix is the same, and any other
@@ -459,148 +436,28 @@ func sameFingerprint(found, mine string) (int, bool) {
 	return -1, true
 }
 
-// decideSync looks at the open PRs of a branch, when there is a publisher, and decides
-// what to do about them, as decideTarget does for a release. It only reads.
-func decideSync(ctx context.Context, pub *Publisher, me, holder string, b SyncBranch) syncState {
-	st := syncState{m: b.marker(holder)}
-	if pub == nil {
-		return st
-	}
-	open, err := pub.Remote.OpenForBase(ctx, holder, b.Branch, 0)
-	if err != nil {
-		st.done = &TargetResult{Status: ResultFailed, Branch: b.Preview.Branch, Error: fmt.Sprintf("look for the open PRs of %s: %v", holder, err)}
-		return st
-	}
-	prs := open.PRs
-	byHead, err := pub.Remote.OpenForHead(ctx, holder, pub.HeadOwnerOf(holder)+":"+b.Preview.Branch)
-	if err != nil {
-		st.warnings = append(st.warnings, fmt.Sprintf("could not look for the PR of %s: %v", b.Preview.Branch, err))
-	}
-	for _, p := range byHead {
-		if !slices.ContainsFunc(prs, func(q pulls.PR) bool { return q.Number == p.Number }) {
-			prs = append(prs, p)
-		}
-	}
-	st.dec = decidePublishBy(prs, me, st.m, sameFingerprint)
-	if open.Truncated {
-		st.warnings = append(st.warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this sync may have been missed", len(open.PRs), holder))
-	}
-	for _, a := range st.dec.Also {
-		st.warnings = append(st.warnings, alsoNote(a, b.Branch, 0, false))
-	}
-	return st
-}
-
 // syncConfirmation is what the run is about to do, and whether that writes anything.
-func syncConfirmation(holder string, plan *SyncPlan, ready []int, states []syncState) (Confirmation, bool) {
-	c := Confirmation{Consumer: holder}
+func syncConfirmation(holder string, plan *SyncPlan, ready []int, decided []proposal.Decided) (Confirmation, bool) {
+	c := Confirmation{Consumer: holder, Release: "a sync"}
 	if plan.Push != nil {
 		c.Push = *plan.Push
 	}
-	var what []string
 	for k, i := range ready {
-		b, st := plan.Branches[i], states[k]
-		label := b.Branch
-		if len(b.Rows) > 0 {
-			label = b.Rows[0].Line
+		b, st := plan.Branches[i], decided[k]
+		label := b.line()
+		if label == "" {
+			label = b.Branch
 		}
-		what = append(what, b.Preview.Title)
 		switch {
-		case st.done != nil:
-		case st.dec.Action == PublishAlreadyOpen:
+		case st.Done != nil:
+		case st.Decision.Action == PublishAlreadyOpen:
 			c.Already = append(c.Already, label)
 		default:
 			c.Opens = append(c.Opens, label)
 		}
-		for _, p := range st.dec.Supersede {
-			c.Closes = append(c.Closes, PRRef{Number: p.Number, URL: p.URL})
-		}
+		c.Closes = append(c.Closes, proposal.Refs(st.Decision.Supersede)...)
 	}
-	c.Release = "a sync"
 	return c, len(c.Opens) > 0 || len(c.Closes) > 0
-}
-
-// workSync does the work for one branch that was decided, as workTarget does for a
-// release: a result of its own when there is nothing to make, otherwise the commits and,
-// with a publisher, the push and the PR.
-func workSync(ctx context.Context, ex *Executor, pub *Publisher, clone, remote string, in SyncInput, holder string, b SyncBranch, st syncState, committer Identity) *TargetResult {
-	if st.done != nil {
-		return st.done
-	}
-	if pub != nil && st.dec.Action == PublishAlreadyOpen {
-		result := &TargetResult{Status: ResultAlreadyOpen, Branch: b.Preview.Branch, Warnings: st.warnings,
-			PR: &PRRef{Number: st.dec.Open.Number, URL: st.dec.Open.URL}}
-		if in.DryRun {
-			result.WouldSupersede = refs(st.dec.Supersede)
-		} else {
-			pub.Supersede(ctx, holder, st.dec.Open.Number, st.m, b.subject(), st.dec.Supersede, result, nil)
-		}
-		return result
-	}
-	result := commitSync(ctx, ex, clone, remote, in, b, committer)
-	result.Warnings = append(result.Warnings, st.warnings...)
-	switch {
-	case pub == nil:
-	case in.DryRun:
-		result.WouldSupersede = refs(st.dec.Supersede)
-	case result.Status == ResultCommitted:
-		pub.Publish(ctx, holder, b.subject(), st.m, st.dec, result, nil)
-	}
-	return result
-}
-
-// commitSync makes the commits for one branch and ends the work, whatever happened, so
-// the clone is as it was found apart from the branch it keeps.
-func commitSync(ctx context.Context, ex *Executor, clone, remote string, in SyncInput, b SyncBranch, committer Identity) *TargetResult {
-	result := &TargetResult{Branch: b.Preview.Branch}
-	fail := func(err error) *TargetResult {
-		result.Status, result.Error = ResultFailed, err.Error()
-		return result
-	}
-	w, err := Prepare(ctx, ex.Git, PrepareRequest{
-		CloneDir: clone, Remote: remote, Target: b.Branch, Base: b.Head,
-		Branch: b.Preview.Branch, DryRun: in.DryRun, TempDir: ex.TempDir,
-		// A run in CI owns its checkout, so what an earlier step left in it is the work.
-		StageUntracked: in.CI,
-	})
-	if errors.Is(err, ErrBaseMoved) {
-		return fail(fmt.Errorf("%w; run it again", err))
-	}
-	if err != nil {
-		return fail(err)
-	}
-	result.Place, result.Reason = w.Place, w.Reason
-	if w.Reused {
-		// The branch is one of ours that is current, so nothing is built.
-		result.Commits = w.Existing
-		result.Status = ResultCommitted
-		if in.DryRun {
-			result.Status = ResultWouldCommit
-		}
-		return result
-	}
-	vars := map[string]string{"holdings": holdingsOf(b), "line": b.line()}
-	applied, err := Apply{
-		Route: b.route, Target: bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready},
-		Message: b.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign, Name: committer.Name, Email: committer.Email,
-		StepMessage: syncStepMessage(vars), StrategyMessage: syncStrategyMessage(vars),
-	}.Run(ctx, w)
-	if errors.Is(err, ErrNothingChanged) {
-		result.Status = ResultUpToDate
-		return finish(result, w.Finish(ctx, false))
-	}
-	if err != nil {
-		return fail(errors.Join(err, w.Abort(ctx)))
-	}
-	result.Commits = applied.Commits
-	for _, c := range applied.Changes {
-		result.Changes = append(result.Changes, c.Description)
-	}
-	result.Status = ResultCommitted
-	if in.DryRun {
-		result.Status = ResultWouldCommit
-	}
-	return finish(result, w.Finish(ctx, !in.DryRun))
 }
 
 // holdingsOf is the names of the holdings a branch writes, joined.

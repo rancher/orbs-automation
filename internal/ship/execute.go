@@ -2,9 +2,7 @@ package ship
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -40,55 +38,30 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 	if len(ready) == 0 {
 		return plan, nil
 	}
-	consumer := plan.Consumer
-	clone, err := ws.CloneDir(consumer)
-	if err != nil {
-		return plan, fmt.Errorf("%w: %v", ErrNoClone, err)
-	}
-	remote, err := ws.Remote(consumer)
+	sess, err := proposal.Begin(ctx, ws, ex, proposal.SessionInput{
+		Repo: res.route.Consumer, PushTo: in.PushTo, CI: in.CI, Refresh: in.Refresh, NoPush: in.NoPush,
+	})
 	if err != nil {
 		return plan, err
 	}
-	plan.Clone, plan.Remote = clone, remote
-	var pub *Publisher
-	var me string
-	if ex.Publish != nil && !in.NoPush {
-		if pub, me, plan.Push, err = proposal.PublisherFor(ctx, ws, ex, res.route.Consumer, clone, in.PushTo, in.CI, in.Refresh); err != nil {
-			return plan, err
-		}
+	plan.Clone, plan.Remote, plan.Push, plan.Actor = sess.Clone, sess.Remote, sess.Push, sess.Actor
+	if sess.Actor != nil {
+		emit(sink, Event{Kind: EventActor, Actor: sess.Actor})
 	}
-	if ex.Identify != nil {
-		actor, err := proposal.ActorFor(ctx, ex, clone, me)
-		if err != nil {
-			return plan, err
-		}
-		plan.Actor = actor
-		emit(sink, Event{Kind: EventActor, Actor: plan.Actor})
-		if in.CI {
-			// The bot has no git config in a fresh clone to read. A workstation's
-			// commits take theirs from git, which is what was just read.
-			res.committer = actor.Identity
-		}
-	}
+	res.committer = sess.Committer
+	pub, me := sess.Pub, sess.Me
 	// Decide every target first, reading only, so that the one question before
 	// anything is written can say what will be done.
 	states := make([]targetState, len(ready))
 	for k, i := range ready {
 		states[k] = res.decideTarget(ctx, pub, me, plan, plan.Targets[i], sink)
 	}
-	if pub != nil && !in.DryRun && ex.Confirm != nil {
-		if c, writes := confirmation(plan, states, in.Refresh); writes {
-			ok, err := ex.Confirm(ctx, c)
-			if err != nil {
-				return plan, err
-			}
-			if !ok {
-				return plan, ErrDeclined
-			}
-		}
+	c, writes := confirmation(plan, states, in.Refresh)
+	if err := sess.Confirm(ctx, ex, in.DryRun, c, writes); err != nil {
+		return plan, err
 	}
 	for k, i := range ready {
-		plan.Targets[i].Result = res.workTarget(ctx, ex, pub, clone, remote, in, plan, states[k], sink)
+		plan.Targets[i].Result = res.workTarget(ctx, ex, sess, in, plan, states[k], sink)
 		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Line: plan.Targets[i].Line, Result: plan.Targets[i].Result})
 	}
 	return plan, nil
@@ -111,73 +84,13 @@ type targetState struct {
 // It only reads.
 func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string, plan Plan, tp TargetPlan, sink Sink) targetState {
 	st := targetState{tp: tp, m: Marker{Source: plan.Producer, Consumer: plan.Consumer, Target: tp.Branch, Version: tp.Release}}
-	if pub == nil {
-		return st
-	}
-	open, err := pub.Remote.OpenForBase(ctx, plan.Consumer, tp.Branch, 0)
-	if err != nil {
-		st.done = &TargetResult{Status: ResultFailed, Branch: tp.Preview.Branch,
-			Error: fmt.Sprintf("look for the open PRs of %s: %v", plan.Consumer, err)}
-		return st
-	}
-	prs := open.PRs
-	addHead := func(head string) {
-		byHead, err := pub.Remote.OpenForHead(ctx, plan.Consumer, head)
-		if err != nil {
-			st.warnings = append(st.warnings, fmt.Sprintf("could not look for the PR of %s: %v", head, err))
-			return
-		}
-		for _, p := range byHead {
-			if !slices.ContainsFunc(prs, func(q pulls.PR) bool { return q.Number == p.Number }) {
-				prs = append(prs, p)
-			}
-		}
-	}
-	// The listing reads only the newest, so also ask for the one head this run
-	// would push to, which is exact whatever the number of open PRs.
-	ownHead := pub.HeadOwnerOf(plan.Consumer) + ":" + tp.Preview.Branch
-	addHead(ownHead)
-	// And for the branches of this bump that anyone left on the upstream, found by
-	// the tail of their names in the refs the run already has: a PR of an older or
-	// a newer version is found whatever the prefix and however many PRs are open.
-	owner, _, _ := strings.Cut(plan.Consumer, "/")
-	branches := bumpBranches(r.consumerRefs.Branches, sourceOfKey(tp.Preview.Key, tp.Release, tp.Branch), tp.Branch)
-	if len(branches) > maxBumpBranches {
-		st.warnings = append(st.warnings, fmt.Sprintf("%d branches of this bump are on %s, so only the first %d were asked for their PR", len(branches), plan.Consumer, maxBumpBranches))
-		branches = branches[:maxBumpBranches]
-	}
-	for _, name := range branches {
-		if head := owner + ":" + name; head != ownHead {
-			addHead(head)
-		}
-	}
-	st.dec = decidePublish(prs, me, st.m)
-	emit(sink, Event{Kind: EventDecided, Branch: tp.Branch, Line: tp.Line, Decision: &st.dec})
-	if open.Truncated {
-		st.warnings = append(st.warnings, fmt.Sprintf("only the newest %d open PRs of %s were looked at, so an older PR of this bump may have been missed", len(open.PRs), plan.Consumer))
-	}
-	for _, p := range prs {
-		if found, ok := ParseMarker(p.Body); ok && found.SameBump(st.m) {
-			st.warnings = append(st.warnings, markerWarnings(p, found)...)
-		}
-	}
-	for _, a := range st.dec.Also {
-		behind, known := 0, false
-		if a.HeadOwner != "" {
-			if n, err := pub.Remote.BehindBy(ctx, plan.Consumer, tp.Branch, a.HeadOwner+":"+a.HeadRef); err == nil {
-				behind, known = n, true
-			}
-		}
-		st.warnings = append(st.warnings, alsoNote(a, tp.Branch, behind, known))
-	}
-	for _, o := range st.dec.OtherBase {
-		st.warnings = append(st.warnings, otherBaseNote(o, tp.Branch))
-	}
-	if st.dec.Action == PublishBlocked {
-		newer, _ := ParseMarker(st.dec.Newer.Body)
-		st.done = &TargetResult{Status: ResultBlocked, Branch: tp.Preview.Branch, Warnings: st.warnings,
-			Error: fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", st.dec.Newer.Number, newer.Version, tp.Branch, tp.Release)}
-	}
+	d := proposal.Decide(ctx, pub, me, proposal.DecideInput{
+		Repo: plan.Consumer, Subject: tp.Subject(), Marker: st.m, Branches: r.consumerRefs.Branches,
+		Blocked: func(newer Marker, p pulls.PR) string {
+			return fmt.Sprintf("#%d already ships %s to %s, which is newer than %s", p.Number, newer.Version, tp.Branch, tp.Release)
+		},
+	}, asProposalSink(sink))
+	st.dec, st.warnings, st.done = d.Decision, d.Warnings, d.Done
 	return st
 }
 
@@ -211,104 +124,38 @@ func confirmation(plan Plan, states []targetState, refresh bool) (Confirmation, 
 	return c, len(c.Opens)+len(c.Closes)+len(c.Refreshes) > 0
 }
 
-// workTarget does the work for one target that was decided. One that needs none
-// is its own result. One whose PR is already open only has its older PRs closed
-// (or listed, in a dry run). Otherwise it makes the commits and, unless this is a
-// dry run, publishes them.
-func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher, clone, remote string, in Input, plan Plan, st targetState, sink Sink) *TargetResult {
-	if st.done != nil {
-		return st.done
-	}
+// workTarget does the work for one target that was decided, as the conveyor does for any
+// proposal: the write of the release in the consumer's holdings and the steps of the edits,
+// then, with a publisher, the push and the PR.
+func (r resolution) workTarget(ctx context.Context, ex *Executor, sess *proposal.Session, in Input, plan Plan, st targetState, sink Sink) *TargetResult {
 	tp := st.tp
-	if pub != nil && st.dec.Action == PublishAlreadyOpen {
-		result := &TargetResult{Status: ResultAlreadyOpen, Branch: tp.Preview.Branch, Warnings: st.warnings,
-			PR: &PRRef{Number: st.dec.Open.Number, URL: st.dec.Open.URL}}
-		if open := st.dec.Open; open.HeadOwner != "" {
-			behind, err := pub.Remote.BehindBy(ctx, plan.Consumer, tp.Branch, open.HeadOwner+":"+open.HeadRef)
-			if err != nil {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("could not tell whether #%d is behind %s: %v", open.Number, tp.Branch, err))
-			}
-			result.BehindBy = behind
+	var refresh func(*TargetResult)
+	if in.Refresh {
+		refresh = func(result *TargetResult) {
+			r.refresh(ctx, ex, sess.Pub, sess.Clone, sess.Remote, in, plan, st, result, sink)
 		}
-		if in.DryRun {
-			result.WouldSupersede = refs(st.dec.Supersede)
-		} else {
-			pub.Supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp.Subject(), st.dec.Supersede, result, asProposalSink(sink))
-		}
-		if in.Refresh {
-			r.refresh(ctx, ex, pub, clone, remote, in, plan, st, result, sink)
-		}
-		return result
 	}
-	result := r.commitTarget(ctx, ex, clone, remote, in, tp, plan.ReleaseOf(tp.Release), sink)
-	result.Warnings = append(result.Warnings, st.warnings...)
-	switch {
-	case pub == nil:
-	case in.DryRun:
-		result.WouldSupersede = refs(st.dec.Supersede)
-	case result.Status == ResultCommitted:
-		pub.Publish(ctx, plan.Consumer, tp.Subject(), st.m, st.dec, result, asProposalSink(sink))
-	}
-	return result
+	return proposal.Enact(ctx, ex, proposal.EnactInput{
+		Repo: plan.Consumer, Session: sess, Subject: tp.Subject(), Marker: st.m, DryRun: in.DryRun, CI: in.CI,
+		Decided: proposal.Decided{Decision: st.dec, Warnings: st.warnings, Done: st.done},
+		Apply:   r.applier(ctx, ex, tp, plan.ReleaseOf(tp.Release)),
+		Refresh: refresh,
+	}, asProposalSink(sink))
 }
 
-// commitTarget makes the commit for one target and ends the work, whatever
-// happened, so the clone is as it was found apart from the branch it keeps.
-func (r resolution) commitTarget(ctx context.Context, ex *Executor, clone, remote string, in Input, tp TargetPlan, release Release, sink Sink) *TargetResult {
-	result := &TargetResult{Branch: tp.Preview.Branch}
-	fail := func(err error) *TargetResult {
-		result.Status, result.Error = ResultFailed, err.Error()
-		return result
+// applier is the write of a release into a target's branch, as the conveyor runs it: the
+// holdings of the target, then the steps of the edits, each commit made as the run's
+// committer.
+func (r resolution) applier(ctx context.Context, ex *Executor, tp TargetPlan, release Release) func(*Work, func(CommitInfo)) (ApplyResult, error) {
+	pv := previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}
+	return func(w *Work, onCommit func(CommitInfo)) (ApplyResult, error) {
+		return Apply{
+			Route: r.route, Target: r.targetOf(tp), Tag: release.Tag, Commit: release.Commit,
+			Message: tp.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign,
+			Name: r.committer.Name, Email: r.committer.Email, OnCommit: onCommit,
+			StepMessage: stepMessage(pv), StrategyMessage: strategyMessage(pv),
+		}.Run(ctx, w)
 	}
-	w, err := Prepare(ctx, ex.Git, PrepareRequest{
-		CloneDir: clone, Remote: remote, Target: tp.Branch, Base: tp.Commit,
-		Branch: tp.Preview.Branch, DryRun: in.DryRun, TempDir: ex.TempDir,
-		// A run in CI owns its checkout, so what an earlier step left in it is the work.
-		StageUntracked: in.CI,
-	})
-	if errors.Is(err, ErrBaseMoved) {
-		return fail(fmt.Errorf("%w; run it again", err))
-	}
-	if err != nil {
-		return fail(err)
-	}
-	result.Place, result.Reason = w.Place, w.Reason
-	emit(sink, Event{Kind: EventTargetStarted, Branch: tp.Branch, Line: tp.Line, Place: w.Place, Reason: w.Reason})
-	if w.Reused {
-		// The branch is one of ours that is current, so nothing is built: what it
-		// holds is what is published.
-		result.Commits = w.Existing
-		result.Status = ResultCommitted
-		if in.DryRun {
-			result.Status = ResultWouldCommit
-		}
-		return result
-	}
-
-	applied, err := Apply{
-		Route: r.route, Target: r.targetOf(tp), Tag: release.Tag, Commit: release.Commit,
-		Message: tp.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign,
-		Name: r.committer.Name, Email: r.committer.Email,
-		OnCommit:        func(c CommitInfo) { emit(sink, Event{Kind: EventCommit, Branch: tp.Branch, Line: tp.Line, Commit: &c}) },
-		StepMessage:     stepMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}),
-		StrategyMessage: strategyMessage(previewInput{producer: r.producer, consumer: r.route.Consumer, release: release, target: tp.Target}),
-	}.Run(ctx, w)
-	if errors.Is(err, ErrNothingChanged) {
-		result.Status = ResultUpToDate
-		return finish(result, w.Finish(ctx, false))
-	}
-	if err != nil {
-		return fail(errors.Join(err, w.Abort(ctx)))
-	}
-	result.Commits = applied.Commits
-	for _, c := range applied.Changes {
-		result.Changes = append(result.Changes, c.Description)
-	}
-	result.Status = ResultCommitted
-	if in.DryRun {
-		result.Status = ResultWouldCommit
-	}
-	return finish(result, w.Finish(ctx, !in.DryRun))
 }
 
 // refresh rebuilds an already open PR of the actor's and replaces its branch when
@@ -384,7 +231,10 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 	preview := *tp.Preview
 	preview.Branch = scratchName
 	scratch.Preview = &preview
-	built := r.commitTarget(ctx, ex, clone, remote, in, scratch, plan.ReleaseOf(tp.Release), sink)
+	built := proposal.Commit(ctx, ex, proposal.CommitInput{
+		Clone: clone, Remote: remote, Subject: scratch.Subject(), DryRun: in.DryRun, CI: in.CI,
+		Apply: r.applier(ctx, ex, scratch, plan.ReleaseOf(tp.Release)),
+	}, asProposalSink(sink))
 	switch built.Status {
 	case ResultCommitted, ResultWouldCommit:
 	case ResultUpToDate:

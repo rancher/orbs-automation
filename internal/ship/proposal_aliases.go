@@ -68,21 +68,13 @@ var (
 	ErrNoClone          = proposal.ErrNoClone
 	ErrNothingChanged   = proposal.ErrNothingChanged
 
-	ParseMarker     = proposal.ParseMarker
-	RecordedKey     = proposal.RecordedKey
-	BranchKey       = proposal.BranchKey
-	BranchTail      = proposal.BranchTail
-	Prepare         = proposal.Prepare
-	decidePublish   = proposal.DecidePublish
-	decidePublishBy = proposal.DecidePublishBy
-	alsoNote        = proposal.AlsoNote
-	otherBaseNote   = proposal.OtherBaseNote
-	markerWarnings  = proposal.MarkerWarnings
-	sourceOfKey     = proposal.SourceOfKey
-	bumpBranches    = proposal.BumpBranches
-	mergeBody       = proposal.MergeBody
-	short           = proposal.Short
-	refs            = proposal.Refs
-	finish          = proposal.Finish
-	geroBlocks      = proposal.GeroBlocks
+	ParseMarker = proposal.ParseMarker
+	RecordedKey = proposal.RecordedKey
+	BranchKey   = proposal.BranchKey
+	BranchTail  = proposal.BranchTail
+	Prepare     = proposal.Prepare
+	mergeBody   = proposal.MergeBody
+	short       = proposal.Short
+	refs        = proposal.Refs
+	geroBlocks  = proposal.GeroBlocks
 )
