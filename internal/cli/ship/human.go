@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -619,7 +620,7 @@ func (h *humanSink) results(p *domain.Plan) {
 	}
 	for _, t := range p.Targets {
 		if r := t.Result; r != nil && len(r.WouldSupersede) > 0 {
-			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Key(), refNumbers(r.WouldSupersede)))
+			h.out.Line(fmt.Sprintf("  %s: would close %s", t.Key(), proposer.RefNumbers(r.WouldSupersede)))
 		}
 	}
 	for _, g := range groupTargets(p.Targets, func(t domain.TargetPlan) []string {
@@ -649,15 +650,6 @@ func (h *humanSink) results(p *domain.Plan) {
 			h.out.Line(h.st.Style(style.Dim, line))
 		}
 	}
-}
-
-// refNumbers lists PR references by number: #101, #90.
-func refNumbers(refs []domain.PRRef) string {
-	out := make([]string, len(refs))
-	for i, r := range refs {
-		out[i] = fmt.Sprintf("#%d", r.Number)
-	}
-	return strings.Join(out, ", ")
 }
 
 // statusRoleOf is statusRole for a status that is known to have one.

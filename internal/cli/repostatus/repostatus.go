@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/releasetag"
+	"github.com/rancher/orbs-automation/internal/reposync"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -74,7 +75,7 @@ type Status struct {
 	Sources   []ship.SourceHoldings   `json:"sources,omitempty"`
 	// Series is what this project holds of the series of a stream, which names no
 	// release, against the series its stream has for each line.
-	Series []ship.SeriesHolding `json:"series,omitempty"`
+	Series []reposync.SeriesHolding `json:"series,omitempty"`
 	// TraceError is why the consumers or the sources could not be worked out at all,
 	// such as an update method that is not usable.
 	TraceError string `json:"traceError,omitempty"`
@@ -223,7 +224,7 @@ func trace(ctx context.Context, ws ship.Reader, p *chain.Project, opts Options, 
 		note(err)
 	}
 	var err error
-	st.Series, err = ship.SeriesHoldings(ctx, ws, p)
+	st.Series, err = reposync.SeriesHoldings(ctx, ws, p)
 	note(err)
 	st.TraceError = strings.Join(problems, "; ")
 }
@@ -489,7 +490,7 @@ func renderText(st Status, view *style.Renderer) string {
 // renderSeries is the section of one series holding: what each line's branch holds
 // against the series its stream has for the line, and the pull request that would
 // fix a difference.
-func renderSeries(b *strings.Builder, view *style.Renderer, sh ship.SeriesHolding) {
+func renderSeries(b *strings.Builder, view *style.Renderer, sh reposync.SeriesHolding) {
 	b.WriteString("\n" + view.Style(style.Heading, fmt.Sprintf("Series: %s, stream %s (%s)", sh.Name, sh.Stream, sh.Producer)) + "\n")
 	table := [][]string{heads(view, true, "BRANCH", "HOLDS", "WANTS", "STATUS")}
 	for _, l := range sh.Lines {
@@ -508,7 +509,7 @@ func renderSeries(b *strings.Builder, view *style.Renderer, sh ship.SeriesHoldin
 // seriesStatusText says how one line stands: current, a difference that the
 // warning series-differs names (or the reason a document gives for it), or why the
 // branch could not be read.
-func seriesStatusText(l ship.SeriesLine) string {
+func seriesStatusText(l reposync.SeriesLine) string {
 	switch {
 	case l.Error != "":
 		return "unreadable: " + l.Error

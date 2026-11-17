@@ -1,4 +1,4 @@
-package ship
+package proposer
 
 import (
 	"bufio"
@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 )
 
@@ -18,7 +18,7 @@ var ErrNeedsApproval = errors.New("this pushes branches and opens PRs and needs 
 
 // question is the one line asked before anything is written: what is pushed
 // where, and which PRs are opened and closed.
-func question(c domain.Confirmation) string {
+func Question(c proposal.Confirmation) string {
 	var parts []string
 	if len(c.Opens) > 0 {
 		noun := "branch"
@@ -54,9 +54,18 @@ func question(c domain.Confirmation) string {
 		if len(parts) == 0 {
 			in = " in " + c.Consumer
 		}
-		parts = append(parts, fmt.Sprintf("%s %s%s", verb, refNumbers(c.Closes), in))
+		parts = append(parts, fmt.Sprintf("%s %s%s", verb, RefNumbers(c.Closes), in))
 	}
 	return strings.Join(parts, ", then ") + "? [y/N] "
+}
+
+// RefNumbers lists PR references by number: #101, #90.
+func RefNumbers(refs []proposal.PRRef) string {
+	out := make([]string, len(refs))
+	for i, r := range refs {
+		out[i] = fmt.Sprintf("#%d", r.Number)
+	}
+	return strings.Join(out, ", ")
 }
 
 // differ is "it differs" or "they differ".
@@ -67,12 +76,12 @@ func differ(n int) string {
 	return "it"
 }
 
-// confirmer returns the function that asks before a run writes. With yes it says
+// Confirmer returns the function that asks before a run writes. With yes it says
 // yes without asking. Without a terminal it is an error, so a forgotten flag in
 // CI is a loud failure and not a hang or a silent yes. Otherwise it writes the
 // question to out and reads the answer from in, and only y or yes is yes.
-func confirmer(in io.Reader, out io.Writer, interactive, yes bool, st *style.Renderer) func(context.Context, domain.Confirmation) (bool, error) {
-	return func(_ context.Context, c domain.Confirmation) (bool, error) {
+func Confirmer(in io.Reader, out io.Writer, interactive, yes bool, st *style.Renderer) func(context.Context, proposal.Confirmation) (bool, error) {
+	return func(_ context.Context, c proposal.Confirmation) (bool, error) {
 		if yes {
 			return true, nil
 		}
@@ -80,7 +89,7 @@ func confirmer(in io.Reader, out io.Writer, interactive, yes bool, st *style.Ren
 			return false, ErrNeedsApproval
 		}
 		// The question is what the user is to read, and the choices are not.
-		text, _ := strings.CutSuffix(question(c), " [y/N] ")
+		text, _ := strings.CutSuffix(Question(c), " [y/N] ")
 		if _, err := fmt.Fprint(out, "\n"+st.Style(style.Heading, text)+" "+st.Style(style.Dim, "[y/N]")+" "); err != nil {
 			return false, err
 		}

@@ -20,12 +20,10 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/goreleases"
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
-	"github.com/rancher/orbs-automation/internal/cli/identity"
+	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/rancher/orbs-automation/internal/registry"
 	domain "github.com/rancher/orbs-automation/internal/ship"
-	"github.com/rancher/orbs-automation/internal/steprun"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
@@ -93,34 +91,12 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 	if err := checkFormat(s.Output); err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "gero-ship-")
+	ctx, ex, cleanup, err := proposer.Build(ctx, w, log, s, proposer.Options{NoPush: opts.NoPush, Yes: opts.Yes, Interactive: opts.Interactive, In: opts.In})
 	if err != nil {
-		return fmt.Errorf("make a directory for worktrees: %w", err)
+		return err
 	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp, Sign: s.SignCommits, Identify: identify(s)}
-	if !opts.NoPush {
-		creds, err := github.Resolve(github.GoGh{}, "")
-		switch {
-		case err == nil:
-			ctx = pushContext(ctx, s, creds)
-			remote, err := newRemote(creds, s)
-			if err != nil {
-				return err
-			}
-			ex.Publish = &domain.Publisher{Git: domain.GitCLI{}, Remote: remote}
-			ex.Confirm = confirmer(opts.In, w, opts.Interactive, opts.Yes, style.New(s.Terminal))
-		case s.DryRun && errors.Is(err, github.ErrNoToken):
-			// A dry run can still say what it would commit; it just cannot look at
-			// the open PRs without a token.
-			if log != nil {
-				log.Warn("no GitHub token, so the open PRs were not looked at", "error", err)
-			}
-		default:
-			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
-		}
-	}
-	return runToStyled(ctx, w, log, shipWorkspace{workspace.Open(s, cwd)}, probers(), ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
+	defer cleanup()
+	return runToStyled(ctx, w, log, proposer.Workspace{Workspace: workspace.Open(s, cwd)}, probers(), ex, s.Output, inputFrom(s, opts), opts.Preview, style.New(s.Terminal))
 }
 
 // probers is what a run looks things up with: the registries for images, the proxy
@@ -298,13 +274,4 @@ func renderJSON(p domain.Plan) (string, error) {
 		return "", err
 	}
 	return string(b) + "\n", nil
-}
-
-// identify says who the commits are made as in the clone: the engineer's git
-// identity there on a workstation, the bot's in CI.
-func identify(s clicfg.Settings) func(context.Context, string) (domain.Identity, error) {
-	return func(ctx context.Context, clone string) (domain.Identity, error) {
-		id, err := identity.ResolveIn(ctx, s, clone)
-		return domain.Identity{Name: id.Name, Email: id.Email}, err
-	}
 }

@@ -25,3 +25,12 @@ func TestTheRealProbersHaveTheListOfGoReleases(t *testing.T) {
 	assert.NotNil(t, p.Modules)
 	assert.NotNil(t, p.Go, "so a go.mod with go 1.26 and no toolchain line can be given its newest patch")
 }
+
+// opening is the confirmation of a run that opens a PR for each of the branches.
+func opening(branches ...string) domain.Confirmation {
+	return domain.Confirmation{
+		Consumer: "rancher/rancher", Release: "v0.5.3",
+		Push:  domain.PushTarget{Role: domain.RoleFork, Remote: "origin"},
+		Opens: branches,
+	}
+}

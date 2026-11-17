@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/reposync"
 	"github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
@@ -778,10 +779,10 @@ func TestRenderTextNamesTheStreamOfAConsumerThatTakesSeveralOfThem(t *testing.T)
 }
 
 func seriesStatus() Status {
-	return Status{Slug: "rancher/prometheus-federator", Series: []ship.SeriesHolding{{
+	return Status{Slug: "rancher/prometheus-federator", Series: []reposync.SeriesHolding{{
 		Name: "prometheus-federator-holds-kuberlr", Producer: "rancher/kuberlr-kubectl", Stream: "kuberlr-kubectl",
 		Edits: []string{"promfed-edit"},
-		Lines: []ship.SeriesLine{
+		Lines: []reposync.SeriesLine{
 			{Line: "v2.16", Branch: "main", File: "build.yaml", Current: "v9", Want: "v9", UpToDate: true},
 			{Line: "v2.15", Branch: "release/v7.x", File: "build.yaml", Current: "v9", Want: "v8",
 				Suggest: "open a pull request on release/v7.x of rancher/prometheus-federator that writes v8, with Edit promfed-edit"},

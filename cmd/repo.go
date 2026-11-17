@@ -13,8 +13,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repoinfo"
 	"github.com/rancher/orbs-automation/internal/cli/repolist"
 	"github.com/rancher/orbs-automation/internal/cli/repostatus"
+	"github.com/rancher/orbs-automation/internal/cli/reposync"
 	"github.com/rancher/orbs-automation/internal/cli/repotag"
-	"github.com/rancher/orbs-automation/internal/cli/ship"
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/spf13/cobra"
 )
@@ -354,7 +354,7 @@ else from the git repository in the current directory.`,
 
 // syncCommand is gero repo sync: bring what a project holds in line with config.
 func syncCommand() *cobra.Command {
-	var in ship.SyncOptions
+	var in reposync.Options
 	cmd := &cobra.Command{
 		Use:   "sync [project]",
 		Short: "Bring what a project holds in line with config, one pull request for each branch",
@@ -399,7 +399,7 @@ does everything but write.`,
 			in.Yes = s.NonInteractive
 			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
 			in.In, in.Interactive = cmd.InOrStdin(), termfacts.IsTerminal(os.Stdin)
-			return ship.RunSync(ctx, cmd.OutOrStdout(), log, s, cwd, in)
+			return reposync.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
 		},
 	}
 	flags := cmd.Flags()

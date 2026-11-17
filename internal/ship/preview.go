@@ -3,7 +3,6 @@ package ship
 import (
 	"fmt"
 	"maps"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/texts"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
+	"github.com/rancher/orbs-automation/internal/proposal"
 )
 
 // previewInput is everything the texts are made from.
@@ -45,7 +45,7 @@ func renderPreview(in previewInput) (Preview, error) {
 	vars["changes"] = changes(in)
 	vars["marker"] = marker.String()
 
-	prefix := firstNonEmpty(in.userPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
+	prefix := proposal.FirstNonEmpty(in.userPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
 	prefixVars := maps.Clone(vars)
 	delete(prefixVars, "key")
 	renderedPrefix, err := templates.Render(prefix, prefixVars)
@@ -56,7 +56,7 @@ func renderPreview(in previewInput) (Preview, error) {
 	if len(in.pins) > 0 { // lasso goes with wrangler: the title and the commit say so
 		defaultTitle, defaultCommit = texts.DefaultTitleWith(), texts.CommitMessageWith()
 	}
-	titleTemplate := firstNonEmpty(prs.Title, defaultTitle)
+	titleTemplate := proposal.FirstNonEmpty(prs.Title, defaultTitle)
 	title, err := templates.Render(titleTemplate, vars)
 	if err != nil {
 		return Preview{}, fmt.Errorf("title %q: %w", titleTemplate, err)
@@ -144,18 +144,6 @@ func stepMessage(in previewInput) func(bump.Unit) (string, error) {
 	}
 }
 
-// blankLines is two or more blank lines in a row.
-var blankLines = regexp.MustCompile(`\n{3,}`)
-
-// bullets lists changes, one bullet each.
-func bullets(changes []bump.Change) string {
-	lines := make([]string, len(changes))
-	for i, c := range changes {
-		lines[i] = "- " + c.Description
-	}
-	return strings.Join(lines, "\n")
-}
-
 // strategyMessage returns the function that makes the commit message of a
 // strategy that changed files: which strategy ran and what it changed, from the
 // embedded template.
@@ -164,13 +152,13 @@ func strategyMessage(in previewInput) func(bump.Unit) (string, error) {
 		vars := textVars(in)
 		vars["strategy"] = u.Strategy
 		vars["edit"] = u.Edit
-		vars["changes"] = bullets(u.Changes)
+		vars["changes"] = proposal.Bullets(u.Changes)
 		msg, err := templates.Render(texts.StrategyCommitMessage(), vars)
 		if err != nil {
 			return "", err
 		}
 		// A strategy that names no change leaves two blank lines where the list was.
-		return blankLines.ReplaceAllString(msg, "\n\n"), nil
+		return proposal.CollapseBlankLines(msg), nil
 	}
 }
 
@@ -235,13 +223,4 @@ func managedByWords(p *chain.Project) string {
 		return "which " + team + " manages"
 	}
 	return "which no team names"
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }

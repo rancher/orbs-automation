@@ -1,4 +1,4 @@
-package ship
+package reposync
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/steprun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ type seriesWS struct {
 	graph *chain.Graph
 	up    string
 	clone string
-	push  PushSettings
+	push  proposal.PushSettings
 }
 
 // seriesDocs is the holder and its two streams, with the Edit following the holdings
@@ -71,18 +72,18 @@ func seriesDocs(edit bool, followed ...string) []string {
 	return docs
 }
 
-func newSeriesWS(t *testing.T, edit bool) (*seriesWS, *Executor) {
+func newSeriesWS(t *testing.T, edit bool) (*seriesWS, *proposal.Executor) {
 	t.Helper()
 	up := seriesRepo(t)
 	ws := &seriesWS{t: t, graph: chaintest.Load(t, seriesDocs(edit)...), up: up, clone: engineer(t, up)}
-	return ws, &Executor{Git: GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
+	return ws, &proposal.Executor{Git: proposal.GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
 }
 
-func (w *seriesWS) Project(string) (*chain.Project, error) { return w.graph.Project("cons"), nil }
-func (w *seriesWS) Bump() (*bump.Engine, error)            { return bump.NewEngine(bump.Builtin(), w.graph) }
-func (w *seriesWS) CloneDir(string) (string, error)        { return w.clone, nil }
-func (w *seriesWS) Remote(string) (string, error)          { return "upstream", nil }
-func (w *seriesWS) PushSettings(string) PushSettings       { return w.push }
+func (w *seriesWS) Project(string) (*chain.Project, error)    { return w.graph.Project("cons"), nil }
+func (w *seriesWS) Bump() (*bump.Engine, error)               { return bump.NewEngine(bump.Builtin(), w.graph) }
+func (w *seriesWS) CloneDir(string) (string, error)           { return w.clone, nil }
+func (w *seriesWS) Remote(string) (string, error)             { return "upstream", nil }
+func (w *seriesWS) PushSettings(string) proposal.PushSettings { return w.push }
 
 func (w *seriesWS) UpstreamRefs(context.Context, string) (git.Refs, error) {
 	var refs git.Refs
@@ -102,7 +103,7 @@ func (w *seriesWS) UpstreamFile(_ context.Context, _, ref, path string) ([]byte,
 }
 
 // branchOf is the branch of the plan, which the test requires.
-func branchOf(t *testing.T, p SyncPlan, branch string) SyncBranch {
+func branchOf(t *testing.T, p Plan, branch string) Branch {
 	t.Helper()
 	for _, b := range p.Branches {
 		if b.Branch == branch {
@@ -110,7 +111,7 @@ func branchOf(t *testing.T, p SyncPlan, branch string) SyncBranch {
 		}
 	}
 	require.Failf(t, "no branch", "%s in %+v", branch, p.Branches)
-	return SyncBranch{}
+	return Branch{}
 }
 
 const behind = "release/v7.x"
@@ -118,7 +119,7 @@ const behind = "release/v7.x"
 func TestSyncWithoutAnExecutorOnlyChecks(t *testing.T) {
 	ws, _ := newSeriesWS(t, true)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true}, nil)
+	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "acme/cons", plan.Holder)
@@ -147,7 +148,7 @@ func TestSyncWithoutAnExecutorOnlyChecks(t *testing.T) {
 func TestSyncDoesNotWriteAHoldingNoEditFollows(t *testing.T) {
 	ws, ex := newSeriesWS(t, false)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{NoPush: true}, ex)
 
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
@@ -164,7 +165,7 @@ func TestSyncWritesTheHoldingsThatHaveAnEditAndLeavesTheRest(t *testing.T) {
 	// the Edit follows only the first holding: the second is only read
 	ws.graph = chaintest.Load(t, seriesDocs(true, "cons-holds-prod")...)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{NoPush: true}, ex)
 
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
@@ -179,13 +180,13 @@ func TestSyncWritesTheHoldingsThatHaveAnEditAndLeavesTheRest(t *testing.T) {
 func TestSyncCommitsEveryCorrectionAndTheEditsStepOnOneBranch(t *testing.T) {
 	ws, ex := newSeriesWS(t, true)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{NoPush: true}, ex)
 
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
 	res := b.Result
 	require.NotNil(t, res)
-	assert.Equal(t, ResultCommitted, res.Status)
+	assert.Equal(t, proposal.ResultCommitted, res.Status)
 	assert.Equal(t, b.Preview.Branch, res.Branch)
 	assert.Equal(t, heldV8, runGit(t, ws.clone, "show", res.Branch+":build.yaml")+"\n", "both values are written")
 	assert.Equal(t, "release/v7.x", runGit(t, ws.clone, "show", res.Branch+":generated/branch.txt"), "the Edit's step ran once, on the branch")
@@ -199,13 +200,13 @@ func TestSyncCommitsEveryCorrectionAndTheEditsStepOnOneBranch(t *testing.T) {
 func TestSyncDryRunLeavesNothingBehind(t *testing.T) {
 	ws, ex := newSeriesWS(t, true)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true, DryRun: true}, ex)
+	plan, err := Run(bg, ws, Input{NoPush: true, DryRun: true}, ex)
 
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
 	require.NotNil(t, b.Result)
-	assert.Equal(t, ResultWouldCommit, b.Result.Status)
-	assert.Equal(t, Worktree, b.Result.Place)
+	assert.Equal(t, proposal.ResultWouldCommit, b.Result.Status)
+	assert.Equal(t, proposal.Worktree, b.Result.Place)
 	assert.False(t, branchExistsIn(t, ws.clone, b.Preview.Branch))
 	entries, err := os.ReadDir(ex.TempDir)
 	require.NoError(t, err)
@@ -215,43 +216,43 @@ func TestSyncDryRunLeavesNothingBehind(t *testing.T) {
 func TestSyncLimitsTheRunToTheLinesAndTheHoldingAsked(t *testing.T) {
 	ws, _ := newSeriesWS(t, true)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true, Lines: []string{"2.16"}}, nil)
+	plan, err := Run(bg, ws, Input{NoPush: true, Lines: []string{"2.16"}}, nil)
 	require.NoError(t, err)
 	require.Len(t, plan.Branches, 1)
 	assert.Equal(t, "main", plan.Branches[0].Branch)
 
-	plan, err = Sync(bg, ws, SyncInput{NoPush: true, Holding: "cons-holds-side"}, nil)
+	plan, err = Run(bg, ws, Input{NoPush: true, Holding: "cons-holds-side"}, nil)
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
 	require.Len(t, b.Rows, 1)
 	assert.Equal(t, "[v7.x] Sync cons-holds-side on v2.15", b.Preview.Title)
 
-	_, err = Sync(bg, ws, SyncInput{NoPush: true, Holding: "nope"}, nil)
+	_, err = Run(bg, ws, Input{NoPush: true, Holding: "nope"}, nil)
 	require.ErrorContains(t, err, "nope")
 }
 
 // syncPublishing is a run that pushes to the clone's upstream and opens the PR, with
 // the fake GitHub.
-func syncPublishing(t *testing.T) (*seriesWS, *Executor, *fakeRemote, *log) {
+func syncPublishing(t *testing.T) (*seriesWS, *proposal.Executor, *fakeRemote, *log) {
 	t.Helper()
 	ws, ex := newSeriesWS(t, true)
 	lg := &log{}
 	remote := &fakeRemote{Log: lg, Labels: []string{"status/auto-created"}}
-	ws.push = PushSettings{Upstream: "upstream"}
-	ex.Publish = &Publisher{Git: GitCLI{}, Remote: remote}
+	ws.push = proposal.PushSettings{Upstream: "upstream"}
+	ex.Publish = &proposal.Publisher{Git: proposal.GitCLI{}, Remote: remote}
 	return ws, ex, remote, lg
 }
 
 func TestSyncPushesAndOpensOnePRForTheBranchWithAMarker(t *testing.T) {
 	ws, ex, _, lg := syncPublishing(t)
 
-	plan, err := Sync(bg, ws, SyncInput{}, ex)
+	plan, err := Run(bg, ws, Input{}, ex)
 
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
 	res := b.Result
 	require.NotNil(t, res)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	require.NotNil(t, res.PR)
 	assert.Equal(t, 104, res.PR.Number)
 	assert.Equal(t, "upstream", res.Pushed)
@@ -263,17 +264,17 @@ func TestSyncPushesAndOpensOnePRForTheBranchWithAMarker(t *testing.T) {
 
 func TestSyncAnAlreadyOpenPRMakesNothing(t *testing.T) {
 	ws, ex, remote, lg := syncPublishing(t)
-	checked, err := Sync(bg, ws, SyncInput{NoPush: true}, nil)
+	checked, err := Run(bg, ws, Input{NoPush: true}, nil)
 	require.NoError(t, err)
 	fp := branchOf(t, checked, behind).fingerprint
-	remote.Open = pulls.Open{PRs: []pulls.PR{pr(77, "danpock", Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: fp})}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{pr(77, "danpock", proposal.Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: fp})}}
 
-	plan, err := Sync(bg, ws, SyncInput{}, ex)
+	plan, err := Run(bg, ws, Input{}, ex)
 
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
 	require.NotNil(t, b.Result)
-	assert.Equal(t, ResultAlreadyOpen, b.Result.Status)
+	assert.Equal(t, proposal.ResultAlreadyOpen, b.Result.Status)
 	assert.Equal(t, 77, b.Result.PR.Number)
 	assert.False(t, lg.Has("create"))
 	assert.False(t, branchExistsIn(t, ws.clone, b.Preview.Branch), "no branch was made")
@@ -281,14 +282,14 @@ func TestSyncAnAlreadyOpenPRMakesNothing(t *testing.T) {
 
 func TestSyncClosesMyStalePRForTheBranchWhenWhatItWritesChanged(t *testing.T) {
 	ws, ex, remote, lg := syncPublishing(t)
-	remote.Open = pulls.Open{PRs: []pulls.PR{pr(61, "danpock", Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: "0ld0ld00"})}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{pr(61, "danpock", proposal.Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: "0ld0ld00"})}}
 
-	plan, err := Sync(bg, ws, SyncInput{}, ex)
+	plan, err := Run(bg, ws, Input{}, ex)
 
 	require.NoError(t, err)
 	res := branchOf(t, plan, behind).Result
 	require.NotNil(t, res)
-	assert.Equal(t, ResultOpened, res.Status)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
 	require.Len(t, res.Superseded, 1)
 	assert.Equal(t, 61, res.Superseded[0].Number)
 	assert.True(t, lg.Has("close #61"), "an earlier sync of the branch is replaced by this one")
@@ -300,7 +301,7 @@ func TestSyncLeavesLinesThatWantDifferentValuesOfOnePlaceOnASingleBranch(t *test
 	docs[3] = chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n")
 	ws.graph = chaintest.Load(t, docs...)
 
-	plan, err := Sync(bg, ws, SyncInput{NoPush: true}, nil)
+	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Branches, 1, "one branch holds every line")

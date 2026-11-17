@@ -1,4 +1,4 @@
-package ship
+package proposer
 
 import (
 	"bytes"
@@ -6,47 +6,47 @@ import (
 	"strings"
 	"testing"
 
-	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func opening(branches ...string) domain.Confirmation {
-	return domain.Confirmation{
+func opening(branches ...string) proposal.Confirmation {
+	return proposal.Confirmation{
 		Consumer: "rancher/rancher", Release: "v0.5.3",
-		Push:  domain.PushTarget{Role: domain.RoleFork, Remote: "origin"},
+		Push:  proposal.PushTarget{Role: proposal.RoleFork, Remote: "origin"},
 		Opens: branches,
 	}
 }
 
 func TestQuestionSaysWhatIsPushedWhereAndWhatIsOpened(t *testing.T) {
-	q := question(opening("release/v2.15"))
+	q := Question(opening("release/v2.15"))
 
 	for _, want := range []string{"release/v2.15", "origin", "fork", "1 PR", "rancher/rancher", "[y/N]"} {
 		assert.Contains(t, q, want)
 	}
 	assert.NotContains(t, q, "close")
 
-	q = question(opening("release/v2.15", "main"))
+	q = Question(opening("release/v2.15", "main"))
 	assert.Contains(t, q, "release/v2.15, main")
 	assert.Contains(t, q, "2 PRs")
 }
 
 func TestQuestionSaysWhichOlderPRsWillBeClosed(t *testing.T) {
 	c := opening("release/v2.15")
-	c.Closes = []domain.PRRef{{Number: 101}, {Number: 90}}
+	c.Closes = []proposal.PRRef{{Number: 101}, {Number: 90}}
 
-	q := question(c)
+	q := Question(c)
 
 	assert.Contains(t, q, "close #101, #90")
 }
 
 func TestQuestionWithNothingToOpenIsAboutTheClosing(t *testing.T) {
 	c := opening()
-	c.Closes = []domain.PRRef{{Number: 101}}
+	c.Closes = []proposal.PRRef{{Number: 101}}
 
-	q := question(c)
+	q := Question(c)
 
 	assert.Contains(t, q, "Close #101 in rancher/rancher")
 	assert.NotContains(t, q, "Push", "nothing is pushed")
@@ -55,7 +55,7 @@ func TestQuestionWithNothingToOpenIsAboutTheClosing(t *testing.T) {
 func TestConfirmerYesSaysYesWithoutAsking(t *testing.T) {
 	var out bytes.Buffer
 
-	ok, err := confirmer(strings.NewReader(""), &out, false, true, style.Plain())(context.Background(), opening("main"))
+	ok, err := Confirmer(strings.NewReader(""), &out, false, true, style.Plain())(context.Background(), opening("main"))
 
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -65,7 +65,7 @@ func TestConfirmerYesSaysYesWithoutAsking(t *testing.T) {
 func TestConfirmerWithoutATerminalIsAnErrorNotASilentYes(t *testing.T) {
 	var out bytes.Buffer
 
-	ok, err := confirmer(strings.NewReader("y\n"), &out, false, false, style.Plain())(context.Background(), opening("main"))
+	ok, err := Confirmer(strings.NewReader("y\n"), &out, false, false, style.Plain())(context.Background(), opening("main"))
 
 	require.ErrorIs(t, err, ErrNeedsApproval)
 	assert.False(t, ok)
@@ -79,7 +79,7 @@ func TestConfirmerAsksOnTheTerminalAndOnlyYesIsYes(t *testing.T) {
 	} {
 		var out bytes.Buffer
 
-		ok, err := confirmer(strings.NewReader(answer), &out, true, false, style.Plain())(context.Background(), opening("main"))
+		ok, err := Confirmer(strings.NewReader(answer), &out, true, false, style.Plain())(context.Background(), opening("main"))
 
 		require.NoError(t, err, "%q", answer)
 		assert.Equal(t, want, ok, "%q", answer)
@@ -91,7 +91,7 @@ func TestQuestionSaysWhichPRsWillBeRebuilt(t *testing.T) {
 	c := opening()
 	c.Refreshes = []string{"release/v2.15", "main"}
 
-	q := question(c)
+	q := Question(c)
 
 	assert.Contains(t, q, "Rebuild the branches for release/v2.15, main")
 	assert.Contains(t, q, "origin", "where the replacing branch is pushed")
@@ -103,7 +103,7 @@ func TestQuestionWithAnOpenAndARefreshAsksAboutBoth(t *testing.T) {
 	c := opening("main")
 	c.Refreshes = []string{"release/v2.15"}
 
-	q := question(c)
+	q := Question(c)
 
 	assert.Contains(t, q, "open 1 PR")
 	assert.Contains(t, q, "rebuild the branch for release/v2.15")
@@ -113,8 +113,8 @@ func TestQuestionSaysWhenABranchOnTheRemoteMayBeReplaced(t *testing.T) {
 	c := opening("main")
 	c.MayReplace = true
 
-	q := question(c)
+	q := Question(c)
 
 	assert.Contains(t, q, "replacing the branch on origin if an earlier attempt left one of ours")
-	assert.NotContains(t, question(opening("main")), "replacing")
+	assert.NotContains(t, Question(opening("main")), "replacing")
 }

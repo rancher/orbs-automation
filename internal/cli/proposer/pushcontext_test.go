@@ -1,4 +1,4 @@
-package ship
+package proposer
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 func TestPushContextCarriesTheTokenInCIOnly(t *testing.T) {
 	creds := github.Credentials{Host: "github.com", Token: "t0ken"}
 
-	assert.True(t, gitcli.HasToken(pushContext(context.Background(), clicfg.Settings{CI: true}, creds)))
-	assert.False(t, gitcli.HasToken(pushContext(context.Background(), clicfg.Settings{}, creds)), "the engineer's own credentials push")
+	assert.True(t, gitcli.HasToken(PushContext(context.Background(), clicfg.Settings{CI: true}, creds)))
+	assert.False(t, gitcli.HasToken(PushContext(context.Background(), clicfg.Settings{}, creds)), "the engineer's own credentials push")
 }
 
 func TestPushContextWithoutATokenCarriesNone(t *testing.T) {
-	assert.False(t, gitcli.HasToken(pushContext(context.Background(), clicfg.Settings{CI: true}, github.Credentials{Host: "github.com"})))
+	assert.False(t, gitcli.HasToken(PushContext(context.Background(), clicfg.Settings{CI: true}, github.Credentials{Host: "github.com"})))
 }

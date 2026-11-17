@@ -1,4 +1,4 @@
-package ship
+package reposync
 
 import (
 	"context"
@@ -56,7 +56,7 @@ func (w *seriesWorld) UpstreamFile(_ context.Context, _, ref, path string) ([]by
 func TestSeriesHoldingsSaysWhatEachBranchHoldsAgainstTheSeriesOfItsLine(t *testing.T) {
 	w := newSeriesWorld(t)
 
-	got, err := SeriesHoldings(ctx, w, w.graph.Project("cons"))
+	got, err := SeriesHoldings(bg, w, w.graph.Project("cons"))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -78,7 +78,7 @@ func TestSeriesHoldingsSaysWhatEachBranchHoldsAgainstTheSeriesOfItsLine(t *testi
 func TestSeriesHoldingsSuggestsAPullRequestWhenAnEditFollowsTheHolding(t *testing.T) {
 	w := newSeriesWorld(t, chaintest.Doc("Edit", "cons-edit", "{holding: cons-holds-prod}", "  postEdit:\n    - {run: [make, generate]}\n"))
 
-	got, err := SeriesHoldings(ctx, w, w.graph.Project("cons"))
+	got, err := SeriesHoldings(bg, w, w.graph.Project("cons"))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -100,7 +100,7 @@ func TestSeriesHoldingsADifferenceTheDocumentAcknowledgesSaysWhy(t *testing.T) {
 		"apiVersion: gero/v1alpha2\nkind: Holding\nname: cons-holds-prod\nrefs: {project: cons, stream: prod}\nacknowledge:\n  - {rule: series-differs, lines: {since: v2.15, until: v2.15}, reason: held back on purpose}\nspec:\n  at: {file: build.yaml, key: prodVersion}\n  holds: {kind: series, form: \"v{major}\"}\n",
 	)
 
-	got, err := SeriesHoldings(ctx, w, w.graph.Project("cons"))
+	got, err := SeriesHoldings(bg, w, w.graph.Project("cons"))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -113,7 +113,7 @@ func TestSeriesHoldingsABranchThatCannotBeReadDoesNotStopTheOthers(t *testing.T)
 	w := newSeriesWorld(t)
 	delete(w.files, "sha-215:build.yaml")
 
-	got, err := SeriesHoldings(ctx, w, w.graph.Project("cons"))
+	got, err := SeriesHoldings(bg, w, w.graph.Project("cons"))
 
 	require.NoError(t, err)
 	require.Len(t, got, 1)
@@ -125,7 +125,7 @@ func TestSeriesHoldingsABranchThatCannotBeReadDoesNotStopTheOthers(t *testing.T)
 func TestAProjectWithNoSeriesHoldingHasNone(t *testing.T) {
 	w := newSeriesWorld(t)
 
-	got, err := SeriesHoldings(ctx, w, w.graph.Project("prod"))
+	got, err := SeriesHoldings(bg, w, w.graph.Project("prod"))
 
 	require.NoError(t, err)
 	assert.Empty(t, got)

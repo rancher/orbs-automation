@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/platform/ociregistry"
 
+	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	domain "github.com/rancher/orbs-automation/internal/ship"
 	"github.com/rancher/orbs-automation/internal/ui"
@@ -149,11 +150,11 @@ func TestARunWritesTheStyledTextAndItsPlainTextIsTheSame(t *testing.T) {
 
 func TestTheQuestionIsStyledAndItsPlainTextIsTheSame(t *testing.T) {
 	st := colored()
-	q := question(opening("main"))
+	q := proposer.Question(opening("main"))
 	text := strings.TrimSuffix(q, " [y/N] ")
 	var out bytes.Buffer
 
-	ok, err := confirmer(strings.NewReader("y\n"), &out, true, false, st)(context.Background(), opening("main"))
+	ok, err := proposer.Confirmer(strings.NewReader("y\n"), &out, true, false, st)(context.Background(), opening("main"))
 
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -166,17 +167,17 @@ func TestTheQuestionWithoutColorIsThePlainQuestion(t *testing.T) {
 	for who, st := range map[string]*style.Renderer{"plain": style.Plain(), "none": style.New(clicfg.Terminal{})} {
 		var out bytes.Buffer
 
-		_, err := confirmer(strings.NewReader("n\n"), &out, true, false, st)(context.Background(), opening("main"))
+		_, err := proposer.Confirmer(strings.NewReader("n\n"), &out, true, false, st)(context.Background(), opening("main"))
 
 		require.NoError(t, err, who)
-		assert.Equal(t, "\n"+question(opening("main")), out.String(), who)
+		assert.Equal(t, "\n"+proposer.Question(opening("main")), out.String(), who)
 	}
 }
 
 func TestYesNeverAsksSoNothingIsStyled(t *testing.T) {
 	var out bytes.Buffer
 
-	_, err := confirmer(strings.NewReader(""), &out, false, true, colored())(context.Background(), opening("main"))
+	_, err := proposer.Confirmer(strings.NewReader(""), &out, false, true, colored())(context.Background(), opening("main"))
 
 	require.NoError(t, err)
 	assert.Empty(t, out.String())

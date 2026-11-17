@@ -1,4 +1,7 @@
-package ship
+// Package reposync holds the logic of gero repo sync: what the command asks of the
+// reposync domain and how it reports what came of it. It is framework-free: cmd/ owns
+// the cobra wiring.
+package reposync
 
 import (
 	"context"
@@ -7,21 +10,24 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
-	"github.com/rancher/orbs-automation/internal/platform/github"
-	domain "github.com/rancher/orbs-automation/internal/ship"
-	"github.com/rancher/orbs-automation/internal/steprun"
+	"github.com/rancher/orbs-automation/internal/proposal"
+	domain "github.com/rancher/orbs-automation/internal/reposync"
 	"github.com/rancher/orbs-automation/internal/ui"
 	"github.com/rancher/orbs-automation/internal/ui/style"
 	"github.com/rancher/orbs-automation/internal/workspace"
 )
 
-// SyncOptions is what the user asked to sync; the command fills it from its
+// ErrFailed is returned, with the report still written, when a row could not be read or a
+// branch failed.
+var ErrFailed = errors.New("some branches failed")
+
+// Options is what the user asked to sync; the command fills it from its
 // arguments and flags.
-type SyncOptions struct {
+type Options struct {
 	Project string   // the holder, by config name or slug
 	Holding string   // limit the run to one holding
 	Lines   []string // limit the run to these Rancher lines
@@ -34,54 +40,34 @@ type SyncOptions struct {
 	In          io.Reader
 }
 
-// RunSync brings what a project holds in line with config: it checks each branch, makes
+// Run brings what a project holds in line with config: it checks each branch, makes
 // the commits for the corrections an Edit follows and, unless --no-push or --dry-run,
 // pushes each branch and opens its PR after asking once. The report is written to w, as text or as one
 // document in json, and it is written even when the error returned is ErrFailed or
 // ErrDeclined.
-func RunSync(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, cwd string, opts SyncOptions) error {
+func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, cwd string, opts Options) error {
 	if err := checkFormat(s.Output); err != nil {
 		return err
 	}
-	tmp, err := os.MkdirTemp("", "gero-ship-")
+	ctx, ex, cleanup, err := proposer.Build(ctx, w, log, s, proposer.Options{NoPush: opts.NoPush, Yes: opts.Yes, Interactive: opts.Interactive, In: opts.In})
 	if err != nil {
-		return fmt.Errorf("make a directory for worktrees: %w", err)
+		return err
 	}
-	defer func() { _ = os.RemoveAll(tmp) }()
-	ex := &domain.Executor{Git: domain.GitCLI{}, Runner: steprun.Runner{}, TempDir: tmp, Sign: s.SignCommits, Identify: identify(s)}
-	if !opts.NoPush {
-		creds, err := github.Resolve(github.GoGh{}, "")
-		switch {
-		case err == nil:
-			ctx = pushContext(ctx, s, creds)
-			remote, err := newRemote(creds, s)
-			if err != nil {
-				return err
-			}
-			ex.Publish = &domain.Publisher{Git: domain.GitCLI{}, Remote: remote}
-			ex.Confirm = confirmer(opts.In, w, opts.Interactive, opts.Yes, style.New(s.Terminal))
-		case s.DryRun && errors.Is(err, github.ErrNoToken):
-			if log != nil {
-				log.Warn("no GitHub token, so the open PRs were not looked at", "error", err)
-			}
-		default:
-			return fmt.Errorf("opening PRs needs a GitHub token (--no-push does not): %w", err)
-		}
-	}
-	in := domain.SyncInput{
+	defer cleanup()
+	in := domain.Input{
 		Project: opts.Project, Holding: opts.Holding, Lines: opts.Lines, BranchPrefix: s.BranchPrefix,
 		DryRun: s.DryRun, NoPush: opts.NoPush, PushTo: opts.PushTo, CI: s.CI,
 	}
-	return runSyncTo(ctx, w, shipWorkspace{workspace.Open(s, cwd)}, ex, s.Output, in, opts.Preview, style.New(s.Terminal))
+	return runTo(ctx, w, proposer.Workspace{Workspace: workspace.Open(s, cwd)}, ex, s.Output, in, opts.Preview, style.New(s.Terminal))
 }
 
-// runSyncTo checks and fixes, with an executor, and writes the report. Errors that
+// runTo checks and fixes, with an executor, and writes the report. Errors that
 // come after the check (no clone, a failed target, declined) are returned after it.
-func runSyncTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *domain.Executor, format string, in domain.SyncInput, full bool, st *style.Renderer) error {
+func runTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *proposal.Executor, format string, in domain.Input, full bool, st *style.Renderer) error {
 	if err := checkFormat(format); err != nil {
 		return err
 	}
-	plan, err := domain.Sync(ctx, ws, in, ex)
+	plan, err := domain.Run(ctx, ws, in, ex)
 	if errors.Is(err, workspace.ErrNotProject) {
 		return fmt.Errorf("%w: name the project to sync as the first argument", err)
 	}
@@ -107,9 +93,9 @@ func runSyncTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *domain
 
 // syncFailed is ErrFailed when a row could not be read or a branch failed, whether its
 // commit or its push did: the exit code says the run did not do everything it was asked.
-func syncFailed(p domain.SyncPlan) error {
+func syncFailed(p domain.Plan) error {
 	for _, b := range p.Branches {
-		if b.Status == domain.StatusFailed || (b.Result != nil && (b.Result.Status == domain.ResultFailed || b.Result.Status == domain.ResultBlocked)) {
+		if b.Status == domain.StatusFailed || (b.Result != nil && (b.Result.Status == proposal.ResultFailed || b.Result.Status == proposal.ResultBlocked)) {
 			return ErrFailed
 		}
 		for _, r := range b.Rows {
@@ -123,7 +109,7 @@ func syncFailed(p domain.SyncPlan) error {
 
 // renderSyncText is the report of a sync: a row for each holding on each line, and for
 // each branch that was worked on what was done, with the texts of the PR when full.
-func renderSyncText(p domain.SyncPlan, full bool, view *style.Renderer) string {
+func renderSyncText(p domain.Plan, full bool, view *style.Renderer) string {
 	var b strings.Builder
 	b.WriteString(view.Style(style.Heading, "Sync: "+p.Holder) + "\n")
 	if len(p.Branches) == 0 {
@@ -150,7 +136,7 @@ func renderSyncText(p domain.SyncPlan, full bool, view *style.Renderer) string {
 			}
 		}
 		if r := br.Result; r != nil {
-			b.WriteString("  " + view.Style(statusRoleOf(r.Status), string(r.Status)))
+			b.WriteString("  " + view.Style(proposer.ResultRole(r.Status), string(r.Status)))
 			if r.PR != nil {
 				b.WriteString(fmt.Sprintf(" #%d %s", r.PR.Number, r.PR.URL))
 			}
@@ -173,7 +159,7 @@ func renderSyncText(p domain.SyncPlan, full bool, view *style.Renderer) string {
 }
 
 // syncStatus is how one row stands, in a few words.
-func syncStatus(view *style.Renderer, r domain.SyncRow) string {
+func syncStatus(view *style.Renderer, r domain.Row) string {
 	switch r.Status {
 	case domain.StatusUpToDate:
 		return view.Style(style.OK, "current")
@@ -199,4 +185,12 @@ func indent(text string) string {
 		lines[i] = "    " + l
 	}
 	return strings.Join(lines, "\n")
+}
+
+// checkFormat refuses an output format that the command does not write.
+func checkFormat(format string) error {
+	if format != clicfg.OutputText && format != clicfg.OutputJSON {
+		return fmt.Errorf("output format %q is not supported by repo sync: use text or json", format)
+	}
+	return nil
 }

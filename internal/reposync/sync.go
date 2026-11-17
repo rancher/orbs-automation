@@ -1,4 +1,4 @@
-package ship
+package reposync
 
 import (
 	"context"
@@ -17,8 +17,8 @@ import (
 	"github.com/rancher/orbs-automation/internal/proposal"
 )
 
-// SyncInput is what the user asked to sync: the held values of one project.
-type SyncInput struct {
+// Input is what the user asked to sync: the held values of one project.
+type Input struct {
 	Project string   // the holder, by config name or slug; empty for the one the working directory is in
 	Holding string   // limit the run to one holding, by name
 	Lines   []string // limit the run to these Rancher lines
@@ -30,29 +30,29 @@ type SyncInput struct {
 	CI           bool   // the actor is the bot
 }
 
-// SyncPlan is what a sync of a project would do, and what a run did: a branch of the
+// Plan is what a sync of a project would do, and what a run did: a branch of the
 // holder for each of its branches that holds something to correct, and in it every
 // correction, whatever holds it.
-type SyncPlan struct {
-	Holder   string       `json:"holder"` // the repository of the project, owner/name
-	Clone    string       `json:"clone,omitempty"`
-	Remote   string       `json:"remote,omitempty"`
-	Push     *PushTarget  `json:"push,omitempty"`
-	Actor    *Actor       `json:"actor,omitempty"`
-	Branches []SyncBranch `json:"branches,omitempty"`
+type Plan struct {
+	Holder   string               `json:"holder"` // the repository of the project, owner/name
+	Clone    string               `json:"clone,omitempty"`
+	Remote   string               `json:"remote,omitempty"`
+	Push     *proposal.PushTarget `json:"push,omitempty"`
+	Actor    *proposal.Actor      `json:"actor,omitempty"`
+	Branches []Branch             `json:"branches,omitempty"`
 }
 
-// SyncBranch is one branch of the holder: what each holding in it holds against what
+// Branch is one branch of the holder: what each holding in it holds against what
 // it should, and, when something is to be corrected, the one PR that corrects it.
-// A PR has one base, so a correction on another branch is another SyncBranch.
-type SyncBranch struct {
-	Branch string    `json:"branch"`
-	Head   string    `json:"head,omitempty"` // the commit at the head of the branch on the host
-	Status Status    `json:"status"`
-	Rows   []SyncRow `json:"rows"`
-	// Preview is what a run would write, when a row is ready. Result is what a run did.
-	Preview *Preview      `json:"preview,omitempty"`
-	Result  *TargetResult `json:"result,omitempty"`
+// A PR has one base, so a correction on another branch is another Branch.
+type Branch struct {
+	Branch string `json:"branch"`
+	Head   string `json:"head,omitempty"` // the commit at the head of the branch on the host
+	Status Status `json:"status"`
+	Rows   []Row  `json:"rows"`
+	// proposal.Preview is what a run would write, when a row is ready. Result is what a run did.
+	Preview *proposal.Preview      `json:"preview,omitempty"`
+	Result  *proposal.TargetResult `json:"result,omitempty"`
 
 	holder *chain.Project
 	route  bump.Route
@@ -62,8 +62,8 @@ type SyncBranch struct {
 	fingerprint string
 }
 
-// SyncRow is one holding on one line of a branch.
-type SyncRow struct {
+// Row is one holding on one line of a branch.
+type Row struct {
 	SeriesLine
 	Holding string `json:"holding"`
 	Kind    string `json:"kind"`
@@ -78,12 +78,12 @@ type SyncRow struct {
 
 // marker is what identifies the PR of the branch: the holder, the branch and the
 // fingerprint of what it writes.
-func (b SyncBranch) marker(holder string) Marker {
-	return Marker{Source: "sync", Consumer: holder, Target: b.Branch, Version: b.fingerprint}
+func (b Branch) marker(holder string) proposal.Marker {
+	return proposal.Marker{Source: "sync", Consumer: holder, Target: b.Branch, Version: b.fingerprint}
 }
 
 // line is the Rancher line of the branch: that of its first row.
-func (b SyncBranch) line() string {
+func (b Branch) line() string {
 	if len(b.Rows) > 0 {
 		return b.Rows[0].Line
 	}
@@ -91,11 +91,11 @@ func (b SyncBranch) line() string {
 }
 
 // subject is the branch as the publisher knows it.
-func (b SyncBranch) subject() proposal.Subject {
+func (b Branch) subject() proposal.Subject {
 	return proposal.Subject{Branch: b.Branch, Commit: b.Head, Line: b.line(), Preview: b.Preview}
 }
 
-// Sync brings what a project holds in line with config, branch by branch: for each
+// Run brings what a project holds in line with config, branch by branch: for each
 // branch of the holder, every holding whose value differs from what it should be and
 // that an Edit follows is written in one commit, followed by the steps of the Edits, and
 // the branch is pushed and opened as one PR. A holding that no Edit follows, or whose
@@ -104,16 +104,16 @@ func (b SyncBranch) subject() proposal.Subject {
 // in line now; a kind that is pulled later is another row source in rowsOf.
 //
 // With ex nil it only checks. A branch that fails is reported and the others go on.
-func Sync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor) (SyncPlan, error) {
+func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Plan, error) {
 	holder, err := ws.Project(in.Project)
 	if err != nil {
-		return SyncPlan{}, err
+		return Plan{}, err
 	}
 	engine, engineErr := ws.Bump()
 	if engine == nil {
-		return SyncPlan{}, engineErr
+		return Plan{}, engineErr
 	}
-	plan := SyncPlan{Holder: holder.Slug()}
+	plan := Plan{Holder: holder.Slug()}
 	holdings, err := pulledHoldingsOf(holder, in.Holding)
 	if err != nil {
 		return plan, err
@@ -125,7 +125,7 @@ func Sync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor) (SyncPl
 	if err != nil {
 		return plan, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
 	}
-	var rows []SyncRow
+	var rows []Row
 	for _, h := range holdings {
 		for _, r := range rowsOf(ctx, ws, in, holder, refs, h) {
 			rows = append(rows, r)
@@ -157,14 +157,14 @@ func pulledHoldingsOf(holder *chain.Project, name string) ([]*chain.Holding, err
 // rowsOf reads a holding on each of its lines: what it holds against what config says
 // it should. This is where a kind of holding that is pulled says what its value should
 // be; a series is the series its stream has for the line.
-func rowsOf(ctx context.Context, ws Reader, in SyncInput, holder *chain.Project, refs git.Refs, h *chain.Holding) []SyncRow {
-	var rows []SyncRow
+func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, h *chain.Holding) []Row {
+	var rows []Row
 	for _, line := range seriesLinesOf(holder, h) {
 		if len(in.Lines) > 0 && !slices.ContainsFunc(in.Lines, func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) }) {
 			continue
 		}
 		sl := seriesLine(ctx, ws, holder, refs, h, line)
-		row := SyncRow{SeriesLine: sl, Holding: h.Name(), Kind: h.Kind(), holding: h}
+		row := Row{SeriesLine: sl, Holding: h.Name(), Kind: h.Kind(), holding: h}
 		switch {
 		case sl.Error != "":
 			row.Status, row.Reason = StatusFailed, sl.Error
@@ -187,12 +187,12 @@ func rowsOf(ctx context.Context, ws Reader, in SyncInput, holder *chain.Project,
 // fingerprint of what it writes. Rows of one holding that want different values of one
 // place on one branch (a holder with a single branch for lines that differ) cannot both
 // be written, so they are left alone.
-func syncBranches(holder *chain.Project, engine *bump.Engine, in SyncInput, rows []SyncRow) []SyncBranch {
-	var out []SyncBranch
+func syncBranches(holder *chain.Project, engine *bump.Engine, in Input, rows []Row) []Branch {
+	var out []Branch
 	for _, r := range rows {
-		i := slices.IndexFunc(out, func(b SyncBranch) bool { return b.Branch == r.Branch })
+		i := slices.IndexFunc(out, func(b Branch) bool { return b.Branch == r.Branch })
 		if i < 0 {
-			out = append(out, SyncBranch{Branch: r.Branch, Head: r.Head, holder: holder})
+			out = append(out, Branch{Branch: r.Branch, Head: r.Head, holder: holder})
 			i = len(out) - 1
 		}
 		out[i].Rows = append(out[i].Rows, r)
@@ -241,7 +241,7 @@ func syncBranches(holder *chain.Project, engine *bump.Engine, in SyncInput, rows
 // leaveConflicts marks the ready rows of one holding as left alone when another line of
 // the holding on the branch wants a different value, whether that row differs or not:
 // writing one would put the other out.
-func leaveConflicts(b *SyncBranch) {
+func leaveConflicts(b *Branch) {
 	for i, r := range b.Rows {
 		if r.Status != StatusReady {
 			continue
@@ -258,7 +258,7 @@ func leaveConflicts(b *SyncBranch) {
 
 // statusOfBranch is ready when a row is, failed when none can be read, up to date when
 // every row is, and blocked when what differs is all left alone.
-func statusOfBranch(b *SyncBranch) Status {
+func statusOfBranch(b *Branch) Status {
 	var ready, upToDate, failed int
 	for _, r := range b.Rows {
 		switch r.Status {
@@ -285,7 +285,7 @@ func statusOfBranch(b *SyncBranch) Status {
 
 // syncPreview is the text a sync of the branch would write: the branch, the PR's title and
 // body, the commit message and the steps that run around the write.
-func syncPreview(in SyncInput, holder *chain.Project, b SyncBranch) (Preview, error) {
+func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, error) {
 	prs := holder.PullRequests()
 	target := bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready}
 	pre, post := b.route.Steps(target)
@@ -316,9 +316,9 @@ func syncPreview(in SyncInput, holder *chain.Project, b SyncBranch) (Preview, er
 		"holdings": strings.Join(holdings, ", "), "count": noun, "line": strings.Join(linesOf, ", "),
 		"branch": strings.TrimPrefix(b.Branch, "release/"), "targetBranch": b.Branch, "consumer": holder.Slug(),
 		"changes": strings.Join(changes, "\n"), "marker": b.marker(holder.Slug()).String(),
-		"key": BranchKey("sync", b.fingerprint, b.Branch),
+		"key": proposal.BranchKey("sync", b.fingerprint, b.Branch),
 	}
-	prefix := firstNonEmpty(in.BranchPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
+	prefix := proposal.FirstNonEmpty(in.BranchPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
 	prefixVars := map[string]string{}
 	for k, v := range vars {
 		if k != "key" {
@@ -327,32 +327,32 @@ func syncPreview(in SyncInput, holder *chain.Project, b SyncBranch) (Preview, er
 	}
 	renderedPrefix, err := templates.Render(prefix, prefixVars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
+		return proposal.Preview{}, fmt.Errorf("branch prefix %q: %w", prefix, err)
 	}
 	title, err := templates.Render(texts.SyncTitle(), vars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("title: %w", err)
+		return proposal.Preview{}, fmt.Errorf("title: %w", err)
 	}
 	commit, err := templates.Render(texts.SyncCommitMessage(), vars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("commit message: %w", err)
+		return proposal.Preview{}, fmt.Errorf("commit message: %w", err)
 	}
 	body, err := templates.Render(texts.SyncBody(), vars)
 	if err != nil {
-		return Preview{}, fmt.Errorf("body: %w", err)
+		return proposal.Preview{}, fmt.Errorf("body: %w", err)
 	}
-	var stepPreviews []StepPreview
+	var stepPreviews []proposal.StepPreview
 	for _, ref := range steps {
 		message, err := syncStepMessage(vars)(bump.Unit{Kind: bump.UnitStep, Phase: ref.Phase, Edit: ref.Edit, Index: ref.Index, Run: ref.Step.Run})
 		if err != nil {
-			return Preview{}, err
+			return proposal.Preview{}, err
 		}
-		stepPreviews = append(stepPreviews, StepPreview{
+		stepPreviews = append(stepPreviews, proposal.StepPreview{
 			Phase: string(ref.Phase), Edit: ref.Edit, Run: strings.Join(ref.Step.Run, " "),
 			BeforeEdit: ref.Phase == bump.PreEdit, CommitMessage: message,
 		})
 	}
-	return Preview{
+	return proposal.Preview{
 		Branch: renderedPrefix + vars["key"], Key: vars["key"], Title: title, Labels: prs.Labels,
 		CommitMessage: commit, Body: body, Steps: stepPreviews,
 	}, nil
@@ -369,19 +369,19 @@ func syncStepMessage(vars map[string]string) func(bump.Unit) (string, error) {
 // syncStrategyMessage is the commit message of a strategy that changed files.
 func syncStrategyMessage(vars map[string]string) func(bump.Unit) (string, error) {
 	return func(u bump.Unit) (string, error) {
-		v := map[string]string{"holdings": vars["holdings"], "line": vars["line"], "strategy": u.Strategy, "edit": u.Edit, "changes": bullets(u.Changes)}
+		v := map[string]string{"holdings": vars["holdings"], "line": vars["line"], "strategy": u.Strategy, "edit": u.Edit, "changes": proposal.Bullets(u.Changes)}
 		msg, err := templates.Render(texts.SyncStrategyCommitMessage(), v)
 		if err != nil {
 			return "", err
 		}
-		return blankLines.ReplaceAllString(msg, "\n\n"), nil
+		return proposal.CollapseBlankLines(msg), nil
 	}
 }
 
 // runSync makes the commit of each ready branch and, with a publisher, pushes it and
 // opens its PR, after the one question when the run writes to GitHub. The conveyor of
 // internal/proposal does what a release's run does too: begin, decide, ask, enact.
-func runSync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor, holder *chain.Project, refs git.Refs, plan *SyncPlan) error {
+func runSync(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor, holder *chain.Project, refs git.Refs, plan *Plan) error {
 	var ready []int
 	for i, b := range plan.Branches {
 		if b.Status == StatusReady && b.Preview != nil {
@@ -413,9 +413,9 @@ func runSync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor, hold
 		plan.Branches[i].Result = proposal.Enact(ctx, ex, proposal.EnactInput{
 			Repo: holder.Slug(), Session: sess, Subject: b.subject(), Marker: b.marker(holder.Slug()), Decided: decided[k],
 			DryRun: in.DryRun, CI: in.CI,
-			Apply: func(w *Work, onCommit func(CommitInfo)) (ApplyResult, error) {
+			Apply: func(w *proposal.Work, onCommit func(proposal.CommitInfo)) (proposal.ApplyResult, error) {
 				vars := map[string]string{"holdings": holdingsOf(b), "line": b.line()}
-				return Apply{
+				return proposal.Apply{
 					Route: b.route, Target: bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready},
 					Message: b.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign, Name: sess.Committer.Name, Email: sess.Committer.Email,
 					OnCommit: onCommit, StepMessage: syncStepMessage(vars), StrategyMessage: syncStrategyMessage(vars),
@@ -437,8 +437,8 @@ func sameFingerprint(found, mine string) (int, bool) {
 }
 
 // syncConfirmation is what the run is about to do, and whether that writes anything.
-func syncConfirmation(holder string, plan *SyncPlan, ready []int, decided []proposal.Decided) (Confirmation, bool) {
-	c := Confirmation{Consumer: holder, Release: "a sync"}
+func syncConfirmation(holder string, plan *Plan, ready []int, decided []proposal.Decided) (proposal.Confirmation, bool) {
+	c := proposal.Confirmation{Consumer: holder, Release: "a sync"}
 	if plan.Push != nil {
 		c.Push = *plan.Push
 	}
@@ -450,7 +450,7 @@ func syncConfirmation(holder string, plan *SyncPlan, ready []int, decided []prop
 		}
 		switch {
 		case st.Done != nil:
-		case st.Decision.Action == PublishAlreadyOpen:
+		case st.Decision.Action == proposal.PublishAlreadyOpen:
 			c.Already = append(c.Already, label)
 		default:
 			c.Opens = append(c.Opens, label)
@@ -461,7 +461,7 @@ func syncConfirmation(holder string, plan *SyncPlan, ready []int, decided []prop
 }
 
 // holdingsOf is the names of the holdings a branch writes, joined.
-func holdingsOf(b SyncBranch) string {
+func holdingsOf(b Branch) string {
 	var names []string
 	for _, h := range b.ready {
 		names = append(names, h.Name())

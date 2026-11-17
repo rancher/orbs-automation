@@ -1,4 +1,4 @@
-package ship
+package proposer
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 var creds = github.Credentials{Host: "github.com", Token: "tok"}
 
 func TestNewRemoteInCIIsTheBotNamedByTheWorkflow(t *testing.T) {
-	r, err := newRemote(creds, clicfg.Settings{CI: true, BotUser: "rancher-scc-bot[bot]"})
+	r, err := NewRemote(creds, clicfg.Settings{CI: true, BotUser: "rancher-scc-bot[bot]"})
 
 	require.NoError(t, err)
 	me, err := r.Me(context.Background())
@@ -22,21 +22,21 @@ func TestNewRemoteInCIIsTheBotNamedByTheWorkflow(t *testing.T) {
 }
 
 func TestNewRemoteInCIWithNoBotUserSaysWhatToSet(t *testing.T) {
-	_, err := newRemote(creds, clicfg.Settings{CI: true})
+	_, err := NewRemote(creds, clicfg.Settings{CI: true})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "GERO_BOT_USER")
 }
 
 func TestNewRemoteOnAWorkstationNeedsNoBotUser(t *testing.T) {
-	r, err := newRemote(creds, clicfg.Settings{})
+	r, err := NewRemote(creds, clicfg.Settings{})
 
 	require.NoError(t, err)
 	assert.NotNil(t, r)
 }
 
 func TestNewRemoteWithNoTokenIsAnError(t *testing.T) {
-	_, err := newRemote(github.Credentials{Host: "github.com"}, clicfg.Settings{})
+	_, err := NewRemote(github.Credentials{Host: "github.com"}, clicfg.Settings{})
 
 	require.ErrorIs(t, err, github.ErrNoToken)
 }

@@ -1,4 +1,4 @@
-package ship
+package proposer
 
 import (
 	"errors"
@@ -6,14 +6,14 @@ import (
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
-	domain "github.com/rancher/orbs-automation/internal/ship"
+	"github.com/rancher/orbs-automation/internal/proposal"
 )
 
-// newRemote returns the GitHub side of publishing for the credentials. In CI the
+// NewRemote returns the GitHub side of publishing for the credentials. In CI the
 // token is an installation's and has no user, so the bot is who is running, as the
 // workflow names it in GERO_BOT_USER, and without it there is no telling which PRs
 // are the bot's own.
-func newRemote(c github.Credentials, s clicfg.Settings) (domain.Remote, error) {
+func NewRemote(c github.Credentials, s clicfg.Settings) (proposal.Remote, error) {
 	svc, err := pulls.New(c)
 	if err != nil {
 		return nil, err
