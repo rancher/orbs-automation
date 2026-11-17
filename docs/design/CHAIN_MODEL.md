@@ -109,7 +109,7 @@ The queries are not written for the config. They come from `internal/platform/gr
 
 | Query | Answers |
 |---|---|
-| `Cycles` | each set of nodes that can all reach one another, as a path in the order the nodes were first added; a node that points at itself is one |
+| `Cycles` | one cycle for each set of nodes that can all reach one another: the shortest way round from the first node of the set, in the order the nodes were added; a node that points at itself is one |
 | `Reachable(from)` | every node a path from `from` reaches, in the order first found, without `from` unless it is on a cycle |
 | `Path(from, to)` | whether a path exists, and the shortest one |
 
