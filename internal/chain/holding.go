@@ -41,6 +41,10 @@ func (h *Holding) Acknowledgement(rule, line string) (reason string, ok bool) {
 // hold different versions, found by reading a repo.
 const RuleLocationsDiffer = v1alpha2.RuleLocationsDiffer
 
+// RuleSeriesDiffers is the rule of the warning that a series holding holds a series
+// other than the one its stream has for the line, found by reading a repo.
+const RuleSeriesDiffers = v1alpha2.RuleSeriesDiffers
+
 // Name is the name of the document.
 func (h *Holding) Name() string { return h.Doc.Name }
 
