@@ -15,6 +15,7 @@ const (
 	HoldsRelease = "release"
 	HoldsCommit  = "commit"
 	HoldsBranch  = "branch"
+	HoldsSeries  = "series"
 
 	FormatYAML       = "yaml"
 	FormatDockerfile = "dockerfile"
