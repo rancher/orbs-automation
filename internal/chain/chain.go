@@ -44,13 +44,13 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 	}
 	streams := map[string]*Stream{}
 	for _, doc := range cfg.Streams {
-		p := g.byName[strings.ToLower(doc.Refs["project"][0])]
+		p := g.byName[strings.ToLower(v1alpha2.Ref(doc, "project"))]
 		s := &Stream{Doc: doc, project: p}
 		p.streams = append(p.streams, s)
 		streams[doc.Name] = s
 	}
 	for _, doc := range cfg.Artifacts {
-		s := streams[doc.Refs["stream"][0]]
+		s := streams[v1alpha2.Ref(doc, "stream")]
 		a := &Artifact{Doc: doc, stream: s}
 		s.artifacts = append(s.artifacts, a)
 		s.project.artifacts = append(s.project.artifacts, a)
@@ -63,22 +63,22 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 	}
 	for _, doc := range cfg.Artifacts { // in the order read, so what pins and what is pinned come in one
 		a := artifacts[doc.Name]
-		for _, name := range doc.Refs["pins"] {
+		for _, name := range v1alpha2.RefList(doc, "pins") {
 			a.pins = append(a.pins, artifacts[name])
 			artifacts[name].pinnedBy = append(artifacts[name].pinnedBy, a)
 		}
 	}
 	holdings := map[string]*Holding{}
 	for _, doc := range cfg.Holdings {
-		h := &Holding{Doc: doc, holder: g.byName[strings.ToLower(doc.Refs["project"][0])]}
-		if names := doc.Refs["artifact"]; len(names) == 1 {
-			h.artifact = artifacts[names[0]]
+		h := &Holding{Doc: doc, holder: g.byName[strings.ToLower(v1alpha2.Ref(doc, "project"))]}
+		if name := v1alpha2.Ref(doc, "artifact"); name != "" {
+			h.artifact = artifacts[name]
 			h.producer = h.artifact.stream.project
-		} else if names := doc.Refs["stream"]; len(names) == 1 {
-			h.stream = streams[names[0]]
+		} else if name := v1alpha2.Ref(doc, "stream"); name != "" {
+			h.stream = streams[name]
 			h.producer = h.stream.project
 		} else {
-			h.producer = g.byName[strings.ToLower(doc.Refs["from"][0])]
+			h.producer = g.byName[strings.ToLower(v1alpha2.Ref(doc, "from"))]
 		}
 		g.holdings = append(g.holdings, h)
 		holdings[doc.Name] = h
@@ -88,12 +88,12 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 	g.makeVirtual()
 	for _, doc := range cfg.Edits {
 		e := &Edit{Doc: doc}
-		for _, name := range doc.Refs["holding"] {
+		for _, name := range v1alpha2.RefList(doc, "holding") {
 			h := holdings[name]
 			e.holdings = append(e.holdings, h)
 			h.edits = append(h.edits, e)
 		}
-		for _, name := range doc.Refs["holding"] {
+		for _, name := range v1alpha2.RefList(doc, "holding") {
 			for _, v := range holdings[name].pinned {
 				e.holdings = append(e.holdings, v) // the file a pin writes is part of what the edit follows
 				v.edits = append(v.edits, e)
@@ -121,7 +121,7 @@ func (g *Graph) makeVirtual() {
 				TypeMeta: h.Doc.TypeMeta,
 				ObjectMeta: v1alpha2.ObjectMeta{
 					Name: h.Name() + "+" + pinned.Name(),
-					Refs: v1alpha2.Refs{"project": h.Doc.Refs["project"], "artifact": {pinned.Name()}},
+					Refs: v1alpha2.Refs{"project": {h.holder.Name()}, "artifact": {pinned.Name()}},
 				},
 				Spec: v1alpha2.HoldingSpec{
 					Holds: v1alpha2.Holds{Kind: v1alpha2.HoldsRelease, Form: "{bareTag}", Lines: h.Doc.Spec.Holds.Lines, Accept: v1alpha2.AcceptAll},

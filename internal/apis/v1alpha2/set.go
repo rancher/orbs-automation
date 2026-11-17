@@ -289,9 +289,9 @@ func (s *set) holdingRefs() {
 		r := s.at(o)
 		for _, ref := range []string{"artifact", "from", "stream"} {
 			switch {
-			case ref == want && len(h.Refs[ref]) == 0:
+			case ref == want && len(refNames(h, ref)) == 0:
 				r.Errorf("refs."+ref, "required for a holding of a %s", kind)
-			case ref != want && len(h.Refs[ref]) > 0:
+			case ref != want && len(refNames(h, ref)) > 0:
 				r.Errorf("refs."+ref, "not for a holding of a %s: it refs %s", kind, want)
 			}
 		}
@@ -308,11 +308,7 @@ func (s *set) holdingRefs() {
 // seriesHolding reports a series holding of a stream that has no series to hold,
 // or whose form asks, for a line it is for, for a part that line's series does not have.
 func (s *set) seriesHolding(r *config.Report, h *Holding) {
-	names := h.Refs["stream"]
-	if len(names) != 1 {
-		return
-	}
-	st, _ := s.index[KindStream][names[0]].(*Stream)
+	st, _ := s.target(h, "stream").(*Stream)
 	if st == nil {
 		return
 	}
@@ -340,47 +336,41 @@ func hasMinor(s semver.Series) bool {
 	return ok
 }
 
-// project returns the Project a ref names, or nil.
-func (s *set) project(name string) *Project {
-	p, _ := s.index[KindProject][name].(*Project)
+// holder returns the Project a Holding is in, or nil.
+func (s *set) holder(h *Holding) *Project {
+	p, _ := s.target(h, "project").(*Project)
 	return p
 }
 
-// holder returns the Project a Holding is in, or nil.
-func (s *set) holder(h *Holding) *Project {
-	if len(h.Refs["project"]) != 1 {
-		return nil
-	}
-	return s.project(h.Refs["project"][0])
+// target returns the document a ref of a document leads to, or nil when it gives
+// no name or the name is not a document of the kind the key points at.
+func (s *set) target(o Object, key string) Object {
+	return s.index[refKeyOf(o, key).target][Ref(o, key)]
 }
 
 // producer returns the Project a Holding holds something of: the one its
-// artifact's stream is of, the one a stream is of, or the one it is taken from. It is nil when the refs
-// do not lead to one.
+// artifact's stream is of, the one a stream is of, or the one it is taken from. It
+// is nil when the refs do not lead to one.
 func (s *set) producer(h *Holding) *Project {
-	if names := h.Refs["from"]; len(names) == 1 {
-		return s.project(names[0])
-	}
-	if names := h.Refs["stream"]; len(names) == 1 {
-		st, _ := s.index[KindStream][names[0]].(*Stream)
-		if st == nil || len(st.Refs["project"]) != 1 {
+	var st *Stream
+	switch {
+	case Ref(h, "from") != "":
+		p, _ := s.target(h, "from").(*Project)
+		return p
+	case Ref(h, "stream") != "":
+		st, _ = s.target(h, "stream").(*Stream)
+	default:
+		a, _ := s.target(h, "artifact").(*Artifact)
+		if a == nil {
 			return nil
 		}
-		return s.project(st.Refs["project"][0])
+		st, _ = s.target(a, "stream").(*Stream)
 	}
-	names := h.Refs["artifact"]
-	if len(names) != 1 {
+	if st == nil {
 		return nil
 	}
-	a, _ := s.index[KindArtifact][names[0]].(*Artifact)
-	if a == nil || len(a.Refs["stream"]) != 1 {
-		return nil
-	}
-	st, _ := s.index[KindStream][a.Refs["stream"][0]].(*Stream)
-	if st == nil || len(st.Refs["project"]) != 1 {
-		return nil
-	}
-	return s.project(st.Refs["project"][0])
+	p, _ := s.target(st, "project").(*Project)
+	return p
 }
 
 // circular warns, once for each ring of projects that hold something of one
@@ -392,10 +382,10 @@ func (s *set) circular() {
 	order := map[*Holding]int{}
 	for _, o := range s.objs {
 		h, ok := o.(*Holding)
-		if !ok || len(h.Refs["project"]) != 1 {
+		if !ok || Ref(h, "project") == "" {
 			continue
 		}
-		holder := h.Refs["project"][0]
+		holder := Ref(h, "project")
 		prod := s.producer(h)
 		if prod == nil || prod.Name == holder {
 			continue
@@ -499,14 +489,14 @@ func (s *set) artifacts() {
 	seen := map[key]string{}
 	for _, o := range s.objs {
 		a, ok := o.(*Artifact)
-		if !ok || len(a.Refs["stream"]) != 1 {
+		if !ok || Ref(a, "stream") == "" {
 			continue
 		}
-		st, _ := s.index[KindStream][a.Refs["stream"][0]].(*Stream)
-		if st == nil || len(st.Refs["project"]) != 1 {
+		st, _ := s.target(a, "stream").(*Stream)
+		if st == nil || Ref(st, "project") == "" {
 			continue
 		}
-		scope, scopeKind := st.Refs["project"][0], "Project"
+		scope, scopeKind := Ref(st, "project"), "Project"
 		if a.Spec.Kind == ArtifactGoMod || a.Spec.Kind == ArtifactFile {
 			scope, scopeKind = st.Name, "Stream"
 		}
@@ -526,10 +516,10 @@ func (s *set) artifacts() {
 func (s *set) streams() {
 	for _, o := range s.objs {
 		st, ok := o.(*Stream)
-		if !ok || st.Spec.Scheme != SchemeCalverLineStage || len(st.Refs["project"]) != 1 {
+		if !ok || st.Spec.Scheme != SchemeCalverLineStage || Ref(st, "project") == "" {
 			continue
 		}
-		p := s.project(st.Refs["project"][0])
+		p, _ := s.target(st, "project").(*Project)
 		if p == nil || p.Spec.Branches.Layout == LayoutSingle {
 			continue
 		}
@@ -546,10 +536,10 @@ func (s *set) streamsOverlap() {
 	earlier := map[string][]*Stream{} // the streams read so far, by Project
 	for _, o := range s.objs {
 		st, ok := o.(*Stream)
-		if !ok || len(st.Refs["project"]) != 1 {
+		if !ok || Ref(st, "project") == "" {
 			continue
 		}
-		project := st.Refs["project"][0]
+		project := Ref(st, "project")
 		for _, before := range earlier[project] {
 			if patternsMayOverlap(before.Spec.TagPattern, st.Spec.TagPattern) {
 				r := s.at(o)
@@ -588,7 +578,7 @@ func (s *set) stagesOf(p *Project) map[string]bool {
 	stages := map[string]bool{}
 	for _, o := range s.objs {
 		st, ok := o.(*Stream)
-		if !ok || len(st.Refs["project"]) != 1 || st.Refs["project"][0] != p.Name {
+		if !ok || Ref(st, "project") == "" || Ref(st, "project") != p.Name {
 			continue
 		}
 		for _, stage := range st.EffectiveStages(p.Spec.Branches.Stages) {
@@ -647,7 +637,7 @@ func (s *set) editSteps() {
 				if st.From != FromProducer {
 					continue
 				}
-				for _, name := range e.Refs["holding"] {
+				for _, name := range RefList(e, "holding") {
 					h, _ := s.index[KindHolding][name].(*Holding)
 					if h == nil {
 						continue
@@ -785,14 +775,14 @@ func (s *set) streamsDifferFromDestination() {
 	var holders []held
 	for _, o := range s.objs {
 		h, ok := o.(*Holding)
-		if !ok || h.Spec.Holds.Kind != HoldsRelease || len(h.Refs["artifact"]) != 1 {
+		if !ok || h.Spec.Holds.Kind != HoldsRelease || Ref(h, "artifact") == "" {
 			continue
 		}
-		a, _ := s.index[KindArtifact][h.Refs["artifact"][0]].(*Artifact)
-		if a == nil || len(a.Refs["stream"]) != 1 {
+		a, _ := s.target(h, "artifact").(*Artifact)
+		if a == nil || Ref(a, "stream") == "" {
 			continue
 		}
-		x := held{o, h, identity{a.Spec.Kind, a.Spec.Name}, a.Refs["stream"][0]}
+		x := held{o, h, identity{a.Spec.Kind, a.Spec.Name}, Ref(a, "stream")}
 		if s.holder(h) == dest {
 			destHeld[x.id] = append(destHeld[x.id], x)
 		} else {
@@ -852,7 +842,7 @@ func (s *set) pins() {
 			continue
 		}
 		r := s.at(o)
-		for i, name := range a.Refs["pins"] {
+		for i, name := range RefList(a, "pins") {
 			target, _ := s.index[KindArtifact][name].(*Artifact)
 			switch {
 			case target == nil:
@@ -907,20 +897,20 @@ func (s *set) pinOverlaps() {
 	var virt []virtual
 	for _, o := range s.objs {
 		h, ok := o.(*Holding)
-		if !ok || h.Spec.Holds.Kind != HoldsRelease || len(h.Refs["artifact"]) != 1 || len(h.Refs["project"]) != 1 {
+		if !ok || h.Spec.Holds.Kind != HoldsRelease || Ref(h, "artifact") == "" || Ref(h, "project") == "" {
 			continue
 		}
-		a, _ := s.index[KindArtifact][h.Refs["artifact"][0]].(*Artifact)
+		a, _ := s.target(h, "artifact").(*Artifact)
 		if a == nil {
 			continue
 		}
-		for _, name := range a.Refs["pins"] {
+		for _, name := range RefList(a, "pins") {
 			b, _ := s.index[KindArtifact][name].(*Artifact)
 			if b == nil || b.Spec.Kind != ArtifactGoMod || b == a {
 				continue
 			}
 			for _, at := range h.Spec.At {
-				virt = append(virt, virtual{place{h.Refs["project"][0], at.File, b.Spec.Name, at.Lines.Intersect(h.Spec.Holds.Lines)}, h, a.Name, b.Name})
+				virt = append(virt, virtual{place{Ref(h, "project"), at.File, b.Spec.Name, at.Lines.Intersect(h.Spec.Holds.Lines)}, h, a.Name, b.Name})
 			}
 		}
 	}
@@ -941,12 +931,12 @@ func (s *set) pinOverlaps() {
 	}
 	for _, o := range s.objs {
 		g, ok := o.(*Holding)
-		if !ok || len(g.Refs["project"]) != 1 {
+		if !ok || Ref(g, "project") == "" {
 			continue
 		}
 		r := s.at(o)
 		for i, at := range g.Spec.At {
-			mine := place{g.Refs["project"][0], at.File, at.Key, at.Lines.Intersect(g.Spec.Holds.Lines)}
+			mine := place{Ref(g, "project"), at.File, at.Key, at.Lines.Intersect(g.Spec.Holds.Lines)}
 			for _, v := range virt {
 				if v.from == g || v.holder != mine.holder || v.file != mine.file || v.key != mine.key || !v.lines.Overlaps(mine.lines) {
 					continue
@@ -969,7 +959,7 @@ func (s *set) goBumpHoldings() {
 			continue
 		}
 		found, refd := false, 0
-		for _, name := range e.Refs["holding"] {
+		for _, name := range RefList(e, "holding") {
 			h, _ := s.index[KindHolding][name].(*Holding)
 			if h == nil {
 				continue
