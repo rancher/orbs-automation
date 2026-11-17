@@ -253,3 +253,10 @@ func TestLoadSettingsNoColorTurnsTheTerminalOff(t *testing.T) {
 	assert.Equal(t, clicfg.ProfileNone, settingsFrom(off).Terminal.Profile)
 	assert.Equal(t, clicfg.ColorNever, settingsFrom(off).Color)
 }
+
+func TestRepoTagHasARetagFlag(t *testing.T) {
+	tag, _, err := rootCmd.Find([]string{"repo", "tag"})
+	require.NoError(t, err)
+
+	assert.NotNil(t, tag.Flags().Lookup("retag"))
+}

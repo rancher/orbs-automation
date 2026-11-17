@@ -16,6 +16,7 @@ type StreamSpec struct {
 	Lines              []StreamLine `yaml:"lines"`
 	Universal          bool         `yaml:"universal"`
 	RequiresPrerelease bool         `yaml:"requiresPrerelease"`
+	AllowRetag         bool         `yaml:"allowRetag"`
 }
 
 // Stage is a tier of a stream's releases.

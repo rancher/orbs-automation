@@ -213,7 +213,7 @@ built yet. --dry-run says what would be cloned and reads the host for forks.`,
 	}
 	cloneCmd.Flags().BoolVar(&cloneAll, "all", false, "clone every project the active team owns, and that is not external")
 	cloneCmd.Flags().StringVar(&cloneInto, "into", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
-	var push, yes, nonInteractive, stable, minor, major bool
+	var push, yes, nonInteractive, stable, minor, major, retag bool
 	tagCmd := &cobra.Command{
 		Use:   "tag [project] <line> [tag]",
 		Short: "Tag the head of the upstream branch of a release line",
@@ -244,7 +244,14 @@ prerelease it is the next one of the same version (rc.2). --stable asks for a
 stable tag instead: the promotion of the newest prerelease, which is only made
 while the branch is still on the commit that prerelease is on, and after a
 stable tag the next stable one, unless the Project requires a prerelease before
-every stable tag. A promotion says which prerelease it is.`,
+every stable tag. A promotion says which prerelease it is.
+
+--retag makes a tag on a commit that already has the line's newest tag, for a
+Project whose stream sets allowRetag (an image that takes in new packages when it
+is built, so a fix is a rebuild of the same code under a new version). The version
+is chosen as above, or named, and must still be newer than the line's newest tag:
+a tag is never moved. Without --retag a commit that has the newest tag gets no
+new one.`,
 		Args: cobra.RangeArgs(1, 3),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -265,7 +272,7 @@ every stable tag. A promotion says which prerelease it is.`,
 				bump = repotag.BumpMajor
 			}
 			return repotag.Run(ctx, cmd.OutOrStdout(), s, cwd, repotag.Options{
-				Project: project, Line: line, Tag: tag, Stable: stable, Bump: bump, Push: push, Yes: s.NonInteractive,
+				Project: project, Line: line, Tag: tag, Stable: stable, Bump: bump, Retag: retag, Push: push, Yes: s.NonInteractive,
 				In: cmd.InOrStdin(), Interactive: termfacts.IsTerminal(os.Stdin),
 			})
 		},
@@ -277,6 +284,7 @@ every stable tag. A promotion says which prerelease it is.`,
 	tagCmd.Flags().BoolVar(&minor, "minor", false, "choose the first prerelease of the next minor version, after a stable tag")
 	tagCmd.Flags().BoolVar(&major, "major", false, "choose the first prerelease of the next major version, after a stable tag")
 	tagCmd.MarkFlagsMutuallyExclusive("minor", "major")
+	tagCmd.Flags().BoolVar(&retag, "retag", false, "allow a new tag on a commit that already has the line's newest tag, for a stream that sets allowRetag")
 	imagesCmd := &cobra.Command{
 		Use:   "images",
 		Short: "Check the images a repository publishes",

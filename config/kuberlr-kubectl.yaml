@@ -21,6 +21,7 @@ name: kuberlr-kubectl
 refs: {project: kuberlr-kubectl}
 spec:
   scheme: semver
+  allowRetag: true
   lines:
     - {line: v2.16, series: "9.x"}
     - {line: v2.15, series: "8.x"}

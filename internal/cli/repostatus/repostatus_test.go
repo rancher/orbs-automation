@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -816,4 +817,34 @@ func TestRenderJSONCarriesTheSeries(t *testing.T) {
 	assert.Contains(t, out, `"series": [`)
 	assert.Contains(t, out, `"want": "v8"`)
 	assert.Contains(t, out, `"upToDate": false`)
+}
+
+func TestStatusAStreamThatAllowsARetagSaysSoWhereNothingIsNew(t *testing.T) {
+	ws := fixture(t)
+	ws.docs = rancherDocs("  allowRetag: true\n")
+	ws.branches[0].Commit = "sha-v2.13.0-rc.10" // main's head is the rc
+
+	got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+	require.NoError(t, err)
+	v213 := byLine(got)["v2.13"]
+	assert.Equal(t, Next{Tag: "v2.13.0-rc.11", Kind: "prerelease", Available: false, Why: "no new commits, but --retag may"}, v213.Next[0])
+}
+
+func TestStatusAfterAStableOnTheHeadOnlyAStreamThatAllowsARetagListsTheNextRc(t *testing.T) {
+	for allow, want := range map[bool]int{false: 0, true: 1} {
+		ws := fixture(t)
+		ws.docs = rancherDocs("  allowRetag: " + strconv.FormatBool(allow) + "\n")
+		ws.branches[1].Commit = "sha-v2.12.2-rc.1" // release/v2.12's head, with v2.12.2-rc.1 tagged on it
+		ws.tags = append(ws.tags, git.Tag{Name: "v2.12.2", Commit: "sha-v2.12.2-rc.1"})
+
+		got, err := gather(ctx, ws, opener(syncedClone(), nil), nil)
+
+		require.NoError(t, err)
+		v212 := byLine(got)["v2.12"]
+		assert.Len(t, v212.Next, want, "allowRetag %t", allow)
+		if allow {
+			assert.Equal(t, Next{Tag: "v2.12.3-rc.1", Kind: "prerelease", Available: false, Why: "no new commits, but --retag may"}, v212.Next[0])
+		}
+	}
 }

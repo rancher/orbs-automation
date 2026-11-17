@@ -151,3 +151,7 @@ func (s *Stream) Universal() bool { return s.Doc.Spec.Universal }
 // RequiresPrerelease reports whether a stable release of a version follows a
 // prerelease of it.
 func (s *Stream) RequiresPrerelease() bool { return s.Doc.Spec.RequiresPrerelease }
+
+// AllowRetag reports whether the stream may have a new tag on a commit that
+// already has the line's newest tag.
+func (s *Stream) AllowRetag() bool { return s.Doc.Spec.AllowRetag }

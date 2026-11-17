@@ -68,6 +68,9 @@ type Options struct {
 	// not used with a tag.
 	Stable bool
 	Bump   Bump
+	// Retag asks for a tag on a commit that already has the line's newest tag, which
+	// only a stream that sets allowRetag may have.
+	Retag bool
 	// Push sends the tag to the upstream as well, after asking once.
 	Push bool
 	Yes  bool // go on without asking before a push
@@ -89,6 +92,8 @@ type Result struct {
 	Newest string `json:"newest,omitempty"`
 	// Promotes is the prerelease that a stable tag is the promotion of.
 	Promotes string `json:"promotes,omitempty"`
+	// Retag is true when the tag is on the commit that the line's newest tag is on.
+	Retag bool `json:"retag,omitempty"`
 	// Action is "tagged" (in the clone only), "tagged and pushed", "pushed" (the tag
 	// was in the clone already), "already tagged" (the host has it), or for a dry
 	// run "would tag", "would tag and push" or "would push".
@@ -206,6 +211,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 		chosen, err := releasetag.Choose(releasetag.Choice{
 			Newest: newest, Pattern: stream.TagPattern(), Series: series, Commit: head.Commit,
 			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: stream.RequiresPrerelease(),
+			Retag: opts.Retag, AllowRetag: stream.AllowRetag(),
 		})
 		if err != nil {
 			return err
@@ -228,12 +234,13 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	in := createtag.Input{CloneDir: clone.Path, Input: releasetag.Input{
 		Repo: slug, Tag: tag, Commit: head.Commit, Tags: tags, Newest: newest,
 		Pattern: stream.TagPattern(), Series: series, RequiresPrerelease: stream.RequiresPrerelease(),
+		Retag: opts.Retag, AllowRetag: stream.AllowRetag(),
 	}}
 	decision, err := releasetag.Check(in.Input)
 	if err != nil {
 		return err
 	}
-	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, Remote: remote, DryRun: dryRun}
+	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, Retag: decision.Retag, Remote: remote, DryRun: dryRun}
 	if decision.Newest != nil {
 		res.Newest = decision.Newest.Name
 	}
@@ -340,6 +347,9 @@ func report(w io.Writer, format string, res Result, view *style.Renderer) error 
 func (r Result) what() string {
 	if r.Promotes != "" {
 		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project)
+	}
+	if r.Retag {
+		return fmt.Sprintf("%s on %s at %s, a retag: %s is on the same commit, in %s", r.Tag, r.Branch, short(r.Commit), r.Newest, r.Project)
 	}
 	return fmt.Sprintf("%s on %s at %s in %s", r.Tag, r.Branch, short(r.Commit), r.Project)
 }

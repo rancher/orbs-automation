@@ -21,6 +21,7 @@ refs: {project: shell}
 spec:
   scheme: semver
   requiresPrerelease: true
+  allowRetag: true
   lines:
     - {line: v2.16, series: "0.9.x"}
     - {line: v2.15, series: "0.8.x"}
