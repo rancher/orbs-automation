@@ -492,3 +492,20 @@ func TestCheckThePromotionOfAPrereleaseOnTheCommitIsNotARetag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, Create, got.Action)
 }
+
+func TestCheckSaysWhenTheTagIsARetag(t *testing.T) {
+	in := shell("v0.8.4-rc.1", tagsAt("head1234", "v0.8.3")...)
+	in.Retag, in.AllowRetag = true, true
+	got, err := Check(in)
+	require.NoError(t, err)
+	assert.True(t, got.Retag)
+
+	got, err = Check(shell("v0.8.4-rc.1", tagsAt("old", "v0.8.3")...))
+	require.NoError(t, err)
+	assert.False(t, got.Retag, "a tag on a commit past the newest is an ordinary one")
+
+	promo := shell("v0.8.4", tagsAt("head1234", "v0.8.3", "v0.8.4-rc.1")...)
+	got, err = Check(promo)
+	require.NoError(t, err)
+	assert.False(t, got.Retag, "the promotion of the prerelease on the commit is not a retag")
+}

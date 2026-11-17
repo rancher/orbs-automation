@@ -88,6 +88,9 @@ type Decision struct {
 	Action Action
 	// Newest is the tag the new one follows in the line, when there is one.
 	Newest *git.Tag
+	// Retag is true when the tag is on the same commit as the newest tag of the line
+	// and is not the promotion of it: the same code under a new version.
+	Retag bool
 }
 
 // Check says what making the tag would do, or why it cannot be made, and reads

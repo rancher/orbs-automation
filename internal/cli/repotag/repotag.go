@@ -68,6 +68,9 @@ type Options struct {
 	// not used with a tag.
 	Stable bool
 	Bump   Bump
+	// Retag asks for a tag on a commit that already has the line's newest tag, which
+	// only a stream that sets allowRetag may have.
+	Retag bool
 	// Push sends the tag to the upstream as well, after asking once.
 	Push bool
 	Yes  bool // go on without asking before a push
@@ -89,6 +92,8 @@ type Result struct {
 	Newest string `json:"newest,omitempty"`
 	// Promotes is the prerelease that a stable tag is the promotion of.
 	Promotes string `json:"promotes,omitempty"`
+	// Retag is true when the tag is on the commit that the line's newest tag is on.
+	Retag bool `json:"retag,omitempty"`
 	// Action is "tagged" (in the clone only), "tagged and pushed", "pushed" (the tag
 	// was in the clone already), "already tagged" (the host has it), or for a dry
 	// run "would tag", "would tag and push" or "would push".

@@ -46,10 +46,16 @@ func (f fakeWorkspace) UpstreamRefs(context.Context, string) (git.Refs, error) {
 // branch for each but the development line.
 func shellProject(t *testing.T, requiresPrerelease bool) *chain.Project {
 	t.Helper()
+	return shellProjectWith(t, requiresPrerelease, false)
+}
+
+// shellProjectWith is shell with its stream's allowRetag as well.
+func shellProjectWith(t *testing.T, requiresPrerelease, allowRetag bool) *chain.Project {
+	t.Helper()
 	return chaintest.Load(t,
 		chaintest.Lines("v2.16", "v2.15"),
 		chaintest.Doc("Project", "shell", "", "  repo: {name: rancher/shell}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.16}\n      - {line: v2.15, branch: release/v2.15}\n"),
-		chaintest.Doc("Stream", "shell", "{project: shell}", fmt.Sprintf("  requiresPrerelease: %t\n  lines:\n    - {line: v2.16, series: \"0.9.x\"}\n    - {line: v2.15, series: \"0.8.x\"}\n", requiresPrerelease)),
+		chaintest.Doc("Stream", "shell", "{project: shell}", fmt.Sprintf("  requiresPrerelease: %t\n  allowRetag: %t\n  lines:\n    - {line: v2.16, series: \"0.9.x\"}\n    - {line: v2.15, series: \"0.8.x\"}\n", requiresPrerelease, allowRetag)),
 	).Project("shell")
 }
 
@@ -633,4 +639,76 @@ func TestRunATagOfAStreamWhoseTagsItsCIMakesIsRefused(t *testing.T) {
 
 	require.ErrorContains(t, err, "semver tags only")
 	assert.Empty(t, g.git.made)
+}
+
+// retaggable is shell with v0.8.3 on the head of release/v2.15, and a stream that allows a retag.
+func retaggable(t *testing.T) fakeWorkspace {
+	t.Helper()
+	ws := shell(t)
+	ws.project = shellProjectWith(t, true, true)
+	ws.refs.Tags = []git.Tag{{Name: "v0.8.2", Commit: "1111"}, {Name: "v0.8.3", Commit: head215}}
+	return ws
+}
+
+func TestRunARetagTagsTheCommitThatAlreadyHasTheNewestTagAndSaysSo(t *testing.T) {
+	var g tagging
+
+	err := g.run(retaggable(t), "text", false, Options{Line: "v2.15", Retag: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/work v0.8.4-rc.1 " + head215}, g.git.made)
+	assert.Contains(t, g.out.String(), "Tagged v0.8.4-rc.1 on release/v2.15 at 8c61398, a retag: v0.8.3 is on the same commit, in rancher/shell")
+}
+
+func TestRunARetagIsInTheJSONResult(t *testing.T) {
+	var g tagging
+
+	require.NoError(t, g.run(retaggable(t), "json", false, Options{Line: "v2.15", Retag: true}))
+
+	var res Result
+	require.NoError(t, json.Unmarshal(g.out.Bytes(), &res), g.out.String())
+	assert.True(t, res.Retag)
+	assert.Equal(t, "v0.8.3", res.Newest)
+}
+
+func TestRunARetagHonorsStableAndTheBump(t *testing.T) {
+	var g tagging
+	ws := retaggable(t)
+	ws.refs.Tags = append(ws.refs.Tags, git.Tag{Name: "v0.8.4-rc.1", Commit: head215})
+
+	require.NoError(t, g.run(ws, "text", false, Options{Line: "v2.15", Retag: true, Stable: true}))
+
+	assert.Equal(t, []string{"/work v0.8.4 " + head215}, g.git.made, "the promotion of the rc on the same commit")
+	assert.NotContains(t, g.out.String(), "a retag", "a promotion is not a retag")
+}
+
+func TestRunARetagOfAStreamThatDoesNotAllowItIsRefusedBeforeAnyWrite(t *testing.T) {
+	var g tagging
+	ws := retaggable(t)
+	ws.project = shellProjectWith(t, true, false)
+
+	err := g.run(ws, "text", false, Options{Line: "v2.15", Retag: true})
+
+	require.ErrorIs(t, err, releasetag.ErrRetagNotAllowed)
+	assert.Empty(t, g.git.made)
+}
+
+func TestRunWithoutRetagACommitThatHasTheNewestTagIsStillRefused(t *testing.T) {
+	var g tagging
+
+	err := g.run(retaggable(t), "text", false, Options{Line: "v2.15"})
+	require.ErrorIs(t, err, releasetag.ErrNothingNew)
+
+	err = g.run(retaggable(t), "text", false, Options{Line: "v2.15", Tag: "v0.8.4-rc.1"})
+	require.ErrorIs(t, err, releasetag.ErrNothingNew, "a named tag too")
+	assert.Empty(t, g.git.made)
+}
+
+func TestRunARetagMayNameItsTag(t *testing.T) {
+	var g tagging
+
+	err := g.run(retaggable(t), "text", false, Options{Line: "v2.15", Tag: "v0.8.5-rc.1", Retag: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/work v0.8.5-rc.1 " + head215}, g.git.made)
 }
