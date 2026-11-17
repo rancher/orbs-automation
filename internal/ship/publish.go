@@ -68,6 +68,13 @@ func otherBaseNote(p pulls.PR, base string) string {
 // same or newer one is reported. A version that cannot be ordered against this
 // one is not acted on.
 func decidePublish(open []pulls.PR, me string, m Marker) Publish {
+	return decidePublishBy(open, me, m, compareVersions)
+}
+
+// decidePublishBy is decidePublish with the order of two versions given: negative
+// when a is older than b, and false when they cannot be ordered. A sync has no versions
+// to order, only the fingerprint of what it writes.
+func decidePublishBy(open []pulls.PR, me string, m Marker, compare func(a, b string) (int, bool)) Publish {
 	var out Publish
 	var older []pulls.PR
 	for _, p := range open {
@@ -79,7 +86,7 @@ func decidePublish(open []pulls.PR, me string, m Marker) Publish {
 			out.OtherBase = append(out.OtherBase, p)
 			continue
 		}
-		order, ordered := compareVersions(found.Version, m.Version)
+		order, ordered := compare(found.Version, m.Version)
 		if p.Author != me {
 			if ordered && order >= 0 || !ordered && found.Version == m.Version {
 				out.Also = append(out.Also, p)

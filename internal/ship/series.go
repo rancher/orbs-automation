@@ -122,7 +122,7 @@ func seriesLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.
 	out.Change = check.Change.Description
 	out.Acknowledged, _ = h.Acknowledgement(chain.RuleSeriesDiffers, line)
 	if edits := h.Edits(); len(edits) > 0 && out.Acknowledged == "" {
-		out.Suggest = fmt.Sprintf("run `gero ship series %s --line %s` to open a pull request on %s that writes %s, with Edit %s", holder.Name(), line, branch, out.Want, edits[0].Name())
+		out.Suggest = fmt.Sprintf("run `gero repo sync %s --line %s` to open a pull request on %s that writes %s, with Edit %s", holder.Name(), line, branch, out.Want, edits[0].Name())
 	}
 	return out
 }
