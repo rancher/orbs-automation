@@ -479,8 +479,9 @@ func (s *set) rancherLines() {
 }
 
 // artifacts reports an Artifact of a kind and name that an earlier Artifact of
-// the same Project has. A Go module is the exception: the same module is an
-// Artifact of each minor's Stream, so for it the name is unique within a Stream.
+// the same Project has. A Go module and a file are the exception: the same module,
+// or the same file of a release (the k3s binary), is an Artifact of each minor's
+// Stream, so for them the name is unique within a Stream.
 func (s *set) artifacts() {
 	type key struct{ scope, kind, name string }
 	seen := map[key]string{}
@@ -494,7 +495,7 @@ func (s *set) artifacts() {
 			continue
 		}
 		scope, scopeKind := st.Refs["project"][0], "Project"
-		if a.Spec.Kind == ArtifactGoMod {
+		if a.Spec.Kind == ArtifactGoMod || a.Spec.Kind == ArtifactFile {
 			scope, scopeKind = st.Name, "Stream"
 		}
 		k := key{scopeKind + " " + scope, a.Spec.Kind, a.Spec.Name}

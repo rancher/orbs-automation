@@ -472,6 +472,27 @@ func TestAModuleNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
 	})
 }
 
+func TestAFileNameIsUniqueWithinAStreamNotAProject(t *testing.T) {
+	const file = "  kind: file\n  name: k3s\n"
+	base := []string{
+		doc("Project", "p", "", projectSpec),
+		doc("Stream", "s1", "{project: p}", streamSpec),
+		doc("Stream", "s2", "{project: p}", streamSpec+"  tagPattern: \"w*\"\n"),
+		doc("Artifact", "f1", "{stream: s1}", file),
+	}
+
+	t.Run("one file in the streams of two minors is fine", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "f2", "{stream: s2}", file))...)
+
+		assert.Empty(t, rep.Findings)
+	})
+	t.Run("twice in one stream is not", func(t *testing.T) {
+		rep := validateSet(t, append(base, doc("Artifact", "f2", "{stream: s1}", file))...)
+
+		assert.True(t, hasSetError(rep, `Artifact "f2"`, "spec.name", `already an artifact of Stream "s1"`), "%v", rep.Findings)
+	})
+}
+
 func TestAProjectDoesNotHoldSomethingOfItself(t *testing.T) {
 	p := doc("Project", "p", "", projectSpec)
 	s := doc("Stream", "s", "{project: p}", streamSpec)
