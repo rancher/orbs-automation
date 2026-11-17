@@ -623,26 +623,26 @@ func TestAHoldingInTheRegexFormatThatMatchesNothingIsAnErrorNamingThePattern(t *
 
 // seriesHolding is a consumer, perLine, that holds the series of a stream: build.yaml
 // says kuberlrVersion in the form given, for the lines the stream has a series for.
-func seriesHolding(t *testing.T, form string) *chain.Holding {
+func seriesHolding(t *testing.T, form string, lines ...string) *chain.Holding {
 	t.Helper()
 	g := chaintest.Load(t,
 		chaintest.Lines("v2.16", "v2.15", "v2.14"),
 		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
 		chaintest.Doc("Stream", "prod", "{project: prod}", "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n    - {line: v2.14, series: \"7.1.x\"}\n"),
 		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: rel-v2.15}, {line: v2.14, branch: rel-v2.14}]\n"),
-		chaintest.Doc("Holding", "h", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: kuberlrVersion}\n  holds: {kind: series, form: \""+form+"\"}\n"),
+		chaintest.Doc("Holding", "h", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: kuberlrVersion}\n  holds: {kind: series, form: \""+form+"\""+strings.Join(lines, "")+"}\n"),
 	)
 	return g.Holdings()[0]
 }
 
 func TestSeriesFormOfIsTheFormRenderedForTheSeriesOfTheLine(t *testing.T) {
-	for _, tt := range []struct{ form, line, want string }{
-		{"v{major}", "v2.16", "v9"},
-		{"v{major}", "v2.15", "v8"},
-		{"{series}", "v2.16", "9.x"},
-		{"v{minor}", "v2.14", "v7.1"},
+	for _, tt := range []struct{ form, line, lines, want string }{
+		{"v{major}", "v2.16", "", "v9"},
+		{"v{major}", "v2.15", "", "v8"},
+		{"{series}", "v2.16", "", "9.x"},
+		{"v{minor}", "v2.14", ", lines: {until: v2.14}", "v7.1"},
 	} {
-		got, err := SeriesFormOf(seriesHolding(t, tt.form), tt.line)
+		got, err := SeriesFormOf(seriesHolding(t, tt.form, tt.lines), tt.line)
 
 		require.NoError(t, err, tt.form)
 		assert.Equal(t, tt.want, got, "%s for %s", tt.form, tt.line)
@@ -653,7 +653,8 @@ func TestSeriesFormOfALineWithNoSeriesOrNoMinorIsAnError(t *testing.T) {
 	_, err := SeriesFormOf(seriesHolding(t, "v{major}"), "v2.13")
 	require.ErrorContains(t, err, "v2.13")
 
-	_, err = SeriesFormOf(seriesHolding(t, "{minor}"), "v2.16")
+	// the holding is for v2.14 and older, so v2.16 is a line it is asked about by mistake
+	_, err = SeriesFormOf(seriesHolding(t, "{minor}", ", lines: {until: v2.14}"), "v2.16")
 	require.ErrorContains(t, err, "minor")
 }
 

@@ -317,6 +317,10 @@ func TestASeriesHoldingNeedsAStreamWithASeries(t *testing.T) {
 
 	rep = validateSet(t, lines, p, q, perLine, doc("Holding", "h", "{project: p, stream: s}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: series, form: \"{minor}\"}\n"))
 	assert.True(t, hasSetError(rep, `Holding "h"`, "spec.holds.form", "minor"), "{minor} of a series with no minor, got %v", rep.Findings)
+
+	minorOfV214 := doc("Stream", "s", "{project: q}", "  lines: [{line: v2.16, series: 9.x}, {line: v2.15, series: 7.1.x}]\n")
+	rep = validateSet(t, lines, p, q, minorOfV214, doc("Holding", "h", "{project: p, stream: s}", "  at: {file: f.yaml, key: .a}\n  holds: {kind: series, form: \"{minor}\", lines: {until: v2.15}}\n"))
+	assert.Empty(t, rep.Findings, "a series with no minor is for a line the holding is not for")
 }
 
 func TestAHoldingOfTheRightRefsIsFine(t *testing.T) {

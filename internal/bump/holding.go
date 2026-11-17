@@ -123,9 +123,37 @@ func FormOf(h *chain.Holding, rel Release) (string, error) {
 }
 
 // SeriesFormOf renders how a series holding writes the series its stream has for the
-// line: its form, over the series, its major and its minor.
+// line: its form, over the series, its major and its minor. It is an error when the
+// stream has no series for the line, or the form asks for a minor the series has none of.
 func SeriesFormOf(h *chain.Holding, line string) (string, error) {
-	return "", nil
+	stream := h.Stream()
+	if stream == nil {
+		return "", fmt.Errorf("Holding %q holds no stream of a series", h.Name())
+	}
+	text, ok := stream.Series(line)
+	if !ok {
+		return "", fmt.Errorf("Stream %q has no series for %s, so Holding %q has nothing to hold there", stream.Name(), line, h.Name())
+	}
+	series, ok := semver.ParseSeries(text)
+	if !ok {
+		return "", fmt.Errorf("Stream %q: %q is not a series", stream.Name(), text)
+	}
+	vars := map[string]string{"series": series.String()}
+	vars["major"], _ = series.Major()
+	uses, err := templates.Placeholders(h.Form())
+	if err != nil {
+		return "", fmt.Errorf("Holding %q: form %q: %w", h.Name(), h.Form(), err)
+	}
+	if slices.Contains(uses, "minor") {
+		if vars["minor"], ok = series.Minor(); !ok {
+			return "", fmt.Errorf("Holding %q: form %q uses {minor}, and the series %s of Stream %q for %s has none", h.Name(), h.Form(), text, stream.Name(), line)
+		}
+	}
+	value, err := templates.Render(h.Form(), vars)
+	if err != nil {
+		return "", fmt.Errorf("Holding %q: form %q: %w", h.Name(), h.Form(), err)
+	}
+	return value, nil
 }
 
 // resolveHolding finds the places and the value a holding wants for a target. It
@@ -144,7 +172,11 @@ func resolveHolding(h *chain.Holding, line, branch string, rel Release) ([]Place
 			return nil, "", fmt.Errorf("%w: Holding %q is in %s, which gero cannot read or write yet", ErrFormatNotBuilt, h.Name(), place.Format)
 		}
 	}
-	want, err := FormOf(h, rel)
+	form := FormOf
+	if h.Kind() == chain.HoldsSeries {
+		form = func(h *chain.Holding, _ Release) (string, error) { return SeriesFormOf(h, line) }
+	}
+	want, err := form(h, rel)
 	if err != nil {
 		return nil, "", err
 	}

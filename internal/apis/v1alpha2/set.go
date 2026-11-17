@@ -9,6 +9,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/apis/lines"
 
 	"github.com/rancher/orbs-automation/internal/platform/config"
+	"github.com/rancher/orbs-automation/internal/platform/semver"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 )
 
@@ -304,7 +305,7 @@ func (s *set) holdingRefs() {
 }
 
 // seriesHolding reports a series holding of a stream that has no series to hold,
-// or whose form asks for a part a series does not have.
+// or whose form asks, for a line it is for, for a part that line's series does not have.
 func (s *set) seriesHolding(r *config.Report, h *Holding) {
 	names := h.Refs["stream"]
 	if len(names) != 1 {
@@ -323,20 +324,19 @@ func (s *set) seriesHolding(r *config.Report, h *Holding) {
 		return
 	}
 	for _, l := range st.Spec.Lines {
-		if _, ok := seriesMinor(l.Series); !ok {
+		if !h.Spec.Holds.Lines.Contains(l.Line) {
+			continue // the holding is not for this line
+		}
+		if parsed, ok := semver.ParseSeries(l.Series); !ok || !hasMinor(parsed) {
 			r.Errorf("spec.holds.form", "uses {minor}, and the series %q of Stream %q for %s has none", l.Series, st.Name, l.Line)
 		}
 	}
 }
 
-// seriesMinor returns the major and minor a series spells ("9.1.x" is "9.1"), and
-// false for a series with no minor ("9.x").
-func seriesMinor(series string) (string, bool) {
-	parts := strings.Split(series, ".")
-	if len(parts) < 3 || parts[1] == "x" || parts[1] == "*" {
-		return "", false
-	}
-	return parts[0] + "." + parts[1], true
+// hasMinor reports whether a series has a minor ("9.1.x" does, "9.x" does not).
+func hasMinor(s semver.Series) bool {
+	_, ok := s.Minor()
+	return ok
 }
 
 // project returns the Project a ref names, or nil.
