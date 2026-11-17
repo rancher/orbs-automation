@@ -114,9 +114,16 @@ func selectProjects(all []*chain.Project, opts Options) ([]*chain.Project, error
 		}
 		out = append(out, m)
 	}
+	for _, team := range opts.ManagedBy {
+		if !slices.ContainsFunc(all, func(p *chain.Project) bool { return managedBy(p, team) }) {
+			return nil, fmt.Errorf("no project is managed by %q", team)
+		}
+	}
 	var drawn []*chain.Project
 	for _, p := range all {
 		switch {
+		case len(opts.ManagedBy) > 0 && !slices.ContainsFunc(opts.ManagedBy, func(team string) bool { return managedBy(p, team) }):
+			continue
 		case len(in) > 0 && !slices.ContainsFunc(in, func(m func(*chain.Project) bool) bool { return m(p) }):
 			continue
 		case len(in) == 0 && p.External() && !opts.External:
@@ -142,4 +149,9 @@ func matches(p *chain.Project, pattern string) bool {
 		}
 	}
 	return false
+}
+
+// managedBy says whether the project's managedBy is the team, whatever the case.
+func managedBy(p *chain.Project, team string) bool {
+	return p.ManagedBy() != "" && strings.EqualFold(p.ManagedBy(), team)
 }

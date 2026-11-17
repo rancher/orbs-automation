@@ -454,8 +454,8 @@ func TestMindmapLeavesOutExternalProjectsUnlessAsked(t *testing.T) {
 	assert.Regexp(t, `\["k3s \(external\)"\]`, out)
 }
 
-func TestGraphTeamKeepsTheProjectsATeamManagesAndTheBoundaryOfWhatTheyTouch(t *testing.T) {
-	out := drawn(t, Options{Teams: []string{"rancher"}})
+func TestGraphManagedByKeepsTheProjectsATeamManagesAndTheBoundaryOfWhatTheyTouch(t *testing.T) {
+	out := drawn(t, Options{ManagedBy: []string{"rancher"}})
 
 	assert.Contains(t, out, "\"acme/app\": {\n  class: [managed]")
 	assert.Contains(t, out, "\"acme/lib\": {\n  class: [managed]")
@@ -464,41 +464,41 @@ func TestGraphTeamKeepsTheProjectsATeamManagesAndTheBoundaryOfWhatTheyTouch(t *t
 	assert.NotContains(t, out, `"holding:other-holds-k3s"`)
 }
 
-func TestGraphTeamIsAnyOfTheNamesWhateverTheCaseAndSharedIsOne(t *testing.T) {
-	out := drawn(t, Options{Teams: []string{"RANCHER", "shared"}})
+func TestGraphManagedByIsAnyOfTheNamesWhateverTheCaseAndSharedIsOne(t *testing.T) {
+	out := drawn(t, Options{ManagedBy: []string{"RANCHER", "shared"}})
 	for _, slug := range []string{"acme/app", "acme/lib", "acme/other"} {
 		assert.Contains(t, out, `"`+slug+"\": {\n  class:", slug)
 	}
 
-	out = drawn(t, Options{Teams: []string{"shared"}})
+	out = drawn(t, Options{ManagedBy: []string{"shared"}})
 	assert.Contains(t, out, "\"acme/other\": {\n  class: [shared]")
-	assert.Contains(t, out, `"acme/app"`+": {class: [boundary]", "it holds nothing of other and is held by nothing of it")
+	assert.NotContains(t, out, `"acme/app"`, "it touches nothing that is drawn")
 }
 
-func TestGraphTeamNarrowsProjectAndNeverAddsToIt(t *testing.T) {
-	out := drawn(t, Options{Teams: []string{"rancher"}, Projects: []string{"acme/*"}})
+func TestGraphManagedByNarrowsProjectAndNeverAddsToIt(t *testing.T) {
+	out := drawn(t, Options{ManagedBy: []string{"rancher"}, Projects: []string{"acme/*"}})
 	assert.Contains(t, out, "\"acme/app\": {\n  class: [managed]")
 	assert.NotContains(t, out, "\"acme/other\": {\n  class", "it matches the pattern and not the team")
 
-	_, err := graph(fakeWorkspace{g: filtered(t)}, Options{Teams: []string{"rancher"}, Projects: []string{"k3s"}})
+	_, err := graph(fakeWorkspace{g: filtered(t)}, Options{ManagedBy: []string{"rancher"}, Projects: []string{"k3s"}})
 	assert.Error(t, err, "an external project has no team")
 }
 
-func TestGraphTeamWithExternalStillKeepsNoExternalProject(t *testing.T) {
-	out := drawn(t, Options{Teams: []string{"rancher"}, External: true})
+func TestGraphManagedByWithExternalStillKeepsNoExternalProject(t *testing.T) {
+	out := drawn(t, Options{ManagedBy: []string{"rancher"}, External: true})
 	assert.NotContains(t, out, "class: [external]")
 	assert.Contains(t, out, `"k3s-io/k3s": {class: [boundary]`)
 }
 
 func TestGraphRefusesATeamNoProjectIsManagedBy(t *testing.T) {
-	out, err := graph(fakeWorkspace{g: filtered(t)}, Options{Teams: []string{"rancher", "nobody"}})
+	out, err := graph(fakeWorkspace{g: filtered(t)}, Options{ManagedBy: []string{"rancher", "nobody"}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `"nobody"`)
 	assert.Empty(t, out)
 }
 
 func TestMindmapKeepsOnlyTheBranchesOfTheTeam(t *testing.T) {
-	out, err := mindmap(fakeWorkspace{g: filtered(t)}, Options{Teams: []string{"shared"}})
+	out, err := mindmap(fakeWorkspace{g: filtered(t)}, Options{ManagedBy: []string{"shared"}})
 	require.NoError(t, err)
 	assert.Regexp(t, `\["other \(shared\)"\]`, out)
 	assert.NotRegexp(t, `\["app `, out)

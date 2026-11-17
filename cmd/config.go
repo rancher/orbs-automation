@@ -70,6 +70,9 @@ a Project draws it even when it is external. A Project that is left out but that
 a drawn one holds something of, or makes something held by, is drawn as a faded
 boundary node.
 
+--managed-by keeps the Projects a team manages (shared counts here), and narrows
+what --project and --external choose; it is not --team, the active team context.
+
 Name the type mindmap (gero config resolve graph mindmap) to draw the same config as a Mermaid mind map instead, a looser
 picture of what each Project produces and holds that GitHub and most Markdown
 viewers render in place.`,
@@ -94,6 +97,7 @@ viewers render in place.`,
 	}
 	graphCmd.Flags().BoolVar(&graphOpts.External, "external", false, "also draw external Projects")
 	graphCmd.Flags().StringArrayVar(&graphOpts.Projects, "project", nil, "draw only the Projects matching this name, slug or alias (repeatable; * is a wildcard, a leading ! leaves out what matches)")
+	graphCmd.Flags().StringArrayVar(&graphOpts.ManagedBy, "managed-by", nil, "draw only the Projects this team manages (repeatable; shared is one)")
 	resolveCmd.AddCommand(graphCmd)
 	configCmd.AddCommand(
 		&cobra.Command{
