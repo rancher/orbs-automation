@@ -1,0 +1,5 @@
+Sync {holdings} on {line}
+
+{changes}
+
+Automation: gero ship

@@ -1,5 +1,0 @@
-Track {source} {series} on {line}
-
-Set {file} to {to}, the series {stream} has for {line}, held by {holding}.
-
-Automation: gero ship

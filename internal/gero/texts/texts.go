@@ -51,19 +51,26 @@ func CommitMessageWith() string { return text("commit_with.txt") + "\n" }
 // Body is the PR body of a bump.
 func Body() string { return text("body.md") + "\n" }
 
-// SeriesTitle is the PR title of a fix to a series holding. It may use
-// SeriesVars.
-func SeriesTitle() string { return text("series_title.txt") }
+// SyncTitle is the PR title of a sync: the corrections of one branch of a holder, made
+// in one PR. It may use SyncVars.
+func SyncTitle() string { return text("sync_title.txt") }
 
-// SeriesCommitMessage is the commit message of the write of a series holding, with
-// the trailers. It may use SeriesVars.
-func SeriesCommitMessage() string { return text("series_commit.txt") + "\n" }
+// SyncCommitMessage is the commit message of the write of a sync, with the trailers.
+func SyncCommitMessage() string { return text("sync_commit.txt") + "\n" }
 
-// SeriesBody is the PR body of a fix to a series holding. It may use SeriesVars.
-func SeriesBody() string { return text("series_body.md") + "\n" }
+// SyncBody is the PR body of a sync.
+func SyncBody() string { return text("sync_body.md") + "\n" }
 
-// SeriesVars are the variables the texts of a series fix may use.
-var SeriesVars = []string{"holding", "stream", "source", "sourceRepo", "consumer", "line", "branch", "targetBranch", "series", "from", "to", "file", "changes", "marker", "key"}
+// SyncStepCommitMessage is the commit message of a step of an Edit that changed files,
+// in a sync.
+func SyncStepCommitMessage() string { return text("sync_step_commit.txt") + "\n" }
+
+// SyncStrategyCommitMessage is the commit message of a strategy of an Edit that changed
+// files, in a sync.
+func SyncStrategyCommitMessage() string { return text("sync_strategy_commit.txt") + "\n" }
+
+// SyncVars are the variables the texts of a sync may use.
+var SyncVars = []string{"holdings", "count", "line", "branch", "targetBranch", "consumer", "changes", "marker", "key", "command", "phase", "strategy", "edit"}
 
 // StrategyCommitMessage is the commit message of a strategy that changed files:
 // which strategy ran, what it changed, where it fits in the bump, and the
