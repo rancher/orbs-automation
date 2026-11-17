@@ -87,8 +87,9 @@ A named rule for where a piece of information lives in a repo, and what it holds
 | `project` | Project | required: the repo whose file it is |
 | `artifact` | Artifact | for `holds.kind: release` |
 | `from` | Project | for `holds.kind: commit` or `branch`: the project whose commit or branch it holds **(provisional)** |
+| `stream` | Stream | for `holds.kind: series`: the stream whose series for the holder's line it holds **(provisional)** |
 
-Exactly one of `artifact` and `from`, matching `holds.kind`.
+Exactly one of `artifact`, `from` and `stream`, matching `holds.kind`.
 
 `spec.at`: where to look. One location, or a list of locations for one piece of a producer held in several places (Rancher's nested `go.mod` files, or one tag in two files). Every location is tied to the same artifact and `holds` rule.
 
@@ -103,7 +104,7 @@ Exactly one of `artifact` and `from`, matching `holds.kind`.
 
 | Field | Type | Default | Rules |
 |---|---|---|---|
-| `kind` | `release`, `commit` or `branch` | required | |
+| `kind` | `release`, `commit`, `branch` or `series` | required | a `series` holds not a release but the series a stream has for the holder's line (`lines[].series`), written in the `form`, for a file that another tool reads to pick the newest release of that series. It is exact about what it says: the expected text for a line is the form rendered over that line's series. It has no `stage` or `accept`, and a stream that is `universal` or has no series for a line has nothing to hold **(provisional)** |
 | `form` | template | `{tag}` | for `release`; how the text is written; variables `image`, `tag`, `prefix`, `bareTag`, `version`, `url`, `file`, `sourceRepo`, `commit`, `base`, `upstream`; only modifiers that can be undone |
 | `lines` | `{since, until}` | every line the holder and the producer both list | |
 | `stage` | stage name | none | the stage branch of the holder where the holding is found |
@@ -143,6 +144,7 @@ Commits are the engine's, not a field: shipping commits after the Holding writes
   | `{sourceRepo}` | the producer's owner/name | `rancher/shell` |
   | `{commit}` | the release's commit | a sha |
   | `{base}`, `{upstream}` | a chart version split at `+up` | `111.0.0`, `0.12.1-rc.16` |
+  | `{series}`, `{major}`, `{minor}` | for `holds.kind: series`: the stream's series for the line, its major, and its major and minor (`9.1.x` is `9.1`; a series with no minor has none, which is an error where `{minor}` is used) | `9.x`, `9`, `9.1` |
 
   More are added as a case needs them; each is a release or layout fact.
 * **Modifiers** respell a value where it is used, apply left to right, and come from a small closed set: `upper`, `lower`, `title` (change case), `trimprefix:P`, `trimsuffix:S` (remove a prefix or suffix) and `replace:FROM=TO` (replace the whole value when it equals FROM, not a substring). `{line|trimprefix:v}` turns `v2.16` into `2.16`, and `{stage|replace:stable=prod}` turns `stable` into `prod` and leaves `dev` alone. The template says how pieces are put together, and a modifier how one piece is spelled.
@@ -171,7 +173,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * Names are unique within a kind; every `refs` name exists and is of the kind its key says
 * Repo slugs are unique; at most one `finalDestination`; at most one line of a Project resolves to the default branch
 * Every line named is in `RancherLines`; a stream's series do not overlap
-* A holding's `from` or `artifact` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
+* A holding's `from`, `artifact` or `stream` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
 * A selector's `since` is not after its `until`
 * A project that holds something of another, which holds something of it, is a warning: the dependency is circular
 * A repo that is `external` has no `managedBy`: no team manages a repo outside the organization
@@ -197,6 +199,7 @@ A warning never makes a document invalid. It names its rule by a stable id, show
 | `locations-differ` | the locations of one Holding hold different versions for a line: it reads the files of a repo at a ref, only when a command asks (not when the graph is built), so `gero repo status` raises it on the Consumers row, not `config validate`; a document can acknowledge it, and validation does not call that acknowledgement unused, since it cannot see the warning | yes |
 | `stream-differs-from-destination` | a project with `layout: perLine` holds another stream of an artifact (matched by its kind and name) than the `finalDestination` for a line; on the holder's Holding, naming the line | yes |
 | `streams-overlap` | two streams of one project have tag patterns that could both match a tag: what one writes before its first wildcard is the start of what the other writes (`v*` and `v3.8.*`), and a tag that both match is a release of the one read first; on the later stream, at `spec.tagPattern`. It does not look at `tagExclude`, so it may warn of two streams that an exclusion keeps apart, which can be acknowledged | yes |
+| `series-differs` | a `series` holding reads a series that is not the stream's series for the line (v2.15 holds `v9` where the stream says `8.x`); it reads the files of a repo at a ref, so only when a command asks, and the finding names the Holding's Edit and suggests a pull request that writes the expected text, when it has one | no |
 | `acknowledgement-unused` | an acknowledgement matches no warning of its document | yes |
 | `lifecycle-date` | a release is shipped to a line past a lifecycle date | no |
 | `branch-prefix-redundant-var` | a `branchPrefix`, in a project or in the user file, uses `{source}`, `{project}`, `{tag}`, `{version}`, `{branch}` or `{targetBranch}`, which the key `gero` appends already says | yes |

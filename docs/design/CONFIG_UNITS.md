@@ -50,7 +50,7 @@ Writing is the same path in reverse: render the form from a release and put it a
 | `Project` | the repo as a place, and its branch layout | none |
 | `Stream` | what a project releases: the versions and the lines | `project` |
 | `Artifact` | one thing each release of a stream produces | `stream` |
-| `Holding` | a named rule: where a piece of information lives in a repo, and what it holds | `project` (whose repo), and `artifact` (a release) or `from` (a project whose commit or branch it holds) |
+| `Holding` | a named rule: where a piece of information lives in a repo, and what it holds | `project` (whose repo), and `artifact` (a release), `from` (a project whose commit or branch it holds) or `stream` (the series it holds for the line) |
 | `Edit` | extra steps when shipping, beyond writing the form | `holding` |
 | `RancherLines` | public line facts | none |
 
@@ -111,6 +111,7 @@ None of these is forced by the shell and SCC to Rancher baseline, which the shap
 * **Evidence:** Assets holds a charts commit, and older Rancher holds a charts branch name; both name a project, not an artifact.
 * **Option A, `refs.artifact` for a release and `refs.from` (a project) for a commit or a branch.** **Option B, always a stream,** with a qualifier. **Option C, commits and branches also become artifacts.**
 * **Lean A.**
+* **Added: `refs.stream` for a series.** `prometheus-federator` holds kuberlr as a major only (`v9`), per line, and its own tooling picks the newest release of it, so the file names no release and no artifact (an image Artifact of a perLine stream is many releases). It is the series the stream has for the line, in another spelling. `holds.kind: series` refs the stream, and its `form` is written over `{series}`, `{major}` and `{minor}` (`v{major}`). The other kinds stay as strict as they were: this one is exact about a series, and says nothing of which release the tool will pick. A read value that is not the stream's series for the line is the `series-differs` warning, with a suggested pull request when the Holding has an Edit.
 
 ### O11. Where do the consumer's steps attach?
 
