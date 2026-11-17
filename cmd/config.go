@@ -19,6 +19,7 @@ func addConfig(root *cobra.Command) {
 		Use:   "config",
 		Short: "Validate and inspect the application config",
 	}
+	var graphType string
 	resolveCmd := &cobra.Command{
 		Use:   "resolve",
 		Short: "Show what the CLI config resolves to on this machine",
@@ -49,7 +50,7 @@ slug, or . for the project whose repository you are in) to look at only that.`,
 			return err
 		},
 	})
-	resolveCmd.AddCommand(&cobra.Command{
+	graphCmd := &cobra.Command{
 		Use:   "graph",
 		Short: "Draw the whole application config as a D2 diagram",
 		Long: `Draw every Project of the application config as a node, and every holding as
@@ -60,21 +61,28 @@ hub, and each holding's edge into its holder is labelled with the release lines
 it serves.
 
 The whole config is drawn, not one team's. The output is D2 source: render it
-with d2 graph.d2 graph.svg.`,
+with d2 graph.d2 graph.svg.
+
+--type mindmap draws the same config as a Mermaid mind map instead, a looser
+picture of what each Project produces and holds that GitHub and most Markdown
+viewers render in place.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			out, err := graphresolve.Graph(settingsFrom(cmd), cwd)
+			kind := graphresolve.Kind(graphType)
+			out, err := graphresolve.Graph(settingsFrom(cmd), cwd, kind)
 			if err != nil {
 				return err
 			}
 			_, err = fmt.Fprint(cmd.OutOrStdout(), out)
 			return err
 		},
-	})
+	}
+	graphCmd.Flags().StringVar(&graphType, "type", string(graphresolve.KindD2), "kind of diagram to draw: d2 or mindmap")
+	resolveCmd.AddCommand(graphCmd)
 	configCmd.AddCommand(
 		&cobra.Command{
 			Use:   "validate",

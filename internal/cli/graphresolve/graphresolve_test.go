@@ -179,14 +179,14 @@ func TestGraphLabelsAnEditWithItsStrategyAndStepCounts(t *testing.T) {
 }
 
 func TestRunWritesD2ForTheTextFormat(t *testing.T) {
-	out, err := run(fakeWorkspace{g: shipping(t)}, clicfg.OutputText)
+	out, err := run(fakeWorkspace{g: shipping(t)}, clicfg.OutputText, KindD2)
 	require.NoError(t, err)
 	assert.Contains(t, out, "classes: {")
 }
 
 func TestRunRefusesTheOtherFormatsAndWritesNothing(t *testing.T) {
 	for _, format := range []string{clicfg.OutputJSON, clicfg.OutputEnv} {
-		out, err := run(fakeWorkspace{g: shipping(t)}, format)
+		out, err := run(fakeWorkspace{g: shipping(t)}, format, KindD2)
 		require.Error(t, err, format)
 		assert.Contains(t, err.Error(), "config resolve graph", format)
 		assert.Contains(t, err.Error(), "D2", format)

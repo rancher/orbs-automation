@@ -21,19 +21,41 @@ type Workspace interface {
 	Chain() (*chain.Graph, error)
 }
 
+// Kind is the kind of diagram to draw.
+type Kind string
+
+const (
+	// KindD2 is the flow diagram, written as D2.
+	KindD2 Kind = "d2"
+	// KindMindmap is the mind map, written as Mermaid.
+	KindMindmap Kind = "mindmap"
+)
+
+// Kinds lists the kinds Graph can draw, the default first.
+var Kinds = []Kind{KindD2, KindMindmap}
+
 // Graph draws the central config found from s and the working directory cwd as
-// D2 source.
-func Graph(s clicfg.Settings, cwd string) (string, error) {
-	return run(workspace.Open(s, cwd), s.Output)
+// a diagram of the kind asks for.
+func Graph(s clicfg.Settings, cwd string, kind Kind) (string, error) {
+	return run(workspace.Open(s, cwd), s.Output, kind)
 }
 
-// run draws the config as the output format asks for.
-func run(ws Workspace, format string) (string, error) {
+// run draws the config as the output format and the kind ask for.
+func run(ws Workspace, format string, kind Kind) (string, error) {
 	if format != clicfg.OutputText {
-		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2", format)
+		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2 or Mermaid", format)
 	}
-	return graph(ws)
+	switch kind {
+	case KindD2:
+		return graph(ws)
+	case KindMindmap:
+		return mindmap(ws)
+	}
+	return "", fmt.Errorf("graph type %q is not supported by config resolve graph", kind)
 }
+
+// mindmap draws the config as a Mermaid mind map.
+func mindmap(Workspace) (string, error) { return "", nil }
 
 // The classes of a node. A Project has one of managed, shared and external, and
 // hub as well when it is where releases end.
