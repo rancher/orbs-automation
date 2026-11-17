@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/registry"
 )
 
@@ -54,25 +55,7 @@ type Reader interface {
 // from the host, and the engineer's clone of the consumer and where to push.
 type Workspace interface {
 	Reader
-	// CloneDir is the directory of the engineer's clone of a repository, or an
-	// error saying how to get one.
-	CloneDir(slug string) (string, error)
-	// Remote is the name of the remote of a repository's clone that is its
-	// upstream.
-	Remote(slug string) (string, error)
-	// PushSettings are the user's settings that decide where a branch for a
-	// repository is pushed.
-	PushSettings(slug string) PushSettings
-}
-
-// PushSettings are the user's settings that decide where a branch is pushed, as
-// the workspace has them.
-type PushSettings struct {
-	UserRepo    string // repos.overrides.<slug>.pushTo
-	UserDefault string // pushTo
-	Fork        string // the remote that holds the engineer's fork
-	Upstream    string // the remote that is the real repository
-	GitHubUser  string // the owner of the fork, for a PR's head
+	proposal.Site
 }
 
 // Input is what the user asked to ship.
@@ -170,6 +153,12 @@ type HoldingPlan struct {
 	// Release is the tag of the companion's release, for a holding that is one; the
 	// target's own release is the target's.
 	Release string `json:"release,omitempty"`
+}
+
+// Subject is the target as the publisher knows it: the branch, the commit read at its
+// head, the line and the texts of its PR.
+func (t TargetPlan) Subject() proposal.Subject {
+	return proposal.Subject{Branch: t.Branch, Commit: t.Commit, Line: t.Line, Preview: t.Preview}
 }
 
 // Key is what a report calls the target: its Rancher line, which means the same

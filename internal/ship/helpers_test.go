@@ -26,11 +26,6 @@ const (
 	trackerBlock = "<!-- gero:tracker v1\nissue: 12\nstate: a > b\n-->"
 )
 
-// markerFor is the marker of shipping scc-operator at a version to release/v2.15.
-func markerFor(version string) Marker {
-	return Marker{Source: "rancher/scc-operator", Consumer: "rancher/rancher", Target: "release/v2.15", Version: version}
-}
-
 // pr is an open PR by author with the marker of a bump at a version.
 func pr(number int, author string, m Marker) pulls.PR {
 	return proposaltest.PR(number, author, m.String())
@@ -46,3 +41,9 @@ func mustPrepare(t *testing.T, req PrepareRequest) *Work {
 	require.DirExists(t, w.Dir)
 	return w
 }
+
+// The fakes of proposaltest, under the names the tests of this package use.
+type (
+	fakeRemote = proposaltest.FakeRemote
+	log        = proposaltest.Log
+)

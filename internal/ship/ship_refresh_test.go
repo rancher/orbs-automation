@@ -26,8 +26,8 @@ func refreshing(t *testing.T) (*realWorkspace, string, *Executor, *fakeRemote, *
 	preview := first.Targets[0].Preview
 	open.Title, open.Body = preview.Title, preview.Body                           // as the PR was made
 	open.HeadOwner, open.HeadRef, open.Base = "rancher", botV215, "release/v2.15" // pushed to the upstream
-	remote.open = pulls.Open{PRs: []pulls.PR{open}}
-	lg.calls = nil
+	remote.Open = pulls.Open{PRs: []pulls.PR{open}}
+	lg.Calls = nil
 	in := realRun()
 	in.Refresh = true
 	return ws, clone, ex, remote, lg, in
@@ -51,7 +51,7 @@ func TestRefreshOfABranchThatIsIdenticalToAFreshBuildChangesNothing(t *testing.T
 	assert.Equal(t, ResultAlreadyOpen, res.Status)
 	assert.Contains(t, res.Note, "identical")
 	for _, write := range []string{"push", "update", "edit comment", "comment #104", "close"} {
-		assert.False(t, lg.has(write), "nothing is written for an identical branch: %s", write)
+		assert.False(t, lg.Has(write), "nothing is written for an identical branch: %s", write)
 	}
 	assert.Equal(t, localBefore, runGit(t, clone, "rev-parse", botV215))
 	assert.Equal(t, remoteBefore, runGit(t, ws.up, "rev-parse", botV215))
@@ -68,7 +68,7 @@ func targetMoves(t *testing.T, ws *realWorkspace, remote *fakeRemote) {
 	runGit(t, ws.up, "add", ".")
 	runGit(t, ws.up, "commit", "--quiet", "-m", "unrelated")
 	runGit(t, ws.up, "checkout", "--quiet", "main")
-	remote.behind = 1
+	remote.Behind = 1
 }
 
 func TestRefreshOfABranchThatIsBehindIsReplacedEvenWhenTheChangeIsIdentical(t *testing.T) {
@@ -86,8 +86,8 @@ func TestRefreshOfABranchThatIsBehindIsReplacedEvenWhenTheChangeIsIdentical(t *t
 	assert.NotEqual(t, oldTip, newTip)
 	assert.Equal(t, "1", runGit(t, ws.up, "rev-list", "--count", "release/v2.15.."+botV215), "on top of the moved target")
 	assert.False(t, branchExistsIn(t, clone, scratchV215))
-	require.True(t, lg.has("comment #104 "))
-	assert.Contains(t, lg.calls[lg.index("comment #104 ")], "was 1 behind")
+	require.True(t, lg.Has("comment #104 "))
+	assert.Contains(t, lg.Calls[lg.Index("comment #104 ")], "was 1 behind")
 }
 
 func TestRefreshOfABranchThatIsBehindIsOnlyReportedWithoutTheFlag(t *testing.T) {
@@ -102,14 +102,14 @@ func TestRefreshOfABranchThatIsBehindIsOnlyReportedWithoutTheFlag(t *testing.T) 
 	assert.Equal(t, ResultAlreadyOpen, res.Status)
 	assert.Equal(t, 1, res.BehindBy)
 	assert.Equal(t, oldTip, runGit(t, ws.up, "rev-parse", botV215))
-	assert.False(t, lg.has("update"))
+	assert.False(t, lg.Has("update"))
 }
 
 const staleBody = "## Summary\nan older text\n\n"
 
 func TestRefreshUpdatesAStaleDescriptionAndKeepsOtherHiddenBlocksWhenTheBranchIsFine(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	pr := &remote.open.PRs[0]
+	pr := &remote.Open.PRs[0]
 	fresh := pr.Body
 	pr.Title = "an older title"
 	pr.Body = staleBody + ownMarker(pr.Body) + "\n\n" + trackerBlock + "\n"
@@ -121,41 +121,41 @@ func TestRefreshUpdatesAStaleDescriptionAndKeepsOtherHiddenBlocksWhenTheBranchIs
 	res := onlyResult(t, plan)
 	assert.Equal(t, ResultAlreadyOpen, res.Status, "the branch is as it should be")
 	assert.Contains(t, res.Note, "description")
-	require.True(t, lg.has("update #104"), "the title and body are brought up to date")
-	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", remote.updatedTitle)
-	assert.Equal(t, mergeBody(pr.Body, fresh), remote.updatedBody)
-	assert.Contains(t, remote.updatedBody, trackerBlock, "what another part of gero put there stays")
-	assert.NotContains(t, remote.updatedBody, "an older text")
+	require.True(t, lg.Has("update #104"), "the title and body are brought up to date")
+	assert.Equal(t, "[v2.15] Update scc-operator to v0.5.3", remote.UpdatedTitle)
+	assert.Equal(t, mergeBody(pr.Body, fresh), remote.UpdatedBody)
+	assert.Contains(t, remote.UpdatedBody, trackerBlock, "what another part of gero put there stays")
+	assert.NotContains(t, remote.UpdatedBody, "an older text")
 	assert.Equal(t, oldTip, runGit(t, ws.up, "rev-parse", botV215), "and the branch is not pushed")
-	assert.False(t, lg.has("push"))
-	require.True(t, lg.has("comment #104 "), "the update is recorded")
-	assert.Contains(t, lg.calls[lg.index("comment #104 ")], "Updated the description")
+	assert.False(t, lg.Has("push"))
+	require.True(t, lg.Has("comment #104 "), "the update is recorded")
+	assert.Contains(t, lg.Calls[lg.Index("comment #104 ")], "Updated the description")
 }
 
 func TestRefreshUpdatesATitleThatDiffersAloneAndNeverTouchesABodyThatDoesNot(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	remote.open.PRs[0].Title = "an older title"
+	remote.Open.PRs[0].Title = "an older title"
 
 	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	require.True(t, lg.has("update #104"))
-	assert.Equal(t, remote.open.PRs[0].Body, remote.updatedBody, "the body was already right")
+	require.True(t, lg.Has("update #104"))
+	assert.Equal(t, remote.Open.PRs[0].Body, remote.UpdatedBody, "the body was already right")
 }
 
 func TestRefreshLeavesTheDescriptionAloneWhenOnlyTheLineEndingsDiffer(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	remote.open.PRs[0].Body = strings.ReplaceAll(remote.open.PRs[0].Body, "\n", "\r\n") + "\r\n"
+	remote.Open.PRs[0].Body = strings.ReplaceAll(remote.Open.PRs[0].Body, "\n", "\r\n") + "\r\n"
 
 	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	assert.False(t, lg.has("update"), "GitHub stores the line endings it likes")
+	assert.False(t, lg.Has("update"), "GitHub stores the line endings it likes")
 }
 
 func TestRefreshADryRunSaysItWouldUpdateTheDescriptionAndWritesNothing(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	remote.open.PRs[0].Body = staleBody + ownMarker(remote.open.PRs[0].Body) + "\n"
+	remote.Open.PRs[0].Body = staleBody + ownMarker(remote.Open.PRs[0].Body) + "\n"
 	in.DryRun = true
 
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
@@ -164,21 +164,21 @@ func TestRefreshADryRunSaysItWouldUpdateTheDescriptionAndWritesNothing(t *testin
 	res := onlyResult(t, plan)
 	assert.Contains(t, res.Note, "would update the description")
 	for _, write := range []string{"push", "update", "edit comment", "comment #104", "close"} {
-		assert.False(t, lg.has(write), "a dry run does not %s", write)
+		assert.False(t, lg.Has(write), "a dry run does not %s", write)
 	}
 }
 
 func TestRefreshOfAReplacedBranchMergesTheBodyToo(t *testing.T) {
 	ws, _, ex, remote, _, in := refreshing(t)
-	pr := &remote.open.PRs[0]
+	pr := &remote.Open.PRs[0]
 	pr.Body += "\n" + trackerBlock + "\n"
 	withGenerate(ws)
 
 	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	assert.Contains(t, remote.updatedBody, trackerBlock, "a replaced branch does not erase the tracker's block")
-	assert.Contains(t, remote.updatedBody, "Ran `./scripts/gen.sh`", "and the new text is there")
+	assert.Contains(t, remote.UpdatedBody, trackerBlock, "a replaced branch does not erase the tracker's block")
+	assert.Contains(t, remote.UpdatedBody, "Ran `./scripts/gen.sh`", "and the new text is there")
 }
 
 // ownMarker is the marker block of a body made by gero ship.
@@ -213,11 +213,11 @@ func TestRefreshOfABranchThatDiffersReplacesItAndRecordsIt(t *testing.T) {
 	assert.Equal(t, newTip, runGit(t, clone, "rev-parse", botV215), "and so is the local one")
 	assert.False(t, branchExistsIn(t, clone, scratchV215))
 	assert.Equal(t, "2", runGit(t, ws.up, "rev-list", "--count", "release/v2.15.."+botV215))
-	assert.True(t, lg.has(`update #104 title="[v2.15] Update scc-operator to v0.5.3"`), "the title and body are refreshed")
+	assert.True(t, lg.Has(`update #104 title="[v2.15] Update scc-operator to v0.5.3"`), "the title and body are refreshed")
 	assert.Contains(t, rec.kinds(), EventRefreshed)
 	assert.Contains(t, rec.kinds(), EventPushed)
-	require.True(t, lg.has("comment #104 "), "recorded in a comment")
-	comment := lg.calls[lg.index("comment #104 ")]
+	require.True(t, lg.Has("comment #104 "), "recorded in a comment")
+	comment := lg.Calls[lg.Index("comment #104 ")]
 	assert.Contains(t, comment, "<!-- gero:refresh v1 -->")
 	assert.Contains(t, comment, "Rebuilt on release/v2.15@")
 	assert.Contains(t, comment, "2026-11-06")
@@ -246,7 +246,7 @@ func TestRefreshReplacesABranchThatIsCheckedOutInTheClone(t *testing.T) {
 
 func TestRefreshEditsTheOneCommentInPlaceAndDoesNotAddAnother(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	remote.comments = []pulls.Comment{
+	remote.PRComments = []pulls.Comment{
 		{ID: 40, Author: "alice", Body: "a comment of someone else's\n<!-- gero:refresh v1 -->"},
 		{ID: 55, Author: "danpock", Body: "Rebuilt by gero ship:\n\n- Rebuilt on release/v2.15@1111111 (2026-11-01 09:00 UTC)\n\n<!-- gero:refresh v1 -->"},
 	}
@@ -256,24 +256,24 @@ func TestRefreshEditsTheOneCommentInPlaceAndDoesNotAddAnother(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, ResultRefreshed, onlyResult(t, plan).Status)
-	assert.False(t, lg.has("comment #104 "), "no second comment")
-	require.True(t, lg.has("edit comment 55 "))
-	edited := lg.calls[lg.index("edit comment 55 ")]
+	assert.False(t, lg.Has("comment #104 "), "no second comment")
+	require.True(t, lg.Has("edit comment 55 "))
+	edited := lg.Calls[lg.Index("edit comment 55 ")]
 	assert.Contains(t, edited, "2026-11-01 09:00 UTC", "the earlier line is kept")
 	assert.Contains(t, edited, "2026-11-06 15:04 UTC", "and the new one is added")
-	assert.False(t, lg.has("edit comment 40"), "never someone else's comment")
+	assert.False(t, lg.Has("edit comment 40"), "never someone else's comment")
 }
 
 func TestRefreshACommentOfSomeoneElsesIsNeverEditedSoANewOneIsMade(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	remote.comments = []pulls.Comment{{ID: 40, Author: "alice", Body: "<!-- gero:refresh v1 -->"}}
+	remote.PRComments = []pulls.Comment{{ID: 40, Author: "alice", Body: "<!-- gero:refresh v1 -->"}}
 	withGenerate(ws)
 
 	_, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
 
 	require.NoError(t, err)
-	assert.False(t, lg.has("edit comment"))
-	assert.True(t, lg.has("comment #104 "))
+	assert.False(t, lg.Has("edit comment"))
+	assert.True(t, lg.Has("comment #104 "))
 }
 
 func TestRefreshWillNotReplaceABranchWithACommitThatIsNotOurs(t *testing.T) {
@@ -294,12 +294,12 @@ func TestRefreshWillNotReplaceABranchWithACommitThatIsNotOurs(t *testing.T) {
 	assert.Contains(t, res.Note, "not refreshed")
 	assert.Contains(t, res.Note, "trailer")
 	assert.Equal(t, handTip, runGit(t, ws.up, "rev-parse", botV215), "their commit is untouched")
-	assert.False(t, lg.has("update"))
+	assert.False(t, lg.Has("update"))
 }
 
 func TestRefreshWillNotTouchABranchInAnotherRepository(t *testing.T) {
 	ws, _, ex, remote, lg, in := refreshing(t)
-	remote.open.PRs[0].HeadOwner = "someone-else"
+	remote.Open.PRs[0].HeadOwner = "someone-else"
 	withGenerate(ws)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
@@ -309,12 +309,12 @@ func TestRefreshWillNotTouchABranchInAnotherRepository(t *testing.T) {
 	assert.Equal(t, ResultAlreadyOpen, res.Status)
 	assert.Contains(t, res.Note, "not refreshed")
 	assert.Contains(t, res.Note, "someone-else")
-	assert.False(t, lg.has("update"))
+	assert.False(t, lg.Has("update"))
 }
 
 func TestRefreshWillNotTouchABranchWithAnotherName(t *testing.T) {
 	ws, _, ex, remote, _, in := refreshing(t)
-	remote.open.PRs[0].HeadRef = "dan/scc-operator-v0.5.3-v2.15"
+	remote.Open.PRs[0].HeadRef = "dan/scc-operator-v0.5.3-v2.15"
 	withGenerate(ws)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
@@ -340,7 +340,7 @@ func TestRefreshADryRunSaysItWouldAndChangesNothing(t *testing.T) {
 	assert.Equal(t, ResultWouldRefresh, res.Status)
 	assert.Len(t, res.Commits, 2)
 	for _, write := range []string{"push", "update", "edit comment", "comment #104", "close"} {
-		assert.False(t, lg.has(write), "a dry run does not %s", write)
+		assert.False(t, lg.Has(write), "a dry run does not %s", write)
 	}
 	assert.Equal(t, remoteBefore, runGit(t, ws.up, "rev-parse", botV215))
 	assert.Equal(t, localBefore, runGit(t, clone, "rev-parse", botV215), "nor does it move the local branch")
@@ -349,8 +349,8 @@ func TestRefreshADryRunSaysItWouldAndChangesNothing(t *testing.T) {
 
 func TestRefreshAFailureToUpdateTheBodyOrRecordItIsAWarningAndTheBranchStaysReplaced(t *testing.T) {
 	ws, _, ex, remote, _, in := refreshing(t)
-	remote.updateErr = errors.New("update refused")
-	remote.commentsErr = errors.New("cannot list comments")
+	remote.UpdateErr = errors.New("update refused")
+	remote.CommentsErr = errors.New("cannot list comments")
 	withGenerate(ws)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)
@@ -371,8 +371,8 @@ func TestWithoutRefreshAnOpenPRIsNotRebuiltEvenIfItWouldDiffer(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, ResultAlreadyOpen, onlyResult(t, plan).Status)
-	assert.False(t, lg.has("push"))
-	assert.False(t, lg.has("update"))
+	assert.False(t, lg.Has("push"))
+	assert.False(t, lg.Has("update"))
 }
 
 func TestRefreshIsPartOfWhatTheConfirmationAsksAbout(t *testing.T) {

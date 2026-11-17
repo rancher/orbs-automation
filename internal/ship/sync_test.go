@@ -236,7 +236,7 @@ func syncPublishing(t *testing.T) (*seriesWS, *Executor, *fakeRemote, *log) {
 	t.Helper()
 	ws, ex := newSeriesWS(t, true)
 	lg := &log{}
-	remote := &fakeRemote{log: lg, labels: []string{"status/auto-created"}}
+	remote := &fakeRemote{Log: lg, Labels: []string{"status/auto-created"}}
 	ws.push = PushSettings{Upstream: "upstream"}
 	ex.Publish = &Publisher{Git: GitCLI{}, Remote: remote}
 	return ws, ex, remote, lg
@@ -256,9 +256,9 @@ func TestSyncPushesAndOpensOnePRForTheBranchWithAMarker(t *testing.T) {
 	assert.Equal(t, 104, res.PR.Number)
 	assert.Equal(t, "upstream", res.Pushed)
 	assert.Equal(t, res.Tip(), runGit(t, ws.up, "rev-parse", res.Branch), "the branch is on the remote")
-	assert.Equal(t, 1, lg.count("create "), "one PR for the two holdings")
-	assert.Less(t, lg.index("open acme/cons release/v7.x"), lg.index("create "), "the open PRs are looked at first")
-	assert.True(t, lg.has(`create acme/cons head=`+res.Branch+` base=release/v7.x title="[v7.x] Sync cons-holds-prod, cons-holds-side on v2.15"`))
+	assert.Equal(t, 1, lg.Count("create "), "one PR for the two holdings")
+	assert.Less(t, lg.Index("open acme/cons release/v7.x"), lg.Index("create "), "the open PRs are looked at first")
+	assert.True(t, lg.Has(`create acme/cons head=`+res.Branch+` base=release/v7.x title="[v7.x] Sync cons-holds-prod, cons-holds-side on v2.15"`))
 }
 
 func TestSyncAnAlreadyOpenPRMakesNothing(t *testing.T) {
@@ -266,7 +266,7 @@ func TestSyncAnAlreadyOpenPRMakesNothing(t *testing.T) {
 	checked, err := Sync(bg, ws, SyncInput{NoPush: true}, nil)
 	require.NoError(t, err)
 	fp := branchOf(t, checked, behind).fingerprint
-	remote.open = pulls.Open{PRs: []pulls.PR{pr(77, "danpock", Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: fp})}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{pr(77, "danpock", Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: fp})}}
 
 	plan, err := Sync(bg, ws, SyncInput{}, ex)
 
@@ -275,13 +275,13 @@ func TestSyncAnAlreadyOpenPRMakesNothing(t *testing.T) {
 	require.NotNil(t, b.Result)
 	assert.Equal(t, ResultAlreadyOpen, b.Result.Status)
 	assert.Equal(t, 77, b.Result.PR.Number)
-	assert.False(t, lg.has("create"))
+	assert.False(t, lg.Has("create"))
 	assert.False(t, branchExistsIn(t, ws.clone, b.Preview.Branch), "no branch was made")
 }
 
 func TestSyncClosesMyStalePRForTheBranchWhenWhatItWritesChanged(t *testing.T) {
 	ws, ex, remote, lg := syncPublishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{pr(61, "danpock", Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: "0ld0ld00"})}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{pr(61, "danpock", Marker{Source: "sync", Consumer: "acme/cons", Target: behind, Version: "0ld0ld00"})}}
 
 	plan, err := Sync(bg, ws, SyncInput{}, ex)
 
@@ -291,7 +291,7 @@ func TestSyncClosesMyStalePRForTheBranchWhenWhatItWritesChanged(t *testing.T) {
 	assert.Equal(t, ResultOpened, res.Status)
 	require.Len(t, res.Superseded, 1)
 	assert.Equal(t, 61, res.Superseded[0].Number)
-	assert.True(t, lg.has("close #61"), "an earlier sync of the branch is replaced by this one")
+	assert.True(t, lg.Has("close #61"), "an earlier sync of the branch is replaced by this one")
 }
 
 func TestSyncLeavesLinesThatWantDifferentValuesOfOnePlaceOnASingleBranch(t *testing.T) {

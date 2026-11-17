@@ -182,7 +182,7 @@ func TestShipTargetsThatCouldNotBeReadAreStillReported(t *testing.T) {
 
 func TestShipEveryEventAboutATargetNamesItsLineAndAPushNamesTheBranch(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(101, "danpock", "v0.5.2")}}
 	rec := &recording{}
 
 	_, err := Ship(bg, ws, &fakeProber{}, realRun(), ex, rec)

@@ -6,8 +6,17 @@ import "github.com/rancher/orbs-automation/internal/proposal"
 // They are aliases while ship is moved onto it, and are removed when it is.
 type (
 	Marker         = proposal.Marker
+	Executor       = proposal.Executor
+	Identity       = proposal.Identity
+	Actor          = proposal.Actor
+	Confirmation   = proposal.Confirmation
+	Publisher      = proposal.Publisher
+	Remote         = proposal.Remote
+	Preview        = proposal.Preview
+	StepPreview    = proposal.StepPreview
+	PushSettings   = proposal.PushSettings
 	PublishAction  = proposal.PublishAction
-	Publish        = proposal.Publish
+	Publish        = proposal.Decision
 	PushRole       = proposal.PushRole
 	PushChoice     = proposal.PushChoice
 	PushRemotes    = proposal.PushRemotes
@@ -59,24 +68,21 @@ var (
 	ErrNoClone          = proposal.ErrNoClone
 	ErrNothingChanged   = proposal.ErrNothingChanged
 
-	ParseMarker       = proposal.ParseMarker
-	RecordedKey       = proposal.RecordedKey
-	BranchKey         = proposal.BranchKey
-	BranchTail        = proposal.BranchTail
-	Prepare           = proposal.Prepare
-	decidePublish     = proposal.DecidePublish
-	decidePublishBy   = proposal.DecidePublishBy
-	alsoNote          = proposal.AlsoNote
-	otherBaseNote     = proposal.OtherBaseNote
-	markerWarnings    = proposal.MarkerWarnings
-	sourceOfKey       = proposal.SourceOfKey
-	bumpBranches      = proposal.BumpBranches
-	mergeBody         = proposal.MergeBody
-	sameBody          = proposal.SameBody
-	resolvePushTarget = proposal.ResolvePushTarget
-	short             = proposal.Short
-	refs              = proposal.Refs
-	finish            = proposal.Finish
-	tip               = proposal.Tip
-	geroBlocks        = proposal.GeroBlocks
+	ParseMarker     = proposal.ParseMarker
+	RecordedKey     = proposal.RecordedKey
+	BranchKey       = proposal.BranchKey
+	BranchTail      = proposal.BranchTail
+	Prepare         = proposal.Prepare
+	decidePublish   = proposal.DecidePublish
+	decidePublishBy = proposal.DecidePublishBy
+	alsoNote        = proposal.AlsoNote
+	otherBaseNote   = proposal.OtherBaseNote
+	markerWarnings  = proposal.MarkerWarnings
+	sourceOfKey     = proposal.SourceOfKey
+	bumpBranches    = proposal.BumpBranches
+	mergeBody       = proposal.MergeBody
+	short           = proposal.Short
+	refs            = proposal.Refs
+	finish          = proposal.Finish
+	geroBlocks      = proposal.GeroBlocks
 )

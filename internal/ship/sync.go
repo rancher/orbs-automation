@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
+	"github.com/rancher/orbs-automation/internal/proposal"
 )
 
 // SyncInput is what the user asked to sync: the held values of one project.
@@ -83,13 +84,17 @@ func (b SyncBranch) marker(holder string) Marker {
 	return Marker{Source: "sync", Consumer: holder, Target: b.Branch, Version: b.fingerprint}
 }
 
-// plan is the branch as the publisher knows it.
-func (b SyncBranch) plan() TargetPlan {
-	line := ""
+// line is the Rancher line of the branch: that of its first row.
+func (b SyncBranch) line() string {
 	if len(b.Rows) > 0 {
-		line = b.Rows[0].Line
+		return b.Rows[0].Line
 	}
-	return TargetPlan{Target: Target{Branch: b.Branch, Commit: b.Head}, Line: line, Preview: b.Preview}
+	return ""
+}
+
+// subject is the branch as the publisher knows it.
+func (b SyncBranch) subject() proposal.Subject {
+	return proposal.Subject{Branch: b.Branch, Commit: b.Head, Line: b.line(), Preview: b.Preview}
 }
 
 // Sync brings what a project holds in line with config, branch by branch: for each
@@ -284,7 +289,7 @@ func statusOfBranch(b *SyncBranch) Status {
 // body, the commit message and the steps that run around the write.
 func syncPreview(in SyncInput, holder *chain.Project, b SyncBranch) (Preview, error) {
 	prs := holder.PullRequests()
-	target := bump.Target{Branch: b.Branch, Line: b.plan().Line, Holdings: b.ready}
+	target := bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready}
 	pre, post := b.route.Steps(target)
 	steps := append(slices.Clone(pre), post...)
 
@@ -399,13 +404,13 @@ func runSync(ctx context.Context, ws Workspace, in SyncInput, ex *Executor, hold
 	var pub *Publisher
 	var me string
 	if ex.Publish != nil && !in.NoPush {
-		if pub, me, plan.Push, err = publisherFor(ctx, ws, ex, holder, clone, in.PushTo, in.CI, false); err != nil {
+		if pub, me, plan.Push, err = proposal.PublisherFor(ctx, ws, ex, holder, clone, in.PushTo, in.CI, false); err != nil {
 			return err
 		}
 	}
 	var committer Identity
 	if ex.Identify != nil {
-		actor, err := actorFor(ctx, ex, clone, me)
+		actor, err := proposal.ActorFor(ctx, ex, clone, me)
 		if err != nil {
 			return err
 		}
@@ -467,7 +472,7 @@ func decideSync(ctx context.Context, pub *Publisher, me, holder string, b SyncBr
 		return st
 	}
 	prs := open.PRs
-	byHead, err := pub.Remote.OpenForHead(ctx, holder, pub.headOwner(holder)+":"+b.Preview.Branch)
+	byHead, err := pub.Remote.OpenForHead(ctx, holder, pub.HeadOwnerOf(holder)+":"+b.Preview.Branch)
 	if err != nil {
 		st.warnings = append(st.warnings, fmt.Sprintf("could not look for the PR of %s: %v", b.Preview.Branch, err))
 	}
@@ -528,7 +533,7 @@ func workSync(ctx context.Context, ex *Executor, pub *Publisher, clone, remote s
 		if in.DryRun {
 			result.WouldSupersede = refs(st.dec.Supersede)
 		} else {
-			pub.supersede(ctx, holder, st.dec.Open.Number, st.m, b.plan(), st.dec.Supersede, result, nil)
+			pub.Supersede(ctx, holder, st.dec.Open.Number, st.m, b.subject(), st.dec.Supersede, result, nil)
 		}
 		return result
 	}
@@ -539,7 +544,7 @@ func workSync(ctx context.Context, ex *Executor, pub *Publisher, clone, remote s
 	case in.DryRun:
 		result.WouldSupersede = refs(st.dec.Supersede)
 	case result.Status == ResultCommitted:
-		pub.publish(ctx, holder, b.plan(), st.m, st.dec, result, nil)
+		pub.Publish(ctx, holder, b.subject(), st.m, st.dec, result, nil)
 	}
 	return result
 }
@@ -574,9 +579,9 @@ func commitSync(ctx context.Context, ex *Executor, clone, remote string, in Sync
 		}
 		return result
 	}
-	vars := map[string]string{"holdings": holdingsOf(b), "line": b.plan().Line}
+	vars := map[string]string{"holdings": holdingsOf(b), "line": b.line()}
 	applied, err := Apply{
-		Route: b.route, Target: bump.Target{Branch: b.Branch, Line: b.plan().Line, Holdings: b.ready},
+		Route: b.route, Target: bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready},
 		Message: b.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign, Name: committer.Name, Email: committer.Email,
 		StepMessage: syncStepMessage(vars), StrategyMessage: syncStrategyMessage(vars),
 	}.Run(ctx, w)

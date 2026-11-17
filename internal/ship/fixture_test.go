@@ -30,7 +30,7 @@ type projectSpec struct {
 	FinalDestination      bool          // the project releases end in
 	Title                 string        // pullRequests.title
 	PushTo                string        // pullRequests.pushTo
-	Labels, BotLabels     []string      // pullRequests.labels and botLabels
+	Labels, BotLabels     []string      // pullRequests.Labels and botLabels
 	Lines                 []lineSpec    // the lines it lists, on a branch each; none is a single branch
 	Stream                string        // a producer's stream, as the lines of its spec
 	Scheme                string        // a producer's stream scheme; semver when empty

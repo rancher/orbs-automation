@@ -1,4 +1,4 @@
-package ship
+package proposal
 
 import (
 	"context"
@@ -43,7 +43,7 @@ type Publisher struct {
 	Remote Remote
 	Clone  string     // the clone the branch is in
 	Push   PushTarget // where the branch is pushed
-	// HeadOwner is the owner of the fork, for the PR's head when the branch is
+	// HeadOwnerOf is the owner of the fork, for the PR's head when the branch is
 	// pushed there: the head is HeadOwner:branch. It is not used for the upstream.
 	HeadOwner string
 	// IsBot says the actor is the bot, which adds BotLabels to the PR's labels.
@@ -54,26 +54,26 @@ type Publisher struct {
 	Refresh bool
 }
 
-// publish pushes the branch of a target that was committed, opens its PR with
+// Publish pushes the branch of a target that was committed, opens its PR with
 // the labels that exist, and then comments on and closes each superseded PR, in
 // that order, so a failure leaves the older PRs as they were. res is updated: a
 // failure to push or to open the PR fails the target, and one to label or to close
 // an older PR is a warning. Each step is reported to sink as it is done.
-func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, m Marker, dec Publish, res *TargetResult, sink Sink) {
-	branch := tp.Preview.Branch
-	if err := p.pushBranch(ctx, tp); err != nil {
+func (p Publisher) Publish(ctx context.Context, consumer string, s Subject, m Marker, dec Decision, res *TargetResult, sink Sink) {
+	branch := s.Preview.Branch
+	if err := p.pushBranch(ctx, s); err != nil {
 		res.Status, res.Error = ResultFailed, err.Error()
 		return
 	}
 	res.Pushed = p.Push.Remote
-	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: p.Push.Remote, NewBranch: branch})
+	emit(sink, Event{Kind: EventPushed, Branch: s.Branch, Line: s.Line, Remote: p.Push.Remote, NewBranch: branch})
 	head := branch
 	if p.Push.Role == RoleFork {
 		head = p.HeadOwner + ":" + branch
 	}
 	pr, err := createpr.Run(ctx, p.Remote, createpr.Input{
-		Repo: consumer, Title: tp.Preview.Title, Body: tp.Preview.Body, Head: head, Base: tp.Branch,
-		Labels: p.labels(tp.Preview.Labels),
+		Repo: consumer, Title: s.Preview.Title, Body: s.Preview.Body, Head: head, Base: s.Branch,
+		Labels: p.labels(s.Preview.Labels),
 	})
 	if err != nil {
 		res.Status, res.Error = ResultFailed, fmt.Sprintf("the branch is pushed to %s, but opening the PR failed: %v", p.Push.Remote, err)
@@ -81,17 +81,17 @@ func (p Publisher) publish(ctx context.Context, consumer string, tp TargetPlan, 
 	}
 	res.Status, res.PR = ResultOpened, &PRRef{Number: pr.Number, URL: pr.URL}
 	res.Warnings = append(res.Warnings, pr.Warnings...)
-	emit(sink, Event{Kind: EventPROpened, Branch: tp.Branch, Line: tp.Line, PR: res.PR})
+	emit(sink, Event{Kind: EventPROpened, Branch: s.Branch, Line: s.Line, PR: res.PR})
 
-	p.supersede(ctx, consumer, pr.Number, m, tp, dec.Supersede, res, sink)
+	p.Supersede(ctx, consumer, pr.Number, m, s, dec.Supersede, res, sink)
 }
 
 // pushBranch puts the branch on the remote with the pushbranch task, and says
 // how to go on when the remote has an earlier attempt's commits that were not
 // replaced.
-func (p Publisher) pushBranch(ctx context.Context, tp TargetPlan) error {
+func (p Publisher) pushBranch(ctx context.Context, s Subject) error {
 	_, err := pushbranch.Run(ctx, p.Git, pushbranch.Input{
-		Dir: p.Clone, Remote: p.Push.Remote, Branch: tp.Preview.Branch, Base: tp.Commit, Replace: p.Refresh,
+		Dir: p.Clone, Remote: p.Push.Remote, Branch: s.Preview.Branch, Base: s.Commit, Replace: p.Refresh,
 	})
 	if errors.Is(err, pushbranch.ErrNeedsReplace) {
 		return fmt.Errorf("%w: run with --refresh to replace them", err)
@@ -99,10 +99,10 @@ func (p Publisher) pushBranch(ctx context.Context, tp TargetPlan) error {
 	return err
 }
 
-// supersede tells each older PR that the one numbered by is its replacement, and
+// Supersede tells each older PR that the one numbered by is its replacement, and
 // closes it, in that order: a PR that could not be told is left open. A failure
 // is a warning, and only what was closed is recorded.
-func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Marker, tp TargetPlan, older []pulls.PR, res *TargetResult, sink Sink) {
+func (p Publisher) Supersede(ctx context.Context, consumer string, by int, m Marker, s Subject, older []pulls.PR, res *TargetResult, sink Sink) {
 	for _, old := range older {
 		note := fmt.Sprintf("Superseded by #%d (%s %s).", by, m.Source, m.Version)
 		if err := p.Remote.Comment(ctx, consumer, old.Number, note); err != nil {
@@ -115,13 +115,13 @@ func (p Publisher) supersede(ctx context.Context, consumer string, by int, m Mar
 		}
 		ref := PRRef{Number: old.Number, URL: old.URL}
 		res.Superseded = append(res.Superseded, ref)
-		emit(sink, Event{Kind: EventSuperseded, Branch: tp.Branch, Line: tp.Line, PR: &ref})
+		emit(sink, Event{Kind: EventSuperseded, Branch: s.Branch, Line: s.Line, PR: &ref})
 	}
 }
 
-// headOwner is the owner of the repository a branch pushed by this publisher is
+// HeadOwnerOf is the owner of the repository a branch pushed by this publisher is
 // in: the fork's, or the repository's own for the upstream.
-func (p Publisher) headOwner(consumer string) string {
+func (p Publisher) HeadOwnerOf(consumer string) string {
 	if p.Push.Role == RoleFork {
 		return p.HeadOwner
 	}
@@ -133,33 +133,33 @@ func (p Publisher) headOwner(consumer string) string {
 // rebuilt the branch.
 const refreshMarker = "<!-- gero:refresh v1 -->"
 
-// descriptionStale reports whether the PR's title or body is not what a fresh
+// DescriptionStale reports whether the PR's title or body is not what a fresh
 // build would give it, and the body it should have: the new text with the hidden
-// blocks of the old one that gero ship does not write kept (mergeBody).
-func descriptionStale(open pulls.PR, tp TargetPlan) (body string, stale bool) {
-	body = mergeBody(open.Body, tp.Preview.Body)
-	return body, open.Title != tp.Preview.Title || !sameBody(body, open.Body)
+// blocks of the old one that gero ship does not write kept (MergeBody).
+func DescriptionStale(open pulls.PR, s Subject) (body string, stale bool) {
+	body = MergeBody(open.Body, s.Preview.Body)
+	return body, open.Title != s.Preview.Title || !SameBody(body, open.Body)
 }
 
-// updateDescription brings the PR's title and body up to date, and says whether it
+// UpdateDescription brings the PR's title and body up to date, and says whether it
 // did. A failure is a warning.
-func (p Publisher) updateDescription(ctx context.Context, consumer string, open pulls.PR, tp TargetPlan, res *TargetResult) bool {
-	body, stale := descriptionStale(open, tp)
+func (p Publisher) UpdateDescription(ctx context.Context, consumer string, open pulls.PR, s Subject, res *TargetResult) bool {
+	body, stale := DescriptionStale(open, s)
 	if !stale {
 		return false
 	}
-	if err := p.Remote.UpdateBody(ctx, consumer, open.Number, tp.Preview.Title, body); err != nil {
+	if err := p.Remote.UpdateBody(ctx, consumer, open.Number, s.Preview.Title, body); err != nil {
 		res.Warnings = append(res.Warnings, fmt.Sprintf("could not refresh the title and body of #%d: %v", open.Number, err))
 		return false
 	}
 	return true
 }
 
-// recordRefresh records what a refresh did in the comment gero keeps for the
+// RecordRefresh records what a refresh did in the comment gero keeps for the
 // purpose: one that is edited in place, found by its marker and by being the
 // actor's own, with a line added for each refresh, and created the first time. A
 // failure is a warning.
-func (p Publisher) recordRefresh(ctx context.Context, consumer string, number int, line string, res *TargetResult) {
+func (p Publisher) RecordRefresh(ctx context.Context, consumer string, number int, line string, res *TargetResult) {
 	me, err := p.Remote.Me(ctx)
 	var comments []pulls.Comment
 	if err == nil {
@@ -191,4 +191,14 @@ func (p Publisher) labels(configured []string) []string {
 		wanted = append(wanted, p.BotLabels...)
 	}
 	return wanted
+}
+
+// Subject is what a proposal is about, as far as publishing it goes: the base branch it
+// is for, the commit read at the head of that branch, the Rancher line of the branch when
+// it is in one, and the texts of the PR.
+type Subject struct {
+	Branch  string // the base branch
+	Commit  string // the commit at its head that was read
+	Line    string
+	Preview *Preview
 }

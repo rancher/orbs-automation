@@ -1,6 +1,9 @@
 package ship
 
-import "github.com/rancher/orbs-automation/internal/registry"
+import (
+	"github.com/rancher/orbs-automation/internal/proposal"
+	"github.com/rancher/orbs-automation/internal/registry"
+)
 
 // EventKind says what happened.
 type EventKind string
@@ -84,4 +87,20 @@ func emit(sink Sink, e Event) {
 	if sink != nil {
 		sink.Event(e)
 	}
+}
+
+// proposalSink passes the events of the proposal conveyor to a Sink of ship, as its own: the
+// kinds are the same words.
+type proposalSink struct{ Sink }
+
+func (s proposalSink) Event(e proposal.Event) {
+	s.Sink.Event(Event{Kind: EventKind(e.Kind), Branch: e.Branch, Line: e.Line, NewBranch: e.NewBranch, Remote: e.Remote, PR: e.PR})
+}
+
+// asProposalSink is sink for the conveyor, and none for none.
+func asProposalSink(sink Sink) proposal.Sink {
+	if sink == nil {
+		return nil
+	}
+	return proposalSink{sink}
 }

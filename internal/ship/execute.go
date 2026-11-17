@@ -8,69 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rancher/orbs-automation/internal/bump"
-	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/authorship"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
+	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/registry"
 )
-
-// Executor is what a run needs to make commits.
-type Executor struct {
-	Git     Git
-	Runner  bump.StepRunner
-	TempDir string // where worktrees go
-	// Sign makes git sign every commit with the engineer's own key (signCommits).
-	Sign bool
-	// Identify says who the commits are made as, in the clone: git's own answer on
-	// a workstation, the bot's in CI. Not set means it is not asked.
-	Identify func(ctx context.Context, clone string) (Identity, error)
-	// Publish, when set, finds the open PRs of each target before making anything,
-	// and with it a run that is not --no-push or --dry-run pushes and opens the
-	// PRs. Without it a run stops at the commits.
-	Publish *Publisher
-	// Confirm, when set, is asked once before anything is written, if the run is
-	// going to publish something: it is given what will be done and says whether
-	// to go on. It is not asked for a dry run, a --no-push run, or when nothing
-	// would be written. Not set means go on.
-	Confirm func(ctx context.Context, c Confirmation) (bool, error)
-	// Now is the time, for the line a refresh records. Not set is time.Now.
-	Now func() time.Time
-}
-
-// Identity is the author and committer of the commits of a run.
-type Identity struct {
-	Name  string `json:"name"`
-	Email string `json:"email"`
-}
-
-// Actor is who a run acts as, shown before anything is written: the identity its
-// commits carry, the GitHub account its PRs are opened by (when it opens any), and
-// whether the commits are signed.
-type Actor struct {
-	Identity
-	Login   string `json:"login,omitempty"`
-	Signing bool   `json:"signing"`
-}
-
-// Confirmation is what a run is about to do, for the one question before it
-// writes: the targets that will get a new PR, the older PRs that will be closed,
-// and the targets that will be left alone.
-type Confirmation struct {
-	Consumer string     // the repository the PRs are in
-	Release  string     // the tag being shipped
-	Push     PushTarget // where the branches are pushed
-	Opens    []string   // the targets that will get a new PR, by line (TargetPlan.Key)
-	Closes   []PRRef    // the older PRs that will be closed, for every target
-	Already  []string   // the targets whose PR is already open
-	Blocked  []string   // the targets a newer PR of the actor's blocks
-	// Refreshes are the target branches whose open PR will be rebuilt, and its
-	// branch replaced if it differs: a force push, with a lease.
-	Refreshes []string
-	// MayReplace says a branch an earlier attempt left on the remote, if it is
-	// ours, will be replaced to open the new PRs: --refresh was given.
-	MayReplace bool
-}
 
 // Ship checks the state, as Check does, and then, when ex is not nil and
 // nothing blocks the release as a whole, makes the commit for each target that
@@ -111,12 +53,12 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 	var pub *Publisher
 	var me string
 	if ex.Publish != nil && !in.NoPush {
-		if pub, me, plan.Push, err = publisherFor(ctx, ws, ex, res.route.Consumer, clone, in.PushTo, in.CI, in.Refresh); err != nil {
+		if pub, me, plan.Push, err = proposal.PublisherFor(ctx, ws, ex, res.route.Consumer, clone, in.PushTo, in.CI, in.Refresh); err != nil {
 			return plan, err
 		}
 	}
 	if ex.Identify != nil {
-		actor, err := actorFor(ctx, ex, clone, me)
+		actor, err := proposal.ActorFor(ctx, ex, clone, me)
 		if err != nil {
 			return plan, err
 		}
@@ -150,41 +92,6 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Line: plan.Targets[i].Line, Result: plan.Targets[i].Result})
 	}
 	return plan, nil
-}
-
-// publisherFor makes the publisher of a run for the consumer's clone: where its branches
-// are pushed, decided from the flag, the settings and the project, and the login whose PRs
-// are the actor's own. It returns the target the branches go to.
-func publisherFor(ctx context.Context, ws Workspace, ex *Executor, consumer *chain.Project, clone, pushTo string, ci, refresh bool) (*Publisher, string, *PushTarget, error) {
-	p := *ex.Publish
-	p.Clone = clone
-	settings := ws.PushSettings(consumer.Slug())
-	target, err := resolvePushTarget(
-		PushChoice{Flag: pushTo, UserRepo: settings.UserRepo, Project: consumer.PullRequests().PushTo, UserDefault: settings.UserDefault},
-		PushRemotes{Fork: settings.Fork, Upstream: settings.Upstream}, ci)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	if target.Role == RoleFork && settings.GitHubUser == "" {
-		return nil, "", nil, errors.New("pushing to the fork needs githubUser in the user file: the PR's head is the fork's owner and the branch")
-	}
-	p.Push, p.HeadOwner = target, settings.GitHubUser
-	p.IsBot, p.BotLabels, p.Refresh = ci, consumer.PullRequests().BotLabels, refresh
-	me, err := p.Remote.Me(ctx)
-	if err != nil {
-		return nil, "", nil, fmt.Errorf("%w: %v", ErrNoRemote, err)
-	}
-	return &p, me, &target, nil
-}
-
-// actorFor says who a run acts as: the identity its commits carry, the login its PRs
-// are opened by, and whether the commits are signed.
-func actorFor(ctx context.Context, ex *Executor, clone, login string) (*Actor, error) {
-	id, err := ex.Identify(ctx, clone)
-	if err != nil {
-		return nil, fmt.Errorf("commit identity: %w", err)
-	}
-	return &Actor{Identity: id, Login: login, Signing: ex.Sign}, nil
 }
 
 // targetState is what was found out about one target before any work: the
@@ -228,7 +135,7 @@ func (r resolution) decideTarget(ctx context.Context, pub *Publisher, me string,
 	}
 	// The listing reads only the newest, so also ask for the one head this run
 	// would push to, which is exact whatever the number of open PRs.
-	ownHead := pub.headOwner(plan.Consumer) + ":" + tp.Preview.Branch
+	ownHead := pub.HeadOwnerOf(plan.Consumer) + ":" + tp.Preview.Branch
 	addHead(ownHead)
 	// And for the branches of this bump that anyone left on the upstream, found by
 	// the tail of their names in the refs the run already has: a PR of an older or
@@ -326,7 +233,7 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher
 		if in.DryRun {
 			result.WouldSupersede = refs(st.dec.Supersede)
 		} else {
-			pub.supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp, st.dec.Supersede, result, sink)
+			pub.Supersede(ctx, plan.Consumer, st.dec.Open.Number, st.m, tp.Subject(), st.dec.Supersede, result, asProposalSink(sink))
 		}
 		if in.Refresh {
 			r.refresh(ctx, ex, pub, clone, remote, in, plan, st, result, sink)
@@ -340,7 +247,7 @@ func (r resolution) workTarget(ctx context.Context, ex *Executor, pub *Publisher
 	case in.DryRun:
 		result.WouldSupersede = refs(st.dec.Supersede)
 	case result.Status == ResultCommitted:
-		pub.publish(ctx, plan.Consumer, tp, st.m, st.dec, result, sink)
+		pub.Publish(ctx, plan.Consumer, tp.Subject(), st.m, st.dec, result, asProposalSink(sink))
 	}
 	return result
 }
@@ -425,7 +332,7 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 		result.Status, result.Error = ResultFailed, fmt.Sprintf(format, args...)
 	}
 
-	if want := pub.headOwner(plan.Consumer); open.HeadOwner != want {
+	if want := pub.HeadOwnerOf(plan.Consumer); open.HeadOwner != want {
 		skip("its branch is in %s's repository, and this run pushes to %s's", open.HeadOwner, want)
 		return
 	}
@@ -505,13 +412,13 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 			}
 		}
 		result.Note = "identical to a fresh build"
-		switch _, stale := descriptionStale(*open, tp); {
+		switch _, stale := proposal.DescriptionStale(*open, tp.Subject()); {
 		case !stale:
 		case in.DryRun:
 			result.Note += "; would update the description"
-		case pub.updateDescription(ctx, plan.Consumer, *open, tp, result):
+		case pub.UpdateDescription(ctx, plan.Consumer, *open, tp.Subject(), result):
 			result.Note += "; description updated"
-			pub.recordRefresh(ctx, plan.Consumer, open.Number, "- Updated the description ("+stamp+")", result)
+			pub.RecordRefresh(ctx, plan.Consumer, open.Number, "- Updated the description ("+stamp+")", result)
 		}
 		return
 	}
@@ -535,12 +442,12 @@ func (r resolution) refresh(ctx context.Context, ex *Executor, pub *Publisher, c
 	result.Status, result.Pushed = ResultRefreshed, pub.Push.Remote
 	emit(sink, Event{Kind: EventPushed, Branch: tp.Branch, Line: tp.Line, Remote: pub.Push.Remote, NewBranch: branch})
 	emit(sink, Event{Kind: EventRefreshed, Branch: tp.Branch, Line: tp.Line, PR: result.PR})
-	pub.updateDescription(ctx, plan.Consumer, *open, tp, result)
+	pub.UpdateDescription(ctx, plan.Consumer, *open, tp.Subject(), result)
 	line := fmt.Sprintf("- Rebuilt on %s@%s (%s)", tp.Branch, short(base), stamp)
 	if behind {
 		line += fmt.Sprintf(", was %d behind", result.BehindBy)
 	}
-	pub.recordRefresh(ctx, plan.Consumer, open.Number, line, result)
+	pub.RecordRefresh(ctx, plan.Consumer, open.Number, line, result)
 }
 
 // releaseTags names the releases of a plan: the one tag, or the tags of the

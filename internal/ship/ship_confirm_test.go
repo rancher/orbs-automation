@@ -32,7 +32,7 @@ func onBase(base string, number int, author, version string) pulls.PR {
 
 func TestShipAsksOnceBeforeAnythingIsWrittenAndSaysWhatWillBeDone(t *testing.T) {
 	ws, clone, ex, remote, lg := publishing(t)
-	remote.openBy = map[string]pulls.Open{
+	remote.OpenBy = map[string]pulls.Open{
 		"release/v2.15": {PRs: []pulls.PR{onBase("release/v2.15", 101, "danpock", "v0.5.2")}},
 		"release/v2.14": {PRs: []pulls.PR{onBase("release/v2.14", 104, "danpock", "v0.5.3")}},
 	}
@@ -40,9 +40,9 @@ func TestShipAsksOnceBeforeAnythingIsWrittenAndSaysWhatWillBeDone(t *testing.T) 
 	ex.Confirm = func(ctx context.Context, c Confirmation) (bool, error) {
 		// Nothing has been written when the question is asked: no branch, no push.
 		assert.False(t, branchExistsIn(t, clone, botV215), "no branch yet")
-		assert.False(t, lg.has("push"))
-		assert.False(t, lg.has("create"))
-		assert.False(t, lg.has("close"))
+		assert.False(t, lg.Has("push"))
+		assert.False(t, lg.Has("create"))
+		assert.False(t, lg.Has("close"))
 		return q.confirm(ctx, c)
 	}
 
@@ -73,9 +73,9 @@ func TestShipDecliningWritesNothingAndReturnsThePlan(t *testing.T) {
 	assert.Nil(t, plan.Targets[0].Result, "no work was done")
 	assert.False(t, branchExistsIn(t, clone, botV215), "not even a local branch")
 	assert.Equal(t, "main", current(t, clone))
-	assert.False(t, lg.has("push"))
-	assert.False(t, lg.has("create"))
-	assert.False(t, lg.has("close"))
+	assert.False(t, lg.Has("push"))
+	assert.False(t, lg.Has("create"))
+	assert.False(t, lg.Has("close"))
 }
 
 func TestShipAnErrorFromTheQuestionStopsBeforeAnyWork(t *testing.T) {
@@ -92,7 +92,7 @@ func TestShipAnErrorFromTheQuestionStopsBeforeAnyWork(t *testing.T) {
 
 func TestShipIsNotAskedWhenNothingWouldBeWritten(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3")}} // already open, nothing older
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3")}} // already open, nothing older
 	q := &asked{answer: true}
 	ex.Confirm = q.confirm
 
@@ -105,7 +105,7 @@ func TestShipIsNotAskedWhenNothingWouldBeWritten(t *testing.T) {
 
 func TestShipIsNotAskedWhenEverythingIsBlocked(t *testing.T) {
 	ws, _, ex, remote, _ := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(110, "danpock", "v0.5.4")}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(110, "danpock", "v0.5.4")}}
 	q := &asked{answer: true}
 	ex.Confirm = q.confirm
 
@@ -117,7 +117,7 @@ func TestShipIsNotAskedWhenEverythingIsBlocked(t *testing.T) {
 
 func TestShipAClosingOfOlderPRsAloneIsAWriteThatIsAskedAbout(t *testing.T) {
 	ws, _, ex, remote, lg := publishing(t)
-	remote.open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3"), existing(101, "danpock", "v0.5.2")}}
+	remote.Open = pulls.Open{PRs: []pulls.PR{existing(104, "danpock", "v0.5.3"), existing(101, "danpock", "v0.5.2")}}
 	q := &asked{answer: false}
 	ex.Confirm = q.confirm
 
@@ -128,7 +128,7 @@ func TestShipAClosingOfOlderPRsAloneIsAWriteThatIsAskedAbout(t *testing.T) {
 	assert.Empty(t, q.got[0].Opens)
 	assert.Equal(t, []string{"v2.15"}, q.got[0].Already)
 	assert.Len(t, q.got[0].Closes, 1)
-	assert.False(t, lg.has("close"), "declined, so the older PR is still open")
+	assert.False(t, lg.Has("close"), "declined, so the older PR is still open")
 }
 
 func TestShipIsNotAskedForADryRunOrANoPushRun(t *testing.T) {

@@ -21,8 +21,8 @@ const (
 	PublishBlocked PublishAction = "blocked"
 )
 
-// Publish is the decision for one target.
-type Publish struct {
+// Decision is the decision for one target.
+type Decision struct {
 	Action PublishAction
 	// Open is the PR that is already open at this version, for PublishAlreadyOpen.
 	Open *pulls.PR
@@ -67,15 +67,15 @@ func OtherBaseNote(p pulls.PR, base string) string {
 // actor's own to close; the others are never touched and do not block, though a
 // same or newer one is reported. A version that cannot be ordered against this
 // one is not acted on.
-func DecidePublish(open []pulls.PR, me string, m Marker) Publish {
+func DecidePublish(open []pulls.PR, me string, m Marker) Decision {
 	return DecidePublishBy(open, me, m, CompareVersions)
 }
 
 // DecidePublishBy is DecidePublish with the order of two versions given: negative
 // when a is older than b, and false when they cannot be ordered. A sync has no versions
 // to order, only the fingerprint of what it writes.
-func DecidePublishBy(open []pulls.PR, me string, m Marker, compare func(a, b string) (int, bool)) Publish {
-	var out Publish
+func DecidePublishBy(open []pulls.PR, me string, m Marker, compare func(a, b string) (int, bool)) Decision {
+	var out Decision
 	var older []pulls.PR
 	for _, p := range open {
 		found, ok := ParseMarker(p.Body)
