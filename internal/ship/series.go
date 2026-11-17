@@ -2,8 +2,11 @@ package ship
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/git"
 )
 
 // SeriesHolding is what a project holds of the series of one stream, line by line:
@@ -42,5 +45,79 @@ type SeriesLine struct {
 // series its stream has for the line. A branch that cannot be read has its Error set
 // and does not stop the others. A project with no series holding has none.
 func SeriesHoldings(ctx context.Context, ws Reader, holder *chain.Project) ([]SeriesHolding, error) {
-	return nil, nil
+	var mine []*chain.Holding
+	for _, h := range holder.Held() {
+		if h.Kind() == chain.HoldsSeries && !h.Virtual() {
+			mine = append(mine, h)
+		}
+	}
+	if len(mine) == 0 {
+		return nil, nil
+	}
+	refs, err := ws.UpstreamRefs(ctx, holder.Slug())
+	if err != nil {
+		return nil, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
+	}
+	var out []SeriesHolding
+	for _, h := range mine {
+		held := SeriesHolding{Name: h.Name(), Producer: h.Producer().Slug(), Stream: h.Stream().Name()}
+		for _, ed := range h.Edits() {
+			held.Edits = append(held.Edits, ed.Name())
+		}
+		for _, line := range seriesLinesOf(holder, h) {
+			held.Lines = append(held.Lines, seriesLine(ctx, ws, holder, refs, h, line))
+		}
+		out = append(out, held)
+	}
+	return out, nil
+}
+
+// seriesLinesOf is the lines a series holding is for: those the holder lists, or every
+// line of the stream for a holder with one branch, that the stream has a series for
+// and the holding's range holds.
+func seriesLinesOf(holder *chain.Project, h *chain.Holding) []string {
+	candidates := holder.Lines()
+	if len(candidates) == 0 {
+		candidates = h.Stream().Lines()
+	}
+	var out []string
+	for _, line := range candidates {
+		if h.AppliesTo(line) {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// seriesLine reads one line of a series holding at the head of the line's branch.
+func seriesLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, h *chain.Holding, line string) SeriesLine {
+	out := SeriesLine{Line: line}
+	branch, ok := holder.BranchOfLine(line, "")
+	if !ok {
+		out.Error = fmt.Sprintf("%s has no branch for %s", holder.Slug(), line)
+		return out
+	}
+	out.Branch = branch
+	head, ok := refs.Branch(branch)
+	if !ok {
+		out.Error = fmt.Sprintf("%s has no branch %s", holder.Slug(), branch)
+		return out
+	}
+	check, err := bump.CheckHolding(ctx, bump.HostTree(ws, holder.Slug(), head.Commit), h, line, branch, bump.Release{})
+	if err != nil {
+		out.Error = err.Error()
+		return out
+	}
+	out.Want, out.Current, out.UpToDate = check.Want, check.Current, check.UpToDate
+	if len(check.Locations) > 0 {
+		out.File = check.Locations[0].Place.File
+	}
+	if out.UpToDate {
+		return out
+	}
+	out.Acknowledged, _ = h.Acknowledgement(chain.RuleSeriesDiffers, line)
+	if edits := h.Edits(); len(edits) > 0 && out.Acknowledged == "" {
+		out.Suggest = fmt.Sprintf("open a pull request on %s of %s that writes %s, with Edit %s", branch, holder.Slug(), out.Want, edits[0].Name())
+	}
+	return out
 }

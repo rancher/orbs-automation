@@ -42,9 +42,18 @@ Shown only for a project that takes from others (**Sources**, the projects that 
 * **STATUS** compares it with the line's latest stable release and, when a prerelease is newer, with the newest: `current`; `on stable, <tag> is newer`; `on a prerelease, <tag> is newer`; `behind <tag>`; `ahead of <tag>`; `unknown` when a version cannot be compared; `unreadable: <why>` when the branch has no value to read. When the locations of a holding hold different values, `; locations differ` follows it (the rule `locations-differ`), unless the holding's document acknowledges it for that line, which says nothing here. One consumer that cannot be traced is its own line (`unavailable: <why>`) and the others are shown.
 * **Cost.** A ref listing for each project and one small file read for each branch, whatever the number of releases it is compared with. They are on by default for a project that ships or takes, and `--no-consumers` and `--no-sources` leave them out. A public repository needs no token.
 
+## Series: what a project holds of a stream's series
+
+Shown only for a project that has a `series` holding: a file that names a series and no release (`v9`), which another tool reads to pick the newest release of it. A section for each holding, with a row for each line it is for, read at the head of the line's branch on the host with the update engine's own check, so a line is compared with the series its stream has for that line.
+
+* **HOLDS** is the value read from the file and **WANTS** is the holding's form rendered over the stream's series for the line.
+* **STATUS** is `current`; `differs [series-differs]`; `differs, acknowledged: <reason>` when the holding's document acknowledges the rule for that line; or `unreadable: <why>`. A difference is a warning and never fails the command.
+* When an Edit follows the holding, a line that differs and is not acknowledged says the pull request that would fix it: the branch, the value and the Edit.
+* **Cost.** One ref listing for the project and one small file read for each line.
+
 ## JSON and failures
 
-`--json` carries the same sections as `targets` (with `state` and `next`), `consumers` and `sources`. When the host cannot be read the report is printed with what is known and the command exits 1; an edit or a holding that cannot be used is a `traceError` and not a failure of the rest.
+`--json` carries the same sections as `targets` (with `state` and `next`), `consumers`, `sources` and `series`. When the host cannot be read the report is printed with what is known and the command exits 1; an edit or a holding that cannot be used is a `traceError` and not a failure of the rest.
 
 ## Not built yet
 

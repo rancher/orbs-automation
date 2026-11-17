@@ -76,7 +76,7 @@ func NewEngine(strategies *StrategyRegistry, g *chain.Graph) (*Engine, error) {
 	var errs []error
 	seen := map[*chain.Edit]bool{}
 	for _, h := range g.Holdings() {
-		if h.Kind() != chain.HoldsRelease {
+		if h.Kind() != chain.HoldsRelease && h.Kind() != chain.HoldsSeries {
 			continue
 		}
 		for _, at := range h.Locations() {

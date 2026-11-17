@@ -37,7 +37,7 @@ One chain runs `kuberlr-kubectl`, BRO, `rancher/charts`, `rancher/rancher`. Chai
 * **M: Read the commit pinned in `lock.yaml` at a ref and compare it with the head of the stage's branch.** Done when `repo status` says whether the newest Assets tag was built from today's charts branch.
 * **S: Confirm where Rancher holds the charts branch.** Before v2.16 it is `CHART_DEFAULT_BRANCH` in `package/Dockerfile`; find the file and key for v2.16 and later. Done when each line's holding names the right file and key and a test reads it.
 * **L: Walk several hops in `gero lines resolve` and `gero repo status`.** The walk is safe on cycles, prints a tree, and takes `--depth`. Done when `ob-team-charts`, `charts` and `rancher` appear as one connected path for a line. [LINES_RESOLVE](specs/LINES_RESOLVE.md)
-* **M: Read and write a `series` holding, and raise `series-differs`.** The config and the graph have the kind. Done when the engine reads the text as a series and writes it only when the stream's series for the line changes, and a line that holds another series raises `series-differs` naming the Edit's suggested pull request. [CONFIG_SCHEMA](design/CONFIG_SCHEMA.md#holding)
+* **M: Propose the pull request that fixes a `series` holding that differs.** `repo status` reports it and `bump.ApplyHolding` writes it, but no command runs the write, so the suggestion is text. Done when a command opens a pull request on the line's branch that writes the series, with its Edit's steps. [CONFIG_SCHEMA](design/CONFIG_SCHEMA.md#holding)
 * **M: Check a held tag's stage against the release team's rule.** The rule comes from the release team. Done when a mismatch is reported by `repo status` or the walk.
 
 ### Charts automation
