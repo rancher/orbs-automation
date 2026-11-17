@@ -263,7 +263,7 @@ func TestMindmapHangsEachProjectOffTheRoot(t *testing.T) {
 
 func TestMindmapNestsStreamsAndArtifactsInTheirProject(t *testing.T) {
 	out := mindmapOf(t, shipping(t))
-	assert.Regexp(t, `\n    n\d+\["shell \(managed\)"\]\n      n\d+\["stream shell"\]\n        n\d+\["artifact shell-image: rancher/shell"\]\n`, out)
+	assert.Regexp(t, `\n    n\d+\["shell \(managed\)"\]\n      n\d+\["stream shell v\*"\]\n        n\d+\["artifact shell-image: rancher/shell"\]\n`, out)
 }
 
 func TestMindmapShowsWhereAnArtifactReachesAndWhatAProjectHolds(t *testing.T) {
