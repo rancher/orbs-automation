@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rancher/orbs-automation/internal/bump"
+	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/authorship"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/registry"
@@ -182,38 +183,21 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 	var pub *Publisher
 	var me string
 	if ex.Publish != nil && !in.NoPush {
-		p := *ex.Publish
-		p.Clone = clone
-		pub = &p
-		consumer := res.route.Consumer
-		settings := ws.PushSettings(plan.Consumer)
-		target, err := resolvePushTarget(
-			PushChoice{Flag: in.PushTo, UserRepo: settings.UserRepo, Project: consumer.PullRequests().PushTo, UserDefault: settings.UserDefault},
-			PushRemotes{Fork: settings.Fork, Upstream: settings.Upstream}, in.CI)
-		if err != nil {
+		if pub, me, plan.Push, err = publisherFor(ctx, ws, ex, res.route.Consumer, clone, in.PushTo, in.CI, in.Refresh); err != nil {
 			return plan, err
-		}
-		if target.Role == RoleFork && settings.GitHubUser == "" {
-			return plan, errors.New("pushing to the fork needs githubUser in the user file: the PR's head is the fork's owner and the branch")
-		}
-		pub.Push, pub.HeadOwner = target, settings.GitHubUser
-		pub.IsBot, pub.BotLabels, pub.Refresh = in.CI, consumer.PullRequests().BotLabels, in.Refresh
-		plan.Push = &target
-		if me, err = pub.Remote.Me(ctx); err != nil {
-			return plan, fmt.Errorf("%w: %v", ErrNoRemote, err)
 		}
 	}
 	if ex.Identify != nil {
-		id, err := ex.Identify(ctx, clone)
+		actor, err := actorFor(ctx, ex, clone, me)
 		if err != nil {
-			return plan, fmt.Errorf("commit identity: %w", err)
+			return plan, err
 		}
-		plan.Actor = &Actor{Identity: id, Login: me, Signing: ex.Sign}
+		plan.Actor = actor
 		emit(sink, Event{Kind: EventActor, Actor: plan.Actor})
 		if in.CI {
 			// The bot has no git config in a fresh clone to read. A workstation's
 			// commits take theirs from git, which is what was just read.
-			res.committer = id
+			res.committer = actor.Identity
 		}
 	}
 	// Decide every target first, reading only, so that the one question before
@@ -238,6 +222,41 @@ func Ship(ctx context.Context, ws Workspace, prober registry.Prober, in Input, e
 		emit(sink, Event{Kind: EventTargetDone, Branch: plan.Targets[i].Branch, Line: plan.Targets[i].Line, Result: plan.Targets[i].Result})
 	}
 	return plan, nil
+}
+
+// publisherFor makes the publisher of a run for the consumer's clone: where its branches
+// are pushed, decided from the flag, the settings and the project, and the login whose PRs
+// are the actor's own. It returns the target the branches go to.
+func publisherFor(ctx context.Context, ws Workspace, ex *Executor, consumer *chain.Project, clone, pushTo string, ci, refresh bool) (*Publisher, string, *PushTarget, error) {
+	p := *ex.Publish
+	p.Clone = clone
+	settings := ws.PushSettings(consumer.Slug())
+	target, err := resolvePushTarget(
+		PushChoice{Flag: pushTo, UserRepo: settings.UserRepo, Project: consumer.PullRequests().PushTo, UserDefault: settings.UserDefault},
+		PushRemotes{Fork: settings.Fork, Upstream: settings.Upstream}, ci)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	if target.Role == RoleFork && settings.GitHubUser == "" {
+		return nil, "", nil, errors.New("pushing to the fork needs githubUser in the user file: the PR's head is the fork's owner and the branch")
+	}
+	p.Push, p.HeadOwner = target, settings.GitHubUser
+	p.IsBot, p.BotLabels, p.Refresh = ci, consumer.PullRequests().BotLabels, refresh
+	me, err := p.Remote.Me(ctx)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("%w: %v", ErrNoRemote, err)
+	}
+	return &p, me, &target, nil
+}
+
+// actorFor says who a run acts as: the identity its commits carry, the login its PRs
+// are opened by, and whether the commits are signed.
+func actorFor(ctx context.Context, ex *Executor, clone, login string) (*Actor, error) {
+	id, err := ex.Identify(ctx, clone)
+	if err != nil {
+		return nil, fmt.Errorf("commit identity: %w", err)
+	}
+	return &Actor{Identity: id, Login: login, Signing: ex.Sign}, nil
 }
 
 // targetState is what was found out about one target before any work: the
