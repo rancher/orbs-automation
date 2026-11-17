@@ -1,18 +1,37 @@
 # TODO
 
-The work that is accepted, by milestone. Nothing is here that has not been checked against the code and decided. The milestones are those of [PHASES](PHASES.md); the detail of each part is in its [spec](specs/README.md).
+Two kinds of item, in two places, so that what can be picked up is never mixed with what must be run.
 
-**Reading an item.** It starts with a verb, names one result, and says what makes it done. The letter is its size: **S** is hours, **M** a day or two, **L** includes design and may need a spec first. *(no code)* needs knowledge of the repos or the release process, and *(needs a real run)* cannot be shown by a test. To take one, open an issue that names it so we do not collide.
+* **Build** items are in the milestone sections: known work that nobody has started, and that can be picked up. Each ends in a test or a result you can name. Nothing is here that has not been checked against the code and decided. The milestones are those of [PHASES](PHASES.md); the detail of each part is in its [spec](specs/README.md).
+* **Verify** items are in [Verify in a real run](#verify-in-a-real-run): things that are built, or configured, and that only a run of `gero` against real repos, a real host or a real token can show to work. They are not work to pick up: run them, and report. What a run finds is either "it works", and the item is deleted, or a defect, and it becomes a Build item in the milestone it belongs to.
 
-**Keeping it true.** When an item is built, delete it here and delete its line from the spec's **Not built yet** list, in the same change.
+**Reading a build item.** It starts with a verb, names one result, and says what makes it done. The letter is its size: **S** is hours, **M** a day or two, **L** includes design and may need a spec first. *(no code)* needs knowledge of the repos or the release process. To take one, open an issue that names it so we do not collide.
 
-| Milestone | Means |
+**Reading a verify item.** It names the command to run, what to check in the result, and what a failure should become. It has no size and nobody takes it: whoever runs it says so on the issue.
+
+**Keeping it true.** When a build item is built, delete it here and delete its line from the spec's **Not built yet** list, in the same change. When a verify item is run and passes, delete it. When it fails, delete it and add the defect as a build item.
+
+| Section | Means |
 |---|---|
+| [Verify in a real run](#verify-in-a-real-run) | Built or configured, shown only by running `gero` for real; not work to pick up |
 | [Before V1](#before-v1) | Needed for v1.0.0 |
 | [After V1](#after-v1) | The v1.x releases, soon after |
 | [Before V2](#before-v2) | Needed for the v2.0.0 gate |
 | [Moonshot and wishlist](#moonshot-and-wishlist) | Wanted, with no date |
 | [On request](#on-request) | Built only if someone asks |
+
+---
+
+## Verify in a real run
+
+Each is built and passes its tests, which use fakes. What follows is what a test cannot show. Run it, and report on the issue.
+
+* **`repo sync` opens real PRs for PromFed.** Run `gero repo sync prometheus-federator --preview` with a clone of `rancher/prometheus-federator` and a fork. Check one PR for each branch that differs: `main` takes the newest k3s patches and the `+` spelling, `release/v7.x` is corrected to the v2.15 minors (1.34 and 1.36) and to `v8` for kuberlr, and `release/v4.x` to `release/v6.x` take their patches. Run it again: it says each PR is already open. Change what it writes and run it a third time: the earlier PR is closed and replaced. [REPO_SYNC](specs/REPO_SYNC.md)
+* **PromFed's Edit regenerates `pkg/buildconfig` in a real clone.** Its one step is `go run pkg/codegen/buildconfig/writer.go pkg/codegen/buildconfig/main.go`. Check, in the PR `repo sync` opens, that a second commit changes `pkg/buildconfig/constants.go` to the values written in `build.yaml`, and that the step runs without network access beyond the module cache.
+* **PromFed's `promfed-chart` Artifact names the file the repo publishes.** Compare `prometheus-federator-{version}.tgz` with the assets of a release of `rancher/prometheus-federator`. A different name is a fix to `config/prometheus-federator.yaml`.
+* **`repo sync` reads the tags of k3s in a reasonable time.** k3s has thousands of tags, listed once for a run. Check the time of the run above and that the host does not rate-limit it.
+* **`ship` and `ci:ship` behave as before the move to `internal/proposal`.** Run `gero ship <project> --dry-run --no-push` and `--refresh` on a project with open bump PRs, and a `ci:ship` run in a workflow, and compare the report and the JSON with what an earlier build prints. A difference is a defect. [PROPOSAL](specs/PROPOSAL.md)
+* **`auth status` reports a real installation token's 403.** Run `gero auth status` in CI with an installation token that cannot reach the consumer: it says why, and exits as documented. Tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ---
 
@@ -27,7 +46,6 @@ The work that is accepted, by milestone. Nothing is here that has not been check
 * **M: Run steps `from: producer` and `from: central`.** `steprun` refuses both. Done when a step runs a script from the producer's checkout or from the bundle, in `ci:ship` only. [APP_CONFIG](specs/APP_CONFIG.md)
 * **S: Print the preflight line that names workstation signs under a forced CI context,** in `gero ship` and `ci:ship`. It only warns. `clicfg.WorkstationSigns` has no caller. Done when forcing the CI context on a workstation prints the line. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 * **M: Move `shell` onto `ci:ship`, and remove the push scripts of `shell` and `scc-operator`.** Both workflows install a pinned, signed `gero`. Done when neither repo has a push script.
-* **S (needs a real run): Check the `auth status` 403 path against a real installation token.** It is tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ### Tracing the chain
 
