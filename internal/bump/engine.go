@@ -344,6 +344,10 @@ type Target struct {
 	// pinned module that the pinning release requires, which the caller derived from
 	// its file. The engine reads no host. A virtual Holding with no entry is an error.
 	Pinned map[*chain.Holding]string
+	// Pulled is the release each release holding of a pull route is written with, which
+	// the caller chose from the producer's tags: a route that pulls ships no release of
+	// its own. A pulled holding with no entry is an error.
+	Pulled map[*chain.Holding]Release
 }
 
 // releaseOf is the release a holding of the target holds: the tag of the run for a
