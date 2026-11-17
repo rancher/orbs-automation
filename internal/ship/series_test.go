@@ -66,7 +66,7 @@ func TestSeriesHoldingsSaysWhatEachBranchHoldsAgainstTheSeriesOfItsLine(t *testi
 	require.Len(t, got[0].Lines, 2, "v2.14 has no series in the stream, so the holding is not for it")
 
 	main, rel := got[0].Lines[0], got[0].Lines[1]
-	assert.Equal(t, SeriesLine{Line: "v2.16", Branch: "main", File: "build.yaml", Current: "v9", Want: "v9", UpToDate: true}, main)
+	assert.Equal(t, SeriesLine{Line: "v2.16", Branch: "main", Head: "sha-main", File: "build.yaml", Current: "v9", Want: "v9", UpToDate: true}, main)
 	assert.Equal(t, "v2.15", rel.Line)
 	assert.Equal(t, "rel-v2.15", rel.Branch)
 	assert.Equal(t, "v9", rel.Current)

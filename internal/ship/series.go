@@ -25,6 +25,7 @@ type SeriesHolding struct {
 type SeriesLine struct {
 	Line   string `json:"line"`
 	Branch string `json:"branch"`
+	Head   string `json:"head,omitempty"` // the commit at the head of the branch on the host
 	File   string `json:"file,omitempty"`
 	// Current is what the branch holds, and Want what the stream's series for the
 	// line would be written as.
@@ -99,6 +100,7 @@ func seriesLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.
 	}
 	out.Branch = branch
 	head, ok := refs.Branch(branch)
+	out.Head = head.Commit
 	if !ok {
 		out.Error = fmt.Sprintf("%s has no branch %s", holder.Slug(), branch)
 		return out

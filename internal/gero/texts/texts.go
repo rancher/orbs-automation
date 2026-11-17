@@ -51,6 +51,20 @@ func CommitMessageWith() string { return text("commit_with.txt") + "\n" }
 // Body is the PR body of a bump.
 func Body() string { return text("body.md") + "\n" }
 
+// SeriesTitle is the PR title of a fix to a series holding. It may use
+// SeriesVars.
+func SeriesTitle() string { return text("series_title.txt") }
+
+// SeriesCommitMessage is the commit message of the write of a series holding, with
+// the trailers. It may use SeriesVars.
+func SeriesCommitMessage() string { return text("series_commit.txt") + "\n" }
+
+// SeriesBody is the PR body of a fix to a series holding. It may use SeriesVars.
+func SeriesBody() string { return text("series_body.md") + "\n" }
+
+// SeriesVars are the variables the texts of a series fix may use.
+var SeriesVars = []string{"holding", "stream", "source", "sourceRepo", "consumer", "line", "branch", "targetBranch", "series", "from", "to", "file", "changes", "marker", "key"}
+
 // StrategyCommitMessage is the commit message of a strategy that changed files:
 // which strategy ran, what it changed, where it fits in the bump, and the
 // trailers. It may use StrategyCommitVars.

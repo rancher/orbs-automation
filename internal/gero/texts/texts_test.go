@@ -102,3 +102,14 @@ func TestEveryCommitMessageEndsWithTheTrailerAuthorshipLooksFor(t *testing.T) {
 		assert.True(t, ours, "%s: %s", name, why)
 	}
 }
+
+func TestSeriesTextsOnlyUseTheirVariablesAndKeepTheTrailers(t *testing.T) {
+	for name, text := range map[string]string{"title": SeriesTitle(), "commit message": SeriesCommitMessage(), "body": SeriesBody()} {
+		require.NotEmpty(t, text, name)
+		assert.NoError(t, templates.Validate(text, SeriesVars), name)
+	}
+	assert.NotContains(t, SeriesTitle(), "\n", "a title is one line")
+	lines := strings.Split(strings.TrimRight(SeriesCommitMessage(), "\n"), "\n")
+	assert.Equal(t, authorship.Trailer, lines[len(lines)-1], "the trailer block is last, so a later run knows the branch is its own")
+	assert.Contains(t, SeriesBody(), "{marker}")
+}
