@@ -85,8 +85,8 @@ func runSeriesTo(ctx context.Context, w io.Writer, ws domain.Workspace, ex *doma
 	if errors.Is(err, workspace.ErrNotProject) {
 		return fmt.Errorf("%w: name the project whose series holdings to fix as the first argument", err)
 	}
-	if err != nil && plan.Holder == "" {
-		return err
+	if err != nil && len(plan.Targets) == 0 {
+		return err // nothing was found, so there is no report: "no series holding" would be untrue
 	}
 	out := renderSeriesText(plan, full, st)
 	if format == clicfg.OutputJSON {
