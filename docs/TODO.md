@@ -137,7 +137,7 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 
 **Wishlist**
 
-* **S: Offer a few Actions that make using `gero` easier in CI,** such as one that calls `gero ci:ship` from a shipping repo. Where they live and what kind they are is decided with the first repo that uses one.
+* **S: Offer an Action that calls `gero ci:ship` from a shipping repo.** It joins the other composite actions in [ACTIONS](specs/ACTIONS.md); where it needs a token and a user file is decided with the first repo that uses it.
 * **S: Publish the JSON Schemas at a stable URL,** then wire them into the team's editors (no code). [APP_CONFIG](specs/APP_CONFIG.md#json-schemas)
 * **S: Add a paste-safe mode to `gero doctor`** that leaves out local paths. [DOCTOR](specs/DOCTOR.md)
 * **M: Improve the REPL:** a short `help` of its own commands, a one-line hint for an unknown name, `!<command>` for a shell line, and an opt-in prompt prefix when `GERO_REPL` is set. [REPL](specs/REPL.md)
