@@ -1,6 +1,6 @@
 # CONFIG_GRAPH
 
-**Status:** implemented. `gero config resolve graph`: the whole application config drawn as a D2 diagram.
+**Status:** implemented. `gero config resolve graph`: the whole application config drawn as a D2 diagram, or with `--type mindmap` as a Mermaid mind map.
 
 The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which the other commands read one question at a time. This command draws all of it at once, so the projects and the way releases flow between them are seen together. It reads the central config and never the network or the clock, and writes D2 source to stdout ([CLI_OUTPUT](CLI_OUTPUT.md)); render it with `d2 graph.d2 graph.svg`.
 
@@ -14,9 +14,25 @@ The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which
 * **Every node is labelled apart from the others.** Several streams of one thing, such as the series of a Go module, have artifacts that publish under one name, so a stream is labelled with its name and tag pattern, an artifact with its name and the name it publishes, and a holding with its name.
 * **The output is deterministic.** Projects are written by slug and holdings by name, so the same config always gives the same text, whatever order the documents were read in.
 * **Names are quoted.** A slug has dots and slashes that D2 reads as nesting, so every key and label is a quoted string.
-* **Only D2 is written.** `--json` and any other output format are refused with an error that says so, and nothing is written. A format-neutral diagram is not built; another format adds its own writer beside this one.
+* **Only text is written.** `--json` and any other output format are refused with an error that says so, and nothing is written. A format-neutral diagram is not built; each type has its own writer.
+
+## Types
+
+`--type` picks what is drawn. The default is `d2`, the diagram above; `mindmap` is the other. An unknown type is refused with an error naming it, and nothing is written.
+
+### mindmap
+
+A Mermaid mind map, which GitHub and most Markdown viewers render in place. It shows the same config as a looser picture, one branch per project, where the D2 diagram is a strict flow.
+
+* **A mind map is a tree with no edges**, so what joins two projects is said on both of them. The root is the config and each project is a branch of it, in slug order, labelled with its name and its stewardship (`managed`, `shared` or `external`, and `hub` for the final destination).
+* **A project's streams hold its artifacts**, as in D2. Under an artifact is a node for each holding that takes it: `to <holder> via <holding>`, with the release lines it serves in brackets. A holding of a commit or a branch has the same node under its producer project.
+* **A project's `holds` branch lists its holdings**, each as `<holding>: <kind> from <producer>`, with `, pinned` for what a pin makes, and the edits that follow it beneath.
+* **Every node is a single line with an id of its own**, and quotes in a label are written as apostrophes, so a name never breaks the syntax.
+* **The output is deterministic**, by project slug then holding name.
 
 ## Tests
 
 * A fake workspace over a graph of inline documents covers: a node for every project, with its streams and artifacts nested inside it, the producer-to-holding-to-holder edges and no edge back, the stewardship and hub classes, the line labels, an edit drawn once with an edge from each holding it follows, and the same output on every run.
+* The mind map is covered over the same fake workspace: one root, a branch for each project with its class, streams and artifacts nested, where an artifact reaches and what a project holds, a pin, quotes kept out of labels, and the same output each time.
+* An unknown type is refused and `--type` defaults to D2.
 * An error from the workspace is returned as it is.

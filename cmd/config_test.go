@@ -309,3 +309,20 @@ func TestConfigFetchOfflineIsRefusedAndSaysSo(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "offline")
 }
+
+func TestConfigResolveGraphDrawsD2UnlessAskedForAMindmap(t *testing.T) {
+	isolateGero(t)
+	dir, err := filepath.Abs("../docs/design/fixture")
+	require.NoError(t, err)
+
+	d2, _, err := execRoot(t, "config", "resolve", "graph", "--central-config-dir", dir)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(d2, "direction: down\n"))
+
+	mm, _, err := execRoot(t, "config", "resolve", "graph", "--type", "mindmap", "--central-config-dir", dir)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(mm, "mindmap\n"))
+
+	_, _, err = execRoot(t, "config", "resolve", "graph", "--type", "pie", "--central-config-dir", dir)
+	assert.ErrorContains(t, err, `"pie"`)
+}
