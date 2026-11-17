@@ -130,11 +130,11 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 
 ### Repo sync
 
-`gero repo sync` is the pull side of `ship`: it brings what a project holds in line with config, one PR for each branch. It does series holdings now. [REPO_SYNC](specs/REPO_SYNC.md)
+`gero repo sync` is the pull side of `ship`: it brings what a project holds in line with config, one PR for each branch. It does series holdings and release holdings now. [REPO_SYNC](specs/REPO_SYNC.md)
 
 * **L: Pull a release holding that pins another Artifact with `repo sync`.** The companion (lasso with wrangler) comes from the go.mod of the release that is written, which `ship` derives; `sync` leaves the holding to it. Done when `sync` writes the pinned module in the same PR, with the release the pin resolves. [REPO_SYNC](specs/REPO_SYNC.md)
 * **M: Move the refresh of an open PR into `internal/proposal`.** Its logic is `ship`'s today, and `repo sync` has no `--refresh` for want of it. Done when `ship` calls the conveyor for it, its refresh tests pass as they were, and `repo sync --refresh` rebuilds a stale PR of its own. [PROPOSAL](specs/PROPOSAL.md)
-* **M: Bring a commit or branch holding in line with `repo sync`.** The wanted value is the head of the producer's branch for the stage. Done when a differing commit holding is written by `sync` through an Edit.
+* **M: Bring a commit or branch holding in line with `repo sync`.** The wanted value is the head of the producer's branch for the stage. Needs "Read a commit or a branch that a repo holds, at a ref" under Tracing the chain first: the engine skips both kinds today. Done when a differing commit holding is written by `sync` through an Edit.
 * **M: Run `repo sync` for every project a team owns.** Done when one command opens the PRs of each owned project and reports each by project.
 
 ### Doctor and the workstation
