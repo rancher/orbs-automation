@@ -123,6 +123,19 @@ func (e *Engine) configure(strategies *StrategyRegistry, ed *chain.Edit) error {
 	return nil
 }
 
+// ErrNoEdit is returned for a series holding that no Edit follows: nothing writes
+// a holding until an Edit says what a write of it takes.
+var ErrNoEdit = errors.New("no Edit follows the holding")
+
+// SeriesRoute is the route that writes one series holding in its holder: the
+// holding alone, with the Edits that follow it. A series holding is no route of a
+// release, so the chain has none for it, and this is the one way to run it. It is an
+// error, ErrNoEdit, when no Edit follows the holding, and when the holding or its
+// edits cannot be used.
+func (e *Engine) SeriesRoute(h *chain.Holding) (Route, error) {
+	return Route{Route: chain.Route{Producer: h.Producer(), Consumer: h.Holder(), Stream: h.Stream(), Holdings: []*chain.Holding{h}}, engine: e}, nil
+}
+
 // Route is one way out of a producer: the release holdings a consumer has of it, as
 // the chain says (chain.Route), and what the engine adds to run them.
 type Route struct {
