@@ -319,10 +319,15 @@ func TestConfigResolveGraphDrawsD2UnlessAskedForAMindmap(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(d2, "direction: down\n"))
 
-	mm, _, err := execRoot(t, "config", "resolve", "graph", "--type", "mindmap", "--central-config-dir", dir)
+	mm, _, err := execRoot(t, "config", "resolve", "graph", "mindmap", "--central-config-dir", dir)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(mm, "mindmap\n"))
 
-	_, _, err = execRoot(t, "config", "resolve", "graph", "--type", "pie", "--central-config-dir", dir)
+	_, _, err = execRoot(t, "config", "resolve", "graph", "pie", "--central-config-dir", dir)
 	assert.ErrorContains(t, err, `"pie"`)
+
+	out, _, err := execRoot(t, "__complete", "config", "resolve", "graph", "")
+	require.NoError(t, err)
+	assert.Contains(t, out, "d2\n")
+	assert.Contains(t, out, "mindmap\n")
 }

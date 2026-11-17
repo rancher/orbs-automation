@@ -1,6 +1,6 @@
 # CONFIG_GRAPH
 
-**Status:** implemented. `gero config resolve graph`: the whole application config drawn as a D2 diagram, or with `--type mindmap` as a Mermaid mind map.
+**Status:** implemented. `gero config resolve graph`: the whole application config drawn as a D2 diagram, or with the `mindmap` argument as a Mermaid mind map.
 
 The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which the other commands read one question at a time. This command draws all of it at once, so the projects and the way releases flow between them are seen together. It reads the central config and never the network or the clock, and writes D2 source to stdout ([CLI_OUTPUT](CLI_OUTPUT.md)); render it with `d2 graph.d2 graph.svg`.
 
@@ -18,7 +18,7 @@ The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which
 
 ## Types
 
-`--type` picks what is drawn. The default is `d2`, the diagram above; `mindmap` is the other. An unknown type is refused with an error naming it, and nothing is written.
+The optional argument, `gero config resolve graph [d2|mindmap]`, picks what is drawn, and shell completion offers both words. The default is `d2`, the diagram above; `mindmap` is the other. An unknown type is refused with an error naming it, and nothing is written.
 
 ### mindmap
 
@@ -34,5 +34,5 @@ A Mermaid mind map, which GitHub and most Markdown viewers render in place. It s
 
 * A fake workspace over a graph of inline documents covers: a node for every project, with its streams and artifacts nested inside it, the producer-to-holding-to-holder edges and no edge back, the stewardship and hub classes, the line labels, an edit drawn once with an edge from each holding it follows, and the same output on every run.
 * The mind map is covered over the same fake workspace: one root, a branch for each project with its class, streams and artifacts nested, where an artifact reaches and what a project holds, a pin, quotes kept out of labels, and the same output each time.
-* An unknown type is refused and `--type` defaults to D2.
+* An unknown type is refused and the argument defaults to D2, and completion offers the types.
 * An error from the workspace is returned as it is.

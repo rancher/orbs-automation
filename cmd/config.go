@@ -19,7 +19,6 @@ func addConfig(root *cobra.Command) {
 		Use:   "config",
 		Short: "Validate and inspect the application config",
 	}
-	var graphType string
 	resolveCmd := &cobra.Command{
 		Use:   "resolve",
 		Short: "Show what the CLI config resolves to on this machine",
@@ -51,7 +50,7 @@ slug, or . for the project whose repository you are in) to look at only that.`,
 		},
 	})
 	graphCmd := &cobra.Command{
-		Use:   "graph",
+		Use:   "graph [d2|mindmap]",
 		Short: "Draw the whole application config as a D2 diagram",
 		Long: `Draw every Project of the application config as a node, and every holding as
 a node between the Project that produces a release and the Project that holds
@@ -63,16 +62,20 @@ it serves.
 The whole config is drawn, not one team's. The output is D2 source: render it
 with d2 graph.d2 graph.svg.
 
---type mindmap draws the same config as a Mermaid mind map instead, a looser
+Name the type mindmap (gero config resolve graph mindmap) to draw the same config as a Mermaid mind map instead, a looser
 picture of what each Project produces and holds that GitHub and most Markdown
 viewers render in place.`,
-		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		Args:      cobra.MatchAll(cobra.MaximumNArgs(1), cobra.OnlyValidArgs),
+		ValidArgs: kindNames(),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			kind := graphresolve.Kind(graphType)
+			kind := graphresolve.KindD2
+			if len(args) > 0 {
+				kind = graphresolve.Kind(args[0])
+			}
 			out, err := graphresolve.Graph(settingsFrom(cmd), cwd, kind)
 			if err != nil {
 				return err
@@ -81,7 +84,6 @@ viewers render in place.`,
 			return err
 		},
 	}
-	graphCmd.Flags().StringVar(&graphType, "type", string(graphresolve.KindD2), "kind of diagram to draw: d2 or mindmap")
 	resolveCmd.AddCommand(graphCmd)
 	configCmd.AddCommand(
 		&cobra.Command{
@@ -147,4 +149,13 @@ stable releases and a pre-release binary at pre-releases too.`,
 		resolveCmd,
 	)
 	root.AddCommand(configCmd)
+}
+
+// kindNames are the graph types, as the words completion offers.
+func kindNames() []string {
+	names := make([]string, len(graphresolve.Kinds))
+	for i, k := range graphresolve.Kinds {
+		names[i] = string(k)
+	}
+	return names
 }
