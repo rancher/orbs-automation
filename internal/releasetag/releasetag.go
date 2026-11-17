@@ -45,6 +45,9 @@ var (
 	// ErrTagExists is returned when the tag is already there, on another commit. A
 	// tag is never moved.
 	ErrTagExists = errors.New("the tag already exists on another commit")
+	// ErrRetagNotAllowed is returned for a retag, a tag on a commit that already has
+	// the line's newest, of a stream that does not set allowRetag.
+	ErrRetagNotAllowed = errors.New("the stream does not allow a retag")
 )
 
 // Input says which tag to make, on what, and what the repository holds already.
@@ -64,6 +67,9 @@ type Input struct {
 	// RequiresPrerelease is the project's release.requiresPrerelease: a stable tag
 	// is only made on a commit that already has a prerelease of its version.
 	RequiresPrerelease bool
+	// Retag says a tag on a commit that already has the line's newest tag is wanted,
+	// and AllowRetag is the stream's permission for it (allowRetag).
+	Retag, AllowRetag bool
 }
 
 // Action is what making the tag comes to.
@@ -141,6 +147,9 @@ type Choice struct {
 	// apply to the iteration or the promotion of a prerelease.
 	Bump               semver.Bump
 	RequiresPrerelease bool
+	// Retag lifts the refusal of a commit that already has the line's newest tag,
+	// and AllowRetag is the stream's permission for it (allowRetag).
+	Retag, AllowRetag bool
 }
 
 // Chosen is the tag Choose picked.

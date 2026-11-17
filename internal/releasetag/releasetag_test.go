@@ -396,3 +396,99 @@ func TestStateOfABranchTheHostDoesNotHaveIsNone(t *testing.T) {
 
 	assert.Equal(t, State(""), StateOf(c))
 }
+
+func TestChooseARetagTagsACommitThatAlreadyHasTheNewestTagWhenTheStreamAllowsIt(t *testing.T) {
+	c := line(at("head1234", "v0.8.3")...)
+	c.Retag, c.AllowRetag = true, true
+
+	got, err := Choose(c)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.8.4-rc.1", got.Tag, "the ordinary choice, on the same commit")
+
+	c.Bump = semver.Minor
+	got, err = Choose(c)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.9.0-rc.1", got.Tag, "the bump is respected")
+}
+
+func TestChooseARetagOfAStreamThatDoesNotAllowItIsRefused(t *testing.T) {
+	c := line(at("head1234", "v0.8.3")...)
+	c.Retag = true
+
+	_, err := Choose(c)
+
+	require.ErrorIs(t, err, ErrRetagNotAllowed)
+}
+
+func TestChooseARetagIsTheNextRcAndThenItsPromotionOnTheSameCommit(t *testing.T) {
+	c := line(at("head1234", "v0.8.3")...)
+	c.Retag, c.AllowRetag, c.RequiresPrerelease = true, true, true
+
+	got, err := Choose(c)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.8.4-rc.1", got.Tag)
+
+	c = line(append(at("head1234", "v0.8.3"), git.Tag{Name: "v0.8.4-rc.1", Commit: "head1234"})...)
+	c.Retag, c.AllowRetag, c.RequiresPrerelease, c.Stable = true, true, true, true
+	got, err = Choose(c)
+	require.NoError(t, err)
+	assert.Equal(t, "v0.8.4", got.Tag)
+	require.NotNil(t, got.Promotes)
+	assert.Equal(t, "v0.8.4-rc.1", got.Promotes.Name)
+}
+
+func TestChooseARetagStillRequiresAPrereleaseBeforeAStableAfterAStable(t *testing.T) {
+	c := line(at("head1234", "v0.8.3")...)
+	c.Retag, c.AllowRetag, c.RequiresPrerelease, c.Stable = true, true, true, true
+
+	_, err := Choose(c)
+
+	require.ErrorIs(t, err, ErrNeedsPrerelease)
+}
+
+func TestChooseARetagStillRefusesAPromotionWhenTheBranchHasMoved(t *testing.T) {
+	c := line(git.Tag{Name: "v0.8.4-rc.1", Commit: "old"})
+	c.Retag, c.AllowRetag, c.Stable = true, true, true
+
+	_, err := Choose(c)
+
+	require.ErrorIs(t, err, ErrMovedSincePrerelease)
+}
+
+func TestCheckANamedTagOnACommitThatHasTheNewestTagNeedsARetag(t *testing.T) {
+	in := shell("v0.8.4-rc.1", tagsAt("head1234", "v0.8.3")...)
+
+	_, err := Check(in)
+	require.ErrorIs(t, err, ErrNothingNew)
+
+	in.Retag = true
+	_, err = Check(in)
+	require.ErrorIs(t, err, ErrRetagNotAllowed)
+
+	in.AllowRetag = true
+	got, err := Check(in)
+	require.NoError(t, err)
+	assert.Equal(t, Create, got.Action)
+}
+
+func TestCheckARetagIsStillNewerAndInTheSeries(t *testing.T) {
+	in := shell("v0.8.3", tagsAt("head1234", "v0.8.3")...)
+	in.Tag = "v0.8.2"
+	in.Retag, in.AllowRetag = true, true
+	_, err := Check(in)
+	require.ErrorIs(t, err, ErrNotNewer)
+
+	in.Tag = "v0.9.0-rc.1"
+	_, err = Check(in)
+	require.ErrorIs(t, err, ErrNotInSeries)
+}
+
+func TestCheckThePromotionOfAPrereleaseOnTheCommitIsNotARetag(t *testing.T) {
+	in := shell("v0.8.4", tagsAt("head1234", "v0.8.3", "v0.8.4-rc.1")...)
+	in.RequiresPrerelease = true
+
+	got, err := Check(in)
+
+	require.NoError(t, err)
+	assert.Equal(t, Create, got.Action)
+}
