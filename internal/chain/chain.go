@@ -14,6 +14,7 @@ import (
 type Graph struct {
 	projects []*Project
 	holdings []*Holding
+	edits    []*Edit
 	virtual  []*Holding          // the Holdings the pins make, in the order of the Holdings they come from
 	byName   map[string]*Project // lowercase name
 	bySlug   map[string]*Project // lowercase owner/name
@@ -88,6 +89,7 @@ func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 	g.makeVirtual()
 	for _, doc := range cfg.Edits {
 		e := &Edit{Doc: doc}
+		g.edits = append(g.edits, e)
 		for _, name := range v1alpha2.RefList(doc, "holding") {
 			h := holdings[name]
 			e.holdings = append(e.holdings, h)

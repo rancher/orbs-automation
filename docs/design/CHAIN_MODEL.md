@@ -100,7 +100,7 @@ The config is a network: the documents are nodes, and a `refs` name is a foreign
 
 * **Membership is not an edge.** A Stream of a Project and an Artifact of a Stream stay parent links (`Stream.Project`, `Artifact.Stream`): they say what a thing is part of, and no question of the config is asked by walking them as a path.
 * **A virtual Holding is a derived edge**, built with the graph, and is returned beside the written ones with `Holding.Virtual` set. A caller that wants only what the documents say filters on it.
-* **`Graph.Edges(kinds...)`** returns the edges of those kinds, or all of them, in the order the documents were read, so the same config always gives the same edges. It builds no index of its own: it reads the links `Build` already made (`held`, `sourced`, `pins`, `edits`).
+* **`Graph.Edges(kinds...)`** returns the edges of those kinds, or all of them: the `holds` edges first, the Holdings written in the order read and then the virtual ones, then `pins` by Project and its Artifacts, then `follows` by Edit in the order read, so the same config always gives the same edges. It builds no index of its own: it reads the links `Build` already made. `Graph.Cycles(kind)`, `Graph.Reachable(from, kinds...)` and `Graph.Path(from, to, kinds...)` ask the queries below of those edges.
 * **`Route` is a grouping of `holds` edges**: the release holdings one consumer has of one stream of a producer. `RoutesFrom` and `RoutesInto` are that grouping and agree with `Edges(holds)`.
 
 ### Queries
