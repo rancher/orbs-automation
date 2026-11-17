@@ -620,3 +620,70 @@ func TestAHoldingInTheRegexFormatThatMatchesNothingIsAnErrorNamingThePattern(t *
 	assert.Contains(t, err.Error(), "charts/values.yaml")
 	assert.Contains(t, err.Error(), "matches nowhere")
 }
+
+// seriesHolding is a consumer, perLine, that holds the series of a stream: build.yaml
+// says kuberlrVersion in the form given, for the lines the stream has a series for.
+func seriesHolding(t *testing.T, form string) *chain.Holding {
+	t.Helper()
+	g := chaintest.Load(t,
+		chaintest.Lines("v2.16", "v2.15", "v2.14"),
+		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
+		chaintest.Doc("Stream", "prod", "{project: prod}", "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n    - {line: v2.14, series: \"7.1.x\"}\n"),
+		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: rel-v2.15}, {line: v2.14, branch: rel-v2.14}]\n"),
+		chaintest.Doc("Holding", "h", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: kuberlrVersion}\n  holds: {kind: series, form: \""+form+"\"}\n"),
+	)
+	return g.Holdings()[0]
+}
+
+func TestSeriesFormOfIsTheFormRenderedForTheSeriesOfTheLine(t *testing.T) {
+	for _, tt := range []struct{ form, line, want string }{
+		{"v{major}", "v2.16", "v9"},
+		{"v{major}", "v2.15", "v8"},
+		{"{series}", "v2.16", "9.x"},
+		{"v{minor}", "v2.14", "v7.1"},
+	} {
+		got, err := SeriesFormOf(seriesHolding(t, tt.form), tt.line)
+
+		require.NoError(t, err, tt.form)
+		assert.Equal(t, tt.want, got, "%s for %s", tt.form, tt.line)
+	}
+}
+
+func TestSeriesFormOfALineWithNoSeriesOrNoMinorIsAnError(t *testing.T) {
+	_, err := SeriesFormOf(seriesHolding(t, "v{major}"), "v2.13")
+	require.ErrorContains(t, err, "v2.13")
+
+	_, err = SeriesFormOf(seriesHolding(t, "{minor}"), "v2.16")
+	require.ErrorContains(t, err, "minor")
+}
+
+func TestCheckHoldingOfASeriesSaysWhatIsHeldAndWhatTheLineWants(t *testing.T) {
+	h := seriesHolding(t, "v{major}")
+
+	got, err := CheckHolding(bg, files{"build.yaml": "kuberlrVersion: v9\n"}, h, "v2.16", "main", Release{})
+	require.NoError(t, err)
+	assert.True(t, got.UpToDate)
+	assert.Equal(t, "v9", got.Want)
+	assert.Equal(t, "v9", got.Current)
+
+	got, err = CheckHolding(bg, files{"build.yaml": "kuberlrVersion: v9\n"}, h, "v2.15", "rel-v2.15", Release{})
+	require.NoError(t, err)
+	assert.False(t, got.UpToDate, "v2.15 wants 8.x and holds 9")
+	assert.Equal(t, "v8", got.Want)
+	require.Len(t, got.Changes(), 1)
+	assert.Equal(t, "Updated `kuberlrVersion` in `build.yaml` from `v9` to `v8`", got.Changes()[0].Description)
+}
+
+func TestApplyHoldingOfASeriesWritesOnlyWhenTheSeriesIsNotHeld(t *testing.T) {
+	h := seriesHolding(t, "v{major}")
+	tree := files{"build.yaml": "kuberlrVersion: v9 # keep\nother: 1\n"}
+
+	same, err := ApplyHolding(bg, tree, h, "v2.16", "main", Release{})
+	require.NoError(t, err)
+	assert.False(t, same.Changed, "v9 is the series of v2.16: a new patch of it changes nothing")
+
+	got, err := ApplyHolding(bg, tree, h, "v2.15", "rel-v2.15", Release{})
+	require.NoError(t, err)
+	assert.True(t, got.Changed)
+	assert.Equal(t, "kuberlrVersion: v8 # keep\nother: 1\n", tree["build.yaml"])
+}

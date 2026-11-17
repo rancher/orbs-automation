@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInSeries(t *testing.T) {
@@ -90,6 +91,35 @@ func TestSeriesOverlap(t *testing.T) {
 
 			assert.Equal(t, tt.want, a.Overlaps(b))
 			assert.Equal(t, tt.want, b.Overlaps(a), "it does not matter which is asked")
+		})
+	}
+}
+
+func TestSeriesMajorAndMinor(t *testing.T) {
+	tests := []struct {
+		series, major, minor string
+		hasMajor, hasMinor   bool
+	}{
+		{"9.x", "9", "", true, false},
+		{"111.x", "111", "", true, false},
+		{"9.1.x", "9", "9.1", true, true},
+		{"0.9.x", "0", "0.9", true, true},
+		{"v2.15", "2", "2.15", true, true},
+		{"x", "", "", false, false},
+		{"x.1", "", "", false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.series, func(t *testing.T) {
+			s, ok := ParseSeries(tt.series)
+			require.True(t, ok)
+
+			major, hasMajor := s.Major()
+			minor, hasMinor := s.Minor()
+
+			assert.Equal(t, tt.major, major)
+			assert.Equal(t, tt.hasMajor, hasMajor)
+			assert.Equal(t, tt.minor, minor)
+			assert.Equal(t, tt.hasMinor, hasMinor)
 		})
 	}
 }
