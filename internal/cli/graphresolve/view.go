@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/rancher/orbs-automation/internal/apis/lines"
 	"github.com/rancher/orbs-automation/internal/chain"
 )
 
@@ -17,6 +18,8 @@ type view struct {
 	boundary map[*chain.Project]bool
 	holdings []*chain.Holding // those with a drawn end, by name
 	follows  []chain.Edge     // of the edits that follow a holding drawn, by holding name
+	line     string           // the one line drawn, as the lines document writes it; empty for all
+	phase    func(line string) string
 }
 
 // newView chooses the projects the options draw (docs/specs/CONFIG_GRAPH.md,
@@ -26,13 +29,47 @@ func newView(g *chain.Graph, opts Options) (*view, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := &view{boundary: map[*chain.Project]bool{}}
+	v := &view{boundary: map[*chain.Project]bool{}, phase: func(line string) string {
+		if l, ok := g.Line(line); ok {
+			return l.PhaseAt(opts.Now)
+		}
+		return ""
+	}}
+	if opts.Line != "" {
+		l, ok := g.Line(opts.Line)
+		if !ok {
+			var known []string
+			for _, l := range g.Lines() {
+				known = append(known, l.ID)
+			}
+			return nil, fmt.Errorf("no release line %q: the config has %s", opts.Line, strings.Join(known, ", "))
+		}
+		v.line = l.ID
+	}
+	forLine := func(h *chain.Holding) bool { return v.line == "" || h.AppliesTo(v.line) }
+	if v.line != "" {
+		touched := map[*chain.Project]bool{}
+		for _, e := range g.Edges(chain.EdgeHolds) {
+			if forLine(e.Holding) {
+				touched[e.Holding.Holder()], touched[e.Holding.Producer()] = true, true
+			}
+		}
+		drawn = slices.DeleteFunc(slices.Clone(drawn), func(p *chain.Project) bool {
+			return !touched[p] && len(v.rows(p)) == 0
+		})
+		if len(drawn) == 0 {
+			return nil, fmt.Errorf("nothing is left to draw for line %s", v.line)
+		}
+	}
 	inView := map[*chain.Project]bool{}
 	for _, p := range drawn {
 		inView[p] = true
 	}
 	for _, e := range g.Edges(chain.EdgeHolds) {
 		h := e.Holding
+		if !forLine(h) {
+			continue
+		}
 		holder, producer := inView[h.Holder()], inView[h.Producer()]
 		if !holder && !producer {
 			continue
@@ -154,4 +191,55 @@ func matches(p *chain.Project, pattern string) bool {
 // managedBy says whether the project's managedBy is the team, whatever the case.
 func managedBy(p *chain.Project, team string) bool {
 	return p.ManagedBy() != "" && strings.EqualFold(p.ManagedBy(), team)
+}
+
+// row is one line of a project: where it is branched, and what it releases.
+type row struct {
+	line, stage, branch, series string
+	pending                     bool
+}
+
+// rows are the release lines of a project to draw, newest line first and a line's
+// stages in the order of the project's, only the one line when the view is of one.
+func (v *view) rows(p *chain.Project) []row {
+	var out []row
+	for _, t := range p.ReleaseTargets() {
+		if t.Line == "" || (v.line != "" && lines.Normalize(t.Line) != lines.Normalize(v.line)) {
+			continue
+		}
+		out = append(out, row{line: t.Line, stage: t.Stage, branch: t.Branch, series: t.Series, pending: t.Branch == ""})
+	}
+	slices.SortStableFunc(out, func(a, c row) int { return lines.Compare(c.line, a.line) })
+	return out
+}
+
+// text is the row as one line of words: the line and stage, its branch and series.
+func (r row) text() string {
+	text := r.line
+	if r.stage != "" {
+		text += " " + r.stage
+	}
+	return text
+}
+
+// branchText is where the row's line is branched.
+func (r row) branchText() string {
+	if r.pending {
+		return "no branch yet"
+	}
+	return r.branch
+}
+
+// streams and artifacts are the ones of a project that are for the line, or all of
+// them when the view is of every line.
+func (v *view) streams(p *chain.Project) []*chain.Stream {
+	return slices.DeleteFunc(slices.Clone(p.Streams()), func(st *chain.Stream) bool {
+		return v.line != "" && !st.Serves(v.line)
+	})
+}
+
+func (v *view) artifacts(st *chain.Stream) []*chain.Artifact {
+	return slices.DeleteFunc(slices.Clone(st.Artifacts()), func(a *chain.Artifact) bool {
+		return v.line != "" && !a.AppliesTo(v.line)
+	})
 }

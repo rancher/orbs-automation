@@ -73,6 +73,11 @@ boundary node.
 --managed-by keeps the Projects a team manages (shared counts here), and narrows
 what --project and --external choose; it is not --team, the active team context.
 
+Each Project shows its release lines inside it: the branch and the series of each
+line, coloured by its phase (development, ga, eom, eol) on the day the command
+runs. --line draws one line only, such as v2.16: each Project's row for it, and
+only the streams, artifacts and holdings that are for it.
+
 Name the type mindmap (gero config resolve graph mindmap) to draw the same config as a Mermaid mind map instead, a looser
 picture of what each Project produces and holds that GitHub and most Markdown
 viewers render in place.`,
@@ -98,6 +103,7 @@ viewers render in place.`,
 	graphCmd.Flags().BoolVar(&graphOpts.External, "external", false, "also draw external Projects")
 	graphCmd.Flags().StringArrayVar(&graphOpts.Projects, "project", nil, "draw only the Projects matching this name, slug or alias (repeatable; * is a wildcard, a leading ! leaves out what matches)")
 	graphCmd.Flags().StringArrayVar(&graphOpts.ManagedBy, "managed-by", nil, "draw only the Projects this team manages (repeatable; shared is one)")
+	graphCmd.Flags().StringVar(&graphOpts.Line, "line", "", "draw one release line only, such as v2.16: its branches, series and what is for it")
 	resolveCmd.AddCommand(graphCmd)
 	configCmd.AddCommand(
 		&cobra.Command{

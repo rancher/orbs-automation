@@ -53,6 +53,9 @@ type Options struct {
 // Graph draws the central config found from s and the working directory cwd as
 // a diagram of the kind asks for, of the projects the options choose.
 func Graph(s clicfg.Settings, cwd string, kind Kind, opts Options) (string, error) {
+	if opts.Now.IsZero() {
+		opts.Now = time.Now()
+	}
 	return run(workspace.Open(s, cwd), s.Output, kind, opts)
 }
 
@@ -83,13 +86,13 @@ func mindmap(ws Workspace, opts Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	holdings, projects := v.holdings, v.drawnProjects()
+	projects := v.drawnProjects()
 
 	m := &mindmapWriter{}
 	m.b.WriteString("mindmap\n")
 	m.node(1, `root(("gero config"))`)
 	for _, p := range projects {
-		m.project(g, p, holdings)
+		m.project(g, v, p)
 	}
 	return m.b.String(), nil
 }
@@ -111,7 +114,8 @@ func (m *mindmapWriter) label(depth int, text string) {
 	m.node(depth, fmt.Sprintf(`n%d["%s"]`, m.n, text))
 }
 
-func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*chain.Holding) {
+func (m *mindmapWriter) project(g *chain.Graph, v *view, p *chain.Project) {
+	holdings := v.holdings
 	var marks []string
 	switch {
 	case p.External():
@@ -129,20 +133,33 @@ func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*ch
 		text += " (" + strings.Join(marks, ", ") + ")"
 	}
 	m.label(2, text)
-	for _, st := range p.Streams() {
+	for _, st := range v.streams(p) {
 		m.label(3, streamLabel(st))
-		for _, a := range st.Artifacts() {
+		for _, a := range v.artifacts(st) {
 			m.label(4, "artifact "+a.Name()+": "+a.Ref())
 			for _, h := range holdings {
 				if h.Artifact() == a {
-					m.label(5, reaches(g, h))
+					m.label(5, reaches(g, v, h))
 				}
 			}
 		}
 	}
 	for _, h := range holdings {
 		if h.Producer() == p && h.Artifact() == nil {
-			m.label(3, reaches(g, h))
+			m.label(3, reaches(g, v, h))
+		}
+	}
+	if rows := v.rows(p); len(rows) > 0 {
+		m.label(3, "lines")
+		for _, r := range rows {
+			text := r.text() + ": " + r.branchText()
+			if r.series != "" {
+				text += ", " + r.series
+			}
+			if phase := v.phase(r.line); phase != "" {
+				text += " (" + phase + ")"
+			}
+			m.label(4, text)
 		}
 	}
 	first := true
@@ -167,11 +184,11 @@ func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*ch
 
 // reaches says where a holding takes what its producer makes: its holder, by
 // the holding, for the lines it serves.
-func reaches(g *chain.Graph, h *chain.Holding) string {
+func reaches(g *chain.Graph, v *view, h *chain.Holding) string {
 	text := "to " + h.Holder().Name() + " via " + h.Name()
 	var served []string
 	for _, l := range g.Lines() {
-		if h.AppliesTo(l.ID) {
+		if v.line == "" && h.AppliesTo(l.ID) {
 			served = append(served, l.ID)
 		}
 	}
@@ -193,6 +210,7 @@ const (
 	classArtifact = "artifact"
 	classEdit     = "edit"
 	classBoundary = "boundary"
+	classLine     = "line"
 )
 
 const header = `direction: down
@@ -211,6 +229,11 @@ classes: {
   artifact: {shape: cylinder}
   edit: {style.fill: "#fde2e2"}
   boundary: {style.fill: "#ffffff"; style.stroke-dash: 3; style.opacity: 0.5}
+  line: {style.fill: "#ffffff"; style.stroke-width: 3}
+  development: {style.stroke: "#4a90d9"}
+  ga: {style.stroke: "#2e8b57"}
+  eom: {style.stroke: "#d98e04"}
+  eol: {style.stroke: "#b22222"}
 }
 `
 
@@ -232,7 +255,7 @@ func graph(ws Workspace, opts Options) (string, error) {
 			fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(p.Slug()), classBoundary, quote(p.Name()))
 			continue
 		}
-		writeProject(&b, p)
+		writeProject(&b, v, p)
 	}
 
 	// What a pin makes is a holding of its holder as well: a consumer says nothing of
@@ -256,7 +279,7 @@ func graph(ws Workspace, opts Options) (string, error) {
 	return b.String(), nil
 }
 
-func writeProject(b *strings.Builder, p *chain.Project) {
+func writeProject(b *strings.Builder, v *view, p *chain.Project) {
 	class, label := classManaged, p.Name()
 	switch {
 	case p.External():
@@ -271,10 +294,28 @@ func writeProject(b *strings.Builder, p *chain.Project) {
 		classes += "; " + classHub
 	}
 	fmt.Fprintf(b, "%s: {\n  class: [%s]\n  label: %s\n", quote(p.Slug()), classes, quote(label))
-	for _, st := range p.Streams() {
+	for _, st := range v.streams(p) {
 		fmt.Fprintf(b, "  %s: {\n    class: [%s]\n    label: %s\n", quote(streamKey(st)), classStream, quote(streamLabel(st)))
-		for _, a := range st.Artifacts() {
+		for _, a := range v.artifacts(st) {
 			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(artifactKey(a)), classArtifact, quote(a.Name()+"\n"+a.Ref()))
+		}
+		b.WriteString("  }\n")
+	}
+	if rows := v.rows(p); len(rows) > 0 {
+		b.WriteString("  \"lines\": {\n    label: \"release lines\"\n")
+		for _, r := range rows {
+			key, label := "line:"+r.line, r.text()+"\n"+r.branchText()
+			if r.stage != "" {
+				key += ":" + r.stage
+			}
+			if r.series != "" {
+				label += "\n" + r.series
+			}
+			class := classLine
+			if phase := v.phase(r.line); phase != "" {
+				class += "; " + phase
+			}
+			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(key), class, quote(label))
 		}
 		b.WriteString("  }\n")
 	}
@@ -342,7 +383,7 @@ func writeHolding(b *strings.Builder, g *chain.Graph, v *view, h *chain.Holding)
 	fmt.Fprintf(b, "%s -> %s\n", producerPath(v, h), id)
 	var served []string
 	for _, l := range g.Lines() {
-		if h.AppliesTo(l.ID) {
+		if v.line == "" && h.AppliesTo(l.ID) {
 			served = append(served, l.ID)
 		}
 	}
