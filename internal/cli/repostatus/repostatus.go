@@ -515,6 +515,8 @@ func seriesStatusText(l reposync.SeriesLine) string {
 		return "unreadable: " + l.Error
 	case l.UpToDate:
 		return "current"
+	case l.Left != "":
+		return "differs, left alone: " + l.Left
 	case l.Acknowledged != "":
 		return "differs, acknowledged: " + l.Acknowledged
 	}

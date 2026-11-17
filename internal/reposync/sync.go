@@ -57,6 +57,8 @@ type Branch struct {
 	holder *chain.Project
 	route  bump.Route
 	ready  []*chain.Holding
+	// pulled is the release each release holding among ready is written with.
+	pulled map[*chain.Holding]bump.Release
 	// fingerprint says what the PR writes, so a later run knows its own PR as the
 	// same fix, and an older one as stale.
 	fingerprint string
@@ -74,12 +76,20 @@ type Row struct {
 	Reason string `json:"reason,omitempty"`
 
 	holding *chain.Holding
+	// release is the release a release holding is to be written with.
+	release *bump.Release
 }
 
 // marker is what identifies the PR of the branch: the holder, the branch and the
 // fingerprint of what it writes.
 func (b Branch) marker(holder string) proposal.Marker {
 	return proposal.Marker{Source: "sync", Consumer: holder, Target: b.Branch, Version: b.fingerprint}
+}
+
+// target is the branch as the engine writes it: the holdings that are ready and the releases the
+// release holdings among them are written with.
+func (b Branch) target() bump.Target {
+	return bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready, Pulled: b.pulled}
 }
 
 // line is the Rancher line of the branch: that of its first row.
@@ -126,10 +136,9 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		return plan, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
 	}
 	var rows []Row
+	tags := newTagSource(ctx, ws)
 	for _, h := range holdings {
-		for _, r := range rowsOf(ctx, ws, in, holder, refs, h) {
-			rows = append(rows, r)
-		}
+		rows = append(rows, rowsOf(ctx, ws, in, holder, refs, tags, h)...)
 	}
 	plan.Branches = syncBranches(holder, engine, in, rows)
 	if ex == nil {
@@ -155,24 +164,27 @@ func pulledHoldingsOf(holder *chain.Project, names []string) ([]*chain.Holding, 
 	return out, nil
 }
 
-// rowsOf reads a holding on each of its lines: what it holds against what config says
-// it should. This is where a kind of holding that is pulled says what its value should
-// be; a series is the series its stream has for the line.
-func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, h *chain.Holding) []Row {
+// rowsOf reads a holding on each of its lines: what it holds against what config and the host
+// say it should. This is where a kind of holding that is pulled says what its value should be:
+// a series is the series its stream has for the line, and a release is the newest stable one of
+// its stream for the line.
+func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding) []Row {
 	var rows []Row
 	for _, line := range seriesLinesOf(holder, h) {
 		if len(in.Lines) > 0 && !slices.ContainsFunc(in.Lines, func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) }) {
 			continue
 		}
-		sl := seriesLine(ctx, ws, holder, refs, h, line)
-		row := Row{SeriesLine: sl, Holding: h.Name(), Kind: h.Kind(), holding: h}
+		got := heldLine(ctx, ws, holder, refs, tags, h, line)
+		row := Row{SeriesLine: got.SeriesLine, Holding: h.Name(), Kind: h.Kind(), holding: h, release: got.release}
 		switch {
-		case sl.Error != "":
-			row.Status, row.Reason = StatusFailed, sl.Error
-		case sl.UpToDate:
+		case got.Error != "":
+			row.Status, row.Reason = StatusFailed, got.Error
+		case got.UpToDate:
 			row.Status = StatusUpToDate
-		case sl.Acknowledged != "":
-			row.Status, row.Reason = StatusBlocked, "the difference is acknowledged: "+sl.Acknowledged
+		case got.Left != "":
+			row.Status, row.Reason = StatusBlocked, got.Left
+		case got.Acknowledged != "":
+			row.Status, row.Reason = StatusBlocked, "the difference is acknowledged: "+got.Acknowledged
 		case len(h.Edits()) == 0:
 			row.Status, row.Reason = StatusBlocked, fmt.Sprintf("%v: Holding %q is only read until one does", bump.ErrNoEdit, h.Name())
 		default:
@@ -212,6 +224,12 @@ func syncBranches(holder *chain.Project, engine *bump.Engine, in Input, rows []R
 			}
 			if r.Status == StatusReady {
 				ready = append(ready, r.Holding+"="+r.Want)
+				if r.release != nil {
+					if b.pulled == nil {
+						b.pulled = map[*chain.Holding]bump.Release{}
+					}
+					b.pulled[r.holding] = *r.release
+				}
 			}
 		}
 		route, err := engine.PullRoute(b.ready...)
@@ -288,8 +306,7 @@ func statusOfBranch(b *Branch) Status {
 // body, the commit message and the steps that run around the write.
 func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, error) {
 	prs := holder.PullRequests()
-	target := bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready}
-	pre, post := b.route.Steps(target)
+	pre, post := b.route.Steps(b.target())
 	steps := append(slices.Clone(pre), post...)
 
 	var holdings, linesOf, changes []string
@@ -303,8 +320,7 @@ func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, e
 		if !slices.Contains(linesOf, r.Line) {
 			linesOf = append(linesOf, r.Line)
 		}
-		series, _ := r.holding.Stream().Series(r.Line)
-		changes = append(changes, fmt.Sprintf("- %s (%s: the series `%s` of `%s` for %s)", r.Change, r.Holding, series, r.holding.Stream().Name(), r.Line))
+		changes = append(changes, "- "+r.Change+" ("+sourceOf(r)+")")
 	}
 	for _, ref := range steps {
 		changes = append(changes, "- Ran `"+strings.Join(ref.Step.Run, " ")+"`")
@@ -357,6 +373,17 @@ func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, e
 		Branch: renderedPrefix + vars["key"], Key: vars["key"], Title: title, Labels: prs.Labels,
 		CommitMessage: commit, Body: body, Steps: stepPreviews,
 	}, nil
+}
+
+// sourceOf says where the value of a row comes from, for the PR to read: the series its stream
+// has for the line, or the release it is written with.
+func sourceOf(r Row) string {
+	stream := streamOf(r.holding)
+	if r.release != nil {
+		return fmt.Sprintf("%s: `%s` of `%s`", r.Holding, r.release.Tag, stream.Name())
+	}
+	series, _ := stream.Series(r.Line)
+	return fmt.Sprintf("%s: the series `%s` of `%s` for %s", r.Holding, series, stream.Name(), r.Line)
 }
 
 // syncStepMessage is the commit message of a step that changed files.
@@ -417,7 +444,7 @@ func runSync(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor,
 			Apply: func(w *proposal.Work, onCommit func(proposal.CommitInfo)) (proposal.ApplyResult, error) {
 				vars := map[string]string{"holdings": holdingsOf(b), "line": b.line()}
 				return proposal.Apply{
-					Route: b.route, Target: bump.Target{Branch: b.Branch, Line: b.line(), Holdings: b.ready},
+					Route: b.route, Target: b.target(),
 					Message: b.Preview.CommitMessage, Runner: ex.Runner, Sign: ex.Sign, Name: sess.Committer.Name, Email: sess.Committer.Email,
 					OnCommit: onCommit, StepMessage: syncStepMessage(vars), StrategyMessage: syncStrategyMessage(vars),
 				}.Run(ctx, w)

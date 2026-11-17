@@ -2,6 +2,7 @@ package reposync
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
@@ -32,23 +33,12 @@ func releaseDocs(followed ...string) []string {
 		chaintest.Doc("Project", "ext", "", "  repo: {name: acme/ext, external: true}\n"),
 		chaintest.Doc("Stream", "ext-1-35", "{project: ext}", "  scheme: semver\n  tagPattern: \"v1.35.*\"\n  universal: true\n"),
 		chaintest.Doc("Artifact", "ext-1-35-img", "{stream: ext-1-35}", "  kind: image\n  name: acme/ext\n"),
-		chaintest.Doc("Holding", "cons-holds-ext", "{project: cons, artifact: ext-1-35-img}", "  at: {file: build.yaml, key: extVersion}\n  holds: {kind: release, form: \"{tag}\", lines: {since: v2.16}}\n"),
+		chaintest.Doc("Holding", "cons-holds-ext", "{project: cons, artifact: ext-1-35-img}", "  at: {file: build.yaml, key: extVersion}\n  holds: {kind: release, form: \"{tag}\"}\n"),
 	)
 	if len(followed) == 0 {
 		followed = []string{"cons-holds-prod", "cons-holds-side", "cons-holds-ext"}
 	}
-	return append(docs, chaintest.Doc("Edit", "regen", "{holding: ["+joinNames(followed)+"]}", "  postEdit:\n    - {run: ./scripts/gen.sh}\n"))
-}
-
-func joinNames(names []string) string {
-	out := ""
-	for i, n := range names {
-		if i > 0 {
-			out += ", "
-		}
-		out += n
-	}
-	return out
+	return append(docs, chaintest.Doc("Edit", "regen", "{holding: ["+strings.Join(followed, ", ")+"]}", "  postEdit:\n    - {run: ./scripts/gen.sh}\n"))
 }
 
 // newReleaseWS is the holder with the producer's tags on the host.
@@ -62,14 +52,14 @@ func newReleaseWS(t *testing.T, held string, tags []git.Tag, followed ...string)
 	return ws, &proposal.Executor{Git: proposal.GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
 }
 
-func rowOf(t *testing.T, b Branch, holding string) Row {
+func rowOf(t *testing.T, b Branch) Row {
 	t.Helper()
 	for _, r := range b.Rows {
-		if r.Holding == holding {
+		if r.Holding == "cons-holds-ext" {
 			return r
 		}
 	}
-	require.Failf(t, "no row", "%s in %+v", holding, b.Rows)
+	require.Failf(t, "no row", "the release holding in %+v", b.Rows)
 	return Row{}
 }
 
@@ -81,7 +71,7 @@ func TestSyncPullsTheNewestStablePatchOfAReleaseHolding(t *testing.T) {
 	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
-	row := rowOf(t, branchOf(t, plan, "main"), "cons-holds-ext")
+	row := rowOf(t, branchOf(t, plan, "main"))
 	assert.Equal(t, StatusReady, row.Status)
 	assert.Equal(t, "v1.35.9+k3s1", row.Current)
 	assert.Equal(t, "v1.35.10+k3s1", row.Want, "10 is newer than 9, and a release candidate is never taken")
@@ -90,7 +80,6 @@ func TestSyncPullsTheNewestStablePatchOfAReleaseHolding(t *testing.T) {
 
 func TestSyncWritesAReleaseHoldingAndASeriesHoldingInOneCommit(t *testing.T) {
 	ws, ex := newReleaseWS(t, extHeld, extTags)
-	ws.graph = chaintest.Load(t, append(releaseDocs(), chaintest.Doc("Edit", "regen2", "{holding: [cons-holds-prod]}", "  postEdit:\n    - {run: ./scripts/gen.sh}\n"))...)
 
 	plan, err := Run(bg, ws, Input{NoPush: true}, ex)
 
@@ -109,7 +98,7 @@ func TestSyncTakesTheNewestRespinOfAPatch(t *testing.T) {
 	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
-	assert.Equal(t, "v1.35.10+k3s2", rowOf(t, branchOf(t, plan, "main"), "cons-holds-ext").Want)
+	assert.Equal(t, "v1.35.10+k3s2", rowOf(t, branchOf(t, plan, "main")).Want)
 }
 
 func TestSyncRewritesTheSpellingOfARelease(t *testing.T) {
@@ -119,7 +108,7 @@ func TestSyncRewritesTheSpellingOfARelease(t *testing.T) {
 	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
-	row := rowOf(t, branchOf(t, plan, "main"), "cons-holds-ext")
+	row := rowOf(t, branchOf(t, plan, "main"))
 	assert.Equal(t, StatusReady, row.Status, "the file says the same release in another spelling, and the form of the holding is the one written")
 	assert.Equal(t, "v1.35.10+k3s1", row.Want)
 }
@@ -131,7 +120,7 @@ func TestSyncNeverMovesAReleaseHoldingBackwards(t *testing.T) {
 	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
-	row := rowOf(t, branchOf(t, plan, "main"), "cons-holds-ext")
+	row := rowOf(t, branchOf(t, plan, "main"))
 	assert.Equal(t, StatusBlocked, row.Status)
 	assert.Contains(t, row.Reason, "newer")
 }
@@ -142,7 +131,7 @@ func TestSyncAReleaseHoldingWithNoStableReleaseIsReportedNotWritten(t *testing.T
 	plan, err := Run(bg, ws, Input{NoPush: true}, nil)
 
 	require.NoError(t, err)
-	row := rowOf(t, branchOf(t, plan, "main"), "cons-holds-ext")
+	row := rowOf(t, branchOf(t, plan, "main"))
 	assert.Equal(t, StatusFailed, row.Status)
 	assert.Contains(t, row.Reason, "no stable release")
 }
@@ -153,7 +142,7 @@ func TestSyncDoesNotWriteAReleaseHoldingNoEditFollows(t *testing.T) {
 	plan, err := Run(bg, ws, Input{NoPush: true}, ex)
 
 	require.NoError(t, err)
-	row := rowOf(t, branchOf(t, plan, "main"), "cons-holds-ext")
+	row := rowOf(t, branchOf(t, plan, "main"))
 	assert.Equal(t, StatusBlocked, row.Status)
 	assert.Contains(t, row.Reason, "no Edit follows")
 }

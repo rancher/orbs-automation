@@ -45,6 +45,10 @@ const RuleLocationsDiffer = v1alpha2.RuleLocationsDiffer
 // other than the one its stream has for the line, found by reading a repo.
 const RuleSeriesDiffers = v1alpha2.RuleSeriesDiffers
 
+// RuleReleaseDiffers is the rule of the warning that a pulled release holding holds another
+// release than the newest stable one of its stream for the line, found by reading a repo.
+const RuleReleaseDiffers = v1alpha2.RuleReleaseDiffers
+
 // Name is the name of the document.
 func (h *Holding) Name() string { return h.Doc.Name }
 
