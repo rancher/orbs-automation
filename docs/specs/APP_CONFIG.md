@@ -96,7 +96,6 @@ The kinds are described as JSON Schema (draft 2020-12) so an editor can validate
 * A Go test that validates every file of `config/` against the JSON Schemas.
 * The `chartsPackageBump` strategy, which the real config names.
 * The `lifecycle-date` warning.
-* A command that writes a `series` holding that differs, as a pull request.
 * Steps with `from: producer` and `from: central`, in `ci:ship` only.
 
 ## Open questions

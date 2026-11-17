@@ -99,9 +99,65 @@ with both flags it is a dry run.`,
 		},
 	}
 	shipflags.Bind(shipCmd, &in)
+	shipCmd.AddCommand(seriesCommand())
 	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
 	root.AddCommand(shipCmd)
+}
+
+// seriesCommand is gero ship series: fix the series holdings of a project.
+func seriesCommand() *cobra.Command {
+	var in ship.SeriesOptions
+	cmd := &cobra.Command{
+		Use:   "series [project]",
+		Short: "Fix the series holdings of a project that hold another series than their stream has",
+		Long: `Check what a project holds of the series of a stream, line by line, and open a pull
+request for each line whose branch holds another series than the one its stream
+has for that line.
+
+A series holding is a file that names a series and no release (prometheus-federator's
+kuberlrVersion: v9), which another tool reads to pick the newest release of it.
+gero repo status says where one differs. This writes it, and only when an Edit
+follows the holding: nothing is written until an Edit says what a write of it
+takes, so a holding with none is reported and left alone.
+
+<project> is the project whose files hold the series, by its config name or
+owner/name slug; leave it out for the project whose repository you are in.
+--holding limits the run to one holding and --line to one Rancher line of the
+project. It works as gero ship does for a release: in your own clone, on a new
+branch (or a worktree when the clone is dirty), committing the write and then each
+step of the Edit that changed files; it asks once before it pushes the branches and
+opens the PRs, and --yes goes on without asking. --no-push stops after the commits and
+--dry-run does everything but write.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			if len(args) > 0 {
+				in.Project = args[0]
+			}
+			s := settingsFrom(cmd)
+			in.Yes = s.NonInteractive
+			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
+			in.In, in.Interactive = cmd.InOrStdin(), termfacts.IsTerminal(os.Stdin)
+			return ship.RunSeries(ctx, cmd.OutOrStdout(), log, s, cwd, in)
+		},
+	}
+	flags := cmd.Flags()
+	flags.StringVar(&in.Holding, "holding", "", "fix only this series holding, by name")
+	flags.StringSliceVar(&in.Lines, "line", nil, "fix only this Rancher line (v2.15); repeat it or separate lines with commas for several")
+	flags.BoolVar(&in.Preview, "preview", false, "print the commit message and the PR body too")
+	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
+	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
+	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
+	return cmd
 }

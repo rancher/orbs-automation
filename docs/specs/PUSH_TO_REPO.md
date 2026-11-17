@@ -45,6 +45,15 @@ An Artifact can pin others: a wrangler release goes with the lasso its `go.mod` 
 * **The pinned Artifact alone** is shipped as any release: `gero ship lasso v0.2.7 --to bro` writes that tag in the files the pins make in the consumer, and as a floor, so it never lowers a version. It does not yet check the tag against what the consumer's wrangler requires.
 * **Not here yet:** a warning for a lasso below what the consumer's wrangler requires, and `gero repo status` saying so, which are open ([TOOLING_GOALS](../design/TOOLING_GOALS.md)).
 
+## Fixing a series holding
+
+`gero ship series [project]` writes a `series` holding ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#holding)): a file that names the series a stream has for a line and no release, which `gero repo status` shows under Series. It is not a release being shipped, so it has no tag, no producer to resolve and no route: the holder's own holdings are read line by line.
+
+* **Only through an Edit.** A line whose branch holds another series than its stream's is fixed when an Edit follows the holding. A holding with none, and a difference the holding's document acknowledges (`series-differs`), are reported and left alone.
+* **One PR for each line**, on the holder's branch for that line, from its head on the host. The write is the first commit and each step of the Edit that changed files is another, as for a release. `--holding` and `--line` limit the run.
+* **Identity.** The branch is the prefix and the key `<holding>-<value written>-<branch without release/>`, and the PR's marker names the holding, the holder, the branch and the value written. A PR of the actor's own with that value is already open and makes nothing; one with another value is not closed on a guess, and one the actor has at a newer value blocks. The texts are their own (`series_title.txt`, `series_commit.txt` and `series_body.md`) and the project's `pullRequests.title` does not apply.
+* Where the branch is pushed, asking once, `--no-push`, `--dry-run` and the commit identity are the same as for a release. There is no `--refresh`.
+
 ## Shipping another team's release
 
 Whether a project is **owned** is `managedBy` against the **active team context** gero works in when run (`team`, [CLI_CONFIG](CLI_CONFIG.md)), not a field of the project. `gero ship` is gated on it:
