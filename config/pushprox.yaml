@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# PushProx: owned, one stream for every line (universal), v0.1.x tags with -rc.N prereleases. The default branch is master.
+# Only the project and its stream so far: what it produces and who holds it are not described yet.
+apiVersion: gero/v1alpha2
+kind: Project
+name: pushprox
+spec:
+  repo: {name: rancher/PushProx, managedBy: orbs, defaultBranch: master}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: pushprox
+refs: {project: pushprox}
+spec: {scheme: semver, universal: true}

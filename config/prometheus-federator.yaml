@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# prometheus-federator: owned, one release stream for each line, as BRO. The line-to-branch table is in the repo's README.
+# release/v3.x and older serve lines past v2.12, which are not in config. What it produces and who holds it are not described yet.
+apiVersion: gero/v1alpha2
+kind: Project
+name: prometheus-federator
+spec:
+  aliases: ["promfed"]
+  repo: {name: rancher/prometheus-federator, managedBy: orbs}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.16}                                  # branch omitted: main, while the line is in development
+      - {line: v2.15, branch: release/v7.x}
+      - {line: v2.14, branch: release/v6.x}
+      - {line: v2.13, branch: release/v5.x}
+      - {line: v2.12, branch: release/v4.x}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: prometheus-federator
+refs: {project: prometheus-federator}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.16, series: "8.x"}
+    - {line: v2.15, series: "7.x"}
+    - {line: v2.14, series: "6.x"}
+    - {line: v2.13, series: "5.x"}
+    - {line: v2.12, series: "4.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: promfed-image
+refs: {stream: prometheus-federator}
+spec: {kind: image, name: rancher/prometheus-federator}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: promfed-chart
+refs: {stream: prometheus-federator}
+spec: {kind: file, name: "prometheus-federator-{version}.tgz"}

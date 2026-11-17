@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# kubectl: end of life, replaced by kuberlr-kubectl, pending archive. Kept only so what still holds it can be seen.
+# The tags are Kubernetes versions (v1.29.2 is the newest) and the default branch is master. Nothing new is released.
+apiVersion: gero/v1alpha2
+kind: Project
+name: kubectl
+spec:
+  repo: {name: rancher/kubectl, managedBy: orbs, defaultBranch: master}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: kubectl
+refs: {project: kubectl}
+spec: {scheme: semver, universal: true}
