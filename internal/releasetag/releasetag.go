@@ -136,7 +136,8 @@ func Check(in Input) (Decision, error) {
 			return Decision{}, fmt.Errorf("%w: %s is on %s, so %s is a retag", ErrNothingNew, newest.Name, short(in.Commit), in.Tag)
 		}
 	}
-	return Decision{Action: Create, Newest: in.Newest}, nil
+	retag := in.Newest != nil && in.Newest.Commit == in.Commit && (v.IsPrerelease() || !hasPrereleaseOf(v, in))
+	return Decision{Action: Create, Newest: in.Newest, Retag: retag}, nil
 }
 
 // short abbreviates a commit for a message.

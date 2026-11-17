@@ -211,6 +211,7 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 		chosen, err := releasetag.Choose(releasetag.Choice{
 			Newest: newest, Pattern: stream.TagPattern(), Series: series, Commit: head.Commit,
 			Stable: opts.Stable, Bump: opts.Bump.semver(), RequiresPrerelease: stream.RequiresPrerelease(),
+			Retag: opts.Retag, AllowRetag: stream.AllowRetag(),
 		})
 		if err != nil {
 			return err
@@ -233,12 +234,13 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	in := createtag.Input{CloneDir: clone.Path, Input: releasetag.Input{
 		Repo: slug, Tag: tag, Commit: head.Commit, Tags: tags, Newest: newest,
 		Pattern: stream.TagPattern(), Series: series, RequiresPrerelease: stream.RequiresPrerelease(),
+		Retag: opts.Retag, AllowRetag: stream.AllowRetag(),
 	}}
 	decision, err := releasetag.Check(in.Input)
 	if err != nil {
 		return err
 	}
-	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, Remote: remote, DryRun: dryRun}
+	res := Result{Project: slug, Branch: branch, Commit: head.Commit, Tag: tag, Promotes: promotes, Retag: decision.Retag, Remote: remote, DryRun: dryRun}
 	if decision.Newest != nil {
 		res.Newest = decision.Newest.Name
 	}
@@ -345,6 +347,9 @@ func report(w io.Writer, format string, res Result, view *style.Renderer) error 
 func (r Result) what() string {
 	if r.Promotes != "" {
 		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project)
+	}
+	if r.Retag {
+		return fmt.Sprintf("%s on %s at %s, a retag: %s is on the same commit, in %s", r.Tag, r.Branch, short(r.Commit), r.Newest, r.Project)
 	}
 	return fmt.Sprintf("%s on %s at %s in %s", r.Tag, r.Branch, short(r.Commit), r.Project)
 }
