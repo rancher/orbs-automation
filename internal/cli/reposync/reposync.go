@@ -28,13 +28,13 @@ var ErrFailed = errors.New("some branches failed")
 // Options is what the user asked to sync; the command fills it from its
 // arguments and flags.
 type Options struct {
-	Project string   // the holder, by config name or slug
-	Holding string   // limit the run to one holding
-	Lines   []string // limit the run to these Rancher lines
-	Preview bool     // print the commit message and PR body too
-	NoPush  bool
-	PushTo  string
-	Yes     bool
+	Project  string   // the holder, by config name or slug
+	Holdings []string // limit the run to these holdings
+	Lines    []string // limit the run to these Rancher lines
+	Preview  bool     // print the commit message and PR body too
+	NoPush   bool
+	PushTo   string
+	Yes      bool
 	// Interactive says In is a terminal the question can be asked on.
 	Interactive bool
 	In          io.Reader
@@ -55,7 +55,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 	}
 	defer cleanup()
 	in := domain.Input{
-		Project: opts.Project, Holding: opts.Holding, Lines: opts.Lines, BranchPrefix: s.BranchPrefix,
+		Project: opts.Project, Holdings: opts.Holdings, Lines: opts.Lines, BranchPrefix: s.BranchPrefix,
 		DryRun: s.DryRun, NoPush: opts.NoPush, PushTo: opts.PushTo, CI: s.CI,
 	}
 	return runTo(ctx, w, proposer.Workspace{Workspace: workspace.Open(s, cwd)}, ex, s.Output, in, opts.Preview, style.New(s.Terminal))

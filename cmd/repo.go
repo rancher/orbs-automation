@@ -375,7 +375,7 @@ slug; leave it out for the project whose repository you are in. A pull request h
 one base branch, so a project with a branch for each Rancher line gets one for each
 branch that differs, and a branch with several corrections gets them all in one:
 the write of every holding, then each step of the Edits that follow them, run once.
---holding limits the run to one holding and --line to one Rancher line.
+--holding limits the run to the holdings named and --line to the Rancher lines.
 
 It works as gero ship does: in your own clone, on a new branch (or a worktree when the
 clone is dirty); it asks once before it pushes the branches and opens the PRs, and --yes
@@ -403,7 +403,7 @@ does everything but write.`,
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringVar(&in.Holding, "holding", "", "sync only this holding, by name")
+	flags.StringSliceVar(&in.Holdings, "holding", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
 	flags.StringSliceVar(&in.Lines, "line", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
 	flags.BoolVar(&in.Preview, "preview", false, "print the commit message and the PR body too")
 	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")

@@ -30,9 +30,15 @@ const (
 // Edit runs after the write.
 func seriesRepo(t *testing.T) string {
 	t.Helper()
+	return seriesRepoWith(t, "prodVersion: v9 # keep this\notherVersion: r4\nother: 1\n")
+}
+
+// seriesRepoWith is seriesRepo with the build.yaml given, on main and on release/v7.x.
+func seriesRepoWith(t *testing.T, buildYAML string) string {
+	t.Helper()
 	dir := remote(t)
 	runGit(t, dir, "checkout", "--quiet", "main")
-	put(t, dir, "build.yaml", "prodVersion: v9 # keep this\notherVersion: r4\nother: 1\n")
+	put(t, dir, "build.yaml", buildYAML)
 	put(t, dir, "scripts/gen.sh", "#!/bin/sh\nmkdir -p generated && printf %s \"$GERO_TARGET_BRANCH\" > generated/branch.txt\n")
 	require.NoError(t, os.Chmod(filepath.Join(dir, "scripts", "gen.sh"), 0o755))
 	runGit(t, dir, "add", ".")
@@ -48,6 +54,7 @@ type seriesWS struct {
 	up    string
 	clone string
 	push  proposal.PushSettings
+	tags  map[string][]git.Tag // the tags of the producers, by repository
 }
 
 // seriesDocs is the holder and its two streams, with the Edit following the holdings
@@ -85,7 +92,10 @@ func (w *seriesWS) CloneDir(string) (string, error)           { return w.clone, 
 func (w *seriesWS) Remote(string) (string, error)             { return "upstream", nil }
 func (w *seriesWS) PushSettings(string) proposal.PushSettings { return w.push }
 
-func (w *seriesWS) UpstreamRefs(context.Context, string) (git.Refs, error) {
+func (w *seriesWS) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
+	if slug != "acme/cons" {
+		return git.Refs{Tags: w.tags[slug]}, nil
+	}
 	var refs git.Refs
 	for _, line := range strings.Split(runGit(w.t, w.up, "for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads"), "\n") {
 		name, commit, _ := strings.Cut(line, " ")
@@ -221,13 +231,13 @@ func TestSyncLimitsTheRunToTheLinesAndTheHoldingAsked(t *testing.T) {
 	require.Len(t, plan.Branches, 1)
 	assert.Equal(t, "main", plan.Branches[0].Branch)
 
-	plan, err = Run(bg, ws, Input{NoPush: true, Holding: "cons-holds-side"}, nil)
+	plan, err = Run(bg, ws, Input{NoPush: true, Holdings: []string{"cons-holds-side"}}, nil)
 	require.NoError(t, err)
 	b := branchOf(t, plan, behind)
 	require.Len(t, b.Rows, 1)
 	assert.Equal(t, "[v7.x] Sync cons-holds-side on v2.15", b.Preview.Title)
 
-	_, err = Run(bg, ws, Input{NoPush: true, Holding: "nope"}, nil)
+	_, err = Run(bg, ws, Input{NoPush: true, Holdings: []string{"nope"}}, nil)
 	require.ErrorContains(t, err, "nope")
 }
 

@@ -19,9 +19,9 @@ import (
 
 // Input is what the user asked to sync: the held values of one project.
 type Input struct {
-	Project string   // the holder, by config name or slug; empty for the one the working directory is in
-	Holding string   // limit the run to one holding, by name
-	Lines   []string // limit the run to these Rancher lines
+	Project  string   // the holder, by config name or slug; empty for the one the working directory is in
+	Holdings []string // limit the run to these holdings, by name
+	Lines    []string // limit the run to these Rancher lines
 	// BranchPrefix is the user's branchPrefix setting, which replaces the project's.
 	BranchPrefix string
 	DryRun       bool   // compute and report, and create no branch or PR
@@ -114,7 +114,7 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		return Plan{}, engineErr
 	}
 	plan := Plan{Holder: holder.Slug()}
-	holdings, err := pulledHoldingsOf(holder, in.Holding)
+	holdings, err := pulledHoldingsOf(holder, in.Holdings)
 	if err != nil {
 		return plan, err
 	}
@@ -138,18 +138,19 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 	return plan, runSync(ctx, ws, in, ex, holder, refs, &plan)
 }
 
-// pulledHoldingsOf are the holdings of a project that are brought in line from config
-// and not shipped from a release, or the one named. A name that is none of them is an
-// error.
-func pulledHoldingsOf(holder *chain.Project, name string) ([]*chain.Holding, error) {
+// pulledHoldingsOf are the holdings of a project that are brought in line, or the ones named.
+// A name that is none of them is an error.
+func pulledHoldingsOf(holder *chain.Project, names []string) ([]*chain.Holding, error) {
 	var out []*chain.Holding
 	for _, h := range holder.Held() {
-		if h.Kind() == chain.HoldsSeries && !h.Virtual() && (name == "" || h.Name() == name) {
+		if !h.Virtual() && (h.Kind() == chain.HoldsSeries || h.Kind() == chain.HoldsRelease) && (len(names) == 0 || slices.Contains(names, h.Name())) {
 			out = append(out, h)
 		}
 	}
-	if name != "" && len(out) == 0 {
-		return nil, fmt.Errorf("%s has no holding named %q that is brought in line from config", holder.Slug(), name)
+	for _, name := range names {
+		if !slices.ContainsFunc(out, func(h *chain.Holding) bool { return h.Name() == name }) {
+			return nil, fmt.Errorf("%s has no holding named %q that is brought in line", holder.Slug(), name)
+		}
 	}
 	return out, nil
 }

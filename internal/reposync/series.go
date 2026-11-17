@@ -80,7 +80,7 @@ func SeriesHoldings(ctx context.Context, ws Reader, holder *chain.Project) ([]Se
 // and the holding's range holds.
 func seriesLinesOf(holder *chain.Project, h *chain.Holding) []string {
 	candidates := holder.Lines()
-	if len(candidates) == 0 {
+	if len(candidates) == 0 && h.Stream() != nil {
 		candidates = h.Stream().Lines()
 	}
 	var out []string
@@ -95,6 +95,10 @@ func seriesLinesOf(holder *chain.Project, h *chain.Holding) []string {
 // seriesLine reads one line of a series holding at the head of the line's branch.
 func seriesLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, h *chain.Holding, line string) SeriesLine {
 	out := SeriesLine{Line: line}
+	if h.Kind() != chain.HoldsSeries {
+		out.Error = "a release holding is not brought in line yet"
+		return out
+	}
 	branch, ok := holder.BranchOfLine(line, "")
 	if !ok {
 		out.Error = fmt.Sprintf("%s has no branch for %s", holder.Slug(), line)
