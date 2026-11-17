@@ -133,6 +133,14 @@ var ErrNoEdit = errors.New("no Edit follows the holding")
 // error, ErrNoEdit, when no Edit follows the holding, and when the holding or its
 // edits cannot be used.
 func (e *Engine) SeriesRoute(h *chain.Holding) (Route, error) {
+	switch {
+	case h.Kind() != chain.HoldsSeries:
+		return Route{}, fmt.Errorf("Holding %q holds a %s, not a series", h.Name(), h.Kind())
+	case len(h.Edits()) == 0:
+		return Route{}, fmt.Errorf("%w: Holding %q is only read until one does", ErrNoEdit, h.Name())
+	case e.unusable[h]:
+		return Route{}, fmt.Errorf("Holding %q cannot be written: its format or an edit that follows it is not usable", h.Name())
+	}
 	return Route{Route: chain.Route{Producer: h.Producer(), Consumer: h.Holder(), Stream: h.Stream(), Holdings: []*chain.Holding{h}}, engine: e}, nil
 }
 
@@ -320,6 +328,9 @@ type Target struct {
 // virtual holding of the route's own producer is shipped as any other: when lasso is
 // shipped, what its pins make in a consumer is written with the tag of the run.
 func (t Target) releaseOf(producer *chain.Project, h *chain.Holding, tag, commit string) (Release, error) {
+	if h.Kind() == chain.HoldsSeries {
+		return Release{}, nil // a series holds no release: its value is the stream's series for the line
+	}
 	if !h.Virtual() || h.Producer() == producer {
 		return ReleaseOf(h, tag, commit)
 	}
