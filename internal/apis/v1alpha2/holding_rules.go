@@ -36,6 +36,10 @@ var atVars = []string{"line", "stage", "branch"}
 // artifact.
 var formVars = []string{"image", "tag", "prefix", "bareTag", "version", "url", "file", "sourceRepo", "commit", "base", "upstream"}
 
+// seriesFormVars are the variables the form of a series may use, filled from the
+// series a stream has for a line.
+var seriesFormVars = []string{"series", "major", "minor"}
+
 // SetDefaults fills the format, the accept and, for a release, the form.
 func (h *Holding) SetDefaults() {
 	for i := range h.Spec.At {
@@ -65,11 +69,19 @@ func (h *Holding) Validate(_ config.Context, r *config.Report) {
 	}
 	h.validateOverlap(r)
 
-	kindOK := oneOf(r, "spec.holds.kind", holds.Kind, HoldsRelease, HoldsCommit, HoldsBranch)
+	kindOK := oneOf(r, "spec.holds.kind", holds.Kind, HoldsRelease, HoldsCommit, HoldsBranch, HoldsSeries)
 	if kindOK {
 		h.validateForm(r)
 		if holds.Kind == HoldsRelease && len(holds.Stages) > 0 {
 			r.Errorf("spec.holds.stages", "are for a commit or a branch: a release is found on one stage, named by holds.stage")
+		}
+		if holds.Kind == HoldsSeries {
+			if holds.Stage != "" {
+				r.Errorf("spec.holds.stage", "is not for a series: a series has no stage")
+			}
+			if len(holds.Stages) > 0 {
+				r.Errorf("spec.holds.stages", "are not for a series: a series has no stage")
+			}
 		}
 	}
 	for i, st := range holds.Stages {
@@ -150,13 +162,23 @@ func checkPattern(r *config.Report, path, key string) {
 
 func (h *Holding) validateForm(r *config.Report) {
 	holds := h.Spec.Holds
-	if holds.Kind != HoldsRelease {
+	var vars []string
+	switch holds.Kind {
+	case HoldsRelease:
+		vars = formVars
+	case HoldsSeries:
+		vars = seriesFormVars
+		if holds.Form == "" {
+			r.Errorf("spec.holds.form", "is required: say how the series is written")
+			return
+		}
+	default:
 		if holds.Form != "" {
-			r.Errorf("spec.holds.form", "is only for a release: a %s is held as the text it is", holds.Kind)
+			r.Errorf("spec.holds.form", "is only for a release or a series: a %s is held as the text it is", holds.Kind)
 		}
 		return
 	}
-	if err := templates.Validate(holds.Form, formVars); err != nil {
+	if err := templates.Validate(holds.Form, vars); err != nil {
 		r.Errorf("spec.holds.form", "%v", err)
 		return
 	}

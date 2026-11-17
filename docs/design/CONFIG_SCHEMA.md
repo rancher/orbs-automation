@@ -105,7 +105,7 @@ Exactly one of `artifact`, `from` and `stream`, matching `holds.kind`.
 | Field | Type | Default | Rules |
 |---|---|---|---|
 | `kind` | `release`, `commit`, `branch` or `series` | required | a `series` holds not a release but the series a stream has for the holder's line (`lines[].series`), written in the `form`, for a file that another tool reads to pick the newest release of that series. It is exact about what it says: the expected text for a line is the form rendered over that line's series. It has no `stage` or `accept`, and a stream that is `universal` or has no series for a line has nothing to hold **(provisional)** |
-| `form` | template | `{tag}` | for `release`; how the text is written; variables `image`, `tag`, `prefix`, `bareTag`, `version`, `url`, `file`, `sourceRepo`, `commit`, `base`, `upstream`; only modifiers that can be undone |
+| `form` | template | `{tag}` for a release, required for a series | for `release` and `series`; how the text is written; variables `image`, `tag`, `prefix`, `bareTag`, `version`, `url`, `file`, `sourceRepo`, `commit`, `base`, `upstream`; only modifiers that can be undone |
 | `lines` | `{since, until}` | every line the holder and the producer both list | |
 | `stage` | stage name | none | the stage branch of the holder where the holding is found |
 | `stages` | list of stage names | none | for `commit` or `branch`: which stages of the producer are read; the key uses `{stage}` |

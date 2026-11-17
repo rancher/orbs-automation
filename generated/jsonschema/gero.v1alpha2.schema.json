@@ -392,9 +392,10 @@
           "enum": [
             "release",
             "commit",
-            "branch"
+            "branch",
+            "series"
           ],
-          "description": "release, commit or branch"
+          "description": "release, commit, branch or series"
         },
         "form": {
           "type": "string",
