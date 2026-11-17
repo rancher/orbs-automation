@@ -92,7 +92,19 @@ func allDigits(s string) bool {
 // digits, such as rc2 or alpha10, compares by its text prefix and then by that
 // number, so rc2 is lower than rc10. Plain ASCII order would put rc10 first,
 // which is wrong for the tags this team publishes.
+//
+// A second difference: two versions that are the same by precedence are told apart by
+// the revision in their build metadata (compareBuild), so that a respin such as
+// v1.35.0+k3s3 is newer than v1.35.0+k3s1.
 func Compare(a, b Version) int {
+	if c := comparePrecedence(a, b); c != 0 {
+		return c
+	}
+	return compareBuild(a.Build, b.Build)
+}
+
+// comparePrecedence is the order SemVer gives two versions: the numbers, then the prerelease.
+func comparePrecedence(a, b Version) int {
 	if c := cmp.Or(cmp.Compare(a.Major, b.Major), cmp.Compare(a.Minor, b.Minor), cmp.Compare(a.Patch, b.Patch)); c != 0 {
 		return c
 	}
@@ -111,6 +123,30 @@ func Compare(a, b Version) int {
 		}
 	}
 	return cmp.Compare(len(as), len(bs))
+}
+
+// compareBuild breaks a tie of two versions that are the same by precedence, by the
+// revision their build metadata carries: +k3s3 is newer than +k3s1, and +rke2r2 than
+// +rke2r1, which is how a respin of the same release is told from the first. It
+// compares identifier by identifier, and only identifiers of the same text that end in
+// digits (k3s1 and k3s3, not one and two); anything else is equal, as SemVer has it.
+func compareBuild(a, b string) int {
+	if a == "" || b == "" {
+		return 0
+	}
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		if as[i] == bs[i] {
+			continue
+		}
+		aText, aDigits := splitTrailingDigits(as[i])
+		bText, bDigits := splitTrailingDigits(bs[i])
+		if aText != bText || aDigits == "" || bDigits == "" {
+			return 0
+		}
+		return compareDigits(aDigits, bDigits)
+	}
+	return 0
 }
 
 func compareIdentifier(a, b string) int {
