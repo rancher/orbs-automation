@@ -367,6 +367,7 @@ linters:
             - github.com/rancher/orbs-automation/internal/cli/cigate
             - github.com/rancher/orbs-automation/internal/cli/logging
             - github.com/rancher/orbs-automation/internal/cli/buildinfo
+            - github.com/rancher/orbs-automation/internal/cli/proposer
         layer-commands-doctor:
           list-mode: lax
           files:
@@ -382,6 +383,7 @@ linters:
             - github.com/rancher/orbs-automation/internal/cli/cigate
             - github.com/rancher/orbs-automation/internal/cli/logging
             - github.com/rancher/orbs-automation/internal/cli/buildinfo
+            - github.com/rancher/orbs-automation/internal/cli/proposer
             - github.com/rancher/orbs-automation/internal/cli/authstatus
             - github.com/rancher/orbs-automation/internal/cli/configresolve
         # main.go only calls cmd.Execute(). The tools under tools/ are developer

@@ -47,7 +47,6 @@ type seriesWS struct {
 	up     string
 	clone  string
 	push   PushSettings
-	closed bool
 }
 
 // seriesDocs is the holder and its two streams, with the Edit following the holdings
@@ -79,7 +78,7 @@ func newSeriesWS(t *testing.T, edit bool) (*seriesWS, *Executor) {
 	return ws, &Executor{Git: GitCLI{}, Runner: steprun.Runner{}, TempDir: t.TempDir()}
 }
 
-func (w *seriesWS) Project(key string) (*chain.Project, error) { return w.graph.Project("cons"), nil }
+func (w *seriesWS) Project(string) (*chain.Project, error) { return w.graph.Project("cons"), nil }
 func (w *seriesWS) Bump() (*bump.Engine, error)                { return bump.NewEngine(bump.Builtin(), w.graph) }
 func (w *seriesWS) CloneDir(string) (string, error)            { return w.clone, nil }
 func (w *seriesWS) Remote(string) (string, error)              { return "upstream", nil }
