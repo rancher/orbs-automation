@@ -118,12 +118,19 @@ func Check(in Input) (Decision, error) {
 	if in.Series != "" && !semver.InSeries(in.Tag, in.Series) {
 		return Decision{}, fmt.Errorf("%w: %s is not in %s", ErrNotInSeries, in.Tag, in.Series)
 	}
+	if in.Retag && !in.AllowRetag {
+		return Decision{}, fmt.Errorf("%w: %s", ErrRetagNotAllowed, in.Repo)
+	}
 	if in.RequiresPrerelease && !v.IsPrerelease() && !hasPrereleaseOf(v, in) {
 		return Decision{}, fmt.Errorf("%w: %s has none of %s on %s", ErrNeedsPrerelease, in.Tag, base(v), short(in.Commit))
 	}
 	if newest := in.Newest; newest != nil {
 		if nv, _ := semver.Parse(newest.Name); semver.Compare(v, nv) <= 0 {
 			return Decision{}, fmt.Errorf("%w: %s is not newer than %s", ErrNotNewer, in.Tag, newest.Name)
+		}
+		// The promotion of a prerelease on the commit is not a retag, it is the same code made stable.
+		if newest.Commit == in.Commit && !in.Retag && (v.IsPrerelease() || !hasPrereleaseOf(v, in)) {
+			return Decision{}, fmt.Errorf("%w: %s is on %s, so %s is a retag", ErrNothingNew, newest.Name, short(in.Commit), in.Tag)
 		}
 	}
 	return Decision{Action: Create, Newest: in.Newest}, nil
@@ -205,6 +212,9 @@ func Candidates(c Choice) []Candidate {
 // already has the line's newest tag gets no new one. The tag is written with the
 // "v" the line's tags have, and with the project's pattern when there are none.
 func Choose(c Choice) (Chosen, error) {
+	if c.Retag && !c.AllowRetag {
+		return Chosen{}, ErrRetagNotAllowed
+	}
 	cand := prereleaseCandidate(c)
 	if c.Stable {
 		cand = stableCandidate(c)
@@ -251,7 +261,7 @@ func prereleaseCandidate(c Choice) Candidate {
 		return cand
 	}
 	cand.Tag = vPrefix(c, newest) + next.String()
-	if newest.Commit == c.Commit {
+	if newest.Commit == c.Commit && !c.Retag {
 		cand.Err = fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
 	}
 	return cand
@@ -281,7 +291,7 @@ func stableCandidate(c Choice) Candidate {
 			cand.Err = fmt.Errorf("%w: %s is on %s and the branch is at %s, so the commits after it have no prerelease: make another",
 				ErrMovedSincePrerelease, newest.Name, short(newest.Commit), short(c.Commit))
 		}
-	case newest.Commit == c.Commit:
+	case newest.Commit == c.Commit && !c.Retag:
 		cand.Err = fmt.Errorf("%w: %s is on %s", ErrNothingNew, newest.Name, short(c.Commit))
 	case c.RequiresPrerelease:
 		cand.Err = fmt.Errorf("%w: the project requires a prerelease before every stable tag, so make one first", ErrNeedsPrerelease)
