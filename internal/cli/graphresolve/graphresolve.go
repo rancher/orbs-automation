@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
@@ -43,6 +44,10 @@ type Options struct {
 	Projects []string
 	// ManagedBy keeps the projects whose managedBy is one of them.
 	ManagedBy []string
+	// Line draws one release line only.
+	Line string
+	// Now is the day the phase of a line is read at.
+	Now time.Time
 }
 
 // Graph draws the central config found from s and the working directory cwd as

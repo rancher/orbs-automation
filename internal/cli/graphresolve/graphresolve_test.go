@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -502,4 +503,177 @@ func TestMindmapKeepsOnlyTheBranchesOfTheTeam(t *testing.T) {
 	require.NoError(t, err)
 	assert.Regexp(t, `\["other \(shared\)"\]`, out)
 	assert.NotRegexp(t, `\["app `, out)
+}
+
+var day = time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
+
+// lined is rancher, with a branch per line, a series for each and an image that
+// exists from v2.16; shell, which holds from v2.16 and lists no line; charts, with a
+// branch for each stage of v2.16 and none yet for v2.15; and the lines v2.17 in
+// development, v2.16 ga, v2.15 eol and v2.14 by its dates.
+func lined(t *testing.T) *chain.Graph {
+	t.Helper()
+	return chaintest.Load(t,
+		chaintest.Doc("RancherLines", "rancher", "", `  lines:
+    - {id: v2.17, phase: development}
+    - {id: v2.16, phase: ga}
+    - {id: v2.15, phase: eol}
+    - {id: v2.14, dates: {ga: 2026-01-01, eom: 2026-06-01, eol: 2027-01-01}}
+`),
+		project("rancher", `  repo: {name: rancher/rancher, managedBy: shared, defaultBranch: main}
+  branches:
+    layout: perLine
+    lines:
+      - {line: v2.17}
+      - {line: v2.16, branch: release/v2.16}
+      - {line: v2.15, branch: release/v2.15}
+`),
+		project("shell", "  repo: {name: rancher/shell, managedBy: rancher}\n"),
+		project("charts", `  repo: {name: rancher/charts, managedBy: rancher}
+  branches:
+    layout: perLine
+    stages: [dev, stable]
+    lines:
+      - {line: v2.16, branch: {dev: dev-v2.16, stable: release-v2.16}}
+      - {line: v2.15, branch: ""}
+`),
+		chaintest.Doc("Stream", "rancher", "{project: rancher}", "  lines:\n    - {line: v2.17, series: \"2.17.x\"}\n    - {line: v2.16, series: \"2.16.x\"}\n    - {line: v2.15, series: \"2.15.x\"}\n"),
+		chaintest.Doc("Stream", "shell", "{project: shell}", "  universal: true\n"),
+		chaintest.Doc("Artifact", "rancher-image", "{stream: rancher}", "  kind: image\n  name: rancher/rancher\n"),
+		chaintest.Doc("Artifact", "rancher-server-image", "{stream: rancher}", "  kind: image\n  name: rancher/rancher-server\n  lines: {since: v2.16}\n"),
+		chaintest.Doc("Artifact", "shell-image", "{stream: shell}", "  kind: image\n  name: rancher/shell\n"),
+		chaintest.Doc("Holding", "rancher-holds-shell", "{project: rancher, artifact: shell-image}",
+			"  at: {file: build.yaml, key: shell}\n  holds: {kind: release, form: \"{image}:{tag}\", accept: all, lines: {since: v2.16}}\n"),
+	)
+}
+
+func linedOut(t *testing.T, opts Options) string {
+	t.Helper()
+	opts.Now = day
+	out, err := graph(fakeWorkspace{g: lined(t)}, opts)
+	require.NoError(t, err)
+	return out
+}
+
+func projectBlock(out, slug string) string {
+	block := out[strings.Index(out, `"`+slug+`": {`):]
+	return block[:strings.Index(block, "\n}\n")]
+}
+
+func TestGraphDrawsTheLinesOfAProjectInsideIt(t *testing.T) {
+	rancher := projectBlock(linedOut(t, Options{}), "rancher/rancher")
+
+	assert.Contains(t, rancher, `"lines": {`)
+	assert.Contains(t, rancher, `"line:v2.17": {class: [line; development]; label: "v2.17\nmain\n2.17.x"}`, "the default branch by its name")
+	assert.Contains(t, rancher, `"line:v2.16": {class: [line; ga]; label: "v2.16\nrelease/v2.16\n2.16.x"}`)
+	assert.Contains(t, rancher, `"line:v2.15": {class: [line; eol]; label: "v2.15\nrelease/v2.15\n2.15.x"}`)
+	assert.Less(t, strings.Index(rancher, `"line:v2.17"`), strings.Index(rancher, `"line:v2.16"`), "newest first")
+	assert.Less(t, strings.Index(rancher, `"line:v2.16"`), strings.Index(rancher, `"line:v2.15"`))
+}
+
+func TestGraphDrawsAStageOfALineAndALineWithNoBranchYet(t *testing.T) {
+	charts := projectBlock(linedOut(t, Options{}), "rancher/charts")
+
+	assert.Contains(t, charts, `"line:v2.16:dev": {class: [line; ga]; label: "v2.16 dev\ndev-v2.16"}`)
+	assert.Contains(t, charts, `"line:v2.16:stable": {class: [line; ga]; label: "v2.16 stable\nrelease-v2.16"}`)
+	assert.Contains(t, charts, `"line:v2.15": {class: [line; eol]; label: "v2.15\nno branch yet"}`)
+	assert.Less(t, strings.Index(charts, `"line:v2.16:dev"`), strings.Index(charts, `"line:v2.16:stable"`), "the stages in order")
+}
+
+func TestGraphHasNoLinesContainerForAProjectThatListsNoLineOrForABoundary(t *testing.T) {
+	out := linedOut(t, Options{})
+	assert.NotContains(t, projectBlock(out, "rancher/shell"), `"lines"`)
+
+	out = linedOut(t, Options{Projects: []string{"rancher"}})
+	assert.Contains(t, out, `"rancher/shell": {class: [boundary]`)
+	assert.NotContains(t, out, `"line:v2.16:dev"`)
+}
+
+func TestGraphReadsThePhaseOfALineByTheDayItRuns(t *testing.T) {
+	lines := func(now time.Time) string {
+		g := chaintest.Load(t,
+			chaintest.Doc("RancherLines", "rancher", "", "  lines:\n    - {id: v2.14, dates: {ga: 2026-01-01, eom: 2026-06-01, eol: 2027-01-01}}\n"),
+			project("old", "  repo: {name: rancher/old}\n  branches:\n    layout: perLine\n    lines:\n      - {line: v2.14, branch: r14}\n"),
+		)
+		out, err := graph(fakeWorkspace{g: g}, Options{Now: now})
+		require.NoError(t, err)
+		return out
+	}
+	assert.Contains(t, lines(time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)), "class: [line; ga]")
+	assert.Contains(t, lines(time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)), "class: [line; eom]")
+	assert.Contains(t, lines(time.Date(2027, 2, 1, 0, 0, 0, 0, time.UTC)), "class: [line; eol]")
+}
+
+func TestGraphLinesAreTheSameOnTheSameDay(t *testing.T) {
+	assert.Equal(t, linedOut(t, Options{}), linedOut(t, Options{}))
+}
+
+func TestGraphLineDrawsOnlyThatLine(t *testing.T) {
+	for _, line := range []string{"v2.16", "2.16", "V2.16"} {
+		out := linedOut(t, Options{Line: line})
+		rancher := projectBlock(out, "rancher/rancher")
+		assert.Contains(t, rancher, `"line:v2.16"`, line)
+		assert.NotContains(t, rancher, `"line:v2.17"`, line)
+		assert.NotContains(t, rancher, `"line:v2.15"`, line)
+		assert.Contains(t, rancher, `"artifact:rancher-server-image"`, line)
+		assert.Contains(t, out, `"holding:rancher-holds-shell"`, line)
+		assert.Contains(t, projectBlock(out, "rancher/charts"), `"line:v2.16:dev"`, line)
+		assert.NotContains(t, out, `"line:v2.15"`, line)
+	}
+}
+
+func TestGraphLineLeavesOutWhatIsNotForIt(t *testing.T) {
+	out := linedOut(t, Options{Line: "v2.15"})
+
+	rancher := projectBlock(out, "rancher/rancher")
+	assert.Contains(t, rancher, `"artifact:rancher-image"`)
+	assert.NotContains(t, rancher, `"artifact:rancher-server-image"`, "it exists from v2.16")
+	assert.NotContains(t, out, `"holding:rancher-holds-shell"`, "it is held from v2.16")
+	assert.NotContains(t, out, `"rancher/shell"`, "it has no row for the line and no holding drawn at it, and is no boundary")
+	assert.Contains(t, projectBlock(out, "rancher/charts"), `"line:v2.15": {class: [line; eol]; label: "v2.15\nno branch yet"}`)
+}
+
+func TestGraphLineHasNoLineLabelOnTheHolderEdge(t *testing.T) {
+	out := linedOut(t, Options{Line: "v2.16"})
+
+	assert.Contains(t, out, "\"holding:rancher-holds-shell\" -> \"rancher/rancher\"\n")
+	assert.NotContains(t, out, `-> "rancher/rancher": "`)
+}
+
+func TestGraphLineRefusesALineTheConfigDoesNotHave(t *testing.T) {
+	out, err := graph(fakeWorkspace{g: lined(t)}, Options{Line: "v9.9", Now: day})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"v9.9"`)
+	assert.Contains(t, err.Error(), "v2.17")
+	assert.Empty(t, out)
+}
+
+func TestGraphLineNarrowsProjectAndManagedBy(t *testing.T) {
+	out := linedOut(t, Options{Line: "v2.16", ManagedBy: []string{"rancher"}})
+	assert.NotContains(t, out, "\"rancher/rancher\": {\n  class", "it is shared")
+	assert.Contains(t, out, "\"rancher/charts\": {\n  class")
+}
+
+func mindmapLined(t *testing.T, opts Options) string {
+	t.Helper()
+	opts.Now = day
+	out, err := mindmap(fakeWorkspace{g: lined(t)}, opts)
+	require.NoError(t, err)
+	return out
+}
+
+func TestMindmapListsTheLinesOfAProject(t *testing.T) {
+	out := mindmapLined(t, Options{})
+
+	assert.Regexp(t, `\n      n\d+\["lines"\]\n        n\d+\["v2.17: main, 2.17.x \(development\)"\]\n        n\d+\["v2.16: release/v2.16, 2.16.x \(ga\)"\]\n        n\d+\["v2.15: release/v2.15, 2.15.x \(eol\)"\]\n`, out)
+	assert.Contains(t, out, `["v2.16 dev: dev-v2.16 (ga)"]`)
+	assert.Contains(t, out, `["v2.15: no branch yet (eol)"]`)
+}
+
+func TestMindmapLineNarrowsTheLinesOfAProject(t *testing.T) {
+	out := mindmapLined(t, Options{Line: "v2.16"})
+
+	assert.Contains(t, out, `["v2.16: release/v2.16, 2.16.x (ga)"]`)
+	assert.NotContains(t, out, "v2.17:")
+	assert.NotContains(t, out, "v2.15:")
 }
