@@ -59,6 +59,7 @@ What a project releases: the versions and the lines. `refs`: `project` (required
 | `lines[].series` | text | | `9.x`, `0.9.x`, `111.x`; the grammar belongs to the scheme; series must not overlap within a stream; none for `calverLineStage`, whose tag carries the line |
 | `universal` | bool | `false` | any release serves every line; then `lines` is not given; a stream gives its `lines` or is universal |
 | `requiresPrerelease` | bool | `false` | a stable follows an RC of its version; a release may override it, explicitly and recorded |
+| `allowRetag` | bool | `false` | the stream may have a new tag on a commit that already has the line's newest tag, for a project whose image takes in new packages (RPMs) at build time, so the same code is rebuilt to carry a fix. A tag is still never moved: the new tag has a new, higher version. It is permission only; each such tag is asked for with `gero repo tag --retag`, so it is explicit and recorded |
 
 Scheme defaults for stages: `calverLineStage` gives `dev` (prerelease) and `stable`; `semver` gives none; `chartVersion` takes the stages of the project's branch layout.
 

@@ -95,6 +95,13 @@ A failure at any step leaves the release in draft, so nothing downstream starts.
 * It needs no RC; a QA smoke test for regressions is optional and never a blocker
 * This holds even where automation restricts stables to follow an RC: the path must stay open
 
+## Retag
+
+* Some images take in new packages (RPMs) when they are built, so a CVE fix can be a rebuild of the same commit under a new tag
+* The new tag is a new, higher version on the commit that already has the line's newest tag; a tag is never moved
+* Only a project that allows it may do so, and each retag is asked for explicitly (`gero repo tag --retag`)
+* It follows the same path as any other release: an RC first where the project requires one, then the stable
+
 ## Stable and prerelease
 
 * A prerelease is an `-rc` suffix, or the `dev` stage
