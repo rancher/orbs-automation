@@ -69,5 +69,5 @@ The steps are run by a runner the caller supplies, so the engine starts no proce
 
 ## Not here
 
-* Choosing the release and the targets, the pull request, the commits and the push are `internal/ship`'s
+* Choosing the release and the targets, the pull request, the commits and the push are `internal/ship`'s and, for the pull request, the commits and the push, `internal/proposal`'s
 * Reading a commit or a branch holding is not built

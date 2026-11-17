@@ -91,7 +91,7 @@ A repo provides workflow templates and configs, and `gero` renders them with the
 * **S: Warn in `gero ship lasso` when the tag is below what the consumer's wrangler requires.** Needs the go.mod of the wrangler the consumer holds. Done when shipping an older lasso than that wrangler needs says so on the target. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
 * **M: Let `gero ship --line` take lines held on different streams,** such as `wrangler --line v2.15,v2.16 --to bro`, as one plan for each stream. It is refused today. Done when each line gets the release of its own stream in one run. [PUSH_TO_REPO](specs/PUSH_TO_REPO.md)
 * **M: Enforce `requiresPrerelease` for tags made by hand or by a workflow.** `gero repo tag` enforces it only for its own tags. Done when a stable tag without a prior prerelease is reported wherever it was made. [IMPLEMENTATION](IMPLEMENTATION.md)
-* **M: Move closing superseded PRs, the plan and the publish steps out of `internal/ship` into `internal/task`.** Behaviour does not change. Done when `ship` calls tasks for each step and its tests still pass. [PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md)
+* **M: Move closing superseded PRs, the plan and the publish steps out of `internal/proposal` into `internal/task`.** Behaviour does not change. Done when the conveyor calls tasks for each step and the tests of `ship` and `repo sync` still pass. [PROJECT_LAYOUT](specs/PROJECT_LAYOUT.md)
 * **S: Print the preflight line in `gero repo branch` and `gero repo tag`,** which do not print one. Done when both name the acting identity and how it signs. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ### Checks over the chain
@@ -115,6 +115,7 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 `gero repo sync` is the pull side of `ship`: it brings what a project holds in line with config, one PR for each branch. It does series holdings now. [REPO_SYNC](specs/REPO_SYNC.md)
 
 * **L: Bring a release holding in line with `repo sync`.** Say what the wanted value is for a line: the newest release of the holding's stream that its `accept` and stage take. Done when a release holding that is behind is written in the same PR as a series holding of the branch, and a test shows both in one commit.
+* **M: Move the refresh of an open PR into `internal/proposal`.** Its logic is `ship`'s today, and `repo sync` has no `--refresh` for want of it. Done when `ship` calls the conveyor for it, its refresh tests pass as they were, and `repo sync --refresh` rebuilds a stale PR of its own. [PROPOSAL](specs/PROPOSAL.md)
 * **M: Bring a commit or branch holding in line with `repo sync`.** The wanted value is the head of the producer's branch for the stage. Done when a differing commit holding is written by `sync` through an Edit.
 * **M: Run `repo sync` for every project a team owns.** Done when one command opens the PRs of each owned project and reports each by project.
 
