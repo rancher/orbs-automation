@@ -688,3 +688,56 @@ func TestApplyHoldingOfASeriesWritesOnlyWhenTheSeriesIsNotHeld(t *testing.T) {
 	assert.True(t, got.Changed)
 	assert.Equal(t, "kuberlrVersion: v8 # keep\nother: 1\n", tree["build.yaml"])
 }
+
+// seriesEngine is a consumer, perLine, that holds the series of a stream, with
+// the extra documents (an Edit) added.
+func seriesEngine(t *testing.T, extra ...string) (*Engine, *chain.Holding) {
+	t.Helper()
+	docs := append([]string{
+		chaintest.Lines("v2.16", "v2.15"),
+		chaintest.Doc("Project", "prod", "", "  repo: {name: acme/prod, managedBy: orbs}\n"),
+		chaintest.Doc("Stream", "prod", "{project: prod}", "  lines:\n    - {line: v2.16, series: \"9.x\"}\n    - {line: v2.15, series: \"8.x\"}\n"),
+		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: rel-v2.15}]\n"),
+		chaintest.Doc("Holding", "h", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: prodVersion}\n  holds: {kind: series, form: \"v{major}\"}\n"),
+	}, extra...)
+	g := chaintest.Load(t, docs...)
+	e, err := NewEngine(Builtin(), g)
+	require.NoError(t, err)
+	return e, g.Holdings()[0]
+}
+
+func TestASeriesHoldingIsWrittenOnlyWhenAnEditFollowsIt(t *testing.T) {
+	e, h := seriesEngine(t)
+
+	_, err := e.SeriesRoute(h)
+
+	require.ErrorIs(t, err, ErrNoEdit)
+	assert.ErrorContains(t, err, `"h"`)
+}
+
+func TestASeriesRouteRunsTheEditAroundTheWriteOfTheSeries(t *testing.T) {
+	e, h := seriesEngine(t, chaintest.Doc("Edit", "regen", "{holding: [h]}", "  postEdit:\n    - {run: [make, generate]}\n"))
+	route, err := e.SeriesRoute(h)
+	require.NoError(t, err)
+	tree := files{"build.yaml": "prodVersion: v9\n"}
+	var order []string
+	rec := &recorder{order: &order}
+	target := Target{Branch: "rel-v2.15", Line: "v2.15", Holdings: route.Holdings}
+
+	res, err := route.Run(bg, tree, rec, target, "", "", "/work", func(_ context.Context, u Unit) error {
+		order = append(order, "unit "+string(u.Kind))
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "prod", route.Producer.Name())
+	assert.Equal(t, "cons", route.Consumer.Name())
+	assert.True(t, res.Changed)
+	assert.Equal(t, "prodVersion: v8\n", tree["build.yaml"], "the series of v2.15, written as the form says")
+	assert.Equal(t, []string{"unit edit", "run make generate", "unit step"}, order)
+
+	chk, err := route.Check(bg, tree, target, "", "")
+	require.NoError(t, err)
+	require.Len(t, chk, 1)
+	assert.True(t, chk[0].UpToDate)
+}
