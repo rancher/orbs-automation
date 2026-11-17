@@ -27,7 +27,7 @@ var fileNameVars = []string{"tag", "version"}
 // registries, when it names none, are the ones its release kind goes to, which a
 // getter gives.
 func (a *Artifact) SetDefaults() {
-	if len(a.Refs["pins"]) > 0 && a.Spec.Pins.File == "" {
+	if len(RefList(a, "pins")) > 0 && a.Spec.Pins.File == "" {
 		a.Spec.Pins.File = DefaultPinFile
 	}
 }
@@ -76,7 +76,7 @@ func (a *Artifact) Validate(_ config.Context, r *config.Report) {
 // That what it pins is a Go module too, and that the pins do not circle, is
 // checked across documents.
 func (a *Artifact) validatePins(r *config.Report, kindOK bool) {
-	pinned, file := a.Refs["pins"], a.Spec.Pins.File
+	pinned, file := RefList(a, "pins"), a.Spec.Pins.File
 	if len(pinned) > 0 && kindOK && a.Spec.Kind != ArtifactGoMod {
 		r.Errorf("refs.pins", "only a %s Artifact pins another, and this one is %s", ArtifactGoMod, a.Spec.Kind)
 	}

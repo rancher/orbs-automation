@@ -370,6 +370,66 @@ func TestProjectsThatHoldSomethingOfEachOtherAreAWarning(t *testing.T) {
 	})
 }
 
+func TestProjectsThatHoldInARingAreAWarning(t *testing.T) {
+	ring := func(extra ...string) []string {
+		set := []string{
+			doc("Project", "p", "", projectSpec),
+			doc("Project", "q", "", "  repo: {name: acme/b}\n"),
+			doc("Project", "r", "", "  repo: {name: acme/c}\n"),
+			doc("Stream", "sp", "{project: p}", streamSpec),
+			doc("Stream", "sq", "{project: q}", streamSpec),
+			doc("Stream", "sr", "{project: r}", streamSpec),
+			doc("Artifact", "ap", "{stream: sp}", artifactSpec),
+			doc("Artifact", "aq", "{stream: sq}", "  kind: image\n  name: acme/b\n"),
+			doc("Artifact", "ar", "{stream: sr}", "  kind: image\n  name: acme/c\n"),
+			doc("Holding", "p-holds-q", "{project: p, artifact: aq}", holdingSpec),
+			doc("Holding", "q-holds-r", "{project: q, artifact: ar}", holdingSpec),
+		}
+		return append(set, extra...)
+	}
+
+	t.Run("a line of three is fine", func(t *testing.T) {
+		assert.Empty(t, validateSet(t, ring()...).Warnings())
+	})
+	t.Run("a ring of three is one warning on the holding that closes it", func(t *testing.T) {
+		rep := validateSet(t, ring(doc("Holding", "r-holds-p", "{project: r, artifact: ap}", holdingSpec))...)
+
+		assert.NoError(t, rep.Err(), "a circular dependency is not an error")
+		require.Len(t, rep.Warnings(), 1, "%v", rep.Findings)
+		w := rep.Warnings()[0]
+		assert.Equal(t, `Holding "r-holds-p"`, w.Label)
+		assert.Equal(t, RuleCircularHolding, w.Rule)
+		assert.Contains(t, w.Msg, "circular")
+		assert.Contains(t, w.Msg, `"p"`)
+		assert.Contains(t, w.Msg, `"q"`)
+		assert.Contains(t, w.Msg, `"r"`)
+	})
+	t.Run("a way back that is shorter is the same warning, not another", func(t *testing.T) {
+		rep := validateSet(t, ring(
+			doc("Holding", "r-holds-p", "{project: r, artifact: ap}", holdingSpec),
+			doc("Holding", "q-holds-p", "{project: q, artifact: ap}", holdingSpec),
+		)...)
+
+		require.Len(t, rep.Warnings(), 1, "%v", rep.Findings)
+		assert.Equal(t, `Holding "q-holds-p"`, rep.Warnings()[0].Label, "the last of the set to be read, which is the one of the pair too")
+	})
+	t.Run("two rings apart are two warnings", func(t *testing.T) {
+		rep := validateSet(t, ring(
+			doc("Holding", "r-holds-p", "{project: r, artifact: ap}", holdingSpec),
+			doc("Project", "s", "", "  repo: {name: acme/d}\n"),
+			doc("Project", "u", "", "  repo: {name: acme/e}\n"),
+			doc("Stream", "ss", "{project: s}", streamSpec),
+			doc("Stream", "su", "{project: u}", streamSpec),
+			doc("Artifact", "as", "{stream: ss}", "  kind: image\n  name: acme/d\n"),
+			doc("Artifact", "au", "{stream: su}", "  kind: image\n  name: acme/e\n"),
+			doc("Holding", "s-holds-u", "{project: s, artifact: au}", holdingSpec),
+			doc("Holding", "u-holds-s", "{project: u, artifact: as}", holdingSpec),
+		)...)
+
+		assert.Len(t, rep.Warnings(), 2, "%v", rep.Findings)
+	})
+}
+
 func TestALineWithNoBranchAfterDevelopmentIsAWarning(t *testing.T) {
 	lines := doc("RancherLines", "rancher", "", `  lines:
     - id: v2.16

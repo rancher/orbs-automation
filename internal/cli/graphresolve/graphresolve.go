@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
@@ -34,22 +35,40 @@ const (
 // Kinds lists the kinds Graph can draw, the default first.
 var Kinds = []Kind{KindD2, KindMindmap}
 
+// Options chooses which projects are drawn (docs/specs/CONFIG_GRAPH.md, "Filtering").
+type Options struct {
+	// External puts the external projects in.
+	External bool
+	// Projects are patterns on a project's name, slug and aliases; one that starts
+	// with ! leaves out what it matches.
+	Projects []string
+	// ManagedBy keeps the projects whose managedBy is one of them.
+	ManagedBy []string
+	// Line draws one release line only.
+	Line string
+	// Now is the day the phase of a line is read at.
+	Now time.Time
+}
+
 // Graph draws the central config found from s and the working directory cwd as
-// a diagram of the kind asks for.
-func Graph(s clicfg.Settings, cwd string, kind Kind) (string, error) {
-	return run(workspace.Open(s, cwd), s.Output, kind)
+// a diagram of the kind asks for, of the projects the options choose.
+func Graph(s clicfg.Settings, cwd string, kind Kind, opts Options) (string, error) {
+	if opts.Now.IsZero() {
+		opts.Now = time.Now()
+	}
+	return run(workspace.Open(s, cwd), s.Output, kind, opts)
 }
 
 // run draws the config as the output format and the kind ask for.
-func run(ws Workspace, format string, kind Kind) (string, error) {
+func run(ws Workspace, format string, kind Kind, opts Options) (string, error) {
 	if format != clicfg.OutputText {
 		return "", fmt.Errorf("output format %q is not supported by config resolve graph: it writes D2 or Mermaid", format)
 	}
 	switch kind {
 	case KindD2:
-		return graph(ws)
+		return graph(ws, opts)
 	case KindMindmap:
-		return mindmap(ws)
+		return mindmap(ws, opts)
 	}
 	return "", fmt.Errorf("graph type %q is not supported by config resolve graph", kind)
 }
@@ -58,21 +77,22 @@ func run(ws Workspace, format string, kind Kind) (string, error) {
 // no edges, so a Project is a branch of the root, and what joins two Projects is
 // said on both of them: the artifact says where it reaches, and the holder says
 // what it holds and from whom.
-func mindmap(ws Workspace) (string, error) {
+func mindmap(ws Workspace, opts Options) (string, error) {
 	g, err := ws.Chain()
 	if err != nil {
 		return "", err
 	}
-	holdings := append(slices.Clone(g.Holdings()), g.Virtual()...)
-	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
-	projects := slices.Clone(g.Projects())
-	slices.SortFunc(projects, func(a, c *chain.Project) int { return strings.Compare(a.Slug(), c.Slug()) })
+	v, err := newView(g, opts)
+	if err != nil {
+		return "", err
+	}
+	projects := v.drawnProjects()
 
 	m := &mindmapWriter{}
 	m.b.WriteString("mindmap\n")
 	m.node(1, `root(("gero config"))`)
 	for _, p := range projects {
-		m.project(g, p, holdings)
+		m.project(g, v, p)
 	}
 	return m.b.String(), nil
 }
@@ -94,7 +114,8 @@ func (m *mindmapWriter) label(depth int, text string) {
 	m.node(depth, fmt.Sprintf(`n%d["%s"]`, m.n, text))
 }
 
-func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*chain.Holding) {
+func (m *mindmapWriter) project(g *chain.Graph, v *view, p *chain.Project) {
+	holdings := v.holdings
 	var marks []string
 	switch {
 	case p.External():
@@ -112,20 +133,33 @@ func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*ch
 		text += " (" + strings.Join(marks, ", ") + ")"
 	}
 	m.label(2, text)
-	for _, st := range p.Streams() {
+	for _, st := range v.streams(p) {
 		m.label(3, streamLabel(st))
-		for _, a := range st.Artifacts() {
+		for _, a := range v.artifacts(st) {
 			m.label(4, "artifact "+a.Name()+": "+a.Ref())
 			for _, h := range holdings {
 				if h.Artifact() == a {
-					m.label(5, reaches(g, h))
+					m.label(5, reaches(g, v, h))
 				}
 			}
 		}
 	}
 	for _, h := range holdings {
 		if h.Producer() == p && h.Artifact() == nil {
-			m.label(3, reaches(g, h))
+			m.label(3, reaches(g, v, h))
+		}
+	}
+	if rows := v.rows(p); len(rows) > 0 {
+		m.label(3, "lines")
+		for _, r := range rows {
+			text := r.text() + ": " + r.branchText()
+			if r.series != "" {
+				text += ", " + r.series
+			}
+			if phase := v.phase(r.line); phase != "" {
+				text += " (" + phase + ")"
+			}
+			m.label(4, text)
 		}
 	}
 	first := true
@@ -150,11 +184,11 @@ func (m *mindmapWriter) project(g *chain.Graph, p *chain.Project, holdings []*ch
 
 // reaches says where a holding takes what its producer makes: its holder, by
 // the holding, for the lines it serves.
-func reaches(g *chain.Graph, h *chain.Holding) string {
+func reaches(g *chain.Graph, v *view, h *chain.Holding) string {
 	text := "to " + h.Holder().Name() + " via " + h.Name()
 	var served []string
 	for _, l := range g.Lines() {
-		if h.AppliesTo(l.ID) {
+		if v.line == "" && h.AppliesTo(l.ID) {
 			served = append(served, l.ID)
 		}
 	}
@@ -175,6 +209,8 @@ const (
 	classStream   = "stream"
 	classArtifact = "artifact"
 	classEdit     = "edit"
+	classBoundary = "boundary"
+	classLine     = "line"
 )
 
 const header = `direction: down
@@ -192,50 +228,58 @@ classes: {
   stream: {style.fill: "#ffffff"; style.stroke-dash: 2}
   artifact: {shape: cylinder}
   edit: {style.fill: "#fde2e2"}
+  boundary: {style.fill: "#ffffff"; style.stroke-dash: 3; style.opacity: 0.5}
+  line: {style.fill: "#ffffff"; style.stroke-width: 3}
+  development: {style.stroke: "#4a90d9"}
+  ga: {style.stroke: "#2e8b57"}
+  eom: {style.stroke: "#d98e04"}
+  eol: {style.stroke: "#b22222"}
 }
 `
 
-func graph(ws Workspace) (string, error) {
+func graph(ws Workspace, opts Options) (string, error) {
 	g, err := ws.Chain()
+	if err != nil {
+		return "", err
+	}
+	v, err := newView(g, opts)
 	if err != nil {
 		return "", err
 	}
 	var b strings.Builder
 	b.WriteString(header)
 
-	projects := slices.Clone(g.Projects())
-	slices.SortFunc(projects, func(a, c *chain.Project) int { return strings.Compare(a.Slug(), c.Slug()) })
 	b.WriteString("\n")
-	for _, p := range projects {
-		writeProject(&b, p)
+	for _, p := range v.projects {
+		if v.boundary[p] {
+			fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(p.Slug()), classBoundary, quote(p.Name()))
+			continue
+		}
+		writeProject(&b, v, p)
 	}
 
 	// What a pin makes is a holding of its holder as well: a consumer says nothing of
 	// lasso where it holds wrangler, and lasso still flows to it.
-	holdings := append(slices.Clone(g.Holdings()), g.Virtual()...)
-	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
 	b.WriteString("\n")
+	for _, h := range v.holdings {
+		writeHolding(&b, g, v, h)
+	}
 	edits := map[string]*chain.Edit{}
-	for _, h := range holdings {
-		writeHolding(&b, g, h)
-		for _, e := range h.Edits() {
-			edits[e.Name()] = e
-		}
+	for _, f := range v.follows {
+		edits[f.Edit.Name()] = f.Edit
 	}
 
 	b.WriteString("\n")
 	for _, name := range slices.Sorted(maps.Keys(edits)) {
 		fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(editKey(edits[name])), classEdit, quote(editLabel(edits[name])))
 	}
-	for _, h := range holdings {
-		for _, e := range h.Edits() {
-			fmt.Fprintf(&b, "%s -> %s: {style.stroke-dash: 4}\n", quote("holding:"+h.Name()), quote(editKey(e)))
-		}
+	for _, f := range v.follows { // a follows edge points at the Holding; the diagram flows from it
+		fmt.Fprintf(&b, "%s -> %s: {style.stroke-dash: 4}\n", quote(string(f.To)), quote(string(f.From)))
 	}
 	return b.String(), nil
 }
 
-func writeProject(b *strings.Builder, p *chain.Project) {
+func writeProject(b *strings.Builder, v *view, p *chain.Project) {
 	class, label := classManaged, p.Name()
 	switch {
 	case p.External():
@@ -250,10 +294,28 @@ func writeProject(b *strings.Builder, p *chain.Project) {
 		classes += "; " + classHub
 	}
 	fmt.Fprintf(b, "%s: {\n  class: [%s]\n  label: %s\n", quote(p.Slug()), classes, quote(label))
-	for _, st := range p.Streams() {
+	for _, st := range v.streams(p) {
 		fmt.Fprintf(b, "  %s: {\n    class: [%s]\n    label: %s\n", quote(streamKey(st)), classStream, quote(streamLabel(st)))
-		for _, a := range st.Artifacts() {
+		for _, a := range v.artifacts(st) {
 			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(artifactKey(a)), classArtifact, quote(a.Name()+"\n"+a.Ref()))
+		}
+		b.WriteString("  }\n")
+	}
+	if rows := v.rows(p); len(rows) > 0 {
+		b.WriteString("  \"lines\": {\n    label: \"release lines\"\n")
+		for _, r := range rows {
+			key, label := "line:"+r.line, r.text()+"\n"+r.branchText()
+			if r.stage != "" {
+				key += ":" + r.stage
+			}
+			if r.series != "" {
+				label += "\n" + r.series
+			}
+			class := classLine
+			if phase := v.phase(r.line); phase != "" {
+				class += "; " + phase
+			}
+			fmt.Fprintf(b, "    %s: {class: [%s]; label: %s}\n", quote(key), class, quote(label))
 		}
 		b.WriteString("  }\n")
 	}
@@ -270,7 +332,7 @@ func streamLabel(s *chain.Stream) string {
 	return "stream " + s.Name() + "\n" + s.TagPattern()
 }
 
-func editKey(e *chain.Edit) string { return "edit:" + e.Name() }
+func editKey(e *chain.Edit) string { return string(chain.EditID(e)) }
 
 // editLabel names the edit and says what it does: the strategy that needs code,
 // and how many steps run before and after the write.
@@ -303,25 +365,25 @@ func artifactKey(a *chain.Artifact) string { return "artifact:" + a.Name() }
 
 // producerPath is where a holding's flow starts: the artifact, inside its stream
 // and project, for a release, and the project for a commit or a branch.
-func producerPath(h *chain.Holding) string {
+func producerPath(v *view, h *chain.Holding) string {
 	p := quote(h.Producer().Slug())
-	if a := h.Artifact(); a != nil {
+	if a := h.Artifact(); a != nil && !v.boundary[h.Producer()] {
 		return p + "." + quote(streamKey(a.Stream())) + "." + quote(artifactKey(a))
 	}
 	return p
 }
 
-func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
-	id := quote("holding:" + h.Name())
+func writeHolding(b *strings.Builder, g *chain.Graph, v *view, h *chain.Holding) {
+	id := quote(string(chain.HoldingID(h)))
 	label := h.Name() + "\n" + h.Kind()
 	if h.Virtual() {
 		label += ", pinned"
 	}
 	fmt.Fprintf(b, "%s: {class: [%s]; label: %s}\n", id, classHolding, quote(label))
-	fmt.Fprintf(b, "%s -> %s\n", producerPath(h), id)
+	fmt.Fprintf(b, "%s -> %s\n", producerPath(v, h), id)
 	var served []string
 	for _, l := range g.Lines() {
-		if h.AppliesTo(l.ID) {
+		if v.line == "" && h.AppliesTo(l.ID) {
 			served = append(served, l.ID)
 		}
 	}

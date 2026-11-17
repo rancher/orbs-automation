@@ -175,7 +175,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * Every line named is in `RancherLines`; a stream's series do not overlap
 * A holding's `from`, `artifact` or `stream` matches its `holds.kind`; its templates use only the variables and modifiers allowed where they are written; its `format` is listed
 * A selector's `since` is not after its `until`
-* A project that holds something of another, which holds something of it, is a warning: the dependency is circular
+* Projects that hold something of one another in a cycle, of two or of any longer ring, are a warning: the dependency is circular. It is one warning for each set of projects that all reach one another through their holdings, naming them in the order of the cycle, and it is raised on the last Holding of that cycle in the order read, the one that closes it
 * A repo that is `external` has no `managedBy`: no team manages a repo outside the organization
 * Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
 * A calver stream is on a project whose layout is `single`; a project holds nothing of itself
@@ -193,7 +193,7 @@ A warning never makes a document invalid. It names its rule by a stable id, show
 
 | Rule | Raised when | Built |
 |---|---|---|
-| `circular-holding` | a project holds something of another, which holds something of it | yes |
+| `circular-holding` | projects hold something of one another in a cycle, of any length | yes |
 | `default-branch-past-development` | a line with no `branch` is past development, so it is read from the default branch | yes |
 | `unknown-key` | a user file has a key it does not know (the user file is not a document, so it cannot be acknowledged) | yes |
 | `locations-differ` | the locations of one Holding hold different versions for a line: it reads the files of a repo at a ref, only when a command asks (not when the graph is built), so `gero repo status` raises it on the Consumers row, not `config validate`; a document can acknowledge it, and validation does not call that acknowledgement unused, since it cannot see the warning | yes |

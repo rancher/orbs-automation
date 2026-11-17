@@ -68,6 +68,7 @@ internal/gero/selfupdate/   replaces the running binary with a verified release;
 internal/gero/shellenv/     the shell, its profile, the script and the marked block gero adds   (SHELL_SETUP)
 
 internal/platform/config/     the config engine: decodes one object strictly, fills its defaults, validates it, and reports every finding, errors and warnings   (docs/design/CONFIG_ENGINE.md)
+internal/platform/graph/      a directed graph over any comparable node with a payload on each edge, and its queries: cycles, what is reachable, a path; knows nothing of gero   (docs/design/CHAIN_MODEL.md)
 internal/platform/templates/  the placeholder syntax of config text: the renderer and validator, and the variables a project's texts, an edit's env and a strategy's texts may use
 internal/platform/execx/      the one place gero starts another program: allow-listed binaries, raw stdout, stderr and exit code, no formatting; the only importer of os/exec
 internal/platform/semver/     release tag classification, as the check-semver script did, and a Series of versions (9.x, 0.9.x) that holds versions and overlaps another   (CHECK_SEMVER)
