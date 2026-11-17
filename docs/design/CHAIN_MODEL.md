@@ -84,3 +84,39 @@ No answer is stored in the config that can be worked out from it. There is no im
 ## One adapter
 
 `chain` is the only domain package that reads a version of the API. The names the domain uses (layouts, what a holding holds, `accept`, registry roles) are `chain` constants; the scheme and stage names belong to `tagscheme` and `calver`; and `names_test.go` checks each is the name the config accepts. A new version changes `appconfig`, `chain` and `chainload`. The `oneversion` rule in `.golangci.yml` denies `apis/v1alpha2` anywhere else, except in tests. What every version shares, such as a line and its dates, is in `apis/lines`.
+
+## The graph as nodes and edges
+
+The config is a network: the documents are nodes, and a `refs` name is a foreign key from one to another. Two kinds are joins more than things. A Holding joins a holder Project to a producer and carries the payload of the join (where it is held, what of the producer, for which lines); an Edit joins to the Holdings it follows. The graph reads them so, with typed edges and the queries a graph has, not one hand-walked grouping for each command.
+
+* **A node is named `kind:name`**: `project:rancher`, `artifact:lasso`, `holding:rancher-wrangler`, `edit:go-bump`. The prefix keeps a Project and an Artifact of one name apart, and a name reads the same in a finding, a test and a diagram.
+* **An edge is one of three kinds**, each with the document it was made from as its payload:
+
+| Kind | From, to | Payload | Made by |
+|---|---|---|---|
+| `holds` | holder Project, producer Project | the Holding | every Holding, whatever it holds, and each virtual Holding a pin makes |
+| `pins` | pinning Artifact, pinned Artifact | none | `refs.pins` |
+| `follows` | Edit, Holding | the Edit | `refs.holding` of an Edit, and the virtual Holdings of the pins of those Holdings |
+
+* **Membership is not an edge.** A Stream of a Project and an Artifact of a Stream stay parent links (`Stream.Project`, `Artifact.Stream`): they say what a thing is part of, and no question of the config is asked by walking them as a path.
+* **A virtual Holding is a derived edge**, built with the graph, and is returned beside the written ones with `Holding.Virtual` set. A caller that wants only what the documents say filters on it.
+* **`Graph.Edges(kinds...)`** returns the edges of those kinds, or all of them, in the order the documents were read, so the same config always gives the same edges. It builds no index of its own: it reads the links `Build` already made (`held`, `sourced`, `pins`, `edits`).
+* **`Route` is a grouping of `holds` edges**: the release holdings one consumer has of one stream of a producer. `RoutesFrom` and `RoutesInto` are that grouping and agree with `Edges(holds)`.
+
+### Queries
+
+The queries are not written for the config. They come from `internal/platform/graph`, a directed graph over any comparable node with a payload on each edge, which knows nothing of gero ([LAYERS](LAYERS.md)). The same package is used before the graph exists, by the rules across documents, where the nodes are names.
+
+| Query | Answers |
+|---|---|
+| `Cycles` | each set of nodes that can all reach one another, as a path in the order the nodes were first added; a node that points at itself is one |
+| `Reachable(from)` | every node a path from `from` reaches, in the order first found, without `from` unless it is on a cycle |
+| `Path(from, to)` | whether a path exists, and the shortest one |
+
+* **A cycle is found whatever its length.** Two projects that hold something of each other, and three that hold in a ring, are the same finding; a rule is not written for the pair.
+* **Order is a property.** Nodes and edges are visited in the order they were added, so a path, a cycle and a reachable list are the same on every run.
+* **Nothing is mutated by a query.** A graph is built, then asked.
+
+### One way to follow a ref
+
+A kind's refs are declared once, in `refKeys` of the version package: each key's target kind, whether it is required, and whether it takes one name or a list. The rules across documents and the join `Build` makes both follow a ref through the one resolver built from that table, so a key added to a kind is added in one place, and `Build` never reads a ref by position of its own. A test fails when `chain` reads `Refs` anywhere but through the resolver.

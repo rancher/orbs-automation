@@ -25,7 +25,7 @@ A default fills only a field that has a conservative value of its own, such as `
 
 ## Validating across documents
 
-One object cannot check references to others. A version package adds a set check that runs after every document is decoded and defaulted: unique names, references that resolve to the kind their key names, unique repo slugs, at most one final destination, at most one default-branch line for a project, series that do not overlap, and a holding whose reference matches what it holds. It is skipped when any document failed to decode, as today.
+One object cannot check references to others. A version package adds a set check that runs after every document is decoded and defaulted: unique names, references that resolve to the kind their key names, unique repo slugs, at most one final destination, at most one default-branch line for a project, series that do not overlap, and a holding whose reference matches what it holds. A reference is followed through one resolver built from the table of a kind's refs, the same one the graph of [CHAIN_MODEL](CHAIN_MODEL.md) is joined with, and a cycle is found by the generic graph of `internal/platform/graph`. It is skipped when any document failed to decode, as today.
 
 ## Providers
 

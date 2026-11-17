@@ -18,7 +18,7 @@ cmd
 
 | Layer | Holds | May import |
 |---|---|---|
-| `platform` | generic packages with no knowledge of gero, projects, releases or lines, that another tool could use as they are: clients, exec, YAML editing, version parsing, the template syntax, the config engine | platform and third-party packages |
+| `platform` | generic packages with no knowledge of gero, projects, releases or lines, that another tool could use as they are: clients, exec, YAML editing, version parsing, the template syntax, the config engine, the graph and its queries | platform and third-party packages |
 | `apis` | the versioned config contract: the envelope, the kinds of each apiVersion, their defaults and rules. It depends on nothing gero-specific | platform and apis |
 | `gero` | gero's own infrastructure, which knows it is gero but not the config model: the CLI settings, who commits are attributed to, the work directory of a run, the self-update and the proof a release is gero's, the shell integration, the texts and trailer of its commits and PRs | platform, apis and gero |
 | domain | what the tool knows about projects, releases and shipping | platform, apis, gero and domain |
