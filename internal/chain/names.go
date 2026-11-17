@@ -8,6 +8,7 @@ const (
 	LayoutPerLine = "perLine"
 
 	HoldsRelease = "release"
+	HoldsSeries  = "series"
 	AcceptAll    = "all"
 
 	RegistryDockerHub       = "dockerhub"

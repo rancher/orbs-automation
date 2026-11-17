@@ -12,6 +12,7 @@ type Holding struct {
 	holder   *Project
 	producer *Project
 	artifact *Artifact
+	stream   *Stream // for a series holding: the stream whose series it holds
 	edits    []*Edit
 
 	virtual  bool
@@ -43,19 +44,23 @@ const RuleLocationsDiffer = v1alpha2.RuleLocationsDiffer
 // Name is the name of the document.
 func (h *Holding) Name() string { return h.Doc.Name }
 
-// Kind is what the holding holds: release, commit or branch.
+// Kind is what the holding holds: release, commit, branch or series.
 func (h *Holding) Kind() string { return h.Doc.Spec.Holds.Kind }
 
 // Holder is the project whose file it is.
 func (h *Holding) Holder() *Project { return h.holder }
 
 // Producer is the project the holding holds something of: the one whose stream
-// makes the artifact, or the one a commit or a branch is taken from.
+// makes the artifact, the one whose stream a series is of, or the one a commit or a
+// branch is taken from.
 func (h *Holding) Producer() *Project { return h.producer }
 
 // Artifact is the artifact a release holding holds, and nil for a commit or a
 // branch.
 func (h *Holding) Artifact() *Artifact { return h.artifact }
+
+// Stream is the stream whose series a series holding holds, and nil for any other.
+func (h *Holding) Stream() *Stream { return h.stream }
 
 // AppliesTo reports whether the holding is for the line: its own range holds it,
 // the holder lists it (a single layout lists every line), and the producer lists
@@ -66,6 +71,10 @@ func (h *Holding) AppliesTo(line string) bool {
 	}
 	if h.artifact != nil {
 		return h.artifact.stream.Serves(line) && h.artifact.AppliesTo(line)
+	}
+	if h.stream != nil {
+		_, ok := h.stream.Series(line)
+		return ok
 	}
 	return h.producer.serves(line)
 }
