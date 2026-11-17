@@ -63,8 +63,7 @@ func mindmap(ws Workspace) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	holdings := append(slices.Clone(g.Holdings()), g.Virtual()...)
-	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
+	holdings := holdingsOf(g)
 	projects := slices.Clone(g.Projects())
 	slices.SortFunc(projects, func(a, c *chain.Project) int { return strings.Compare(a.Slug(), c.Slug()) })
 
@@ -212,25 +211,24 @@ func graph(ws Workspace) (string, error) {
 
 	// What a pin makes is a holding of its holder as well: a consumer says nothing of
 	// lasso where it holds wrangler, and lasso still flows to it.
-	holdings := append(slices.Clone(g.Holdings()), g.Virtual()...)
-	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
+	holdings := holdingsOf(g)
 	b.WriteString("\n")
-	edits := map[string]*chain.Edit{}
 	for _, h := range holdings {
 		writeHolding(&b, g, h)
-		for _, e := range h.Edits() {
-			edits[e.Name()] = e
-		}
+	}
+	follows := g.Edges(chain.EdgeFollows)
+	slices.SortStableFunc(follows, func(a, c chain.Edge) int { return strings.Compare(a.Holding.Name(), c.Holding.Name()) })
+	edits := map[string]*chain.Edit{}
+	for _, f := range follows {
+		edits[f.Edit.Name()] = f.Edit
 	}
 
 	b.WriteString("\n")
 	for _, name := range slices.Sorted(maps.Keys(edits)) {
 		fmt.Fprintf(&b, "%s: {class: [%s]; label: %s}\n", quote(editKey(edits[name])), classEdit, quote(editLabel(edits[name])))
 	}
-	for _, h := range holdings {
-		for _, e := range h.Edits() {
-			fmt.Fprintf(&b, "%s -> %s: {style.stroke-dash: 4}\n", quote("holding:"+h.Name()), quote(editKey(e)))
-		}
+	for _, f := range follows { // a follows edge points at the Holding; the diagram flows from it
+		fmt.Fprintf(&b, "%s -> %s: {style.stroke-dash: 4}\n", quote(string(f.To)), quote(string(f.From)))
 	}
 	return b.String(), nil
 }
@@ -270,7 +268,18 @@ func streamLabel(s *chain.Stream) string {
 	return "stream " + s.Name() + "\n" + s.TagPattern()
 }
 
-func editKey(e *chain.Edit) string { return "edit:" + e.Name() }
+func editKey(e *chain.Edit) string { return string(chain.EditID(e)) }
+
+// holdingsOf is every Holding, the ones the pins make as well, by name: what a pin
+// makes is a holding of its holder as much as one a document says.
+func holdingsOf(g *chain.Graph) []*chain.Holding {
+	var holdings []*chain.Holding
+	for _, e := range g.Edges(chain.EdgeHolds) {
+		holdings = append(holdings, e.Holding)
+	}
+	slices.SortFunc(holdings, func(a, c *chain.Holding) int { return strings.Compare(a.Name(), c.Name()) })
+	return holdings
+}
 
 // editLabel names the edit and says what it does: the strategy that needs code,
 // and how many steps run before and after the write.
@@ -312,7 +321,7 @@ func producerPath(h *chain.Holding) string {
 }
 
 func writeHolding(b *strings.Builder, g *chain.Graph, h *chain.Holding) {
-	id := quote("holding:" + h.Name())
+	id := quote(string(chain.HoldingID(h)))
 	label := h.Name() + "\n" + h.Kind()
 	if h.Virtual() {
 		label += ", pinned"

@@ -121,7 +121,6 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 ### Config and CLI
 
 * **M: Add `gero config show --resolved`,** which prints the graph with defaults applied. [APP_CONFIG](specs/APP_CONFIG.md)
-* **S: Warn of holding cycles longer than two projects.** Done when a three-project cycle raises `circular-holding`.
 * **M: Add one `ui.Confirm`** for `ship`, `repo tag`, `shell install` and `doctor self-update`, which each draw their own `[y/N]`. Done when all four use it. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
 * **M: Give every command the logger through the context.** `ship` builds its own in `cmd/` and no other command logs. Done when one logger is built and handed down. [CLI_OUTPUT](specs/CLI_OUTPUT.md)
 * **M: Narrow `ship.Git` and `ship.Remote` to what each task calls.** Both carry every method any task needs. Done when each task takes an interface of its own.
