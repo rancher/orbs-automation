@@ -32,6 +32,8 @@ type SeriesLine struct {
 	Current  string `json:"current,omitempty"`
 	Want     string `json:"want,omitempty"`
 	UpToDate bool   `json:"upToDate"`
+	// Change says in words what a write would change, for a line that differs.
+	Change string `json:"change,omitempty"`
 	// Error is why the branch could not be read, or the line has no series to hold.
 	Error string `json:"error,omitempty"`
 	// Suggest is the pull request that would fix a difference, said when an edit
@@ -117,6 +119,7 @@ func seriesLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.
 	if out.UpToDate {
 		return out
 	}
+	out.Change = check.Change.Description
 	out.Acknowledged, _ = h.Acknowledgement(chain.RuleSeriesDiffers, line)
 	if edits := h.Edits(); len(edits) > 0 && out.Acknowledged == "" {
 		out.Suggest = fmt.Sprintf("open a pull request on %s of %s that writes %s, with Edit %s", branch, holder.Slug(), out.Want, edits[0].Name())

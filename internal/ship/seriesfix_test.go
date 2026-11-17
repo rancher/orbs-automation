@@ -121,7 +121,7 @@ func TestFixSeriesWithoutAnExecutorOnlyChecks(t *testing.T) {
 	require.NotNil(t, behind.Preview)
 	assert.Equal(t, seriesBr, behind.Preview.Branch)
 	assert.Equal(t, "[v7.x] Track prod 8.x on v2.15", behind.Preview.Title)
-	assert.Contains(t, behind.Preview.Body, "Set `prodVersion` in `build.yaml` from `v9` to `v8`")
+	assert.Contains(t, behind.Preview.Body, "Updated `prodVersion` in `build.yaml` from `v9` to `v8`")
 	assert.Contains(t, behind.Preview.Body, "gero:ship")
 	assert.Nil(t, behind.Result, "nothing was written")
 	assert.False(t, branchExistsIn(t, ws.clone, seriesBr))
