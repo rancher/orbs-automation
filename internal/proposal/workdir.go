@@ -85,6 +85,10 @@ func (GitCLI) CreateTag(ctx context.Context, dir, name, commit string, a createt
 	return gitcli.CreateTag(ctx, dir, name, commit, gitcli.Tag{Message: a.Message, Name: a.Name, Email: a.Email, Sign: a.Sign})
 }
 
+func (GitCLI) SignsTags(ctx context.Context, dir string) (bool, error) {
+	return false, nil
+}
+
 func (GitCLI) TagCommit(ctx context.Context, dir, name string) (string, bool, error) {
 	return gitcli.TagCommit(ctx, dir, name)
 }

@@ -93,9 +93,11 @@ type fakeGit struct {
 	pushed []string
 	// annotations are what each tag was made with.
 	annotations []createtag.Annotation
-	fetchErr    error
-	createErr   error
-	pushErr     error
+	// signsTags is what git is set to do about signing a tag.
+	signsTags bool
+	fetchErr  error
+	createErr error
+	pushErr   error
 }
 
 func (f *fakeGit) Fetch(_ context.Context, _, _, branch string) (string, error) {
@@ -112,6 +114,8 @@ func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string, a creat
 	f.annotations = append(f.annotations, a)
 	return f.createErr
 }
+
+func (f *fakeGit) SignsTags(context.Context, string) (bool, error) { return f.signsTags, nil }
 
 func (f *fakeGit) PushTag(_ context.Context, dir, remote, name string) error {
 	f.pushed = append(f.pushed, dir+" "+remote+" "+name)
