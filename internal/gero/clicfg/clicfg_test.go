@@ -948,3 +948,18 @@ func TestAUserPrefixThatSaysNothingTwiceHasNoWarning(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, s.Warnings)
 }
+
+func TestDefaultBranchPrefixIsTheLoginAndASlash(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(nil), UserFile: strings.NewReader("githubUser: alice\n")})
+
+	require.NoError(t, err)
+	assert.Equal(t, "alice/", s.DefaultBranchPrefix())
+	assert.Empty(t, s.BranchPrefix, "the setting itself stays unset, so a project's prefix still applies")
+}
+
+func TestDefaultBranchPrefixIsEmptyWithoutALogin(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(nil)})
+
+	require.NoError(t, err)
+	assert.Empty(t, s.DefaultBranchPrefix())
+}

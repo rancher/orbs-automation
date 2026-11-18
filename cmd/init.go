@@ -19,15 +19,19 @@ func addInit(root *cobra.Command) {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create your user config file",
-		Long: `Create the user file, where gero keeps your own settings: your GitHub login,
-the names of your fork and upstream remotes, the prefix of your branches, where
-the central config is, and where your clones are and go.
+		Long: `Create the user file, where gero keeps your own settings. On a terminal it asks
+for the least that makes gero work on your workstation: your GitHub login, the
+names of your fork and upstream remotes, the directories where your clones are,
+and the directory new clones go in.
 
-Each value is asked for on a terminal unless its flag gives it (--github-user,
---fork, --upstream, --branch-prefix, --central-config-dir, --search, --clone-root). An
-empty answer skips the question and leaves its key out, so nothing is ever
-filled in for you. Without a terminal nothing is asked, and a value with no flag
-is skipped.
+Each is skipped when its flag gives it (--github-user, --fork, --upstream,
+--search, --clone-root). The login and the search directories are asked again
+when left empty. Enter on a remote takes origin for the fork and upstream for
+the upstream. The clone root is strongly suggested: without it gero repo clone
+needs --into on every run. Your branches are prefixed with your login and a
+slash unless you set --branch-prefix, and the central config comes with the
+release unless you set --central-config-dir; neither is asked. Without a
+terminal nothing is asked or defaulted, and a value with no flag is skipped.
 
 Two of the keys are alike and not the same. repos.search (--search) lists the
 directories gero scans for clones you already have: it only finds what is there.

@@ -387,3 +387,17 @@ func TestRenderEnvHasTheBundleChannelAndTheBundleFile(t *testing.T) {
 	assert.Contains(t, out, "GERO_BUNDLE_CHANNEL=stable\n")
 	assert.Contains(t, out, "GERO_BUNDLE_FILE=/tmp/b.yaml\n")
 }
+
+func TestBranchPrefixShowsTheLoginDefault(t *testing.T) {
+	out, err := Render(load(t, "githubUser: alice\n", nil, nil), workspace.CentralConfigDir{}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^branchPrefix\s+alice/\s+default$`, out)
+}
+
+func TestBranchPrefixFromTheFileBeatsTheLoginDefault(t *testing.T) {
+	out, err := Render(load(t, "githubUser: alice\nbranchPrefix: mine/\n", nil, nil), workspace.CentralConfigDir{}, clicfg.OutputText)
+
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^branchPrefix\s+mine/\s+file$`, out)
+}

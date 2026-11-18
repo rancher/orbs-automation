@@ -326,3 +326,21 @@ func TestSyncLeavesLinesThatWantDifferentValuesOfOnePlaceOnASingleBranch(t *test
 	require.NotEmpty(t, reasons)
 	assert.Contains(t, reasons[0], "want different values of one place")
 }
+
+func TestSyncBranchPrefixDefaultsToTheOneGiven(t *testing.T) {
+	ws, _ := newSeriesWS(t, true)
+
+	plan, err := Run(bg, ws, Input{NoPush: true, DefaultBranchPrefix: "alice/"}, nil)
+
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(branchOf(t, plan, behind).Preview.Branch, "alice/sync-"), branchOf(t, plan, behind).Preview.Branch)
+}
+
+func TestSyncUserBranchPrefixBeatsTheDefault(t *testing.T) {
+	ws, _ := newSeriesWS(t, true)
+
+	plan, err := Run(bg, ws, Input{NoPush: true, BranchPrefix: "mine/", DefaultBranchPrefix: "alice/"}, nil)
+
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(branchOf(t, plan, behind).Preview.Branch, "mine/sync-"), branchOf(t, plan, behind).Preview.Branch)
+}

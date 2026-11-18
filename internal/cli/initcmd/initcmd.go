@@ -20,6 +20,13 @@ import (
 // ErrExists is returned when the user file exists and Force was not given.
 var ErrExists = errors.New("the user file exists")
 
+// DefaultFork and DefaultUpstream are what Enter accepts at the question for
+// each remote on a terminal: the names git and GitHub's own guides use.
+const (
+	DefaultFork     = "origin"
+	DefaultUpstream = "upstream"
+)
+
 // Options are the choices of one run.
 type Options struct {
 	// The values of the file. One left empty is asked for on a terminal, and an
@@ -129,44 +136,71 @@ const searchVersusCloneRoot = `repos.search and repos.cloneRoot are not the same
 The clone root is scanned as well, so it need not be listed in repos.search.`
 
 // ask puts a question to each value still empty, on o.Out, and reads the answer
-// from o.In. An empty answer, or the end of the input, skips the question: its
-// value stays empty and its key is left out of the file.
+// from o.In. It asks the least that makes gero work on a workstation: the
+// login, the two remotes, the directories of the clones that exist and the one
+// for new clones. The branch prefix follows from the login and the central
+// config has the release bundle, so neither is asked; their flags still give
+// them. The login and the search directories are needed, so an empty answer asks
+// again. The remotes offer a default that Enter accepts. The clone root is
+// strongly suggested and may be skipped. The end of the input skips every
+// question left, so its keys are left out of the file.
 func ask(o Options, v *clicfg.UserFileValues) error {
 	view := style.New(o.Terminal)
 	in := bufio.NewReader(o.In)
-	var started bool
+	var eof bool
 	line := func(question string) (string, error) {
-		if !started {
-			started = true
-			if _, err := fmt.Fprintln(o.Out, view.Style(style.Dim, "Enter to skip any question: its key is then left out of the file.")); err != nil {
-				return "", err
-			}
+		if eof {
+			return "", nil
 		}
 		if _, err := fmt.Fprint(o.Out, view.Style(style.Heading, question)+" "); err != nil {
 			return "", err
 		}
 		text, err := in.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
+		if errors.Is(err, io.EOF) {
+			eof = true
+		} else if err != nil {
 			return "", err
 		}
 		return strings.TrimSpace(text), nil
 	}
+	// required asks until there is an answer, or the input ends.
+	required := func(question string) (string, error) {
+		for {
+			answer, err := line(question)
+			if err != nil || answer != "" || eof {
+				return answer, err
+			}
+		}
+	}
+	note := func(text string) error {
+		_, err := fmt.Fprintln(o.Out, view.Style(style.Dim, text))
+		return err
+	}
+
+	if v.GitHubUser == "" {
+		answer, err := required("Your GitHub login:")
+		if err != nil {
+			return err
+		}
+		v.GitHubUser = answer
+	}
 	for _, q := range []struct {
 		dest     *string
 		question string
+		def      string
 	}{
-		{&v.GitHubUser, "Your GitHub login:"},
-		{&v.Fork, "Remote that holds your fork (for example origin):"},
-		{&v.Upstream, "Remote that is the real source (for example upstream):"},
-		{&v.BranchPrefix, "Prefix of your branch names (for example me/):"},
-		{&v.CentralConfigDir, "Directory of the central config, centralConfigDir:"},
+		{&v.Fork, "Remote that holds your fork", DefaultFork},
+		{&v.Upstream, "Remote that is the real source", DefaultUpstream},
 	} {
 		if *q.dest != "" {
 			continue
 		}
-		answer, err := line(q.question)
+		answer, err := line(fmt.Sprintf("%s [%s]:", q.question, q.def))
 		if err != nil {
 			return err
+		}
+		if answer == "" && !eof {
+			answer = q.def
 		}
 		*q.dest = answer
 	}
@@ -176,16 +210,21 @@ func ask(o Options, v *clicfg.UserFileValues) error {
 		}
 	}
 	if len(v.Search) == 0 {
-		answer, err := line("Directories to scan for your existing clones, repos.search (comma-separated):")
+		answer, err := required("Directories to scan for your existing clones, repos.search (comma-separated):")
 		if err != nil {
 			return err
 		}
 		v.Search = cleanList(strings.Split(answer, ","))
 	}
 	if v.CloneRoot == "" {
-		answer, err := line("Directory for new clones, repos.cloneRoot:")
+		answer, err := line("Directory for new clones, repos.cloneRoot (strongly suggested):")
 		if err != nil {
 			return err
+		}
+		if answer == "" && !eof {
+			if err := note("Skipped: gero repo clone will need --into, or GERO_REPOS_CLONE_ROOT, until repos.cloneRoot is set."); err != nil {
+				return err
+			}
 		}
 		v.CloneRoot = answer
 	}

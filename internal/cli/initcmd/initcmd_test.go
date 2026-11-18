@@ -180,37 +180,109 @@ func blank(o *Options) {
 	o.GitHubUser, o.Fork, o.Upstream, o.BranchPrefix, o.CentralConfigDir, o.Search, o.CloneRoot = "", "", "", "", "", nil, ""
 }
 
-func TestRunAsksEveryQuestionOnATerminal(t *testing.T) {
+// The minimum that makes gero work on a workstation: the login, the two
+// remotes, where existing clones are and where new ones go. The branch prefix
+// follows from the login, and the central config has the release bundle, so
+// neither is asked.
+func TestRunAsksOnlyTheMinimumOnATerminal(t *testing.T) {
 	o, path := setup(t)
 	blank(&o)
 	o.Interactive = true
 	var asked bytes.Buffer
 	o.Out = &asked
-	// In the order asked: login, fork, upstream, branch prefix, config dir, search, clone root.
-	o.In = strings.NewReader("alice\norigin\nupstream\nalice/\n~/orbs/config\n~/src, /work\n~/new\n")
+	// In the order asked: login, fork, upstream, search, clone root.
+	o.In = strings.NewReader("alice\norigin\nupstream\n~/src, /work\n~/new\n")
 
 	_, err := Run(o)
 
 	require.NoError(t, err)
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, clicfg.RenderUserFile(full), string(got))
-	assert.Contains(t, asked.String(), "Enter to skip")
+	want := full
+	want.BranchPrefix, want.CentralConfigDir = "", ""
+	assert.Equal(t, clicfg.RenderUserFile(want), string(got))
+	assert.NotContains(t, asked.String(), "branch names")
+	assert.NotContains(t, asked.String(), "central config")
 }
 
-func TestRunAnEmptyAnswerSkipsTheQuestion(t *testing.T) {
+func TestRunEnterAcceptsTheDefaultRemotes(t *testing.T) {
 	o, path := setup(t)
 	blank(&o)
 	o.Interactive = true
-	// A login, then Enter on the rest but the clone root.
-	o.In = strings.NewReader("alice\n\n\n\n\n\n~/new\n")
+	var asked bytes.Buffer
+	o.Out = &asked
+	o.In = strings.NewReader("alice\n\n\n~/src\n~/new\n")
 
 	_, err := Run(o)
 
 	require.NoError(t, err)
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{GitHubUser: "alice", CloneRoot: "~/new"}), string(got))
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{
+		GitHubUser: "alice", Fork: "origin", Upstream: "upstream", Search: []string{"~/src"}, CloneRoot: "~/new",
+	}), string(got))
+	assert.Contains(t, asked.String(), "[origin]")
+	assert.Contains(t, asked.String(), "[upstream]")
+}
+
+func TestRunATypedRemoteBeatsTheDefault(t *testing.T) {
+	o, path := setup(t)
+	blank(&o)
+	o.Interactive = true
+	o.In = strings.NewReader("alice\nmine\nreal\n~/src\n~/new\n")
+
+	_, err := Run(o)
+
+	require.NoError(t, err)
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{
+		GitHubUser: "alice", Fork: "mine", Upstream: "real", Search: []string{"~/src"}, CloneRoot: "~/new",
+	}), string(got))
+}
+
+// The login and the search directories are needed for gero to work, so an empty
+// answer asks again and does not skip.
+func TestRunAsksAgainForTheLoginAndTheSearchWhenLeftEmpty(t *testing.T) {
+	o, path := setup(t)
+	blank(&o)
+	o.Interactive = true
+	var asked bytes.Buffer
+	o.Out = &asked
+	o.In = strings.NewReader("\nalice\n\n\n\n~/src\n~/new\n")
+
+	_, err := Run(o)
+
+	require.NoError(t, err)
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{
+		GitHubUser: "alice", Fork: "origin", Upstream: "upstream", Search: []string{"~/src"}, CloneRoot: "~/new",
+	}), string(got))
+	assert.Equal(t, 2, strings.Count(asked.String(), "Your GitHub login"))
+	assert.Equal(t, 2, strings.Count(asked.String(), "repos.search (comma-separated)"))
+}
+
+// The clone root is strongly suggested and not required: gero repo clone fails
+// without it, so a skipped answer says what the command will then need.
+func TestRunAnEmptyCloneRootIsSkippedWithAWarning(t *testing.T) {
+	o, path := setup(t)
+	blank(&o)
+	o.Interactive = true
+	var asked bytes.Buffer
+	o.Out = &asked
+	o.In = strings.NewReader("alice\n\n\n~/src\n\n")
+
+	_, err := Run(o)
+
+	require.NoError(t, err)
+	got, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{
+		GitHubUser: "alice", Fork: "origin", Upstream: "upstream", Search: []string{"~/src"},
+	}), string(got))
+	assert.Contains(t, asked.String(), "gero repo clone")
+	assert.Contains(t, asked.String(), "--into")
 }
 
 func TestRunSkipsEverythingWhenTheInputEnds(t *testing.T) {
@@ -230,10 +302,10 @@ func TestRunSkipsEverythingWhenTheInputEnds(t *testing.T) {
 func TestRunOnATerminalAsksOnlyWhatFlagsLeftOut(t *testing.T) {
 	o, path := setup(t)
 	o.Interactive = true
-	o.BranchPrefix = ""
+	o.Fork = ""
 	var asked bytes.Buffer
 	o.Out = &asked
-	o.In = strings.NewReader("mine/\n")
+	o.In = strings.NewReader("mine\n")
 
 	_, err := Run(o)
 
@@ -241,7 +313,7 @@ func TestRunOnATerminalAsksOnlyWhatFlagsLeftOut(t *testing.T) {
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
 	want := full
-	want.BranchPrefix = "mine/"
+	want.Fork = "mine"
 	assert.Equal(t, clicfg.RenderUserFile(want), string(got))
 	assert.NotContains(t, asked.String(), "GitHub login")
 }
@@ -250,14 +322,14 @@ func TestRunSearchAnswerIsCommaSeparatedAndBlanksAreDropped(t *testing.T) {
 	o, path := setup(t)
 	blank(&o)
 	o.Interactive = true
-	o.In = strings.NewReader("\n\n\n\n\n ~/a ,, /b ,\n\n")
+	o.In = strings.NewReader("alice\n\n\n ~/a ,, /b ,\n\n")
 
 	_, err := Run(o)
 
 	require.NoError(t, err)
 	got, err := os.ReadFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{Search: []string{"~/a", "/b"}}), string(got))
+	assert.Equal(t, clicfg.RenderUserFile(clicfg.UserFileValues{GitHubUser: "alice", Fork: "origin", Upstream: "upstream", Search: []string{"~/a", "/b"}}), string(got))
 }
 
 // The two path questions look alike, so the prompt says what each is for: search
@@ -268,7 +340,7 @@ func TestRunExplainsHowSearchDiffersFromTheCloneRoot(t *testing.T) {
 	o.Interactive = true
 	var asked bytes.Buffer
 	o.Out = &asked
-	o.In = strings.NewReader("")
+	o.In = strings.NewReader("alice\n\n\n")
 
 	_, err := Run(o)
 
