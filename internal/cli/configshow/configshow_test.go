@@ -113,6 +113,16 @@ func TestEntries(t *testing.T) {
 			want: map[string]Entry{"pushTo": {"pushTo", "", "default"}},
 		},
 		{
+			name: "signing, left to git",
+			want: map[string]Entry{"signCommits": {"signCommits", "", "default"}, "signTags": {"signTags", "", "default"}},
+		},
+		{
+			name: "signing, from the file and the env",
+			file: "signCommits: true\nsignTags: false\n",
+			env:  map[string]string{"GERO_SIGN_TAGS": "true"},
+			want: map[string]Entry{"signCommits": {"signCommits", "true", "file"}, "signTags": {"signTags", "true", "env"}},
+		},
+		{
 			name: "repos.cloneRoot",
 			file: "repos:\n  cloneRoot: /src\n",
 			want: map[string]Entry{"repos.cloneRoot": {"repos.cloneRoot", "/src", "file"}},
@@ -235,6 +245,8 @@ func TestRenderTextHintsForUnsetKeys(t *testing.T) {
 	assert.Regexp(t, `(?m)^fork\s+\(none\)\s+default$`, out)
 	assert.Regexp(t, `(?m)^githubUser\s+\(none\)\s+default$`, out)
 	assert.Regexp(t, `(?m)^branchPrefix\s+\(none\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^signCommits\s+\(git's own setting, commit\.gpgSign\)\s+default$`, out)
+	assert.Regexp(t, `(?m)^signTags\s+\(git's own setting, tag\.gpgSign or tag\.forceSignAnnotated\)\s+default$`, out)
 	assert.NotContains(t, out, "inferred")
 	assert.NotContains(t, out, "(unset)")
 }
