@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
@@ -39,6 +40,8 @@ var hints = map[string]string{
 	"githubUser":       "none",
 	"branchPrefix":     "none",
 	"pushTo":           "none: the fork when one is set, else the upstream",
+	"signCommits":      "git's own setting, commit.gpgSign",
+	"signTags":         "git's own setting, tag.gpgSign or tag.forceSignAnnotated",
 }
 
 // Entries flattens s into one Entry per setting, in display order: the user
@@ -71,6 +74,8 @@ func Entries(s clicfg.Settings, dir workspace.CentralConfigDir) []Entry {
 		entry(s, "githubUser", s.GitHubUser),
 		branchPrefix,
 		entry(s, "pushTo", s.PushTo),
+		signEntry(s, "signCommits", s.SignCommits),
+		signEntry(s, "signTags", s.SignTags),
 	}
 	if len(s.Repos.Search) > 0 {
 		es = append(es, Entry{"repos.search", strings.Join(s.Repos.Search, ","), clicfg.SourceFile.String()})
@@ -91,6 +96,15 @@ func Entries(s clicfg.Settings, dir workspace.CentralConfigDir) []Entry {
 		}
 	}
 	return es
+}
+
+// signEntry is a signing key: true or false when it is set, and empty when it is
+// left to git.
+func signEntry(s clicfg.Settings, key string, on *bool) Entry {
+	if on == nil {
+		return entry(s, key, "")
+	}
+	return entry(s, key, strconv.FormatBool(*on))
 }
 
 func entry(s clicfg.Settings, key, value string) Entry {

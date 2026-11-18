@@ -343,7 +343,7 @@ func brokenSigning(t *testing.T, clone string) {
 func TestShipSignsTheCommitsWhenAskedAndFailsWhenItCannot(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	brokenSigning(t, clone)
-	ex.Sign = true
+	ex.Sign = new(true)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 
@@ -353,9 +353,22 @@ func TestShipSignsTheCommitsWhenAskedAndFailsWhenItCannot(t *testing.T) {
 	assert.False(t, branchExistsIn(t, clone, botV215), "and nothing is left behind")
 }
 
-func TestShipDoesNotSignByDefault(t *testing.T) {
+func TestShipLeavesSigningToGitWhenNotToldWhetherToSign(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	brokenSigning(t, clone)
+	runGit(t, clone, "config", "commit.gpgSign", "true")
+
+	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, proposal.ResultFailed, onlyResult(t, plan).Status, "git is set to sign, and cannot, as it would for the engineer's own commit")
+}
+
+func TestShipDoesNotSignWhenToldNotToWhateverGitIsSetTo(t *testing.T) {
+	ws, clone, ex := newShip(t)
+	brokenSigning(t, clone)
+	runGit(t, clone, "config", "commit.gpgSign", "true")
+	ex.Sign = new(false)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 

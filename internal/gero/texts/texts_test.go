@@ -118,3 +118,18 @@ func TestSyncTextsOnlyUseTheirVariablesAndKeepTheTrailers(t *testing.T) {
 	}
 	assert.Contains(t, SyncBody(), "{marker}")
 }
+
+func TestTagMessageOnlyUsesItsVariables(t *testing.T) {
+	require.NotEmpty(t, TagMessage())
+	assert.NoError(t, templates.Validate(TagMessage(), TagVars))
+}
+
+func TestTagMessageNamesTheTagAndWhereItWasMadeFromAndEndsInATrailer(t *testing.T) {
+	msg := TagMessage()
+	lines := strings.Split(strings.TrimRight(msg, "\n"), "\n")
+
+	assert.Equal(t, "{project} {tag}", lines[0], "the subject says what was tagged")
+	assert.Contains(t, msg, "{targetBranch} of {sourceRepo}")
+	assert.Equal(t, "Automation: gero repo tag", lines[len(lines)-1])
+	assert.True(t, strings.HasSuffix(msg, "\n"))
+}

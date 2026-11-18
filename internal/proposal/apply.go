@@ -29,7 +29,7 @@ type Apply struct {
 	Runner          bump.StepRunner // runs the steps
 	Name            string          // the commit's author and committer, or empty for the clone's git config
 	Email           string
-	Sign            bool
+	Sign            *bool // nil leaves it to git (commit.gpgSign)
 }
 
 // CommitInfo is a commit a run made.

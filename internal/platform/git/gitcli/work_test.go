@@ -267,18 +267,31 @@ func TestCommitChangesWithAnIdentity(t *testing.T) {
 	assert.Equal(t, "gero <gero@example.com>", run(t, dir, "log", "-1", "--format=%cn <%ce>"))
 }
 
-func TestCommitChangesIsUnsignedUnlessAsked(t *testing.T) {
+func TestCommitChangesFollowsGitUnlessToldWhetherToSign(t *testing.T) {
 	dir := clone(t, upstream(t))
 	run(t, dir, "config", "commit.gpgsign", "true")
 	run(t, dir, "config", "gpg.program", "false") // signing would fail
 	write(t, dir, "build.yaml", "image: new\n")
 
 	_, err := CommitChanges(ctx, dir, Commit{Message: "m"})
-	require.NoError(t, err, "the setting does not make gero sign")
+	require.Error(t, err, "git is set to sign, and signing fails, so the commit fails")
+
+	_, err = CommitChanges(ctx, dir, Commit{Message: "m", Sign: new(false)})
+	require.NoError(t, err, "told not to sign, whatever git is set to")
 
 	write(t, dir, "build.yaml", "image: newer\n")
-	_, err = CommitChanges(ctx, dir, Commit{Message: "m", Sign: true})
+	_, err = CommitChanges(ctx, dir, Commit{Message: "m", Sign: new(true)})
 	require.Error(t, err, "asked to sign, and signing fails, so the commit fails")
+}
+
+func TestCommitChangesIsUnsignedWhenGitIsSetToSignNothing(t *testing.T) {
+	dir := clone(t, upstream(t))
+	run(t, dir, "config", "gpg.program", "false") // signing would fail
+	write(t, dir, "build.yaml", "image: new\n")
+
+	_, err := CommitChanges(ctx, dir, Commit{Message: "m"})
+
+	require.NoError(t, err)
 }
 
 func TestCommitChangesWithNothingStagedIsAnError(t *testing.T) {

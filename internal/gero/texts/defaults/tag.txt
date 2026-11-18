@@ -1,0 +1,5 @@
+{project} {tag}
+
+Tagged from {targetBranch} of {sourceRepo}.
+
+Automation: gero repo tag

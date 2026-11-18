@@ -38,7 +38,7 @@ type Input struct {
 	OnCommit func(workdir.CommitInfo)
 	Name     string // the commit's author and committer, or empty for the clone's git config
 	Email    string
-	Sign     bool
+	Sign     *bool // nil leaves it to git (commit.gpgSign)
 }
 
 // Output is what the run did.

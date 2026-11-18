@@ -65,13 +65,13 @@ The actor is who the commits and the PRs are attributed to. It is two things tha
 
 In CI the push authenticates with the token that opens the PRs (`GH_TOKEN`), as a one-shot credential over HTTPS: `gitcli.WithToken` puts it in the context, and `gitcli` hands it to the one `git` process as `http.<host>/.extraheader` through `GIT_CONFIG_COUNT` and its keys, so it is in no remote URL, no argument and no file. The key is first set empty, because a clone made by `actions/checkout` already has a header for the workflow's own token in the same list, and git would send both. Only a push carries it: a fetch uses what the clone's own configuration has, which for a checkout is its credentials.
 
-**Signing is off by default and opt-in for humans.** Signed commits are not required by the target repositories. An engineer who wants them sets `signCommits: true` in the user file (or `GERO_SIGN_COMMITS=true`, which beats the file). `gero ship` signs every commit it makes when it is on.
+**Signing follows the engineer's git configuration, and the user file can say otherwise.** Signed commits and tags are not required by the target repositories. Unless `signCommits` or `signTags` is set (in the user file, or as `GERO_SIGN_COMMITS` and `GERO_SIGN_TAGS`, which beat the file), `gero` leaves it to git, so a clone that signs when the engineer commits signs the commits `gero ship` makes and the tags `gero repo tag` makes. `true` signs and `false` never does, whatever git is set to. Commits follow `commit.gpgSign`. Tags are always annotated, and follow `tag.gpgSign` and `tag.forceSignAnnotated`.
 
-* The signature is made by `git` with the engineer's own `gpg.*` and `user.signingkey` configuration, so `gero` holds no key and never reads one. With signing on, the commit is created through `gitcli`, not go-git.
-* If signing is requested and fails (no key, agent locked), the command fails. It never falls back to an unsigned commit, because the engineer asked for the opposite.
-* In CI the setting is ignored, as every user-file key is ([CLI_CONFIG](CLI_CONFIG.md)). Bot commits are not signed and not verified.
+* The signature is made by `git` with the engineer's own `gpg.*` and `user.signingkey` configuration, so `gero` holds no key and never reads one. The commit and the tag are created through `gitcli`, not go-git.
+* If git is set to sign, or `gero` is told to, and signing fails (no key, agent locked), the command fails. It never falls back to an unsigned commit or tag, because the engineer asked for the opposite. `signCommits: false` and `signTags: false` are how to turn it off for `gero` alone.
+* In CI the setting is ignored, as every user-file key is ([CLI_CONFIG](CLI_CONFIG.md)), and the CI clone has no signing configuration. Bot commits are not signed and not verified.
 
-`signCommits` fits the user file because it states how one engineer's commits are made, not what the tool decides.
+`signCommits` and `signTags` fit the user file because they state how one engineer's commits and tags are made, not what the tool decides.
 
 ## Write-command contract
 

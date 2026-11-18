@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/releasetag"
+	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,10 +87,14 @@ func shell(t *testing.T) fakeWorkspace {
 
 // fakeGit records what was done to the clone, and holds its local tags.
 type fakeGit struct {
-	heads     map[string]string // what fetching a branch gives, when it is not what the host said
-	local     map[string]string // the local tags
-	made      []string
-	pushed    []string
+	heads  map[string]string // what fetching a branch gives, when it is not what the host said
+	local  map[string]string // the local tags
+	made   []string
+	pushed []string
+	// annotations are what each tag was made with.
+	annotations []createtag.Annotation
+	// signsTags is what git is set to do about signing a tag.
+	signsTags bool
 	fetchErr  error
 	createErr error
 	pushErr   error
@@ -104,10 +109,13 @@ func (f *fakeGit) TagCommit(_ context.Context, _, name string) (string, bool, er
 	return c, ok, nil
 }
 
-func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string) error {
+func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string, a createtag.Annotation) error {
 	f.made = append(f.made, dir+" "+name+" "+commit)
+	f.annotations = append(f.annotations, a)
 	return f.createErr
 }
+
+func (f *fakeGit) SignsTags(context.Context, string) (bool, error) { return f.signsTags, nil }
 
 func (f *fakeGit) PushTag(_ context.Context, dir, remote, name string) error {
 	f.pushed = append(f.pushed, dir+" "+remote+" "+name)
@@ -711,4 +719,84 @@ func TestRunARetagMayNameItsTag(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []string{"/work v0.8.5-rc.1 " + head215}, g.git.made)
+}
+
+func TestRunMakesTheTagWithTheTagMessageAndTheTagger(t *testing.T) {
+	var g tagging
+	opts := plain()
+	opts.Identify = func(context.Context, string) (string, string, error) {
+		return "Dan Pock", "dan@example.com", nil
+	}
+
+	require.NoError(t, g.run(shell(t), "text", false, opts))
+
+	require.Len(t, g.git.annotations, 1)
+	assert.Equal(t, createtag.Annotation{
+		Message: "shell v0.8.4-rc.1\n\nTagged from release/v2.15 of rancher/shell.\n\nAutomation: gero repo tag\n",
+		Name:    "Dan Pock", Email: "dan@example.com",
+	}, g.git.annotations[0], "and signing is left to git")
+}
+
+func TestRunWithoutAnIdentityLeavesTheTaggerToTheClonesGitConfig(t *testing.T) {
+	var g tagging
+
+	require.NoError(t, g.run(shell(t), "text", false, plain()))
+
+	require.Len(t, g.git.annotations, 1)
+	assert.Empty(t, g.git.annotations[0].Name)
+	assert.Empty(t, g.git.annotations[0].Email)
+}
+
+func TestRunAnIdentityThatCannotBeFoundIsAnErrorBeforeAnyWrite(t *testing.T) {
+	var g tagging
+	opts := pushing("y\n")
+	opts.Identify = func(context.Context, string) (string, string, error) { return "", "", errors.New("no user.email") }
+
+	err := g.run(shell(t), "text", false, opts)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no user.email")
+	assert.Empty(t, g.git.made)
+	assert.NotContains(t, g.out.String(), "[y/N]", "before anything is asked")
+}
+
+func TestRunSaysWhetherTheTagIsSigned(t *testing.T) {
+	yes, no := true, false
+	tests := []struct {
+		name      string
+		sign      *bool
+		gitSigns  bool
+		wantSign  *bool // what the tag is made with
+		signed    bool
+		dryRun    bool
+		wantInOut string
+	}{
+		{"asked to", &yes, false, &yes, true, false, "Tagged v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell (signed)"},
+		{"asked not to, though git would", &no, true, &no, false, false, "Tagged v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell\n"},
+		{"left to git, which signs", nil, true, nil, true, false, "in rancher/shell (signed)"},
+		{"left to git, which does not", nil, false, nil, false, false, "in rancher/shell\n"},
+		{"a dry run, asked to", &yes, false, nil, true, true, "Would tag v0.8.4-rc.1 on release/v2.15 at 8c61398 in rancher/shell (signed)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := tagging{git: &fakeGit{signsTags: tt.gitSigns}}
+			opts := plain()
+			opts.Sign = tt.sign
+
+			require.NoError(t, g.run(shell(t), "text", tt.dryRun, opts))
+
+			assert.Contains(t, g.out.String(), tt.wantInOut)
+			if !tt.dryRun {
+				require.Len(t, g.git.annotations, 1)
+				assert.Equal(t, tt.wantSign, g.git.annotations[0].Sign)
+			}
+
+			var j tagging
+			j.git = &fakeGit{signsTags: tt.gitSigns}
+			require.NoError(t, j.run(shell(t), "json", tt.dryRun, opts))
+			var res Result
+			require.NoError(t, json.Unmarshal(j.out.Bytes(), &res))
+			assert.Equal(t, tt.signed, res.Signed)
+		})
+	}
 }

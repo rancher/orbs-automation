@@ -5,12 +5,35 @@ import (
 	"strings"
 )
 
-// CreateTag makes the lightweight tag name at commit in the clone in dir:
-// `git tag <name> <commit>`. It is a ref and nothing more, with no tagger, no
-// message and no signature, and it moves no branch and nothing in the working
-// tree. It fails when the tag exists, and never moves one.
-func CreateTag(ctx context.Context, dir, name, commit string) error {
-	_, err := inDir(ctx, dir, "tag", name, commit+"^{commit}")
+// Tag is what an annotated tag says about who made it and what it is.
+type Tag struct {
+	// Message is the whole tag message. Git needs one for every annotated tag.
+	Message string
+	// Name and Email are the tagger, or both empty for the git configuration of
+	// the clone, as for Commit.
+	Name, Email string
+	// Sign says whether git signs the tag with the engineer's own configuration.
+	// Nil leaves it to git: it signs when tag.gpgSign or tag.forceSignAnnotated is
+	// set. True signs, and false never does, whatever the configuration says.
+	Sign *bool
+}
+
+// CreateTag makes the annotated tag name at commit in the clone in dir:
+// `git tag -m <message> <name> <commit>`. It has no -a, because git ignores
+// tag.forceSignAnnotated when the command line says -a, and -m annotates alone.
+// It moves no branch and nothing in
+// the working tree. It fails when the tag exists, and never moves one.
+func CreateTag(ctx context.Context, dir, name, commit string, t Tag) error {
+	args := identityConfig(t.Name, t.Email)
+	if t.Sign != nil && !*t.Sign {
+		// --no-sign does not undo tag.forceSignAnnotated, so both settings are turned off.
+		args = append(args, "-c", "tag.gpgSign=false", "-c", "tag.forceSignAnnotated=false")
+	}
+	args = append(args, "tag", "-m", t.Message)
+	if t.Sign != nil && *t.Sign {
+		args = append(args, "-s")
+	}
+	_, err := inDir(ctx, dir, append(args, name, commit+"^{commit}")...)
 	return err
 }
 

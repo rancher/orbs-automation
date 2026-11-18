@@ -64,6 +64,9 @@
         "signCommits": {
           "type": "boolean"
         },
+        "signTags": {
+          "type": "boolean"
+        },
         "repos": {
           "$ref": "#/$defs/fileRepos"
         },

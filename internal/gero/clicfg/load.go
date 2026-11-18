@@ -238,16 +238,11 @@ func Load(in Inputs) (Settings, error) {
 	if s.Offline, s.sources["offline"], err = loadBool("offline", nil, getenv); err != nil {
 		return Settings{}, err
 	}
-	s.sources["signCommits"] = SourceDefault
-	if fc.SignCommits != nil {
-		s.SignCommits, s.sources["signCommits"] = *fc.SignCommits, SourceFile
+	if s.SignCommits, s.sources["signCommits"], err = loadSign("signCommits", fc.SignCommits, getenv); err != nil {
+		return Settings{}, err
 	}
-	if ev := getenv(EnvName("signCommits")); ev != "" {
-		on, err := strconv.ParseBool(ev)
-		if err != nil {
-			return Settings{}, fmt.Errorf("%s: must be true or false, got %q", where("signCommits", SourceEnv, ""), ev)
-		}
-		s.SignCommits, s.sources["signCommits"] = on, SourceEnv
+	if s.SignTags, s.sources["signTags"], err = loadSign("signTags", fc.SignTags, getenv); err != nil {
+		return Settings{}, err
 	}
 
 	s.Fork, s.GitHubUser, s.BranchPrefix, s.PushTo = fc.Fork, fc.GitHubUser, fc.BranchPrefix, fc.PushTo
@@ -308,6 +303,23 @@ func loadBool(key string, flags FlagLookup, getenv func(string) string, flagName
 	on, err := strconv.ParseBool(value)
 	if err != nil {
 		return false, src, fmt.Errorf("%s: must be true or false, got %q", where(key, src, ""), value)
+	}
+	return on, src, nil
+}
+
+// loadSign reads a signing key: the user file's, beaten by the environment's.
+// Neither set is nil, the default, which leaves it to git's own configuration.
+func loadSign(key string, file *bool, getenv func(string) string) (*bool, Source, error) {
+	on, src := file, SourceDefault
+	if file != nil {
+		src = SourceFile
+	}
+	if ev := getenv(EnvName(key)); ev != "" {
+		v, err := strconv.ParseBool(ev)
+		if err != nil {
+			return nil, src, fmt.Errorf("%s: must be true or false, got %q", where(key, SourceEnv, ""), ev)
+		}
+		on, src = &v, SourceEnv
 	}
 	return on, src, nil
 }

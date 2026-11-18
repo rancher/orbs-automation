@@ -48,6 +48,21 @@ func CommitMessage() string { return text("commit.txt") + "\n" }
 // with the one asked for.
 func CommitMessageWith() string { return text("commit_with.txt") + "\n" }
 
+// TagMessage is the message of the annotated tag gero repo tag makes: the project
+// and the tag, where it was tagged from, and the trailer. It may use TagVars.
+func TagMessage() string { return text("tag.txt") + "\n" }
+
+// TagVars are the variables of the tag message: the ones that say which release
+// of which project it is, and the branch it is on.
+//
+//	project       the project's name
+//	sourceRepo    the project's repository, owner/name
+//	tag           the tag that is made
+//	version       the tag's version, as the project writes it
+//	branch        the branch without "release/"
+//	targetBranch  the branch as it is named
+var TagVars = []string{"project", "sourceRepo", "tag", "version", "branch", "targetBranch"}
+
 // Body is the PR body of a bump.
 func Body() string { return text("body.md") + "\n" }
 

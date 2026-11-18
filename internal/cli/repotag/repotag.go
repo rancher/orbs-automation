@@ -15,9 +15,12 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/cli/identity"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/texts"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/releasetag"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
@@ -74,6 +77,12 @@ type Options struct {
 	// Push sends the tag to the upstream as well, after asking once.
 	Push bool
 	Yes  bool // go on without asking before a push
+	// Sign says whether the tag is signed, from signTags. Nil leaves it to git's own
+	// configuration.
+	Sign *bool
+	// Identify says who the tagger is, in the clone: the engineer's git identity
+	// there on a workstation. Nil leaves it to the clone's own git configuration.
+	Identify func(ctx context.Context, clone string) (name, email string, err error)
 	// Interactive says In is a terminal that the question can be asked on.
 	Interactive bool
 	In          io.Reader
@@ -98,6 +107,8 @@ type Result struct {
 	// was in the clone already), "already tagged" (the host has it), or for a dry
 	// run "would tag", "would tag and push" or "would push".
 	Action string `json:"action"`
+	// Signed is true when the tag is, or for a dry run would be, signed.
+	Signed bool `json:"signed,omitempty"`
 	// Remote is the upstream remote the tag was or would be pushed to.
 	Remote string `json:"remote,omitempty"`
 	DryRun bool   `json:"dryRun,omitempty"`
@@ -120,6 +131,9 @@ type Git interface {
 	Fetch(ctx context.Context, dir, remote, branch string) (string, error)
 	// TagCommit is the commit a local tag is on, and false when there is none.
 	TagCommit(ctx context.Context, dir, name string) (commit string, found bool, err error)
+	// SignsTags is whether git, as configured in the clone, signs the tags made
+	// in it when it is not told either way.
+	SignsTags(ctx context.Context, dir string) (bool, error)
 	// PushTag sends a tag to the remote, never forced.
 	PushTag(ctx context.Context, dir, remote, name string) error
 }
@@ -148,6 +162,11 @@ func ParseArgs(args []string) (project, line, tag string) {
 // the engineer that the host sees pushing the tag.
 func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
 	opts.Style = style.New(s.Terminal)
+	opts.Sign = s.SignTags
+	opts.Identify = func(ctx context.Context, clone string) (string, string, error) {
+		id, err := identity.ResolveIn(ctx, s, clone)
+		return id.Name, id.Email, err
+	}
 	return run(ctx, w, workspace.Open(s, cwd), proposal.GitCLI{}, s.Output, s.DryRun, opts)
 }
 
@@ -246,6 +265,14 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 	}
 	onHost := slices.ContainsFunc(refs.Tags, func(t git.Tag) bool { return t.Name == tag && t.Commit == head.Commit })
 	inClone := hasLocal && local == head.Commit
+	if !onHost && !inClone {
+		// The tag is going to be made, so who makes it, and whether it is signed, are
+		// settled before anything is asked or written.
+		in.Annotation, res.Signed, err = annotate(ctx, g, project, clone.Path, branch, tag, opts)
+		if err != nil {
+			return err
+		}
+	}
 	push := opts.Push && !onHost
 	switch {
 	case onHost:
@@ -280,6 +307,34 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 		}
 	}
 	return report(w, format, res, opts.Style)
+}
+
+// annotate is what the tag says: the embedded message with the project, the tag
+// and the branch in it, the tagger, and whether it is signed. A tag that is
+// signed when it is set to be, or when it is left to git and git is set to.
+func annotate(ctx context.Context, g Git, project *chain.Project, clone, branch, tag string, opts Options) (createtag.Annotation, bool, error) {
+	message, err := templates.Render(texts.TagMessage(), map[string]string{
+		"project":      project.Name(),
+		"sourceRepo":   project.Slug(),
+		"tag":          tag,
+		"version":      project.ReleaseVersion(tag),
+		"branch":       strings.TrimPrefix(branch, "release/"),
+		"targetBranch": branch,
+	})
+	if err != nil {
+		return createtag.Annotation{}, false, fmt.Errorf("the tag message: %w", err)
+	}
+	a := createtag.Annotation{Message: message, Sign: opts.Sign}
+	if opts.Identify != nil {
+		if a.Name, a.Email, err = opts.Identify(ctx, clone); err != nil {
+			return createtag.Annotation{}, false, fmt.Errorf("tagger identity: %w", err)
+		}
+	}
+	if opts.Sign != nil {
+		return a, *opts.Sign, nil
+	}
+	signed, err := g.SignsTags(ctx, clone)
+	return a, signed, err
 }
 
 // approve asks once, before anything is changed, to push the tag, unless --yes was
@@ -345,13 +400,17 @@ func report(w io.Writer, format string, res Result, view *style.Renderer) error 
 // promotion says which prerelease it is the stable version of, and that the head
 // has not moved since, which is the reason it is allowed.
 func (r Result) what() string {
+	signed := ""
+	if r.Signed {
+		signed = " (signed)"
+	}
 	if r.Promotes != "" {
-		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project)
+		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s%s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project, signed)
 	}
 	if r.Retag {
-		return fmt.Sprintf("%s on %s at %s, a retag: %s is on the same commit, in %s", r.Tag, r.Branch, short(r.Commit), r.Newest, r.Project)
+		return fmt.Sprintf("%s on %s at %s, a retag: %s is on the same commit, in %s%s", r.Tag, r.Branch, short(r.Commit), r.Newest, r.Project, signed)
 	}
-	return fmt.Sprintf("%s on %s at %s in %s", r.Tag, r.Branch, short(r.Commit), r.Project)
+	return fmt.Sprintf("%s on %s at %s in %s%s", r.Tag, r.Branch, short(r.Commit), r.Project, signed)
 }
 
 // oneStream is the stream a tag is made for: the one the project has. A project

@@ -281,9 +281,28 @@ type Commit struct {
 	// Name and Email are the author and committer, or both empty for the git
 	// configuration of the clone, which is what the script's local runs use.
 	Name, Email string
-	// Sign makes git sign the commit with the engineer's own configuration.
-	// Otherwise the commit is unsigned whatever the configuration says.
-	Sign bool
+	// Sign says whether git signs the commit with the engineer's own configuration.
+	// Nil leaves it to git: it signs when commit.gpgSign is set. True signs, and
+	// false never does, whatever the configuration says.
+	Sign *bool
+}
+
+// identityConfig is the -c options that make name and email the author and the
+// committer, or the tagger, and none when both are empty, which is the git
+// configuration of the clone.
+func identityConfig(name, email string) []string {
+	if name == "" && email == "" {
+		return nil
+	}
+	return []string{"-c", "user.name=" + name, "-c", "user.email=" + email}
+}
+
+// signFlag is the option of git commit that says to sign or not to.
+func signFlag(sign bool) string {
+	if sign {
+		return "--gpg-sign"
+	}
+	return "--no-gpg-sign"
 }
 
 // CommitChanges stages and commits in the clone in dir, and returns the new
@@ -308,15 +327,10 @@ func CommitChanges(ctx context.Context, dir string, c Commit) (string, error) {
 	if exitCode(err) != 1 {
 		return "", err
 	}
-	var args []string
-	if c.Name != "" || c.Email != "" {
-		args = append(args, "-c", "user.name="+c.Name, "-c", "user.email="+c.Email)
-	}
+	args := identityConfig(c.Name, c.Email)
 	args = append(args, "commit", "--quiet", "-m", c.Message)
-	if c.Sign {
-		args = append(args, "--gpg-sign")
-	} else {
-		args = append(args, "--no-gpg-sign")
+	if c.Sign != nil {
+		args = append(args, signFlag(*c.Sign))
 	}
 	if _, err := inDir(ctx, dir, args...); err != nil {
 		return "", err

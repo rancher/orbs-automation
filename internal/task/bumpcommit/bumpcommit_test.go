@@ -155,7 +155,7 @@ func TestRunEditsTheFileAndCommitsItWithTheMessage(t *testing.T) {
 func TestRunCommitsAsTheGivenIdentityAndSigning(t *testing.T) {
 	g := &fakeGit{}
 	in := input(work(t, g), invocation(t, nil, nil))
-	in.Name, in.Email, in.Sign = "gero bot", "bot@example.com", true
+	in.Name, in.Email, in.Sign = "gero bot", "bot@example.com", new(true)
 
 	_, err := Run(bg, &fakeRunner{}, in)
 
@@ -163,7 +163,8 @@ func TestRunCommitsAsTheGivenIdentityAndSigning(t *testing.T) {
 	require.Len(t, g.commits, 1)
 	assert.Equal(t, "gero bot", g.commits[0].Name)
 	assert.Equal(t, "bot@example.com", g.commits[0].Email)
-	assert.True(t, g.commits[0].Sign)
+	require.NotNil(t, g.commits[0].Sign)
+	assert.True(t, *g.commits[0].Sign)
 }
 
 func TestRunWithoutAnIdentityLeavesItToTheClonesGitConfig(t *testing.T) {
@@ -175,7 +176,7 @@ func TestRunWithoutAnIdentityLeavesItToTheClonesGitConfig(t *testing.T) {
 	require.Len(t, g.commits, 1)
 	assert.Empty(t, g.commits[0].Name)
 	assert.Empty(t, g.commits[0].Email)
-	assert.False(t, g.commits[0].Sign)
+	assert.Nil(t, g.commits[0].Sign, "and to its signing configuration")
 }
 
 func TestRunNothingToCommitAnywhereIsErrNothingChanged(t *testing.T) {
