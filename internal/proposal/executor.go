@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 )
 
 // Executor is what a run needs to make commits.
@@ -100,5 +101,16 @@ func ActorFor(ctx context.Context, ex *Executor, clone, login string) (*Actor, e
 	if err != nil {
 		return nil, fmt.Errorf("commit identity: %w", err)
 	}
-	return &Actor{Identity: id, Login: login, Signing: ex.Sign != nil && *ex.Sign}, nil
+	return &Actor{Identity: id, Login: login, Signing: signs(ctx, ex.Sign, clone)}, nil
+}
+
+// signs is whether the commits are signed: what signCommits says, and when it says
+// nothing what git does in the clone. A clone git cannot be asked about is said to
+// sign nothing, since this only reports.
+func signs(ctx context.Context, set *bool, clone string) bool {
+	if set != nil {
+		return *set
+	}
+	on, err := gitcli.ConfigBool(ctx, clone, "commit.gpgSign")
+	return err == nil && on
 }

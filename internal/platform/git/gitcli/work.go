@@ -287,6 +287,14 @@ type Commit struct {
 	Sign *bool
 }
 
+// signFlag is the option of git commit that says to sign or not to.
+func signFlag(sign bool) string {
+	if sign {
+		return "--gpg-sign"
+	}
+	return "--no-gpg-sign"
+}
+
 // CommitChanges stages and commits in the clone in dir, and returns the new
 // commit. The script's `git add .` and `git commit -m` differ in what they
 // stage: `add .` takes every untracked file in the checkout, including the
@@ -314,10 +322,8 @@ func CommitChanges(ctx context.Context, dir string, c Commit) (string, error) {
 		args = append(args, "-c", "user.name="+c.Name, "-c", "user.email="+c.Email)
 	}
 	args = append(args, "commit", "--quiet", "-m", c.Message)
-	if c.Sign != nil && *c.Sign {
-		args = append(args, "--gpg-sign")
-	} else {
-		args = append(args, "--no-gpg-sign")
+	if c.Sign != nil {
+		args = append(args, signFlag(*c.Sign))
 	}
 	if _, err := inDir(ctx, dir, args...); err != nil {
 		return "", err
