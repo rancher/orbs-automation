@@ -19,10 +19,21 @@ type Tag struct {
 }
 
 // CreateTag makes the annotated tag name at commit in the clone in dir:
-// `git tag -m <message> <name> <commit>`. It moves no branch and nothing in the
-// working tree. It fails when the tag exists, and never moves one.
+// `git tag -m <message> <name> <commit>`. It has no -a, because git ignores
+// tag.forceSignAnnotated when the command line says -a, and -m annotates alone.
+// It moves no branch and nothing in
+// the working tree. It fails when the tag exists, and never moves one.
 func CreateTag(ctx context.Context, dir, name, commit string, t Tag) error {
-	_, err := inDir(ctx, dir, "tag", "--no-sign", name, commit+"^{commit}")
+	args := identityConfig(t.Name, t.Email)
+	if t.Sign != nil && !*t.Sign {
+		// --no-sign does not undo tag.forceSignAnnotated, so both settings are turned off.
+		args = append(args, "-c", "tag.gpgSign=false", "-c", "tag.forceSignAnnotated=false")
+	}
+	args = append(args, "tag", "-m", t.Message)
+	if t.Sign != nil && *t.Sign {
+		args = append(args, "-s")
+	}
+	_, err := inDir(ctx, dir, append(args, name, commit+"^{commit}")...)
 	return err
 }
 

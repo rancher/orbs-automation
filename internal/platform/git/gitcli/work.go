@@ -287,6 +287,16 @@ type Commit struct {
 	Sign *bool
 }
 
+// identityConfig is the -c options that make name and email the author and the
+// committer, or the tagger, and none when both are empty, which is the git
+// configuration of the clone.
+func identityConfig(name, email string) []string {
+	if name == "" && email == "" {
+		return nil
+	}
+	return []string{"-c", "user.name=" + name, "-c", "user.email=" + email}
+}
+
 // signFlag is the option of git commit that says to sign or not to.
 func signFlag(sign bool) string {
 	if sign {
@@ -317,10 +327,7 @@ func CommitChanges(ctx context.Context, dir string, c Commit) (string, error) {
 	if exitCode(err) != 1 {
 		return "", err
 	}
-	var args []string
-	if c.Name != "" || c.Email != "" {
-		args = append(args, "-c", "user.name="+c.Name, "-c", "user.email="+c.Email)
-	}
+	args := identityConfig(c.Name, c.Email)
 	args = append(args, "commit", "--quiet", "-m", c.Message)
 	if c.Sign != nil {
 		args = append(args, signFlag(*c.Sign))
