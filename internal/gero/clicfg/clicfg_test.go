@@ -565,40 +565,60 @@ func TestLoadNonInteractiveIsNotAUserFileKey(t *testing.T) {
 	assert.Contains(t, s.Warnings[0], "nonInteractive")
 }
 
-func TestLoadSignCommits(t *testing.T) {
-	tests := []struct {
-		name string
-		file string
-		env  map[string]string
-		want bool
-		src  Source
+func TestLoadSign(t *testing.T) {
+	for _, k := range []struct {
+		key, env string
+		get      func(Settings) *bool
 	}{
-		{"off by default", "", nil, false, SourceDefault},
-		{"the file", "signCommits: true\n", nil, true, SourceFile},
-		{"the file, off", "signCommits: false\n", nil, false, SourceFile},
-		{"the env", "", map[string]string{"GERO_SIGN_COMMITS": "true"}, true, SourceEnv},
-		{"the env beats the file, off", "signCommits: true\n", map[string]string{"GERO_SIGN_COMMITS": "false"}, false, SourceEnv},
-		{"the env beats the file, on", "signCommits: false\n", map[string]string{"GERO_SIGN_COMMITS": "1"}, true, SourceEnv},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			in := Inputs{Getenv: env(tt.env)}
-			if tt.file != "" {
-				in.UserFile, in.UserFileName = strings.NewReader(tt.file), "config.yaml"
-			}
-			s, err := Load(in)
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, *s.SignCommits)
-			assert.Equal(t, tt.src, s.Source("signCommits"))
-		})
+		{"signCommits", "GERO_SIGN_COMMITS", func(s Settings) *bool { return s.SignCommits }},
+		{"signTags", "GERO_SIGN_TAGS", func(s Settings) *bool { return s.SignTags }},
+	} {
+		on, off := true, false
+		tests := []struct {
+			name string
+			file string
+			env  map[string]string
+			want *bool
+			src  Source
+		}{
+			{"left to git by default", "", nil, nil, SourceDefault},
+			{"the file", k.key + ": true\n", nil, &on, SourceFile},
+			{"the file, off", k.key + ": false\n", nil, &off, SourceFile},
+			{"the env", "", map[string]string{k.env: "true"}, &on, SourceEnv},
+			{"the env, off", "", map[string]string{k.env: "false"}, &off, SourceEnv},
+			{"the env beats the file, off", k.key + ": true\n", map[string]string{k.env: "false"}, &off, SourceEnv},
+			{"the env beats the file, on", k.key + ": false\n", map[string]string{k.env: "1"}, &on, SourceEnv},
+		}
+		for _, tt := range tests {
+			t.Run(k.key+" "+tt.name, func(t *testing.T) {
+				in := Inputs{Getenv: env(tt.env)}
+				if tt.file != "" {
+					in.UserFile, in.UserFileName = strings.NewReader(tt.file), "config.yaml"
+				}
+				s, err := Load(in)
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, k.get(s))
+				assert.Equal(t, tt.src, s.Source(k.key))
+			})
+		}
 	}
 }
 
-func TestLoadSignCommitsRejectsAnythingElse(t *testing.T) {
-	_, err := Load(Inputs{Getenv: env(map[string]string{"GERO_SIGN_COMMITS": "sometimes"})})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "signCommits")
-	assert.Contains(t, err.Error(), "sometimes")
+func TestLoadSignKeysAreSetApart(t *testing.T) {
+	s, err := Load(Inputs{Getenv: env(map[string]string{"GERO_SIGN_TAGS": "true"})})
+	require.NoError(t, err)
+	assert.Nil(t, s.SignCommits, "signing tags says nothing of commits")
+	require.NotNil(t, s.SignTags)
+	assert.True(t, *s.SignTags)
+}
+
+func TestLoadSignRejectsAnythingElse(t *testing.T) {
+	for key, name := range map[string]string{"GERO_SIGN_COMMITS": "signCommits", "GERO_SIGN_TAGS": "signTags"} {
+		_, err := Load(Inputs{Getenv: env(map[string]string{key: "sometimes"})})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), name)
+		assert.Contains(t, err.Error(), "sometimes")
+	}
 }
 
 func TestStatePath(t *testing.T) {
