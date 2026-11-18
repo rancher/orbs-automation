@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/releasetag"
+	"github.com/rancher/orbs-automation/internal/task/createtag"
 	"github.com/rancher/orbs-automation/internal/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,13 +87,15 @@ func shell(t *testing.T) fakeWorkspace {
 
 // fakeGit records what was done to the clone, and holds its local tags.
 type fakeGit struct {
-	heads     map[string]string // what fetching a branch gives, when it is not what the host said
-	local     map[string]string // the local tags
-	made      []string
-	pushed    []string
-	fetchErr  error
-	createErr error
-	pushErr   error
+	heads  map[string]string // what fetching a branch gives, when it is not what the host said
+	local  map[string]string // the local tags
+	made   []string
+	pushed []string
+	// annotations are what each tag was made with.
+	annotations []createtag.Annotation
+	fetchErr    error
+	createErr   error
+	pushErr     error
 }
 
 func (f *fakeGit) Fetch(_ context.Context, _, _, branch string) (string, error) {
@@ -104,8 +107,9 @@ func (f *fakeGit) TagCommit(_ context.Context, _, name string) (string, bool, er
 	return c, ok, nil
 }
 
-func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string) error {
+func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string, a createtag.Annotation) error {
 	f.made = append(f.made, dir+" "+name+" "+commit)
+	f.annotations = append(f.annotations, a)
 	return f.createErr
 }
 

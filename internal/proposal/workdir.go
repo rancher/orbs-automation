@@ -7,6 +7,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/gero/workdir"
 	"github.com/rancher/orbs-automation/internal/platform/git/gitcli"
 	"github.com/rancher/orbs-automation/internal/task/createbranch"
+	"github.com/rancher/orbs-automation/internal/task/createtag"
 )
 
 // The work directory a run edits and commits in lives in internal/gero/workdir.
@@ -80,8 +81,8 @@ func (GitCLI) CommitFiles(ctx context.Context, dir, commit string) ([]string, er
 	return gitcli.CommitFiles(ctx, dir, commit)
 }
 
-func (GitCLI) CreateTag(ctx context.Context, dir, name, commit string) error {
-	return gitcli.CreateTag(ctx, dir, name, commit)
+func (GitCLI) CreateTag(ctx context.Context, dir, name, commit string, a createtag.Annotation) error {
+	return gitcli.CreateTag(ctx, dir, name, commit, gitcli.Tag{Message: a.Message, Name: a.Name, Email: a.Email, Sign: a.Sign})
 }
 
 func (GitCLI) TagCommit(ctx context.Context, dir, name string) (string, bool, error) {

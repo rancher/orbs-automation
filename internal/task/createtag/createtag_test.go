@@ -30,12 +30,14 @@ func tagsAt(commit string, names ...string) []git.Tag {
 }
 
 type fakeGit struct {
-	made []string
-	err  error
+	made        []string
+	annotations []Annotation
+	err         error
 }
 
-func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string) error {
+func (f *fakeGit) CreateTag(_ context.Context, dir, name, commit string, a Annotation) error {
 	f.made = append(f.made, dir+" "+name+" "+commit)
+	f.annotations = append(f.annotations, a)
 	return f.err
 }
 
@@ -75,4 +77,15 @@ func TestRunReportsAFailureToMakeTheTag(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "already exists")
+}
+
+func TestRunMakesTheTagWithTheAnnotationItIsGiven(t *testing.T) {
+	r := &fakeGit{}
+	in := shell("v0.8.4-rc.1", tagsAt("aaa", "v0.8.3")...)
+	in.Annotation = Annotation{Message: "m", Name: "gero", Email: "gero@example.com", Sign: new(true)}
+
+	_, err := Run(bg, r, in)
+
+	require.NoError(t, err)
+	assert.Equal(t, []Annotation{in.Annotation}, r.annotations)
 }

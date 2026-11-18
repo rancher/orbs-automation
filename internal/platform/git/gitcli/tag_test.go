@@ -12,7 +12,7 @@ func TestCreateTagMakesALightweightTagAtTheCommitAndMovesNothing(t *testing.T) {
 	main := run(t, dir, "rev-parse", "HEAD")
 	release := run(t, dir, "rev-parse", "upstream/release/v1")
 
-	require.NoError(t, CreateTag(ctx, dir, "v1.0.0-rc.1", release))
+	require.NoError(t, CreateTag(ctx, dir, "v1.0.0-rc.1", release, Tag{Message: "m"}))
 
 	assert.Equal(t, release, run(t, dir, "rev-parse", "refs/tags/v1.0.0-rc.1"))
 	assert.Equal(t, "commit", run(t, dir, "cat-file", "-t", "refs/tags/v1.0.0-rc.1"), "a ref and no tag object")
@@ -23,9 +23,9 @@ func TestCreateTagMakesALightweightTagAtTheCommitAndMovesNothing(t *testing.T) {
 func TestCreateTagNeverMovesATagThatExists(t *testing.T) {
 	dir := clone(t, upstream(t))
 	first := run(t, dir, "rev-parse", "HEAD")
-	require.NoError(t, CreateTag(ctx, dir, "v1.0.0", first))
+	require.NoError(t, CreateTag(ctx, dir, "v1.0.0", first, Tag{Message: "m"}))
 
-	err := CreateTag(ctx, dir, "v1.0.0", run(t, dir, "rev-parse", "upstream/release/v1"))
+	err := CreateTag(ctx, dir, "v1.0.0", run(t, dir, "rev-parse", "upstream/release/v1"), Tag{Message: "m"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
@@ -35,7 +35,7 @@ func TestCreateTagNeverMovesATagThatExists(t *testing.T) {
 func TestCreateTagAtACommitTheCloneLacksIsAnError(t *testing.T) {
 	dir := clone(t, upstream(t))
 
-	err := CreateTag(ctx, dir, "v1.0.0", "0123456789abcdef0123456789abcdef01234567")
+	err := CreateTag(ctx, dir, "v1.0.0", "0123456789abcdef0123456789abcdef01234567", Tag{Message: "m"})
 
 	require.Error(t, err)
 	assert.Empty(t, run(t, dir, "tag", "--list"))
