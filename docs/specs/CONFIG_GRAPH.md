@@ -1,6 +1,6 @@
 # CONFIG_GRAPH
 
-**Status:** implemented. `gero config resolve graph`: the whole application config drawn as a D2 diagram, or with the `mindmap` argument as a Mermaid mind map.
+**Status:** implemented. `gero config resolve graph`: the whole application config drawn as a D2 diagram, with the `mindmap` argument as a Mermaid mind map, or with the `er` argument as a Mermaid entity-relationship diagram of the config's schema.
 
 The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which the other commands read one question at a time. This command draws all of it at once, so the projects and the way releases flow between them are seen together. It reads the central config, and the clock only for the phase of a release line, and never the network, and writes D2 source to stdout ([CLI_OUTPUT](CLI_OUTPUT.md)); render it with `d2 graph.d2 graph.svg`.
 
@@ -20,7 +20,7 @@ The config joins into one graph ([CHAIN_MODEL](../design/CHAIN_MODEL.md)), which
 
 ## Filtering
 
-A config with many projects draws a diagram too large to read, and most of what is in it, such as k3s, is not ours. Three flags choose which projects are drawn, and a fourth draws one line; all apply to every type.
+A config with many projects draws a diagram too large to read, and most of what is in it, such as k3s, is not ours. Three flags choose which projects are drawn, and a fourth draws one line; all apply to the `d2` and `mindmap` types, and the `er` type refuses them.
 
 * **`--external` puts the external projects in.** Without it a project with `external: true` is left out. It is a default of the diagram only: the config still holds them.
 * **`--project <pattern>` chooses projects by name.** It is repeatable. A pattern is matched, whatever the case, against a project's config name, its `owner/name` slug and each of its aliases, and `*` stands for any run of characters other than `/`, so `rancher/*` is the slug of every project of that organization. A pattern that starts with `!` leaves out the projects it matches.
@@ -41,7 +41,7 @@ A config with many projects draws a diagram too large to read, and most of what 
 
 ## Types
 
-The optional argument, `gero config resolve graph [d2|mindmap]`, picks what is drawn, and shell completion offers both words. The default is `d2`, the diagram above; `mindmap` is the other. An unknown type is refused with an error naming it, and nothing is written.
+The optional argument, `gero config resolve graph [d2|mindmap|er]`, picks what is drawn, and shell completion offers each word. The default is `d2`, the diagram above; `mindmap` and `er` are the others. An unknown type is refused with an error naming it, and nothing is written.
 
 ### mindmap
 
@@ -54,6 +54,21 @@ A Mermaid mind map, which GitHub and most Markdown viewers render in place. It s
 * **Every node is a single line with an id of its own**, and quotes in a label are written as apostrophes, so a name never breaks the syntax.
 * **The output is deterministic**, by project slug then holding name.
 
+### er
+
+A Mermaid `erDiagram` of the schema the config is made of, which GitHub and most Markdown viewers render in place. The config is read as an abstract relational database: its entities are the tables, and the other types draw the rows joined across them. This type draws the tables, so it is the first thing to read to learn the model ([CHAIN_MODEL](../design/CHAIN_MODEL.md)).
+
+* **It draws the schema and no data.** It reads no config and no clock, and writes the same text on every run, wherever it runs. No project, holding or line of a config is named in it.
+* **The entities are** Project, Stream, Artifact, Line, LineBranch, Holding and Edit. Each lists only the columns that explain how it relates to another, not every field of its document.
+* **The relationships are:**
+  * a Project releases any number of Streams, and a Stream produces one or more Artifacts;
+  * a Project lists any number of LineBranches, each of one Line;
+  * a Holding is the junction: it has a holder and a producer, both Projects, and the diagram says which is which; it takes at most one Artifact, none for a holding of a commit or a branch, and holds the series of at most one Stream; it applies to any number of Lines;
+  * an Edit follows one or more Holdings;
+  * an Artifact pins any number of Artifacts.
+* **Notes say what the boxes cannot:** that a Holding is the junction of the model; that what a pin makes is a virtual holding, derived and never a row of its own; and that a Line is a row of the `RancherLines` document.
+* **It takes no filter.** `--external`, `--project`, `--managed-by` and `--line` choose what data is drawn and there is none, so each is refused with an error naming the flag, and nothing is written. `--json` and any other output format are refused as for the other types.
+
 ## Tests
 
 * A fake workspace over a graph of inline documents covers: a node for every project, with its streams and artifacts nested inside it, the producer-to-holding-to-holder edges and no edge back, the stewardship and hub classes, the line labels, an edit drawn once with an edge from each holding it follows, and the same output on every run.
@@ -63,3 +78,4 @@ A Mermaid mind map, which GitHub and most Markdown viewers render in place. It s
 * An unknown type is refused and the argument defaults to D2, and completion offers the types.
 * The filters are covered over the same fake workspace: an external project is a boundary and not a full node until `--external`, a `--project` pattern by name, by slug, by alias and by glob, a `!` pattern, a named external project drawn without `--external`, a holding to a project left out kept and one between two left out dropped, an edit following only holdings that are dropped not drawn, a pattern that matches nothing refused, `--managed-by` by name, by several names and by `shared`, with `--project` as both at once, a team nobody manages refused, and the mind map keeping its holdings without a boundary node.
 * An error from the workspace is returned as it is.
+* The `er` type is covered without a workspace: it names every entity and each relationship, draws the holder and the producer of a Holding as two relationships to Project, is the same on every run, draws even when the workspace would fail, and refuses each filter flag by name.

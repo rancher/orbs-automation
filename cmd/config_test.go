@@ -330,4 +330,18 @@ func TestConfigResolveGraphDrawsD2UnlessAskedForAMindmap(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out, "d2\n")
 	assert.Contains(t, out, "mindmap\n")
+	assert.Contains(t, out, "er\n")
+}
+
+func TestConfigResolveGraphErDrawsTheSchemaAndRefusesFilters(t *testing.T) {
+	isolateGero(t)
+	dir, err := filepath.Abs("../docs/design/fixture")
+	require.NoError(t, err)
+
+	er, _, err := execRoot(t, "config", "resolve", "graph", "er", "--central-config-dir", dir)
+	require.NoError(t, err)
+	assert.Contains(t, er, "erDiagram\n")
+
+	_, _, err = execRoot(t, "config", "resolve", "graph", "er", "--project", "x", "--central-config-dir", dir)
+	assert.ErrorContains(t, err, "--project")
 }

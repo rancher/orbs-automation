@@ -30,10 +30,13 @@ const (
 	KindD2 Kind = "d2"
 	// KindMindmap is the mind map, written as Mermaid.
 	KindMindmap Kind = "mindmap"
+	// KindER is the entity-relationship diagram of the config's schema, written as
+	// Mermaid.
+	KindER Kind = "er"
 )
 
 // Kinds lists the kinds Graph can draw, the default first.
-var Kinds = []Kind{KindD2, KindMindmap}
+var Kinds = []Kind{KindD2, KindMindmap, KindER}
 
 // Options chooses which projects are drawn (docs/specs/CONFIG_GRAPH.md, "Filtering").
 type Options struct {
@@ -69,6 +72,8 @@ func run(ws Workspace, format string, kind Kind, opts Options) (string, error) {
 		return graph(ws, opts)
 	case KindMindmap:
 		return mindmap(ws, opts)
+	case KindER:
+		return erDiagram(opts)
 	}
 	return "", fmt.Errorf("graph type %q is not supported by config resolve graph", kind)
 }
