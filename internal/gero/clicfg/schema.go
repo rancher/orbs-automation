@@ -23,6 +23,7 @@ type fileConfig struct {
 	BranchPrefix     string    `yaml:"branchPrefix"`
 	PushTo           string    `yaml:"pushTo"`
 	SignCommits      *bool     `yaml:"signCommits"`
+	SignTags         *bool     `yaml:"signTags"`
 	Repos            fileRepos `yaml:"repos"`
 	Repl             fileRepl  `yaml:"repl"`
 }
