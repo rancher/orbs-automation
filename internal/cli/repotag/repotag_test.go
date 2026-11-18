@@ -724,7 +724,7 @@ func TestRunARetagMayNameItsTag(t *testing.T) {
 func TestRunMakesTheTagWithTheTagMessageAndTheTagger(t *testing.T) {
 	var g tagging
 	opts := plain()
-	opts.Identify = func(_ context.Context, clone string) (string, string, error) {
+	opts.Identify = func(context.Context, string) (string, string, error) {
 		return "Dan Pock", "dan@example.com", nil
 	}
 
