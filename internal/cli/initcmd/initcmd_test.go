@@ -340,7 +340,7 @@ func TestRunExplainsHowSearchDiffersFromTheCloneRoot(t *testing.T) {
 	o.Interactive = true
 	var asked bytes.Buffer
 	o.Out = &asked
-	o.In = strings.NewReader("")
+	o.In = strings.NewReader("alice\n\n\n")
 
 	_, err := Run(o)
 

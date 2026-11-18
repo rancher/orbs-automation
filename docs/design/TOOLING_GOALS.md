@@ -18,7 +18,7 @@ The primary user config fields that are worth prompting for are:
 - `repos.search` - Would be useful to have set
 - `repos.cloneRoot` - Will be needed for repo clone tooling; if possible we prompt to set this (single dir value) to the first input search path?
 
-**Built:** `gero init` asks for `githubUser`, `fork`, `upstream`, `branchPrefix`, `centralConfigDir`, `repos.search` and `repos.cloneRoot`, or takes them as flags, and refuses an existing file unless `--force` ([CLI_FRAMEWORK](../specs/CLI_FRAMEWORK.md)). An empty answer skips a question and leaves its key out, so there are no defaults, and `repos.cloneRoot` is not offered the first search path: the two are different keys ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and the prompt says so.
+**Built:** `gero init` asks for the least a workstation needs, `githubUser`, `fork`, `upstream`, `repos.search` and `repos.cloneRoot`, or takes them, and `branchPrefix` and `centralConfigDir`, as flags, and refuses an existing file unless `--force` ([CLI_FRAMEWORK](../specs/CLI_FRAMEWORK.md)). On a terminal the login and the search directories are asked again when left empty, the remotes offer `origin` and `upstream`, and an empty clone root is skipped with a note of what `gero repo clone` then needs. Without a terminal nothing is asked or defaulted. `repos.cloneRoot` is not offered the first search path: the two are different keys ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and the prompt says so.
 
 ## Result
 After accepting user inputs it would save to relevant field(s) in file and then subsequent `gero` commands are more configured.
