@@ -164,5 +164,8 @@ func (s Settings) Source(key string) Source {
 // branchPrefix nor the project's says one: the GitHub login and a slash. It is
 // empty when there is no login.
 func (s Settings) DefaultBranchPrefix() string {
-	return ""
+	if s.GitHubUser == "" {
+		return ""
+	}
+	return s.GitHubUser + "/"
 }

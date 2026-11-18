@@ -55,7 +55,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 	}
 	defer cleanup()
 	in := domain.Input{
-		Project: opts.Project, Holdings: opts.Holdings, Lines: opts.Lines, BranchPrefix: s.BranchPrefix,
+		Project: opts.Project, Holdings: opts.Holdings, Lines: opts.Lines, BranchPrefix: s.BranchPrefix, DefaultBranchPrefix: s.DefaultBranchPrefix(),
 		DryRun: s.DryRun, NoPush: opts.NoPush, PushTo: opts.PushTo, CI: s.CI,
 	}
 	return runTo(ctx, w, proposer.Workspace{Workspace: workspace.Open(s, cwd)}, ex, s.Output, in, opts.Preview, style.New(s.Terminal))

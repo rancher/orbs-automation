@@ -337,7 +337,7 @@ func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, e
 		"changes": strings.Join(changes, "\n"), "marker": b.marker(holder.Slug()).String(),
 		"key": proposal.BranchKey("sync", b.fingerprint, b.Branch),
 	}
-	prefix := proposal.FirstNonEmpty(in.BranchPrefix, prs.BranchPrefix, texts.DefaultBranchPrefix())
+	prefix := proposal.FirstNonEmpty(in.BranchPrefix, prs.BranchPrefix, in.DefaultBranchPrefix, texts.DefaultBranchPrefix())
 	prefixVars := map[string]string{}
 	for k, v := range vars {
 		if k != "key" {

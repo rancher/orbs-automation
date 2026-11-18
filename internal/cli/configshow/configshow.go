@@ -51,6 +51,10 @@ func Entries(s clicfg.Settings, dir workspace.CentralConfigDir) []Entry {
 	if dir != (workspace.CentralConfigDir{}) {
 		centralConfigDir = Entry{Key: "centralConfigDir", Value: dir.Dir, Source: dir.Source}
 	}
+	branchPrefix := entry(s, "branchPrefix", s.BranchPrefix)
+	if s.BranchPrefix == "" {
+		branchPrefix.Value = s.DefaultBranchPrefix()
+	}
 	es := []Entry{
 		entry(s, "userFile", s.UserFile),
 		centralConfigDir,
@@ -65,7 +69,7 @@ func Entries(s clicfg.Settings, dir workspace.CentralConfigDir) []Entry {
 		entry(s, "team", s.Team),
 		entry(s, "fork", s.Fork),
 		entry(s, "githubUser", s.GitHubUser),
-		entry(s, "branchPrefix", s.BranchPrefix),
+		branchPrefix,
 		entry(s, "pushTo", s.PushTo),
 	}
 	if len(s.Repos.Search) > 0 {
