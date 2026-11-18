@@ -15,8 +15,9 @@ type Executor struct {
 	Git     Git
 	Runner  bump.StepRunner
 	TempDir string // where worktrees go
-	// Sign makes git sign every commit with the engineer's own key (signCommits).
-	Sign bool
+	// Sign says whether git signs every commit with the engineer's own key
+	// (signCommits). Nil leaves it to git's own configuration (commit.gpgSign).
+	Sign *bool
 	// Identify says who the commits are made as, in the clone: git's own answer on
 	// a workstation, the bot's in CI. Not set means it is not asked.
 	Identify func(ctx context.Context, clone string) (Identity, error)
@@ -99,5 +100,5 @@ func ActorFor(ctx context.Context, ex *Executor, clone, login string) (*Actor, e
 	if err != nil {
 		return nil, fmt.Errorf("commit identity: %w", err)
 	}
-	return &Actor{Identity: id, Login: login, Signing: ex.Sign}, nil
+	return &Actor{Identity: id, Login: login, Signing: ex.Sign != nil && *ex.Sign}, nil
 }

@@ -588,7 +588,7 @@ func TestLoadSignCommits(t *testing.T) {
 			}
 			s, err := Load(in)
 			require.NoError(t, err)
-			assert.Equal(t, tt.want, s.SignCommits)
+			assert.Equal(t, tt.want, *s.SignCommits)
 			assert.Equal(t, tt.src, s.Source("signCommits"))
 		})
 	}

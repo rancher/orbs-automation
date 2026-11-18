@@ -343,7 +343,7 @@ func brokenSigning(t *testing.T, clone string) {
 func TestShipSignsTheCommitsWhenAskedAndFailsWhenItCannot(t *testing.T) {
 	ws, clone, ex := newShip(t)
 	brokenSigning(t, clone)
-	ex.Sign = true
+	ex.Sign = new(true)
 
 	plan, err := Ship(bg, ws, &fakeProber{}, shipIn("v2.15"), ex, nil)
 

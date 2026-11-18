@@ -239,15 +239,16 @@ func Load(in Inputs) (Settings, error) {
 		return Settings{}, err
 	}
 	s.sources["signCommits"] = SourceDefault
+	s.SignCommits = new(false)
 	if fc.SignCommits != nil {
-		s.SignCommits, s.sources["signCommits"] = *fc.SignCommits, SourceFile
+		s.SignCommits, s.sources["signCommits"] = fc.SignCommits, SourceFile
 	}
 	if ev := getenv(EnvName("signCommits")); ev != "" {
 		on, err := strconv.ParseBool(ev)
 		if err != nil {
 			return Settings{}, fmt.Errorf("%s: must be true or false, got %q", where("signCommits", SourceEnv, ""), ev)
 		}
-		s.SignCommits, s.sources["signCommits"] = on, SourceEnv
+		s.SignCommits, s.sources["signCommits"] = &on, SourceEnv
 	}
 
 	s.Fork, s.GitHubUser, s.BranchPrefix, s.PushTo = fc.Fork, fc.GitHubUser, fc.BranchPrefix, fc.PushTo

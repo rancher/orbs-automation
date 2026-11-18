@@ -281,9 +281,10 @@ type Commit struct {
 	// Name and Email are the author and committer, or both empty for the git
 	// configuration of the clone, which is what the script's local runs use.
 	Name, Email string
-	// Sign makes git sign the commit with the engineer's own configuration.
-	// Otherwise the commit is unsigned whatever the configuration says.
-	Sign bool
+	// Sign says whether git signs the commit with the engineer's own configuration.
+	// Nil leaves it to git: it signs when commit.gpgSign is set. True signs, and
+	// false never does, whatever the configuration says.
+	Sign *bool
 }
 
 // CommitChanges stages and commits in the clone in dir, and returns the new
@@ -313,7 +314,7 @@ func CommitChanges(ctx context.Context, dir string, c Commit) (string, error) {
 		args = append(args, "-c", "user.name="+c.Name, "-c", "user.email="+c.Email)
 	}
 	args = append(args, "commit", "--quiet", "-m", c.Message)
-	if c.Sign {
+	if c.Sign != nil && *c.Sign {
 		args = append(args, "--gpg-sign")
 	} else {
 		args = append(args, "--no-gpg-sign")

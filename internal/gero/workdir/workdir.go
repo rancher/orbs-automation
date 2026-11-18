@@ -33,7 +33,7 @@ type GitCommit struct {
 	Message     string
 	Stage       []string // untracked files the run created, to include
 	Name, Email string   // empty for the clone's own git configuration
-	Sign        bool
+	Sign        *bool    // nil leaves it to git (commit.gpgSign)
 }
 
 // Git is what making a commit in a work directory and ending the work need from

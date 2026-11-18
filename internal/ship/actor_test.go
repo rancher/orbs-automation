@@ -47,7 +47,7 @@ func TestShipSaysWhoItActsAsBeforeAnyWorkIsDone(t *testing.T) {
 func TestShipSaysWhetherTheCommitsAreSignedAndWhichAccountOpensThePRs(t *testing.T) {
 	ws, clone, ex, _, _ := publishing(t)
 	brokenSigning(t, clone) // the commit will not be made, which does not change what was said
-	ex.Identify, ex.Sign = identifying(dan, nil), true
+	ex.Identify, ex.Sign = identifying(dan, nil), new(true)
 	in := realRun()
 
 	plan, err := Ship(bg, ws, &fakeProber{}, in, ex, nil)

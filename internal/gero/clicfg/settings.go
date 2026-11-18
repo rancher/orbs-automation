@@ -143,9 +143,11 @@ type Settings struct {
 	// has a local way, and the central config bundle is read from the cache only.
 	// There is no user-file key, so it is never on without being asked for.
 	Offline bool
-	// SignCommits is signCommits in the user file or GERO_SIGN_COMMITS: the
-	// commits a command makes are signed by git, with the engineer's own key.
-	SignCommits bool
+	// SignCommits is signCommits in the user file or GERO_SIGN_COMMITS: whether the
+	// commits a command makes are signed by git, with the engineer's own key. Nil
+	// when neither is set, which leaves it to git's own configuration
+	// (commit.gpgSign).
+	SignCommits *bool
 	// DefaultToken is true when the token in the environment is the workflow's
 	// default GITHUB_TOKEN: GITHUB_TOKEN is set and GH_TOKEN is unset or equal
 	// to it. Only the fact is kept, never a token.

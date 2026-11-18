@@ -277,7 +277,7 @@ func TestCommitChangesIsUnsignedUnlessAsked(t *testing.T) {
 	require.NoError(t, err, "the setting does not make gero sign")
 
 	write(t, dir, "build.yaml", "image: newer\n")
-	_, err = CommitChanges(ctx, dir, Commit{Message: "m", Sign: true})
+	_, err = CommitChanges(ctx, dir, Commit{Message: "m", Sign: new(true)})
 	require.Error(t, err, "asked to sign, and signing fails, so the commit fails")
 }
 
