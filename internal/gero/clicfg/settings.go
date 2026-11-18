@@ -159,3 +159,10 @@ type Settings struct {
 func (s Settings) Source(key string) Source {
 	return s.sources[key]
 }
+
+// DefaultBranchPrefix is the branch prefix to use when neither the user's
+// branchPrefix nor the project's says one: the GitHub login and a slash. It is
+// empty when there is no login.
+func (s Settings) DefaultBranchPrefix() string {
+	return ""
+}

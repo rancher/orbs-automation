@@ -24,10 +24,12 @@ type Input struct {
 	Lines    []string // limit the run to these Rancher lines
 	// BranchPrefix is the user's branchPrefix setting, which replaces the project's.
 	BranchPrefix string
-	DryRun       bool   // compute and report, and create no branch or PR
-	NoPush       bool   // stop after the commit, leaving the branch in the clone
-	PushTo       string // fork or upstream, or empty to let the settings decide
-	CI           bool   // the actor is the bot
+	// DefaultBranchPrefix is used when neither BranchPrefix nor the project says one.
+	DefaultBranchPrefix string
+	DryRun              bool   // compute and report, and create no branch or PR
+	NoPush              bool   // stop after the commit, leaving the branch in the clone
+	PushTo              string // fork or upstream, or empty to let the settings decide
+	CI                  bool   // the actor is the bot
 }
 
 // Plan is what a sync of a project would do, and what a run did: a branch of the
