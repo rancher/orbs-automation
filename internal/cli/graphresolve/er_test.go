@@ -10,26 +10,26 @@ import (
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 )
 
-func erOf(t *testing.T, opts Options) string {
+func erOf(t *testing.T) string {
 	t.Helper()
-	out, err := run(fakeWorkspace{err: errors.New("the schema reads no config")}, clicfg.OutputText, KindER, opts)
+	out, err := run(fakeWorkspace{err: errors.New("the schema reads no config")}, clicfg.OutputText, KindER, Options{})
 	require.NoError(t, err)
 	return out
 }
 
 func TestERStartsAsAMermaidERDiagram(t *testing.T) {
-	assert.Contains(t, erOf(t, Options{}), "erDiagram\n")
+	assert.Contains(t, erOf(t), "erDiagram\n")
 }
 
 func TestERNamesEveryEntity(t *testing.T) {
-	out := erOf(t, Options{})
+	out := erOf(t)
 	for _, e := range []string{"Project", "Stream", "Artifact", "Line", "LineBranch", "Holding", "Edit"} {
 		assert.Regexp(t, `(?m)^\s+`+e+` \{$`, out, e)
 	}
 }
 
 func TestERRelatesTheEntities(t *testing.T) {
-	out := erOf(t, Options{})
+	out := erOf(t)
 	for _, rel := range []string{
 		`Project ||--o{ Stream : releases`,
 		`Stream ||--|{ Artifact : produces`,
@@ -46,20 +46,20 @@ func TestERRelatesTheEntities(t *testing.T) {
 }
 
 func TestERDrawsTheHolderAndTheProducerOfAHoldingAsTwoRelationshipsToProject(t *testing.T) {
-	out := erOf(t, Options{})
+	out := erOf(t)
 	assert.Contains(t, out, `Holding }o--|| Project : holder`)
 	assert.Contains(t, out, `Holding }o--|| Project : producer`)
 }
 
 func TestERSaysWhatTheBoxesCannot(t *testing.T) {
-	out := erOf(t, Options{})
+	out := erOf(t)
 	assert.Contains(t, out, "%% Holding is the junction")
 	assert.Contains(t, out, "%% what a pin makes is a virtual holding")
 	assert.Contains(t, out, "%% a Line is a row of the RancherLines document")
 }
 
 func TestERIsTheSameEachTimeAndNeedsNoWorkspace(t *testing.T) {
-	assert.Equal(t, erOf(t, Options{}), erOf(t, Options{}))
+	assert.Equal(t, erOf(t), erOf(t))
 }
 
 func TestERRefusesEachFilterByName(t *testing.T) {
