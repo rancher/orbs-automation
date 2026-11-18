@@ -15,9 +15,12 @@ import (
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/chain"
+	"github.com/rancher/orbs-automation/internal/cli/identity"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
+	"github.com/rancher/orbs-automation/internal/gero/texts"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/semver"
+	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/releasetag"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
@@ -159,6 +162,11 @@ func ParseArgs(args []string) (project, line, tag string) {
 // the engineer that the host sees pushing the tag.
 func Run(ctx context.Context, w io.Writer, s clicfg.Settings, cwd string, opts Options) error {
 	opts.Style = style.New(s.Terminal)
+	opts.Sign = s.SignTags
+	opts.Identify = func(ctx context.Context, clone string) (string, string, error) {
+		id, err := identity.ResolveIn(ctx, s, clone)
+		return id.Name, id.Email, err
+	}
 	return run(ctx, w, workspace.Open(s, cwd), proposal.GitCLI{}, s.Output, s.DryRun, opts)
 }
 
@@ -302,9 +310,31 @@ func run(ctx context.Context, w io.Writer, ws Workspace, g Git, format string, d
 }
 
 // annotate is what the tag says: the embedded message with the project, the tag
-// and the branch in it, the tagger, and whether it is signed.
+// and the branch in it, the tagger, and whether it is signed. A tag that is
+// signed when it is set to be, or when it is left to git and git is set to.
 func annotate(ctx context.Context, g Git, project *chain.Project, clone, branch, tag string, opts Options) (createtag.Annotation, bool, error) {
-	return createtag.Annotation{}, false, nil
+	message, err := templates.Render(texts.TagMessage(), map[string]string{
+		"project":      project.Name(),
+		"sourceRepo":   project.Slug(),
+		"tag":          tag,
+		"version":      project.ReleaseVersion(tag),
+		"branch":       strings.TrimPrefix(branch, "release/"),
+		"targetBranch": branch,
+	})
+	if err != nil {
+		return createtag.Annotation{}, false, fmt.Errorf("the tag message: %w", err)
+	}
+	a := createtag.Annotation{Message: message, Sign: opts.Sign}
+	if opts.Identify != nil {
+		if a.Name, a.Email, err = opts.Identify(ctx, clone); err != nil {
+			return createtag.Annotation{}, false, fmt.Errorf("tagger identity: %w", err)
+		}
+	}
+	if opts.Sign != nil {
+		return a, *opts.Sign, nil
+	}
+	signed, err := g.SignsTags(ctx, clone)
+	return a, signed, err
 }
 
 // approve asks once, before anything is changed, to push the tag, unless --yes was
@@ -370,13 +400,17 @@ func report(w io.Writer, format string, res Result, view *style.Renderer) error 
 // promotion says which prerelease it is the stable version of, and that the head
 // has not moved since, which is the reason it is allowed.
 func (r Result) what() string {
+	signed := ""
+	if r.Signed {
+		signed = " (signed)"
+	}
 	if r.Promotes != "" {
-		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project)
+		return fmt.Sprintf("%s on %s at %s, which is %s with no commits since, in %s%s", r.Tag, r.Branch, short(r.Commit), r.Promotes, r.Project, signed)
 	}
 	if r.Retag {
-		return fmt.Sprintf("%s on %s at %s, a retag: %s is on the same commit, in %s", r.Tag, r.Branch, short(r.Commit), r.Newest, r.Project)
+		return fmt.Sprintf("%s on %s at %s, a retag: %s is on the same commit, in %s%s", r.Tag, r.Branch, short(r.Commit), r.Newest, r.Project, signed)
 	}
-	return fmt.Sprintf("%s on %s at %s in %s", r.Tag, r.Branch, short(r.Commit), r.Project)
+	return fmt.Sprintf("%s on %s at %s in %s%s", r.Tag, r.Branch, short(r.Commit), r.Project, signed)
 }
 
 // oneStream is the stream a tag is made for: the one the project has. A project

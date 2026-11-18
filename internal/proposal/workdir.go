@@ -86,7 +86,8 @@ func (GitCLI) CreateTag(ctx context.Context, dir, name, commit string, a createt
 }
 
 func (GitCLI) SignsTags(ctx context.Context, dir string) (bool, error) {
-	return false, nil
+	_, tags, err := gitcli.SignsByDefault(ctx, dir)
+	return tags, err
 }
 
 func (GitCLI) TagCommit(ctx context.Context, dir, name string) (string, bool, error) {
