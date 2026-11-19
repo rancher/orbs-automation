@@ -427,14 +427,23 @@ does everything but write.`,
 func backportCommand() *cobra.Command {
 	var in clibackport.Options
 	cmd := &cobra.Command{
-		Use:   "backport [project] <line>[,<line>...] <pr>",
-		Short: "Carry a merged pull request down to release lines, one pull request for each",
-		Long: `Cherry-pick what a merged pull request put on its base branch onto one or more
-release branches of the same repo, and open one pull request for each.
+		Use:   "backport [project] <line>[,<line>...] <pr>[,<pr>...]",
+		Short: "Carry merged pull requests down to release lines, one pull request for each line",
+		Long: `Cherry-pick what merged pull requests put on their base branch onto one or more
+release branches of the same repo, and open one pull request for each line.
 
-<pr> is the last argument: its number, #number, or its URL, which also names the
-repo, so the project may be left out. It must be merged, which is checked on
-GitHub. <line> is a Rancher line (v2.15 or 2.15) or a release branch of the
+<pr> is the last argument: the number, #number, or URL of a PR, which also names
+the repo, so the project may be left out. Several, separated by commas, are a
+bundle: they go to each line together, in one pull request titled "Backport of:
+#12, #15" whose body links each by its title. They are picked in the order they
+were applied to the base, whatever order you typed, and all must be merged to the
+same base. A PR that a line already has, whether someone cherry-picked it by hand or
+gero did (found by its "cherry picked from" line, or by its patch), is left out of
+that line's pull request and named in its body; one left is a regular backport, and
+none is reported as already backported. An open backport of yours that the new one
+covers, every PR of it among the new one's, is closed once the new one is open;
+another that overlaps is only named, and anyone else's is never touched. Every PR
+must be merged, which is checked on GitHub. <line> is a Rancher line (v2.15 or 2.15) or a release branch of the
 project, as gero repo tag takes it; several are separated by commas. [project] is
 the config name or owner/name slug, and by default the repo you are in. The lines
 are worked newest first, and a line that is the branch the PR was merged to is
