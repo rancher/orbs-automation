@@ -50,7 +50,7 @@ An Artifact can pin others: a wrangler release goes with the lasso its `go.mod` 
 Whether a project is **owned** is `managedBy` against the **active team context** gero works in when run (`team`, [CLI_CONFIG](CLI_CONFIG.md)), not a field of the project. `gero ship` is gated on it:
 
 * A producer the active team owns ships as described above, into any consumer that holds it.
-* A producer another team manages, or that is `shared` or has no `managedBy`, is **observed**: a bare `gero ship wrangler` is refused, and the message names the team that manages it and the active team.
+* A producer another team manages, or that is `shared` or has no `managedBy`, is **observed**: a bare `gero ship wrangler` is refused, and the message names the teams that manage it and the active team, by id.
 * `--to <consumer>` is the one exception. `gero ship wrangler v2.16 --to=bro` is allowed when the consumer is owned by the active team, or is `shared` (`rancher/rancher` takes bumps from any team's releases). A consumer of any other team is refused, and so is an external one. The bump is the same one: the producer's release and the consumer's holdings and edits.
 * The steps of the consumer's edits that run from the producer's repo (`from: producer`) are **skipped** for a producer the active team does not own, since gero runs nothing out of a repo its team does not own. The report lists them under "left out", and the PR body lists each as skipped, so the reviewer knows the PR may be incomplete and what to finish by hand. Steps from the consumer's clone, and the strategies, run as usual.
 

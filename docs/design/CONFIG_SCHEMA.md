@@ -23,7 +23,7 @@ The repo as a place. `refs`: none.
 |---|---|---|---|
 | `repo.name` | `owner/name` | required | no space; unique across Projects |
 | `repo.external` | bool | `false` | the repo is outside our organization: gero never ships into it, and no team owns it, so it expects no `managedBy` |
-| `repo.managedBy` | slug | none: unspecified | the team responsible. A project is **owned** when this is the active team ([CLI_CONFIG](../specs/CLI_CONFIG.md)), and gero ships from what it owns; there is no `owned` field. `shared` is a sentinel for every team: no team's context owns it, and any team may ship into it |
+| `repo.managedBy` | team id, or a list of them | none: unspecified | the team or teams responsible, each an `id` in `Teams`, never a GitHub name. A project is **owned** when the active team ([CLI_CONFIG](../specs/CLI_CONFIG.md)) is any one of them, and gero ships from what it owns; there is no `owned` field. `shared` is a sentinel for every team and is not in `Teams`: no team's context owns it, and any team may ship into it. It stands alone, never in a list |
 | `repo.defaultBranch` | string | `main` | |
 | `finalDestination` | bool | `false` | at most one Project |
 | `pullRequests.title`, `.branchPrefix` | template | none | `branchPrefix` is a lead-in only: `gero` always appends the key `{source}-{tag}-{branch}` to it ([PUSH_TO_REPO](../specs/PUSH_TO_REPO.md#branches-and-pr-identity)), and `{key}` is a read-only variable of the title that no setting can assign. Variables as today: `project`, `source`, `sourceRepo`, `tag`, `version`, `branch`, `targetBranch`, `consumer`, `companions` (the releases that go with this one, such as `lasso to v0.2.10`, empty when none), … |
@@ -162,6 +162,17 @@ Commits are the engine's, not a field: shipping commits after the Holding writes
 | `gomod` | a module path: the version on its `require` line in `go.mod` | now |
 | `regex` | a pattern with exactly one capture group, matching in exactly one place; `(?m)` is implied | now |
 
+## Teams
+
+The teams that manage a Project, and the one place a GitHub team name is written. `refs`: none. One document holds the set, as `RancherLines` does, and it lists only teams that manage a Project in the config.
+
+| Field | Type | Default | Rules |
+|---|---|---|---|
+| `teams[].id` | slug | required | listed once; not `shared`. The only name for a team in `managedBy`, in the `team` setting and in `--managed-by`, and in every message and report |
+| `teams[].github` | string | required | the team on GitHub. Bare (`rancher-squad-frameworks`) means `@rancher/rancher-squad-frameworks`; `@org/team` names a team of another organization (`@SUSE/scc-team`). It may hold underscores and dots, which an `id` may not |
+
+Nothing past loading the config reads `github`: the logic works on ids, so a team renamed on GitHub changes one line here. A team's CODEOWNERS entries seed its Projects' `managedBy` once, when a Project is added, and are not read again: paths in CODEOWNERS are not modelled, and a repo's `managedBy` may differ from them.
+
 ## Unchanged kinds
 
 There is no `External` kind: a third-party repo is a Project with `repo.external: true`.
@@ -178,6 +189,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A selector's `since` is not after its `until`
 * Projects that hold something of one another in a cycle, of two or of any longer ring, are a warning: the dependency is circular. It is one warning for each set of projects that all reach one another through their holdings, naming them in the order of the cycle, and it is raised on the last Holding of that cycle in the order read, the one that closes it
 * A repo that is `external` has no `managedBy`: no team manages a repo outside the organization
+* Every id in a `managedBy` is an `id` of `Teams`, or is `shared` alone; a list holds no id twice; there is one `Teams` document
 * Repo slugs are unique whatever their case; an image name is unique within a project; there is one `RancherLines` document
 * A calver stream is on a project whose layout is `single`; a project holds nothing of itself
 * A holding's `stage` is a stage of its holder's `branches.stages`, and its `stages` are stages of the producer's streams
@@ -185,7 +197,7 @@ There is no `External` kind: a third-party repo is a Project with `repo.external
 * A project with `layout: perLine` that holds an artifact (matched by its image name or module path) which the `finalDestination` also holds (a project is not compared with itself) should hold the same stream for each line; a difference is a warning. A `single` layout is not compared
 * An Artifact that `pins` is `gomod`, and so is each one it pins; none pins itself, and the pins have no cycle. A pin makes a virtual Holding of the pinned Artifact for each Holding of the pinning one ([CONFIG_UNITS](CONFIG_UNITS.md#o12-how-do-two-packages-say-their-versions-go-together)), and it is an error when an explicit Holding, or another pin's, is at the same file and key of the same project on overlapping lines
 * A `gomod` Artifact's `name` is a module path; a Holding with `format: gomod` holds a `gomod` Artifact; a `goBump` Edit has at least one such Holding
-* A step run `from: producer` needs a producer whose `managedBy` is a team: not unset, not `shared`, and not external, since no team could run it. Whether the active team owns the producer is known only when a command runs: a producer it does not own has its `from: producer` steps skipped
+* A step run `from: producer` needs a producer whose `managedBy` names at least one team: not unset, not `shared`, and not external, since no team could run it. Whether the active team owns the producer is known only when a command runs: a producer it does not own has its `from: producer` steps skipped
 * A lifecycle date raises a warning, never an error ([CONSTRAINTS](CONSTRAINTS.md))
 
 ## Warnings

@@ -30,8 +30,8 @@ The rules the graph applies, each in `internal/chain`.
 
 | Answer | Rule |
 |---|---|
-| `Project.ManagedBy` | `managedBy` as written; none when unset, and none for an external repo |
-| `Project.Owned(team)` | `managedBy` is the team given, which is the active team of the CLI settings ([CLI_CONFIG](../specs/CLI_CONFIG.md)); never for `shared`, for an unset `managedBy` or for an external repo |
+| `Project.ManagedBy` | the team ids of `managedBy` as written, one or several; none when unset, and none for an external repo |
+| `Project.Owned(team)` | `managedBy` is or lists the team id given, which is the active team of the CLI settings ([CLI_CONFIG](../specs/CLI_CONFIG.md)); never for `shared`, for an unset `managedBy` or for an external repo |
 | `Project.Shared` | `managedBy` is `shared`: no team owns it and every team may ship into it |
 | `Project.Branch(line)` | the line's branch as written; omitted gives the default branch (and says so), `""` gives none yet, a stage map gives a branch for each stage |
 | `Project.BranchOfLine(line, stage)` | the same, for a line id written with or without `v`, any case; a `single` layout gives the default branch for every line; a stage picks from the stage map |
