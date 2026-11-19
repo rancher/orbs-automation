@@ -153,3 +153,16 @@ func (r *Resolver) ForPinnerTag(ctx context.Context, v *chain.Holding, pinnerTag
 		Why: fmt.Sprintf("`%s`, which the pin of `%s` requires", c.Tag, c.RequiredBy),
 	}
 }
+
+// TagOf is the release of h's stream that a value h holds is the form of: the inverse of
+// writing the release with the holding's form, found among the tags the stream accepts.
+func (r *Resolver) TagOf(ctx context.Context, h *chain.Holding, value string) (string, bool) {
+	return "", false
+}
+
+// Required is the floor the release a pinning holding holds now puts on the virtual
+// holding v: what the go.mod of that release requires, where ForPinnerTag takes the
+// release the pinner is brought to. pinnerValue is what the pinning holding holds.
+func (r *Resolver) Required(ctx context.Context, v *chain.Holding, pinnerValue string) Want {
+	return Want{}
+}
