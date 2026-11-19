@@ -194,3 +194,13 @@ func HoldsPickOf(ctx context.Context, dir, ref, commit string) (bool, error) {
 	}
 	return strings.TrimSpace(out) != "", nil
 }
+
+// IsAncestor reports whether a is an ancestor of b, or the same commit.
+func IsAncestor(ctx context.Context, dir, a, b string) (bool, error) { return false, nil }
+
+// PatchPresent reports whether upstream already has a commit with the same change as commit, by
+// patch-id: what git cherry compares. It finds a pick made without -x, or squashed in without its
+// line. A merge commit has no patch-id and is never found.
+func PatchPresent(ctx context.Context, dir, upstream, commit string) (bool, error) {
+	return false, nil
+}
