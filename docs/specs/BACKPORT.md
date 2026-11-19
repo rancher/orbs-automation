@@ -27,12 +27,12 @@ Targets are worked newest line first. A target that is the PR's own base branch 
 
 ### Which commits
 
-Read from the host: the merge commit `M` the PR records, how many parents it has, how many commits `N` the PR has, and the patch-id of each.
+Read from the host: the merge commit `M` the PR records, how many parents it has, how many commits `N` the PR has, and the message and author of each.
 
 | What is found | What a person would do | What it does |
 |---|---|---|
 | `M` has one parent, `N` is 1 | pick the one commit | `cherry-pick -x M` |
-| `M` has one parent, `N` > 1, and the `N` commits ending at `M` have the PR commits' patch-ids in order | a rebase merge: pick each commit | `cherry-pick -x` of those `N`, oldest first |
+| `M` has one parent, `N` > 1, and the `N` commits ending at `M` along first parents have the PR commits' messages and authors, in order | a rebase merge: pick each commit | `cherry-pick -x` of those `N`, oldest first |
 | `M` has one parent, `N` > 1, and they do not match | a squash: pick the result | `cherry-pick -x M` |
 | `M` has two parents | a merge commit | `cherry-pick -x -m 1 M`, one commit |
 
