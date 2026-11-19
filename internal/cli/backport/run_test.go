@@ -67,10 +67,13 @@ func TestRunToWritesTheJSONReportOfACheck(t *testing.T) {
 	require.NoError(t, err)
 	var got struct {
 		Repo    string
+		PRs     []struct{ Number int }
 		Targets []struct{ Branch string }
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
 	assert.Equal(t, "acme/cons", got.Repo)
+	require.Len(t, got.PRs, 1, "the PRs are a list, of one here")
+	assert.Equal(t, 5, got.PRs[0].Number)
 	require.Len(t, got.Targets, 1)
 	assert.Equal(t, "release/v1", got.Targets[0].Branch)
 }

@@ -103,7 +103,6 @@ type Resolver interface {
 type Input struct {
 	Project string   // the repo, by config name or slug; empty for the one the working directory is in
 	Lines   []string // the targets: Rancher lines or release branches, as typed
-	PR      int      // the number of the merged PR, when PRs is not set
 	// PRs are the merged PRs to carry, one or several. Several are a bundle.
 	PRs []int
 	// Repo is the owner/name a PR URL named, or empty. It must be the repo of the project.
@@ -125,22 +124,17 @@ type Input struct {
 // Plan is what a backport would do, and what a run did.
 type Plan struct {
 	Repo   string               `json:"repo"` // the repository, owner/name
-	PR     int                  `json:"pr"`
-	Title  string               `json:"title"`
-	URL    string               `json:"url"`
 	Base   string               `json:"base"`
-	Shape  Shape                `json:"shape,omitempty"`
-	Picks  []string             `json:"picks,omitempty"`
 	Clone  string               `json:"clone,omitempty"`
 	Remote string               `json:"remote,omitempty"`
 	Push   *proposal.PushTarget `json:"push,omitempty"`
 	Actor  *proposal.Actor      `json:"actor,omitempty"`
-	// PRs are the PRs that are carried, in the order they are picked.
-	PRs     []Source `json:"prs,omitempty"`
+	// PRs are the PRs that are carried, in the order they are picked: one or several.
+	PRs     []Source `json:"prs"`
 	Targets []Target `json:"targets,omitempty"`
 }
 
-// Target is one release branch the PR is carried to.
+// Target is one release branch the PRs are carried to, in one PR.
 type Target struct {
 	Branch string `json:"branch"`
 	Line   string `json:"line,omitempty"`
@@ -243,7 +237,6 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		for _, r := range reads {
 			plan.PRs = append(plan.PRs, Source{Number: r.number, Title: r.detail.Title, URL: r.detail.URL})
 		}
-		plan.PR, plan.Title, plan.URL = plan.PRs[0].Number, plan.PRs[0].Title, plan.PRs[0].URL
 		return plan, nil
 	}
 	sess, err := proposal.Begin(ctx, ws, ex, proposal.SessionInput{Repo: holder, PushTo: in.PushTo, CI: in.CI, NoPush: in.NoPush})
@@ -261,7 +254,6 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 	for _, c := range ordered {
 		plan.PRs = append(plan.PRs, c.Source)
 	}
-	plan.PR, plan.Title, plan.URL, plan.Shape, plan.Picks = ordered[0].Number, ordered[0].Title, ordered[0].URL, ordered[0].Shape, ordered[0].Picks
 	states := make([]*state, len(plan.Targets))
 	for i := range plan.Targets {
 		states[i], err = prepare(ctx, g, sess, in, holder, ordered, &plan.Targets[i])
@@ -275,12 +267,8 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 // distinct is the numbers of the PRs asked for, each once, in the order given. There must be some,
 // and no more than MaxPRs.
 func distinct(in Input) ([]int, error) {
-	asked := in.PRs
-	if len(asked) == 0 && in.PR != 0 {
-		asked = []int{in.PR}
-	}
 	var out []int
-	for _, n := range asked {
+	for _, n := range in.PRs {
 		if !slices.Contains(out, n) {
 			out = append(out, n)
 		}
