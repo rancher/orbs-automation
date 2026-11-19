@@ -198,7 +198,8 @@ func TestRepoBackportWiring(t *testing.T) {
 		stdout, _, err := execRoot(t, "repo", "backport", "--help")
 
 		require.NoError(t, err)
-		assert.Contains(t, stdout, "backport [project] <line>[,<line>...] <pr>")
+		assert.Contains(t, stdout, "backport [project] <line>[,<line>...] <pr>[,<pr>...]")
+		assert.Contains(t, stdout, "bundle")
 		assert.Contains(t, stdout, "--no-push")
 	})
 
