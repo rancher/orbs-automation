@@ -159,6 +159,9 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		return Plan{}, err
 	}
 	slug := holder.Slug()
+	if in.Repo != "" && in.Repo != slug {
+		return Plan{}, fmt.Errorf("the PR is in %s, but the project is %s", in.Repo, slug)
+	}
 	detail, err := ws.PullRequests().Get(ctx, slug, in.PR)
 	if err != nil {
 		return Plan{}, err
