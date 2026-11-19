@@ -15,7 +15,9 @@ import (
 type Args struct {
 	Project string   // the repo, by config name or slug; empty for the one the working directory is in
 	Lines   []string // the targets, as typed
-	PR      int      // the number of the merged PR
+	PR      int      // the number of the merged PR, when PRs is not set
+	// PRs are the numbers of the merged PRs, one or several, as typed. Several are a bundle.
+	PRs []int
 	// Repo is the owner/name a PR URL named, or empty when the PR was a number. It must be the
 	// repo of the project.
 	Repo string
