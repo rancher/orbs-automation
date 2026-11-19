@@ -35,7 +35,6 @@ var shorthands = map[string]string{
 	"holding":    "H",
 	"all":        "a",
 	"into":       "i",
-	"switch":     "s",
 	"force":      "f",
 	"check":      "c",
 }

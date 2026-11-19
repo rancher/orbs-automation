@@ -137,7 +137,7 @@ read. For config and the clone alone, with no network, use repo info.`,
 	}
 	statusCmd.Flags().BoolVar(&noConsumers, "no-consumers", false, "leave out who has picked up what this project ships")
 	statusCmd.Flags().BoolVar(&noSources, "no-sources", false, "leave out what this project takes from the projects that ship to it")
-	var switchTo bool
+	var noSwitch bool
 	branchCmd := &cobra.Command{
 		Use:   "branch [project] <line> <name>",
 		Short: "Make a branch off the upstream branch of a release line",
@@ -145,11 +145,12 @@ read. For config and the clone alone, with no network, use repo info.`,
 line, after fetching it, in your clone of the project. The line is one of the
 Project's release lines (v2.15), or a branch of it (release/v2.15, main).
 
-Your checkout stays where it is, as git branch does, and the command says how
-to switch to the new branch. --switch moves you onto it, with git's own rules
-for uncommitted changes. A branch of the name that already holds commits of
-ours on the current head is kept as it is; one with commits that are not ours
-is never touched. With --dry-run nothing is left behind.
+Your checkout moves onto the new branch, as git switch -c does, with git's own
+rules for uncommitted changes. --no-switch leaves it where it is, as git branch
+does, and the command says how to switch to the new branch. A branch of the name
+that already holds commits of ours on the current head is kept as it is; one
+with commits that are not ours is never touched. With --dry-run nothing is left
+behind.
 
 Name a Project (its config name or its owner/name slug) before the line, else
 the repository you are in is used.`,
@@ -163,13 +164,14 @@ the repository you are in is used.`,
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			project, line, name := repobranch.ParseArgs(args)
-			return repobranch.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, repobranch.Options{
-				Project: project, Line: line, Name: name, Switch: switchTo,
-			})
+			return repobranch.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, branchOptions(args, noSwitch))
 		},
 	}
-	branchCmd.Flags().BoolVarP(&switchTo, "switch", "s", false, "leave your checkout on the new branch")
+	branchCmd.Flags().BoolVar(&noSwitch, "no-switch", false, "leave your checkout where it is, and say how to switch to the new branch")
+	// --switch was the flag before the switch became the default: still taken, not listed.
+	branchCmd.Flags().Bool("switch", false, "")
+	_ = branchCmd.Flags().MarkHidden("switch")
+	branchCmd.MarkFlagsMutuallyExclusive("switch", "no-switch")
 	var cloneAll bool
 	var cloneInto string
 	cloneCmd := &cobra.Command{
@@ -507,5 +509,5 @@ open. --no-push stops after the commits and --dry-run does everything but write.
 // from its arguments, and whether to leave the checkout on the new branch.
 func branchOptions(args []string, noSwitch bool) repobranch.Options {
 	project, line, name := repobranch.ParseArgs(args)
-	return repobranch.Options{Project: project, Line: line, Name: name}
+	return repobranch.Options{Project: project, Line: line, Name: name, Switch: !noSwitch}
 }

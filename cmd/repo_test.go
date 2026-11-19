@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"io"
 	"path/filepath"
 	"testing"
 
@@ -91,11 +92,11 @@ func TestRepoBranchWiring(t *testing.T) {
 	})
 
 	// Last: cobra keeps the help flag set on the command between runs.
-	t.Run("the help says what it does and has --switch", func(t *testing.T) {
+	t.Run("the help says what it does and has --no-switch", func(t *testing.T) {
 		stdout, _, err := execRoot(t, "repo", "branch", "--help")
 
 		require.NoError(t, err)
-		assert.Contains(t, stdout, "--switch")
+		assert.Contains(t, stdout, "--no-switch")
 		assert.Contains(t, stdout, "release line")
 	})
 }
@@ -272,7 +273,13 @@ func TestRepoBranchStillTakesSwitchAsAHiddenFlag(t *testing.T) {
 }
 
 func TestRepoBranchSwitchAndNoSwitchExcludeEachOther(t *testing.T) {
-	_, _, err := execRoot(t, "repo", "branch", "--switch", "--no-switch", "v2.15", "my-fix")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := newRootCmd() // not rootCmd, which keeps the flags of the runs before
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+	root.SetArgs([]string{"repo", "branch", "--switch", "--no-switch", "v2.15", "my-fix"})
+
+	err := root.Execute()
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "none of the others can be")
