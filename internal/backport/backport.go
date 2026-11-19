@@ -323,7 +323,7 @@ func varsOf(slug string, pr pulls.Detail, tg Target, m proposal.Marker, commits,
 	return map[string]string{
 		"line": label, "branch": strings.TrimPrefix(tg.Branch, "release/"), "targetBranch": tg.Branch, "consumer": slug,
 		"number": strconv.Itoa(pr.Number), "title": pr.Title, "url": pr.URL, "commits": strings.Join(bullets, "\n"),
-		"conflicts": "", "marker": m.String(), "key": proposal.BranchKey(m.Source, m.Version, tg.Branch),
+		"numbers": "", "prs": "", "skipped": "", "conflicts": "", "marker": m.String(), "key": proposal.BranchKey(m.Source, m.Version, tg.Branch),
 	}
 }
 
