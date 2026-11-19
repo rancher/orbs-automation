@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/termfacts"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // buildUpdater makes the Updater of the running gero. It is a variable so a
@@ -41,8 +42,8 @@ development build is left alone. It runs on a workstation, not in CI and not in
 gero repl.
 
 --check says whether a newer release exists and stops; --dry-run says what would
-be installed. A gero that is a pre-release also looks at pre-releases; --pre-release
-lets a stable one do the same, and --pre-release=false keeps a pre-release to
+be installed. A gero that is a pre-release also looks at pre-releases; --prerelease
+lets a stable one do the same, and --prerelease=false keeps a pre-release to
 stable releases. Without a terminal, pass --yes to approve.`,
 		Example: `  # Update, after being shown the release and asked
   gero doctor self-update
@@ -51,14 +52,14 @@ stable releases. Without a terminal, pass --yes to approve.`,
   gero doctor self-update --check
 
   # Move a stable gero to the newest pre-release
-  gero doctor self-update --pre-release`,
+  gero doctor self-update --prerelease`,
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{ci.ContextAnnotation: ci.ContextWorkstationOnly},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			s := settingsFrom(cmd)
 			// Unset, a pre-release gero follows pre-releases and a stable one does not.
 			var prereleases *bool
-			if cmd.Flags().Changed("pre-release") {
+			if cmd.Flags().Changed("prerelease") {
 				prereleases = &prerelease
 			}
 			updater, err := buildUpdater(version.Version, prereleases)
@@ -77,9 +78,16 @@ stable releases. Without a terminal, pass --yes to approve.`,
 			return err
 		},
 	}
-	c.Flags().BoolVar(&checkOnly, "check", false, "only say whether a newer release exists")
+	c.Flags().BoolVarP(&checkOnly, "check", "c", false, "only say whether a newer release exists")
 	c.Flags().BoolVarP(&yes, "yes", "y", false, "approve the update without asking (env GERO_NON_INTERACTIVE)")
-	c.Flags().BoolVar(&prerelease, "pre-release", false, "consider pre-releases (--pre-release=false for stable only); by default a pre-release gero does and a stable one does not")
+	// --pre-release was the first spelling. It still works, but is not listed.
+	c.Flags().SetNormalizeFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
+		if name == "pre-release" {
+			name = "prerelease"
+		}
+		return pflag.NormalizedName(name)
+	})
+	c.Flags().BoolVarP(&prerelease, "prerelease", "r", false, "consider pre-releases (--prerelease=false for stable only); by default a pre-release gero does and a stable one does not")
 	return c
 }
 

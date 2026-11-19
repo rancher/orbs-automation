@@ -169,7 +169,7 @@ the repository you are in is used.`,
 			})
 		},
 	}
-	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
+	branchCmd.Flags().BoolVarP(&switchTo, "switch", "s", false, "leave your checkout on the new branch")
 	var cloneAll bool
 	var cloneInto string
 	cloneCmd := &cobra.Command{
@@ -212,8 +212,8 @@ built yet. --dry-run says what would be cloned and reads the host for forks.`,
 			})
 		},
 	}
-	cloneCmd.Flags().BoolVar(&cloneAll, "all", false, "clone every project the active team owns, and that is not external")
-	cloneCmd.Flags().StringVar(&cloneInto, "into", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
+	cloneCmd.Flags().BoolVarP(&cloneAll, "all", "a", false, "clone every project the active team owns, and that is not external")
+	cloneCmd.Flags().StringVarP(&cloneInto, "into", "i", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
 	var push, yes, nonInteractive, stable, minor, major, retag bool
 	tagCmd := &cobra.Command{
 		Use:   "tag [project] <line> [tag]",
@@ -413,10 +413,10 @@ does everything but write.`,
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringSliceVar(&in.Holdings, "holding", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
-	flags.StringSliceVar(&in.Lines, "line", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
-	flags.BoolVar(&in.Preview, "preview", false, "print the commit message and the PR body too")
-	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.StringSliceVarP(&in.Holdings, "holding", "H", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
+	flags.StringSliceVarP(&in.Lines, "line", "l", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
+	flags.BoolVarP(&in.Preview, "preview", "p", false, "print the commit message and the PR body too")
+	flags.StringVarP(&in.PushTo, "push-to", "T", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
@@ -495,8 +495,8 @@ open. --no-push stops after the commits and --dry-run does everything but write.
 		},
 	}
 	flags := cmd.Flags()
-	flags.BoolVar(&in.Preview, "preview", false, "print the PR bodies too")
-	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.BoolVarP(&in.Preview, "preview", "p", false, "print the PR bodies too")
+	flags.StringVarP(&in.PushTo, "push-to", "T", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
