@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/rancher/orbs-automation/internal/apis/lines"
@@ -236,7 +237,7 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		tg.Preview = &preview
 		states[i] = st
 	}
-	return plan, enactAll(ctx, g, ex, sess, in, holder, refs, &plan, states, picks)
+	return plan, enactAll(ctx, g, ex, sess, in, refs, &plan, states, picks)
 }
 
 // resolveTargets turns what was typed into the branches to carry the PR to, newest line first,
@@ -321,7 +322,7 @@ func varsOf(slug string, pr pulls.Detail, tg Target, m proposal.Marker, commits,
 	}
 	return map[string]string{
 		"line": label, "branch": strings.TrimPrefix(tg.Branch, "release/"), "targetBranch": tg.Branch, "consumer": slug,
-		"number": fmt.Sprint(pr.Number), "title": pr.Title, "url": pr.URL, "commits": strings.Join(bullets, "\n"),
+		"number": strconv.Itoa(pr.Number), "title": pr.Title, "url": pr.URL, "commits": strings.Join(bullets, "\n"),
 		"conflicts": "", "marker": m.String(), "key": proposal.BranchKey(m.Source, m.Version, tg.Branch),
 	}
 }
@@ -372,7 +373,7 @@ func (st *state) handResolved(files []string) error {
 
 // enactAll decides each target, asks once, and works the targets in order. A conflict that is
 // abandoned, or a resolver that fails, ends the run: the targets after it are not attempted.
-func enactAll(ctx context.Context, g Git, ex *proposal.Executor, sess *proposal.Session, in Input, holder *chain.Project, refs git.Refs, plan *Plan, states []*state, picks Picks) error {
+func enactAll(ctx context.Context, g Git, ex *proposal.Executor, sess *proposal.Session, in Input, refs git.Refs, plan *Plan, states []*state, picks Picks) error {
 	var work []int
 	for i, st := range states {
 		if st != nil {

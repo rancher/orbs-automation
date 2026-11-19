@@ -8,13 +8,13 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	domain "github.com/rancher/orbs-automation/internal/backport"
 	"github.com/rancher/orbs-automation/internal/cli/proposer"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
+	"github.com/rancher/orbs-automation/internal/platform/execx"
 	"github.com/rancher/orbs-automation/internal/platform/github"
 	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/proposal"
@@ -126,8 +126,8 @@ func newTerminal(in io.Reader, out io.Writer) *Terminal {
 	path := clicfg.StatePath(os.Getenv, home, "backport-editor")
 	t := &Terminal{
 		In: in, Out: out,
-		Installed: func(command string) bool { _, err := exec.LookPath(command); return err == nil },
-		Start:     startEditor,
+		Installed: execx.OnPath,
+		Start:     func(_ context.Context, command, dir string) error { return execx.Launch(command, dir) },
 	}
 	if data, err := os.ReadFile(path); path != "" && err == nil {
 		t.Editor = strings.TrimSpace(string(data))
@@ -141,15 +141,4 @@ func newTerminal(in io.Reader, out io.Writer) *Terminal {
 		}
 	}
 	return t
-}
-
-// startEditor opens the editor on the directory and does not wait for it: the editors that are
-// offered hand the directory to a window and return.
-func startEditor(_ context.Context, command, dir string) error {
-	cmd := exec.Command(command, dir)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	go func() { _ = cmd.Wait() }()
-	return nil
 }
