@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# The teams that manage the projects here.
+# One document, and the one place a GitHub team is named: everywhere else, in a
+# project's managedBy and in the --team and --managed-by options, a team is its id.
+# A bare github value is a team of the rancher organization; another organization's
+# team is written @org/team.
+# Only teams that manage a project here are listed. A project's managedBy was seeded
+# from its CODEOWNERS once, and is not kept in step with it.
+apiVersion: gero/v1alpha2
+kind: Teams
+name: rancher
+spec:
+  teams:
+    - {id: orbs, github: orbs}
+    - {id: release, github: release-team}
+    - {id: frameworks, github: rancher-squad-frameworks}
+    - {id: hostbusters, github: rancher-team-2-hostbusters-dev}
+    - {id: infracloud, github: infracloud-team}
+    - {id: rst, github: rancher-security}

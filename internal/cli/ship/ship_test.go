@@ -48,6 +48,7 @@ func graph() *chain.Graph {
 		fsys := fstest.MapFS{}
 		for i, d := range []string{
 			chaintest.Lines("v2.16"),
+			chaintest.Teams("orbs"),
 			chaintest.Doc("Project", "scc-operator", "", "  repo: {name: rancher/scc-operator, managedBy: orbs}\n"),
 			chaintest.Doc("Stream", "scc-operator", "{project: scc-operator}", "  universal: true\n"),
 			chaintest.Doc("Artifact", "scc-image", "{stream: scc-operator}", "  kind: image\n  name: rancher/scc-operator\n"),

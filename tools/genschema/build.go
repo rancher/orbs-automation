@@ -93,6 +93,8 @@ func mapper(t reflect.Type) *jsonschema.Schema {
 	case reflect.TypeFor[v1alpha2.Locations]():
 		at := func() *jsonschema.Schema { return &jsonschema.Schema{Ref: defsPrefix + "At"} }
 		return &jsonschema.Schema{OneOf: []*jsonschema.Schema{at(), {Type: "array", Items: at()}}}
+	case reflect.TypeFor[v1alpha2.ManagedBy]():
+		return &jsonschema.Schema{OneOf: []*jsonschema.Schema{text(), listOfText()}}
 	case reflect.TypeFor[v1alpha2.Command]():
 		return &jsonschema.Schema{OneOf: []*jsonschema.Schema{text(), listOfText()}}
 	case reflect.TypeFor[meta.Refs]():

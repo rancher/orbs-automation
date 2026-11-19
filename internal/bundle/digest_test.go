@@ -11,7 +11,7 @@ import (
 // digestOfFixture is the digest of fixture(), worked out apart from this code: the
 // SHA-256 of "a.yaml", a NUL, the SHA-256 of that file's bytes in hex and a newline,
 // then the same for b.yaml.
-const digestOfFixture = "0acbeadfc35fa371907c479d96a3c603a69f38cf4789b923a0ee2980287c8ed2"
+const digestOfFixture = "00d70cc3db9d76f97722e2c93c81124d5f53f498760b884c18a057da747e5422"
 
 func digestOf(t *testing.T, fsys fstest.MapFS) string {
 	t.Helper()

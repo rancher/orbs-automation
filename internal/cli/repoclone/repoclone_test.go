@@ -101,7 +101,7 @@ func projects(t *testing.T) fakeSource {
 		chaintest.Doc("Project", "scc-operator", "", "  repo: {name: "+scc+", managedBy: orbs}\n"),
 		chaintest.Doc("Project", "sdk", "", "  repo: {name: "+ext+", external: true}\n"),
 		chaintest.Doc("Project", "other", "", "  repo: {name: rancher/other}\n"),
-		chaintest.Doc("Project", "frameworks", "", "  repo: {name: rancher/wrangler, managedBy: frameworks-team}\n"),
+		chaintest.Doc("Project", "frameworks", "", "  repo: {name: rancher/wrangler, managedBy: frameworks}\n"),
 		chaintest.Doc("Project", "everyones", "", "  repo: {name: rancher/charts, managedBy: shared}\n"),
 	)}
 }
@@ -220,7 +220,7 @@ func TestRunAllIsTheOwnedProjectsThatAreNotExternal(t *testing.T) {
 
 func TestRunAllIsTheProjectsOfTheActiveTeam(t *testing.T) {
 	r := newRig(t)
-	r.s.Team = "frameworks-team"
+	r.s.Team = "frameworks"
 
 	out, err := r.do(Options{All: true})
 

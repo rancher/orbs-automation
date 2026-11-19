@@ -7,7 +7,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: libmain
 spec:
-  repo: {name: acme/libmain, managedBy: frameworks-team}
+  repo: {name: acme/libmain, managedBy: frameworks}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2
@@ -26,7 +26,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: libaux
 spec:
-  repo: {name: acme/libaux, managedBy: frameworks-team}
+  repo: {name: acme/libaux, managedBy: frameworks}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

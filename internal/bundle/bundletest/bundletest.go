@@ -21,9 +21,14 @@ var CompiledAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 const Commit = "0123abc"
 
 // Config is a central config of one project, with a stream, for each name: the
-// least that is valid, in a file of its own.
+// least that is valid, in a file of its own, and the Teams that manage them.
 func Config(names ...string) fstest.MapFS {
-	cfg := fstest.MapFS{}
+	cfg := fstest.MapFS{"teams.yaml": &fstest.MapFile{Data: []byte(`apiVersion: gero/v1alpha2
+kind: Teams
+name: rancher
+spec:
+  teams: [{id: orbs, github: orbs}]
+`)}}
 	for _, n := range names {
 		cfg[n+".yaml"] = &fstest.MapFile{Data: []byte(`apiVersion: gero/v1alpha2
 kind: Project

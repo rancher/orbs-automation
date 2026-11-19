@@ -59,11 +59,7 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 	case strings.ContainsAny(repo.Name, " \t"):
 		r.Errorf("spec.repo.name", "%q has a space", repo.Name)
 	}
-	for _, id := range repo.ManagedBy {
-		if !slug.MatchString(id) {
-			r.Errorf("spec.repo.managedBy", "%q must be a lowercase slug such as release-team", id)
-		}
-	}
+	p.validateManagedBy(r)
 	if repo.External && len(repo.ManagedBy) > 0 {
 		r.Errorf("spec.repo.external", "a repo outside the organization has no managing team: remove managedBy")
 	}
@@ -163,5 +159,25 @@ func (p *Project) validateBranches(r *config.Report) {
 	}
 	if len(onDefault) > 1 {
 		r.Errorf("spec.branches.lines", "%s all use the default branch: give all but one a branch, or \"\" for a line that has none yet", strings.Join(onDefault, ", "))
+	}
+}
+
+// validateManagedBy checks each team id of managedBy: a lowercase slug, listed
+// once, and shared only when it is the one.
+func (p *Project) validateManagedBy(r *config.Report) {
+	by := p.Spec.Repo.ManagedBy
+	seen := map[string]bool{}
+	for i, id := range by {
+		at := fmt.Sprintf("spec.repo.managedBy[%d]", i)
+		switch {
+		case !slug.MatchString(id):
+			r.Errorf(at, "%q must be a lowercase slug such as release-team", id)
+		case seen[id]:
+			r.Errorf(at, "team %s is listed twice", id)
+		}
+		seen[id] = true
+	}
+	if len(by) > 1 && seen[ManagedByShared] {
+		r.Errorf("spec.repo.managedBy", "%s is every team, not one to list with others: write it alone", ManagedByShared)
 	}
 }

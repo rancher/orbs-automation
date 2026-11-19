@@ -93,8 +93,20 @@ func decodeLocation(node *yaml.Node) (At, error) {
 
 // UnmarshalYAML reads managedBy as one team id or a list of them.
 func (m *ManagedBy) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind == yaml.ScalarNode {
+	switch node.Kind {
+	case yaml.ScalarNode:
 		*m = ManagedBy{node.Value}
+		return nil
+	case yaml.SequenceNode:
+		ids := make(ManagedBy, 0, len(node.Content))
+		for _, n := range node.Content {
+			if n.Kind != yaml.ScalarNode {
+				return errors.New("managedBy must be a team id or a list of team ids")
+			}
+			ids = append(ids, n.Value)
+		}
+		*m = ids
+		return nil
 	}
-	return nil
+	return errors.New("managedBy must be a team id or a list of team ids")
 }

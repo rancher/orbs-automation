@@ -4,7 +4,7 @@ formatVersion: 1
 geroVersion: v0.5.0
 sourceCommit: abc123
 compiledAt: 2026-01-02T03:04:05Z
-inputsDigest: 0acbeadfc35fa371907c479d96a3c603a69f38cf4789b923a0ee2980287c8ed2
+inputsDigest: 00d70cc3db9d76f97722e2c93c81124d5f53f498760b884c18a057da747e5422
 compilerRevision: 1
 ---
 # source: a.yaml
@@ -13,7 +13,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: alpha
 spec:
-  repo: {name: rancher/alpha, managedBy: orbs}
+  repo: {name: rancher/alpha}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2
@@ -31,7 +31,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: bravo
 spec:
-  repo: {name: rancher/bravo, managedBy: orbs}
+  repo: {name: rancher/bravo}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2

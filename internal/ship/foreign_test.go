@@ -37,7 +37,7 @@ func TestCheckShipsAnotherTeamsReleaseIntoASharedConsumer(t *testing.T) {
 }
 
 func TestCheckRefusesAnotherTeamsReleaseIntoAConsumerNoOneOfTheTeamsOwns(t *testing.T) {
-	for name, team := range map[string]string{"another team's": "frameworks-team", "unspecified": ""} {
+	for name, team := range map[string]string{"another team's": "frameworks", "unspecified": ""} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Check(ctx, foreign(t, team), &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", To: "rancher"})
 
@@ -101,7 +101,7 @@ func TestCheckRunsTheStepsFromAProducerTheTeamOwns(t *testing.T) {
 func TestAnOwnedProducerShipsToAnyConsumerWithTo(t *testing.T) {
 	ws := loopFixture(t)
 	l := stepsLink()
-	l.Consumer.ManagedBy = "frameworks-team"
+	l.Consumer.ManagedBy = "frameworks"
 	ws.links = []link{l}
 
 	got, err := Check(ctx, ws, &fakeProber{}, Input{Team: testTeam, Project: "scc-operator", To: "rancher"})

@@ -6,7 +6,7 @@ kind: Project
 name: rancher-charts
 spec:
   aliases: ["charts"]
-  repo: {name: rancher/charts, managedBy: release-team}
+  repo: {name: rancher/charts, managedBy: release}
   pullRequests: {title: "[{branch}] {package} {chartVersion} {action}"}
   branches:
     layout: perLine

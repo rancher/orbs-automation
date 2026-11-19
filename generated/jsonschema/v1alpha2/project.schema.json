@@ -73,13 +73,6 @@
       "type": "object",
       "description": "Branches is the repo's branch layout."
     },
-    "ManagedBy": {
-      "items": {
-        "type": "string"
-      },
-      "type": "array",
-      "description": "ManagedBy is the teams responsible for a repo, each the id of a team in Teams, written as one id or a list."
-    },
     "Project": {
       "properties": {
         "apiVersion": {
@@ -217,7 +210,17 @@
           "description": "outside our organization"
         },
         "managedBy": {
-          "$ref": "#/$defs/ManagedBy"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
         },
         "defaultBranch": {
           "type": "string"

@@ -104,7 +104,7 @@ func (p *Project) ManagedByLabel() string { return strings.Join(p.ManagedBy(), "
 // shared one and one outside the organization are owned by no team.
 func (p *Project) Owned(team string) bool {
 	by := p.ManagedBy()
-	return team != "" && len(by) == 1 && by[0] == team && by[0] != v1alpha2.ManagedByShared
+	return team != "" && team != v1alpha2.ManagedByShared && slices.Contains(by, team)
 }
 
 // Shared reports whether the project is managed by every team together: no team

@@ -93,7 +93,7 @@ func TestProjectRules(t *testing.T) {
 		{"no repo name", "  repo: {defaultBranch: main}\n", "spec.repo.name", "required"},
 		{"a repo name that is not owner and name", "  repo: {name: shell}\n", "spec.repo.name", "owner/name"},
 		{"a repo name with three parts", "  repo: {name: a/b/c}\n", "spec.repo.name", "owner/name"},
-		{"managedBy that is not a slug", "  repo: {name: a/b, managedBy: Release Team}\n", "spec.repo.managedBy", "lowercase slug"},
+		{"managedBy that is not a slug", "  repo: {name: a/b, managedBy: Release Team}\n", "spec.repo.managedBy[0]", "lowercase slug"},
 		{"a managedBy list with a name that is not a slug", "  repo: {name: a/b, managedBy: [orbs, Release Team]}\n", "spec.repo.managedBy[1]", "lowercase slug"},
 		{"shared in a list with a team", "  repo: {name: a/b, managedBy: [orbs, shared]}\n", "spec.repo.managedBy", "shared"},
 		{"a team listed twice", "  repo: {name: a/b, managedBy: [orbs, orbs]}\n", "spec.repo.managedBy[1]", "twice"},

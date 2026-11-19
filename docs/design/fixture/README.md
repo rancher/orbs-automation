@@ -14,6 +14,7 @@
 | `wrangler.yaml` | Project (managed by another team), a Stream and `gomod` Artifact for each tracked minor (v3.8, v3.7, v3.6, v3.3) |
 | `lasso.yaml` | Project (managed by another team), one Stream and `gomod` Artifact for v0.2 |
 | `rancher.lines.yaml` | RancherLines, as in the real config |
+| `teams.yaml` | Teams, as in the real config |
 | `examples/library.yaml` | a library, two services holding it in their Dockerfiles |
 | `examples/monorepo.yaml` | per-package tags, an image pinned in a Dockerfile |
 | `examples/gomod.yaml` | a prefix-tagged Go module held by Assets' `go.mod` with a `goBump` Edit |
