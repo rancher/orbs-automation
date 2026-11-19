@@ -33,6 +33,7 @@ An existing project note in [`../projects/`](../projects/README.md) records how 
 * [backup-restore-operator](backup-restore-operator.md)
 * [compliance-operator](compliance-operator.md)
 * [system-upgrade-controller](system-upgrade-controller.md)
+* [turtles](turtles.md)
 * [rancher-assets](rancher-assets.md)
 * [scc-operator](scc-operator.md)
 * [shell](shell.md)
