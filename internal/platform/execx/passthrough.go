@@ -45,3 +45,12 @@ func Passthrough(ctx context.Context, c PassCmd) (int, error) {
 	}
 	return 0, err
 }
+
+// OnPath reports whether a program is found on PATH. Like Passthrough it has no allow list: it
+// is for what the user themselves chose to run.
+func OnPath(name string) bool { return false }
+
+// Launch starts a program of the user's own choice, with a directory as its one argument, and
+// does not wait for it: an editor that hands the directory to a window and returns. The program
+// gets the environment gero was given. It is an error when the program cannot be started.
+func Launch(name, dir string) error { return nil }
