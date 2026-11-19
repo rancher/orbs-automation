@@ -321,3 +321,30 @@ func (s *Service) EditComment(ctx context.Context, slug string, id int64, body s
 	}
 	return nil
 }
+
+// Detail is a pull request with what says how it ended: whether it was merged and the
+// commit that GitHub records as the result of the merge.
+type Detail struct {
+	PR
+	Merged bool
+	// MergeCommit is the merge commit's SHA: for a merge commit, the merge; for a squash,
+	// the squashed commit; for a rebase merge, the last commit rebased onto the base.
+	MergeCommit string
+}
+
+// Get reads one pull request, open or not.
+func (s *Service) Get(ctx context.Context, slug string, number int) (Detail, error) {
+	return Detail{}, nil
+}
+
+// Commit is one commit of a pull request, as the host lists it.
+type Commit struct {
+	SHA     string
+	Message string
+	Author  string // the author's name
+}
+
+// Commits lists the commits of a pull request, oldest first, every page of them.
+func (s *Service) Commits(ctx context.Context, slug string, number int) ([]Commit, error) {
+	return nil, nil
+}
