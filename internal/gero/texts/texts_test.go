@@ -154,3 +154,20 @@ func mustRender(t *testing.T, text string, vars map[string]string) string {
 	require.NoError(t, err)
 	return out
 }
+
+func TestBackportBundleTextsOnlyUseTheirVariables(t *testing.T) {
+	for name, text := range map[string]string{"title": BackportBundleTitle(), "body": BackportBundleBody()} {
+		require.NotEmpty(t, text, name)
+		assert.NoError(t, templates.Validate(text, BackportVars), name)
+	}
+	assert.NotContains(t, BackportBundleTitle(), "\n", "a title is one line")
+	assert.Equal(t, "[Backport v2.15] Backport of: #12, #15", mustRender(t, BackportBundleTitle(), map[string]string{"line": "v2.15", "numbers": "#12, #15"}))
+	for _, want := range []string{"{prs}", "{commits}", "{skipped}", "{conflicts}", "{marker}", "{targetBranch}"} {
+		assert.Contains(t, BackportBundleBody(), want)
+	}
+	assert.NotContains(t, BackportBundleBody(), "@", "no mention: it would notify someone")
+}
+
+func TestBackportBodyOfASinglePRHasAPlaceForWhatWasAlreadyThere(t *testing.T) {
+	assert.Contains(t, BackportBody(), "{skipped}", "a bundle that fell back to one PR says which were left out")
+}
