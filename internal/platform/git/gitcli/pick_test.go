@@ -198,3 +198,72 @@ func TestHoldsPickOfFindsAnEarlierPickByItsOriginLine(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, other, "another commit is not found")
 }
+
+func TestIsAncestorOrdersCommitsOfOneHistory(t *testing.T) {
+	dir, s := pickRepo(t)
+
+	before, err := IsAncestor(ctx, dir, s.edit, s.add)
+	require.NoError(t, err)
+	after, err := IsAncestor(ctx, dir, s.add, s.edit)
+	require.NoError(t, err)
+	same, err := IsAncestor(ctx, dir, s.add, s.add)
+	require.NoError(t, err)
+
+	assert.True(t, before, "edit was made before add")
+	assert.False(t, after)
+	assert.True(t, same, "a commit is its own ancestor, as git says")
+}
+
+func TestIsAncestorOfACommitThatIsNotThereIsAnError(t *testing.T) {
+	dir, s := pickRepo(t)
+
+	_, err := IsAncestor(ctx, dir, s.add, "0123456789abcdef0123456789abcdef01234567")
+
+	require.Error(t, err)
+}
+
+func TestPatchPresentFindsAPickMadeWithoutTheOriginLine(t *testing.T) {
+	dir, s := pickRepo(t)
+	absent, err := PatchPresent(ctx, dir, "release/v1", s.add)
+	require.NoError(t, err)
+	assert.False(t, absent, "not picked yet")
+
+	run(t, dir, "cherry-pick", s.add) // by hand, with no -x
+	present, err := PatchPresent(ctx, dir, "release/v1", s.add)
+	require.NoError(t, err)
+	has, err := HoldsPickOf(ctx, dir, "release/v1", s.add)
+	require.NoError(t, err)
+
+	assert.True(t, present)
+	assert.False(t, has, "and the line is not there to find it by")
+}
+
+func TestPatchPresentDoesNotTakeAnotherChangeForIt(t *testing.T) {
+	dir, s := pickRepo(t)
+	run(t, dir, "cherry-pick", s.add)
+
+	other, err := PatchPresent(ctx, dir, "release/v1", s.edit)
+
+	require.NoError(t, err)
+	assert.False(t, other, "the release's own edit of the same file is another change")
+}
+
+func TestPatchPresentNeverFindsAMerge(t *testing.T) {
+	dir, s := pickRepo(t)
+	run(t, dir, "checkout", "--quiet", "main")
+	run(t, dir, "checkout", "--quiet", "-b", "topic", s.edit+"~1")
+	write(t, dir, "c.txt", "c\n")
+	run(t, dir, "add", ".")
+	run(t, dir, "commit", "--quiet", "-m", "Topic")
+	run(t, dir, "checkout", "--quiet", "main")
+	run(t, dir, "merge", "--quiet", "--no-ff", "-m", "Merge topic", "topic")
+	merge := run(t, dir, "rev-parse", "HEAD")
+	run(t, dir, "checkout", "--quiet", "release/v1")
+	_, err := CherryPick(ctx, dir, Pick{Commit: merge, Mainline: 1})
+	require.NoError(t, err)
+
+	got, err := PatchPresent(ctx, dir, "release/v1", merge)
+
+	require.NoError(t, err)
+	assert.False(t, got)
+}
