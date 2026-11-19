@@ -1,6 +1,6 @@
 # BACKPORT
 
-**Status:** implemented, except what is under [Not built yet](#not-built-yet). `gero repo backport [project] <line>... <pr>...` carries merged pull requests down to the release branches of its own repo, one pull request for each line, and stops for a person when a cherry-pick conflicts.
+**Status:** implemented, except what is under [Not built yet](#not-built-yet). `gero repo backport [project] <line>[,<line>...] <pr>[,<pr>...]` carries merged pull requests down to the release branches of its own repo, one pull request for each line, whether it is one PR or a bundle of several, and stops for a person when a cherry-pick conflicts.
 
 ## Direction
 
@@ -19,9 +19,9 @@ Targets are worked newest line first. A target that is the PR's own base branch 
 
 ## What a run does
 
-1. **Check the PR on the host, never from a clone.** It exists in the project's repo and is merged, not just closed. Its base must not be one of the targets.
+1. **Check the PRs on the host, never from a clone.** Each exists in the project's repo and is merged, not just closed. Its base must not be one of the targets.
 2. **Resolve the targets** and refuse the ones that do not resolve, before anything is written.
-3. **Decide each target** with the conveyor. An open backport PR of the actor's own for the same source PR and target, with the same fingerprint, is already open. One with another fingerprint is stale and is closed, with a comment, once the new one is open. A PR of someone else's is reported and never touched. A target whose history already holds the picked commit, found by its `(cherry picked from commit <sha>)` line, is reported as already backported and gets no PR.
+3. **Decide each target** with the conveyor. An open backport PR of the actor's own for the same source PR and target, with the same fingerprint, is already open. One with another fingerprint is stale and is closed, with a comment, once the new one is open. A PR of someone else's is reported and never touched. A target that already has what is to be picked, found as under [Bundles](#bundles), is reported as already backported and gets no PR.
 4. **Pick the commits** by the rule below. Every pick is `git cherry-pick -x`, so the origin is in the message; the author of each commit is kept and the actor is the committer.
 5. **Ask once**, then for each target in order: a branch from the target's head, the picks, the push and the PR. A dry run and `--no-push` do not ask.
 
@@ -74,7 +74,6 @@ The report, as text or as `--json`, mirrors the input: the PRs are a list, `prs`
 
 ## Not built yet
 
-* Bundles: everything under [Bundles](#bundles), and the `prs` list of the report. Until then one PR is taken and the report has the PR's own fields.
 * A branch an earlier run left in the clone (a `--no-push` run, or a push that failed) is not reused. The conveyor knows a branch as its own by the author of its commits, and a pick keeps the author of the commit it picks, so a second run stops at "not ours to change" until the branch is deleted.
 
 ## Open questions
