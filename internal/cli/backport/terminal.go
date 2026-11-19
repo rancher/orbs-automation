@@ -92,7 +92,11 @@ func conflictText(c backport.Conflict) string {
 		label = c.Branch
 	}
 	short := c.Commit[:min(7, len(c.Commit))]
-	fmt.Fprintf(&b, "\nThe pick of %s %q conflicts on %s (%s).\nResolve these files in %s:\n", short, c.Subject, label, c.Branch, c.Dir)
+	of := ""
+	if c.PR != 0 {
+		of = fmt.Sprintf(" of #%d", c.PR)
+	}
+	fmt.Fprintf(&b, "\nThe pick of %s %q%s conflicts on %s (%s).\nResolve these files in %s:\n", short, c.Subject, of, label, c.Branch, c.Dir)
 	for _, f := range c.Files {
 		fmt.Fprintf(&b, "  %s\n", f)
 	}
