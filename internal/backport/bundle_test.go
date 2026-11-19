@@ -1,13 +1,16 @@
 package backport
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/rancher/orbs-automation/internal/platform/github/pulls"
 	"github.com/rancher/orbs-automation/internal/proposal"
+	"github.com/rancher/orbs-automation/internal/proposal/proposaltest"
 )
 
 // bundle is a workspace where PR 12 added b.txt, PR 15 changed build.yaml and PR 18 added c.txt,
@@ -222,4 +225,112 @@ func TestBundleAbandonedAtAConflictLeavesNoneOfItsPicks(t *testing.T) {
 	assert.Equal(t, StatusNotAttempted, target(t, plan, "release/v0").Status)
 	assert.Empty(t, runGit(t, ws.clone, "branch", "--list", "bot/*"), "PR 12's clean pick went with the abandoned target")
 	assert.Empty(t, runGit(t, ws.clone, "status", "--porcelain"))
+}
+
+// bundlePublishing is a bundle run that pushes to the clone's upstream and opens the PRs, with the
+// fake GitHub, whose user is danpock.
+func bundlePublishing(t *testing.T) (*backWS, *proposal.Executor, *fakeRemote, *log) {
+	t.Helper()
+	ws, ex := bundle(t)
+	lg := &log{}
+	remote := &fakeRemote{Log: lg, Labels: []string{"status/auto-created"}}
+	ws.push = proposal.PushSettings{Upstream: "upstream"}
+	ex.Publish = &proposal.Publisher{Git: proposal.GitCLI{}, Remote: remote}
+	return ws, ex, remote, lg
+}
+
+// open is an open backport PR of a set of PRs to a target, by an author.
+func open(number int, author, set, target string) pulls.PR {
+	m := proposal.Marker{Source: "backport-" + set, Consumer: "acme/cons", Target: target, Version: "0ld0ld00"}
+	return proposaltest.PR(number, author, m.String())
+}
+
+func TestBundleClosesMyOpenBackportThatItCoversOnceItsOwnIsOpen(t *testing.T) {
+	ws, ex, remote, lg := bundlePublishing(t)
+	remote.Open = pulls.Open{PRs: []pulls.PR{open(77, "danpock", "12", "release/v0")}}
+
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.14"}, PRs: []int{12, 15}}, ex)
+
+	require.NoError(t, err)
+	res := plan.Targets[0].Result
+	require.NotNil(t, res)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
+	require.Len(t, res.Superseded, 1)
+	assert.Equal(t, 77, res.Superseded[0].Number)
+	assert.Less(t, lg.Index("create "), lg.Index("close #77"), "it is closed once the new one is open")
+}
+
+func TestBundleNeverClosesAnotherUsersPRThatItCovers(t *testing.T) {
+	ws, ex, remote, lg := bundlePublishing(t)
+	remote.Open = pulls.Open{PRs: []pulls.PR{open(78, "someone", "12", "release/v0")}}
+
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.14"}, PRs: []int{12, 15}}, ex)
+
+	require.NoError(t, err)
+	res := plan.Targets[0].Result
+	require.NotNil(t, res)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
+	assert.False(t, lg.Has("close #78"))
+	require.NotEmpty(t, res.Warnings)
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "#78")
+	assert.Contains(t, strings.Join(res.Warnings, "\n"), "someone")
+}
+
+func TestBundleOnlyReportsAnOverlapThatIsNotCovered(t *testing.T) {
+	for name, tc := range map[string]struct {
+		open pulls.PR
+		pr   int
+	}{
+		"a partial overlap":     {open(79, "danpock", "12+20", "release/v0"), 79},
+		"one that has more":     {open(80, "danpock", "12+15+18", "release/v0"), 80},
+		"one of someone else's": {open(81, "someone", "12+15+18", "release/v0"), 81},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ws, ex, remote, lg := bundlePublishing(t)
+			remote.Open = pulls.Open{PRs: []pulls.PR{tc.open}}
+
+			plan, err := Run(bg, ws, Input{Lines: []string{"v2.14"}, PRs: []int{12, 15}}, ex)
+
+			require.NoError(t, err)
+			res := plan.Targets[0].Result
+			require.NotNil(t, res)
+			assert.Equal(t, proposal.ResultOpened, res.Status)
+			assert.False(t, lg.Has("close "), "nothing is closed")
+			assert.Contains(t, strings.Join(res.Warnings, "\n"), "#"+strconv.Itoa(tc.pr))
+		})
+	}
+}
+
+func TestBundleIgnoresOpenPRsThatAreNotBackportsOfThePRsOnThisTarget(t *testing.T) {
+	ws, ex, remote, lg := bundlePublishing(t)
+	sync := proposal.Marker{Source: "sync", Consumer: "acme/cons", Target: "release/v0", Version: "abc"}
+	remote.Open = pulls.Open{PRs: []pulls.PR{
+		open(82, "danpock", "12", "release/v1"), // another target
+		proposaltest.PR(83, "danpock", sync.String()),
+		proposaltest.PR(84, "danpock", "no marker"),
+		open(85, "danpock", "30", "release/v0"), // none of the same PRs
+	}}
+
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.14"}, PRs: []int{12, 15}}, ex)
+
+	require.NoError(t, err)
+	res := plan.Targets[0].Result
+	require.NotNil(t, res)
+	assert.Equal(t, proposal.ResultOpened, res.Status)
+	assert.False(t, lg.Has("close "))
+	assert.Empty(t, res.Warnings)
+}
+
+func TestBundleDryRunSaysWhatItWouldClose(t *testing.T) {
+	ws, ex, remote, lg := bundlePublishing(t)
+	remote.Open = pulls.Open{PRs: []pulls.PR{open(77, "danpock", "12", "release/v0")}}
+
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.14"}, PRs: []int{12, 15}, DryRun: true}, ex)
+
+	require.NoError(t, err)
+	res := plan.Targets[0].Result
+	require.NotNil(t, res)
+	require.Len(t, res.WouldSupersede, 1)
+	assert.Equal(t, 77, res.WouldSupersede[0].Number)
+	assert.False(t, lg.Has("close "))
 }
