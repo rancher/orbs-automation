@@ -98,9 +98,6 @@ func newBackWS(t *testing.T) (*backWS, *proposal.Executor) {
 	return w, &proposal.Executor{Git: proposal.GitCLI{}, TempDir: t.TempDir()}
 }
 
-// merged says PR 12 on the host landed as the one commit, with its title.
-func (w *backWS) merged(sha, title string) { w.mergedPR(12, sha, title) }
-
 // mergedPR says a PR on the host landed as the one commit, with its title, to main.
 func (w *backWS) mergedPR(n int, sha, title string) {
 	w.host.details[n] = pulls.Detail{
@@ -318,7 +315,7 @@ func resolving(content string) *scripted {
 
 func TestBackportAConflictWaitsForThePersonAndGoesOnWhenItIsResolved(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.merged(ws.newImage, "Update image")
+	ws.mergedPR(12, ws.newImage, "Update image")
 	resolver := resolving("image: merged\n")
 
 	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true, Resolver: resolver}, ex)
@@ -345,7 +342,7 @@ func TestBackportAConflictWaitsForThePersonAndGoesOnWhenItIsResolved(t *testing.
 
 func TestBackportAskedToContinueWithMarkersLeftAsksAgainNamingThem(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.merged(ws.newImage, "Update image")
+	ws.mergedPR(12, ws.newImage, "Update image")
 	answers := 0
 	resolver := &scripted{do: func(c Conflict) (Choice, error) {
 		answers++
@@ -365,7 +362,7 @@ func TestBackportAskedToContinueWithMarkersLeftAsksAgainNamingThem(t *testing.T)
 
 func TestBackportAbandoningAConflictEndsTheRunAndLeavesTheCloneAsFound(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.merged(ws.newImage, "Update image")
+	ws.mergedPR(12, ws.newImage, "Update image")
 	resolver := &scripted{do: func(Conflict) (Choice, error) { return Abort, nil }}
 
 	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PRs: []int{12}, NoPush: true, Resolver: resolver}, ex)
@@ -383,7 +380,7 @@ func TestBackportAbandoningAConflictEndsTheRunAndLeavesTheCloneAsFound(t *testin
 
 func TestBackportWithNobodyToAskAbandonsAConflictAndNamesTheFiles(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.merged(ws.newImage, "Update image")
+	ws.mergedPR(12, ws.newImage, "Update image")
 
 	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 
@@ -396,7 +393,7 @@ func TestBackportWithNobodyToAskAbandonsAConflictAndNamesTheFiles(t *testing.T) 
 
 func TestBackportAResolverThatFailsEndsTheRunWithItsError(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.merged(ws.newImage, "Update image")
+	ws.mergedPR(12, ws.newImage, "Update image")
 	boom := errors.New("the editor would not open")
 	resolver := &scripted{do: func(Conflict) (Choice, error) { return 0, boom }}
 
@@ -415,7 +412,7 @@ func putFile(dir, rel, content string) {
 
 func TestBackportDryRunReportsAConflictWithoutAskingAndGoesOn(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.merged(ws.newImage, "Update image")
+	ws.mergedPR(12, ws.newImage, "Update image")
 	resolver := &scripted{do: func(Conflict) (Choice, error) { return Continue, nil }}
 
 	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PRs: []int{12}, NoPush: true, DryRun: true, Resolver: resolver}, ex)
