@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // addRepl adds gero repl to root.
@@ -89,19 +90,17 @@ func runRepl(cmd *cobra.Command, env replEnv) error {
 	return repl.Loop(cmd.Context(), reader, cmd.OutOrStdout(), cmd.ErrOrStderr(), sess)
 }
 
-// globalFlags are the names addGlobalFlags declares, the only flags that can be
-// given to gero repl and carried to its lines.
-var globalFlags = []string{"central-config-dir", "config-source", "bundle-channel", "bundle-file", "upstream", "output", "json", "color", "no-color", "dry-run", "verbose"}
-
 // baseFlags returns the global flags given explicitly to cmd, as arguments to
-// put in front of every line.
+// put in front of every line, so a flag given to gero repl holds for the whole
+// session. Every persistent flag counts, so a new global flag needs no entry
+// here.
 func baseFlags(cmd *cobra.Command) []string {
 	var args []string
-	for _, name := range globalFlags {
-		if f := cmd.Flags().Lookup(name); f != nil && f.Changed {
-			args = append(args, "--"+name+"="+f.Value.String())
+	cmd.InheritedFlags().VisitAll(func(f *pflag.Flag) {
+		if f.Changed {
+			args = append(args, "--"+f.Name+"="+f.Value.String())
 		}
-	}
+	})
 	return args
 }
 

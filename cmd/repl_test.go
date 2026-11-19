@@ -102,17 +102,7 @@ func TestBaseFlagsCarriesWhatWasGivenToRepl(t *testing.T) {
 
 	require.NoError(t, root.Execute())
 
-	assert.Equal(t, []string{"--central-config-dir=/cfg", "--color=never", "--no-color=true", "--dry-run=true", "--verbose=2"}, got)
-}
-
-// A renamed global flag must be renamed in globalFlags, or it would not reach
-// the lines.
-func TestGlobalFlagsAreDeclared(t *testing.T) {
-	flags := newRootCmd().PersistentFlags()
-
-	for _, name := range globalFlags {
-		assert.NotNil(t, flags.Lookup(name), name)
-	}
+	assert.Equal(t, []string{"--central-config-dir=/cfg", "--color=never", "--dry-run=true", "--no-color=true", "--verbose=2"}, got)
 }
 
 func TestTreeCompleteIsWhatCobraCompletes(t *testing.T) {
