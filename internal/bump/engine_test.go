@@ -274,6 +274,22 @@ func TestTargetsForAUniversalProducerAreTheBranchesOfEachStage(t *testing.T) {
 	}, branches(got))
 }
 
+func TestTargetsForAUniversalProducerLeaveOutTheLinesItsArtifactIsNotProducedFor(t *testing.T) {
+	e, g, err := buildEngine(t,
+		d("Project", "rng", "", "  repo: {name: acme/rng, managedBy: orbs}\n"),
+		d("Stream", "rng", "{project: rng}", "  universal: true\n"),
+		d("Artifact", "rng-image", "{stream: rng}", "  kind: image\n  name: acme/rng\n  lines: {since: v2.16}\n"),
+		d("Holding", "cons-rng", "{project: cons, artifact: rng-image}", "  at: {file: rng.yaml, key: image}\n  holds: {kind: release, form: \"{image}:{tag}\", stage: dev}\n"),
+	)
+	require.NoError(t, err)
+	route := e.RoutesFrom(g.Project("rng"))[0]
+
+	got, err := route.TargetsFor("")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"dev-v2.16 (v2.16): cons-rng"}, branches(got), "the artifact is not made for v2.15, so a release is not sent to its branch")
+}
+
 func TestTargetsForAProducerWithLinesAreTheBranchOfTheLineAndStage(t *testing.T) {
 	e, g, err := buildEngine(t)
 	require.NoError(t, err)
