@@ -16,4 +16,4 @@ spec:
     - {id: frameworks, github: rancher-squad-frameworks}
     - {id: hostbusters, github: rancher-team-2-hostbusters-dev}
     - {id: infracloud, github: infracloud-team}
-    - {id: rst, github: rancher-security}
+    - {id: rst, github: cloudnative-security}

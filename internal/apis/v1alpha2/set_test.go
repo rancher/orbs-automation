@@ -635,7 +635,7 @@ func TestAStepFromTheProducerNeedsAProducerATeamManages(t *testing.T) {
 	step := "  postEdit:\n    - {run: x, from: producer}\n"
 	build := func(producer string) []string {
 		return []string{
-			doc("Teams", "rancher", "", "  teams: [{id: orbs, github: orbs}, {id: rst, github: rancher-security}]\n"),
+			doc("Teams", "rancher", "", "  teams: [{id: orbs, github: orbs}, {id: rst, github: cloudnative-security}]\n"),
 			holder,
 			doc("Project", "q", "", producer),
 			doc("Stream", "s", "{project: q}", streamSpec),
@@ -822,7 +822,7 @@ func TestTwoPinsOfOneModuleForDifferentLinesDoNotOverlap(t *testing.T) {
 }
 
 func TestEveryTeamAManagedByNamesIsInTeams(t *testing.T) {
-	teams := doc("Teams", "rancher", "", "  teams:\n    - {id: orbs, github: orbs}\n    - {id: rst, github: rancher-security}\n")
+	teams := doc("Teams", "rancher", "", "  teams:\n    - {id: orbs, github: orbs}\n    - {id: rst, github: cloudnative-security}\n")
 	project := func(by string) string { return doc("Project", "p", "", "  repo: {name: acme/a, managedBy: "+by+"}\n") }
 
 	for name, by := range map[string]string{"one": "orbs", "a list": "[orbs, rst]", "shared alone": "shared"} {
