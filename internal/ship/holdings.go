@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // ConsumerHoldings is what one consumer of a project holds of its releases, branch
@@ -81,6 +82,30 @@ type HeldValue struct {
 	// is expected, when it acknowledges it.
 	Differ       bool   `json:"differ,omitempty"`
 	DifferReason string `json:"differReason,omitempty"`
+	// Pin is set for the virtual holding a pin makes: it is read against what the holding
+	// that pins it requires, and not against the latest release of its own stream.
+	Pin *Pin `json:"pin,omitempty"`
+}
+
+// Pin is how a virtual holding stands against the release the pinning holding requires
+// of it (lasso, for wrangler's go.mod): a floor, so what is held is right when it is at
+// least that.
+type Pin struct {
+	Pinner string `json:"pinner"` // the holding that pins it
+	// Held is the floor the release the pinning holding holds now puts on it: whether the
+	// branch is consistent as it stands. Wanted is the floor of the release the pinning
+	// holding would be brought to, which is what repo sync writes.
+	Held   *PinFloor `json:"held,omitempty"`
+	Wanted *PinFloor `json:"wanted,omitempty"`
+}
+
+// PinFloor is one floor a pin puts on a virtual holding, and how the holding stands against it.
+type PinFloor struct {
+	RequiredBy string   `json:"requiredBy"` // the pinning release whose file says so, such as acme/wr v1.7.4
+	Verdict    *Verdict `json:"verdict,omitempty"`
+	// Error is why no floor could be worked out: the pinner holds no release of its stream,
+	// or the release requires a version no release has.
+	Error string `json:"error,omitempty"`
 }
 
 // HeldLocation is what one location of a holding holds in a branch.
@@ -187,6 +212,12 @@ func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held
 			v.DifferReason, _ = held.Acknowledgement(chain.RuleLocationsDiffer, sp.target.Line)
 		}
 	}
+	if held.Virtual() {
+		// the virtual holding a pin makes is a floor of what the pinning holding requires, and
+		// the latest release of its own stream says nothing of it
+		v.Pin = r.pinOf(ctx, tree, sp, held)
+		return v
+	}
 	v.Stage = r.scheme.Stage(heldTag(c.Current))
 	v.Stable = verdict(r.scheme, sp.release, c.Check)
 	switch {
@@ -200,6 +231,36 @@ func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held
 		}
 	}
 	return v
+}
+
+// pinOf reads the virtual holding v of a branch against the two floors its pinning holding
+// puts on it: what the release the branch holds of the pinner requires, and what the release
+// the pinner is brought to requires.
+func (r resolution) pinOf(ctx context.Context, tree bump.Tree, sp spec, v *chain.Holding) *Pin {
+	pinner := v.PinnedBy()
+	line, branch := sp.target.Line, sp.branch()
+	pin := &Pin{Pinner: pinner.Name()}
+	pin.Wanted = r.floorOf(ctx, tree, sp, v, r.wanted.For(ctx, v, line))
+	if cur, err := bump.CheckHolding(ctx, tree, pinner, line, branch, bump.Release{}); err == nil && !cur.Absent {
+		pin.Held = r.floorOf(ctx, tree, sp, v, r.wanted.Required(ctx, v, cur.Current))
+	}
+	return pin
+}
+
+// floorOf is how a virtual holding of a branch stands against the release a pin requires of it.
+func (r resolution) floorOf(ctx context.Context, tree bump.Tree, sp spec, v *chain.Holding, w wanted.Want) *PinFloor {
+	floor := &PinFloor{RequiredBy: w.RequiredBy}
+	if w.Err != nil {
+		floor.Error = w.Err.Error()
+		return floor
+	}
+	chk, err := bump.CheckHolding(ctx, tree, v, sp.target.Line, sp.branch(), w.Release)
+	if err != nil {
+		floor.Error = err.Error()
+		return floor
+	}
+	floor.Verdict = verdict(r.scheme, Release{Tag: w.Release.Tag}, chk)
+	return floor
 }
 
 // verdict is the check's answer for a release. When the holding could not order

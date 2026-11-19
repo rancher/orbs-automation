@@ -45,7 +45,7 @@ func broGoMod(la string) string {
 
 func newPinWorkspace(t *testing.T, extra ...string) pinWorkspace {
 	t.Helper()
-	g, _ := pinGraph(t, laStream, extra...)
+	g := pinGraph(t, laStream, extra...)
 	return pinWorkspace{g: g, host: pinHost{
 		files: map[string]string{
 			"acme/wr@sha-v1.7.4:go.mod": "", // not read: the tag's commit is not a ref
@@ -192,7 +192,7 @@ func TestATargetOfAPlanTakesTheCompanionsAndTheirReleasesToTheEngine(t *testing.
 	assert.Equal(t, "r15", target.Branch)
 }
 
-func TestHoldingsOfLassoTraceTheVirtualHoldingAsAnyOther(t *testing.T) {
+func TestHoldingsOfLassoReadTheVirtualHoldingAgainstWhatItsPinRequires(t *testing.T) {
 	w := newPinWorkspace(t)
 
 	got, err := Holdings(ctx, w, w.g.Project("la"))
@@ -205,7 +205,11 @@ func TestHoldingsOfLassoTraceTheVirtualHoldingAsAnyOther(t *testing.T) {
 	held := got[0].Targets[0].Held[0]
 	assert.Equal(t, "bro-holds-wr+la-mod", held.Name)
 	assert.Equal(t, "v0.2.3", held.Current)
-	assert.Equal(t, "v0.2.6", held.Stable.Tag, "against the latest lasso, until status reads what the pin requires")
+	assert.Nil(t, held.Stable, "not against the latest lasso, v0.2.6")
+	require.NotNil(t, held.Pin)
+	require.NotNil(t, held.Pin.Wanted.Verdict)
+	assert.Equal(t, "v0.2.5", held.Pin.Wanted.Verdict.Tag, "what the go.mod of the newest wrangler, v1.7.4, requires")
+	assert.False(t, held.Pin.Wanted.Verdict.UpToDate)
 }
 
 func TestHoldingsOfLassoSayWhenNoFileOfTheVirtualHoldingRequiresIt(t *testing.T) {
@@ -227,7 +231,7 @@ func TestHoldingsOfLassoSayWhenNoFileOfTheVirtualHoldingRequiresIt(t *testing.T)
 // and lasso v0.2.5 on both branches.
 func withPinDestination(t *testing.T) pinWorkspace {
 	t.Helper()
-	g, _ := pinGraph(t, laStream,
+	g := pinGraph(t, laStream,
 		chaintest.Doc("Project", "dest", "", "  repo: {name: acme/dest}\n  finalDestination: true\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r15}]\n"),
 		chaintest.Doc("Holding", "dest-holds-wr", "{project: dest, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.15}}\n"),
 	)

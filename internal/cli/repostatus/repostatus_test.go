@@ -848,3 +848,46 @@ func TestStatusAfterAStableOnTheHeadOnlyAStreamThatAllowsARetagListsTheNextRc(t 
 		}
 	}
 }
+
+func TestHoldStatusOfAPinnedHoldingIsReadAgainstWhatItsPinRequires(t *testing.T) {
+	floor := func(by, tag string, upToDate bool) *ship.PinFloor {
+		return &ship.PinFloor{RequiredBy: by, Verdict: &ship.Verdict{Tag: tag, UpToDate: upToDate, Relation: bump.RelationSame}}
+	}
+	tests := []struct {
+		name string
+		pin  *ship.Pin
+		want string
+	}{
+		{"meets both floors", &ship.Pin{Held: floor("rancher/wrangler v3.7.2", "v0.2.9", true), Wanted: floor("rancher/wrangler v3.7.2", "v0.2.9", true)}, "current"},
+		{"meets the floor of the held wrangler and not the wanted one", &ship.Pin{Held: floor("rancher/wrangler v3.7.1", "v0.2.7", true), Wanted: floor("rancher/wrangler v3.7.2", "v0.2.9", false)}, "behind v0.2.9: rancher/wrangler v3.7.2 requires it"},
+		{"below the floor of the held wrangler", &ship.Pin{Held: floor("rancher/wrangler v3.7.2", "v0.2.9", false), Wanted: floor("rancher/wrangler v3.7.2", "v0.2.9", false)}, "behind v0.2.9: rancher/wrangler v3.7.2, which it holds, requires it"},
+		{"the held wrangler is no release, the wanted floor is met", &ship.Pin{Held: &ship.PinFloor{Error: "h holds \"v1.7.1\", which is no release"}, Wanted: floor("rancher/wrangler v3.7.2", "v0.2.9", true)}, "current"},
+		{"the held wrangler is no release, the wanted floor is not met", &ship.Pin{Held: &ship.PinFloor{Error: "no release"}, Wanted: floor("rancher/wrangler v3.7.2", "v0.2.9", false)}, "behind v0.2.9: rancher/wrangler v3.7.2 requires it"},
+		{"no floor can be worked out", &ship.Pin{Wanted: &ship.PinFloor{Error: "rancher/wrangler v3.7.2 requires a pseudo-version"}}, "unreadable: rancher/wrangler v3.7.2 requires a pseudo-version"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, holdStatus(ship.HeldValue{Name: "bro-holds-wrangler+lasso", Current: "v0.2.9", Pin: tt.pin}))
+		})
+	}
+}
+
+func TestRenderTextShowsTheFloorAPinPutsInPlaceOfTheLatestRelease(t *testing.T) {
+	held := func(pin *ship.Pin) Status {
+		return Status{Slug: "rancher/backup-restore-operator", Sources: []ship.SourceHoldings{{
+			Producer: "rancher/lasso", Name: "lasso", Stream: "lasso-v0-2",
+			Targets: []ship.Holding{{Line: "v2.15", Branch: "release/v11.x", Head: "04f0cd7", Held: []ship.HeldValue{{Name: "bro-holds-wrangler-3-7+lasso-v0-2-module", Current: "v0.2.9", Pin: pin}}}},
+		}}}
+	}
+	floor := func(upToDate bool) *ship.PinFloor {
+		return &ship.PinFloor{RequiredBy: "rancher/wrangler v3.7.2", Verdict: &ship.Verdict{Tag: "v0.2.9", UpToDate: upToDate, Relation: bump.RelationSame}}
+	}
+
+	ok := renderText(held(&ship.Pin{Held: floor(true), Wanted: floor(true)}), nil)
+	assert.Contains(t, ok, ">= v0.2.9", "the floor, and not the newest lasso")
+	assert.Contains(t, ok, "current")
+	assert.NotContains(t, ok, "behind")
+
+	behind := renderText(held(&ship.Pin{Held: floor(true), Wanted: floor(false)}), nil)
+	assert.Contains(t, behind, "behind v0.2.9: rancher/wrangler v3.7.2 requires it")
+}

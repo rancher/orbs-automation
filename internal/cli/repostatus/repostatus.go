@@ -252,6 +252,9 @@ func compareStatus(h ship.HeldValue) string {
 	if h.Error != "" {
 		return "unreadable: " + h.Error
 	}
+	if h.Pin != nil {
+		return pinStatus(h.Pin)
+	}
 	if h.Stable == nil {
 		return "-"
 	}
@@ -281,6 +284,47 @@ func compareStatus(h ship.HeldValue) string {
 		return "ahead of " + stable.Tag
 	}
 	return "unknown"
+}
+
+// pinStatus is how a holding that a pin makes stands against what the pinning holding
+// requires of it, which is a floor: what is held is right when it is at least that. Below
+// the floor of the release the branch holds of the pinner, the branch is inconsistent as it
+// stands; below the floor of the release the pinner is brought to, it is behind.
+func pinStatus(p *ship.Pin) string {
+	switch {
+	case below(p.Held):
+		return "behind " + p.Held.Verdict.Tag + ": " + p.Held.RequiredBy + ", which it holds, requires it"
+	case below(p.Wanted):
+		return "behind " + p.Wanted.Verdict.Tag + ": " + p.Wanted.RequiredBy + " requires it"
+	case p.Wanted != nil && p.Wanted.Verdict != nil, p.Held != nil && p.Held.Verdict != nil:
+		return "current"
+	case p.Wanted != nil && p.Wanted.Error != "":
+		return "unreadable: " + p.Wanted.Error
+	}
+	return "-"
+}
+
+// below says a floor is known and is not met. A floor that could not be worked out (the
+// pinner holds no release of its stream) says nothing, and does not make a branch behind.
+func below(f *ship.PinFloor) bool {
+	return f != nil && f.Verdict != nil && !f.Verdict.UpToDate
+}
+
+// latestCell is the release a row is read against, as the LATEST STABLE column shows it:
+// the latest stable release, and for a holding a pin makes, the floor the pin puts on it.
+func latestCell(v ship.HeldValue) string {
+	if v.Pin != nil {
+		for _, f := range []*ship.PinFloor{v.Pin.Wanted, v.Pin.Held} {
+			if f != nil && f.Verdict != nil {
+				return ">= " + f.Verdict.Tag
+			}
+		}
+		return "-"
+	}
+	if v.Stable != nil {
+		return v.Stable.Tag
+	}
+	return "-"
 }
 
 // targets lists the release branches of p, before anything is read: a row for each
@@ -519,8 +563,6 @@ func seriesStatusText(l reposync.SeriesLine) string {
 		return "unreadable: " + l.Error
 	case l.UpToDate:
 		return "current"
-	case l.Left != "":
-		return "differs, left alone: " + l.Left
 	case l.Acknowledged != "":
 		return "differs, acknowledged: " + l.Acknowledged
 	}
@@ -578,10 +620,7 @@ func renderHoldings(b *strings.Builder, view *style.Renderer, heading, errText s
 			continue
 		}
 		for _, v := range h.Held {
-			latest := "-"
-			if v.Stable != nil {
-				latest = v.Stable.Tag
-			}
+			latest := latestCell(v)
 			holds := heldCell(v)
 			if holds == "" {
 				holds = "-"

@@ -260,7 +260,7 @@ func check(ctx context.Context, ws Workspace, prober registry.Prober, in Input, 
 	if err := res.route.Ready(); err != nil {
 		return Plan{}, resolution{}, err // an edit names a strategy gero does not have yet
 	}
-	specs, companions := res.withCompanions(ctx, ws, specs)
+	specs, companions := res.withCompanions(ctx, specs)
 	plan := Plan{
 		Producer: res.producer.Slug(), Consumer: res.route.Consumer.Slug(),
 		DryRun: in.DryRun, NoPush: in.NoPush && !in.DryRun, Refresh: in.Refresh,

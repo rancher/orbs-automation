@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/proposal"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // Input is what the user asked to sync: the held values of one project.
@@ -80,6 +81,9 @@ type Row struct {
 	holding *chain.Holding
 	// release is the release a release holding is to be written with.
 	release *bump.Release
+	// requiredBy is, for the row of the virtual holding a pin makes, the pinning release whose
+	// go.mod requires it.
+	requiredBy string
 }
 
 // marker is what identifies the PR of the branch: the holder, the branch and the
@@ -138,7 +142,7 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		return plan, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
 	}
 	var rows []Row
-	tags := newTagSource(ctx, ws)
+	tags := wanted.New(ws)
 	for _, h := range holdings {
 		rows = append(rows, rowsOf(ctx, ws, in, holder, refs, tags, h)...)
 	}
@@ -170,29 +174,73 @@ func pulledHoldingsOf(holder *chain.Project, names []string) ([]*chain.Holding, 
 // say it should. This is where a kind of holding that is pulled says what its value should be:
 // a series is the series its stream has for the line, and a release is the newest stable one of
 // its stream for the line.
-func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding) []Row {
+func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, tags *wanted.Resolver, h *chain.Holding) []Row {
 	var rows []Row
 	for _, line := range seriesLinesOf(holder, h) {
 		if len(in.Lines) > 0 && !slices.ContainsFunc(in.Lines, func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) }) {
 			continue
 		}
 		got := heldLine(ctx, ws, holder, refs, tags, h, line)
-		row := Row{SeriesLine: got.SeriesLine, Holding: h.Name(), Kind: h.Kind(), holding: h, release: got.release}
-		switch {
-		case got.Error != "":
-			row.Status, row.Reason = StatusFailed, got.Error
-		case got.UpToDate:
-			row.Status = StatusUpToDate
-		case got.Left != "":
-			row.Status, row.Reason = StatusBlocked, got.Left
-		case got.Acknowledged != "":
-			row.Status, row.Reason = StatusBlocked, "the difference is acknowledged: "+got.Acknowledged
-		case len(h.Edits()) == 0:
-			row.Status, row.Reason = StatusBlocked, fmt.Sprintf("%v: Holding %q is only read until one does", bump.ErrNoEdit, h.Name())
-		default:
-			row.Status = StatusReady
+		row := rowFor(h, got)
+		companions := companionRows(ctx, ws, holder, refs, tags, h, line, got, row)
+		for _, c := range companions {
+			if c.Status == StatusFailed && row.Status == StatusReady {
+				// the write of wrangler alone would put go.mod out of step with what it requires
+				row.Status, row.Reason = StatusBlocked, fmt.Sprintf("its companion %s cannot be derived: %s", c.Holding, c.Reason)
+			}
 		}
 		rows = append(rows, row)
+		rows = append(rows, companions...)
+	}
+	return rows
+}
+
+// rowFor is the row of a holding on a line, from what was read of it.
+func rowFor(h *chain.Holding, got held) Row {
+	row := Row{SeriesLine: got.SeriesLine, Holding: h.Name(), Kind: h.Kind(), holding: h, release: got.release}
+	switch {
+	case got.Error != "":
+		row.Status, row.Reason = StatusFailed, got.Error
+	case got.UpToDate:
+		row.Status = StatusUpToDate
+	case got.Acknowledged != "":
+		row.Status, row.Reason = StatusBlocked, "the difference is acknowledged: "+got.Acknowledged
+	case len(bump.PullEdits(h)) == 0:
+		row.Status, row.Reason = StatusBlocked, fmt.Sprintf("%v: Holding %q is only read until one does", bump.ErrNoEdit, h.Name())
+	default:
+		row.Status = StatusReady
+	}
+	return row
+}
+
+// companionRows reads what a holding that pins another Artifact holds of it on a line: the
+// release of the pinned module that the go.mod of the release the holding is brought to
+// requires, as ship derives it. It is a floor, so a newer one is current. A holding whose
+// own value could not be chosen has no companions, and the files that do not require the
+// module have none either.
+func companionRows(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, tags *wanted.Resolver, h *chain.Holding, line string, got held, row Row) []Row {
+	if got.release == nil || h.Kind() != chain.HoldsRelease {
+		return nil
+	}
+	var rows []Row
+	for _, v := range h.Pinned() {
+		if !v.AppliesTo(line) {
+			continue
+		}
+		w := tags.ForPinnerTag(ctx, v, got.release.Tag)
+		var read held
+		switch {
+		case w.Err != nil:
+			read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: w.Err.Error()}}
+		default:
+			read = companionLine(ctx, ws, holder, refs, v, line, w.Release)
+		}
+		if read.Absent {
+			continue
+		}
+		cr := rowFor(v, read)
+		cr.requiredBy = w.RequiredBy
+		rows = append(rows, cr)
 	}
 	return rows
 }
@@ -380,6 +428,9 @@ func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, e
 // sourceOf says where the value of a row comes from, for the PR to read: the series its stream
 // has for the line, or the release it is written with.
 func sourceOf(r Row) string {
+	if r.requiredBy != "" {
+		return fmt.Sprintf("%s: `%s`, which `%s` requires", r.Holding, r.release.Tag, r.requiredBy)
+	}
 	stream := streamOf(r.holding)
 	if r.release != nil {
 		return fmt.Sprintf("%s: `%s` of `%s`", r.Holding, r.release.Tag, stream.Name())

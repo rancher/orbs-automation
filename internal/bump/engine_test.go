@@ -274,6 +274,22 @@ func TestTargetsForAUniversalProducerAreTheBranchesOfEachStage(t *testing.T) {
 	}, branches(got))
 }
 
+func TestTargetsForAUniversalProducerLeaveOutTheLinesItsArtifactIsNotProducedFor(t *testing.T) {
+	e, g, err := buildEngine(t,
+		d("Project", "rng", "", "  repo: {name: acme/rng, managedBy: orbs}\n"),
+		d("Stream", "rng", "{project: rng}", "  universal: true\n"),
+		d("Artifact", "rng-image", "{stream: rng}", "  kind: image\n  name: acme/rng\n  lines: {since: v2.16}\n"),
+		d("Holding", "cons-rng", "{project: cons, artifact: rng-image}", "  at: {file: rng.yaml, key: image}\n  holds: {kind: release, form: \"{image}:{tag}\", stage: dev}\n"),
+	)
+	require.NoError(t, err)
+	route := e.RoutesFrom(g.Project("rng"))[0]
+
+	got, err := route.TargetsFor("")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"dev-v2.16 (v2.16): cons-rng"}, branches(got), "the artifact is not made for v2.15, so a release is not sent to its branch")
+}
+
 func TestTargetsForAProducerWithLinesAreTheBranchOfTheLineAndStage(t *testing.T) {
 	e, g, err := buildEngine(t)
 	require.NoError(t, err)
@@ -658,24 +674,59 @@ func TestAPullRouteRefusesAReleaseHoldingWithNoReleaseToWrite(t *testing.T) {
 	require.Error(t, err, "a pulled release holding is written with the release the caller chose, and none was given")
 }
 
-func TestAPullRouteLeavesToShipAHoldingThatPinsAnotherArtifact(t *testing.T) {
+func TestAPullRouteWritesAHoldingThatPinsAnotherArtifactWithItsCompanion(t *testing.T) {
 	g := pinGraph(t, chaintest.Doc("Edit", "tidy", "{holding: [bro-holds-wr]}", "  postEdit:\n    - {run: gen}\n"))
 	e, err := NewEngine(Builtin(), g)
 	require.NoError(t, err)
+	h, v := holdingNamed(t, g, "bro-holds-wr"), g.Virtual()[0]
+	route, err := e.PullRoute(h, v)
+	require.NoError(t, err)
+	wr, err := ReleaseOf(h, "v1.7.5", "")
+	require.NoError(t, err)
+	la, err := ReleaseOf(v, "v0.2.6", "")
+	require.NoError(t, err)
+	tree := files{"go.mod": broRoot, "cmd/tool/go.mod": broTool}
+	var order []string
+	target := Target{Branch: "main", Line: "v2.16", Holdings: route.Holdings, Pulled: map[*chain.Holding]Release{h: wr, v: la}}
 
-	_, err = e.PullRoute(holdingNamed(t, g, "bro-holds-wr"))
+	res, err := route.Run(bg, tree, &recorder{order: &order}, target, "", "", "/work", nil)
 
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "pins")
+	require.NoError(t, err)
+	assert.True(t, res.Changed)
+	for _, file := range []string{"go.mod", "cmd/tool/go.mod"} {
+		assert.Contains(t, tree[file], "github.com/acme/wr v1.7.5", file)
+		assert.Contains(t, tree[file], "github.com/acme/la v0.2.6", file)
+	}
+	assert.Equal(t, []string{"run gen"}, order, "the edit of the pinning holding runs once, after both are written")
 }
 
-func TestAPullRouteRefusesAVirtualHolding(t *testing.T) {
+func TestAPullRouteWritesAPinnedCompanionAloneWithTheEditOfTheHoldingItComesFrom(t *testing.T) {
 	g := pinGraph(t, chaintest.Doc("Edit", "tidy", "{holding: [bro-holds-wr]}", "  postEdit:\n    - {run: gen}\n"))
 	e, err := NewEngine(Builtin(), g)
 	require.NoError(t, err)
-	require.Len(t, g.Virtual(), 1)
+	v := g.Virtual()[0]
+	route, err := e.PullRoute(v)
+	require.NoError(t, err, "wrangler is current and lasso is below what it requires: the companion is the whole write")
+	la, err := ReleaseOf(v, "v0.2.6", "")
+	require.NoError(t, err)
+	tree := files{"go.mod": broRoot, "cmd/tool/go.mod": broTool}
+	var order []string
+	target := Target{Branch: "main", Line: "v2.16", Holdings: route.Holdings, Pulled: map[*chain.Holding]Release{v: la}}
+
+	_, err = route.Run(bg, tree, &recorder{order: &order}, target, "", "", "/work", nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, tree["go.mod"], "github.com/acme/la v0.2.6")
+	assert.Contains(t, tree["go.mod"], "github.com/acme/wr v1.7.1", "wrangler is not touched")
+	assert.Equal(t, []string{"run gen"}, order)
+}
+
+func TestAPullRouteRefusesAPinnedCompanionWhenNoEditFollowsTheHoldingItComesFrom(t *testing.T) {
+	g := pinGraph(t)
+	e, err := NewEngine(Builtin(), g)
+	require.NoError(t, err)
 
 	_, err = e.PullRoute(g.Virtual()[0])
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrNoEdit)
 }

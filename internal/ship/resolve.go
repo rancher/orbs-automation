@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/proposal"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // resolution is everything about a run that is the same for every target branch:
@@ -31,6 +32,8 @@ type resolution struct {
 	// found once. It is shared by the copies of the resolution, so a run and its
 	// check agree on what was derived.
 	derived map[derivedKey]companion
+	// wanted says which release a holding is expected to hold, where status reads a pin.
+	wanted *wanted.Resolver
 }
 
 // resolve finds the producer, picks the route to ship down, and resolves the
@@ -84,7 +87,7 @@ func resolveRoute(ctx context.Context, ws Reader, route bump.Route) (resolution,
 	if err != nil {
 		return resolution{}, err
 	}
-	res := resolution{producer: route.Producer, route: route, scheme: scheme, stream: stream, derived: map[derivedKey]companion{}}
+	res := resolution{producer: route.Producer, route: route, scheme: scheme, stream: stream, derived: map[derivedKey]companion{}, wanted: wanted.New(ws)}
 	producerRefs, err := ws.UpstreamRefs(ctx, route.Producer.Slug())
 	if err != nil {
 		return resolution{}, fmt.Errorf("read the tags of %s: %w", route.Producer.Slug(), err)
