@@ -88,7 +88,7 @@ Short letters go in three tiers, and an earlier tier wins a letter:
 
 1. **Global flags** (`-v`, `-o`, `-j`, `-n`, `-t`, `-u`). A global letter is reserved on every command, so no local flag may take it.
 2. **Flags several commands share** (`-y`, `-l`, `-p`, `-T`, `-r`).
-3. **Flags of one command** (`-P`, `-m`, `-e`, `-H`, `-a`, `-i`, `-s`, `-f`, `-c`). Two of these may share a letter only when no other choice is left and they are on different commands.
+3. **Flags of one command** (`-P`, `-m`, `-e`, `-H`, `-a`, `-i`, `-f`, `-c`). Two of these may share a letter only when no other choice is left and they are on different commands.
 
 A flag that is a negation (`--no-push`), is set once and then lives in the environment or the user file (the config and bundle flags, `--clone-root`), or has no obvious letter stays long. `-h` is `--help`, and `--version` takes no shorthand because `-v` is `--verbose`. A test walks the command tree and holds each flag to one letter (`cmd/flags_test.go`), so a new flag with a letter, or a new letter for an old flag, is a change to that table.
 

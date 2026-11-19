@@ -23,15 +23,15 @@ The other steps of `ship` are [use cases](#use-cases-not-yet-commands), not name
 
 Makes the branch `<name>` at the head of the upstream branch of the release line `<line>` (`v2.15` is `release/v2.15`, found as `gero repo info` finds it), after fetching it. With two arguments they are the line and the name, with three the project comes first.
 
-By default it **leaves your checkout where it is**, as `git branch <name> <upstream>/<branch>` does, and ends by saying `git switch <name>`. `--switch` moves the checkout onto the new branch afterwards, with git's own rules for uncommitted changes, so it fails as `git switch` would. A clone with changes in it is never disturbed otherwise: the branch is made in a temporary worktree and the worktree is removed. A branch of the name that holds commits of ours on the current head is kept as it is and the report says so. One with commits that are not ours is an error that says whose, and one of ours that the line has moved on from is made again, as `createbranch` does for `ship`. With `--dry-run` the report says `Would create` and no branch is left behind. `--json` prints the project, the branch, where it was cut from and the commit.
+By default it **moves your checkout onto the new branch** afterwards, with git's own rules for uncommitted changes, so it fails as `git switch` would. `--no-switch` **leaves your checkout where it is**, as `git branch <name> <upstream>/<branch>` does, and ends by saying `git switch <name>`. (`--switch`, the flag from before the switch was the default, is still taken, hidden, and cannot be given with `--no-switch`.) A clone with changes in it is never disturbed beyond that switch: the branch is made in a temporary worktree and the worktree is removed. A branch of the name that holds commits of ours on the current head is kept as it is and the report says so. One with commits that are not ours is an error that says whose, and one of ours that the line has moved on from is made again, as `createbranch` does for `ship`. With `--dry-run` the report says `Would create` and no branch is left behind. `--json` prints the project, the branch, where it was cut from and the commit.
 
 ```
 $ gero repo branch v2.15 my-fix
-Created my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
-  git switch my-fix
+Created my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher, and switched to it
 
-$ gero repo branch scc-operator main bump-deps --switch
-Created bump-deps at upstream/main (a41f02cc) in rancher/scc-operator, and switched to it
+$ gero repo branch scc-operator main bump-deps --no-switch
+Created bump-deps at upstream/main (a41f02cc) in rancher/scc-operator
+  git switch bump-deps
 
 $ gero repo branch v2.15 my-fix --dry-run
 Would create my-fix at upstream/release/v2.15 (1b3c9e07) in rancher/rancher
