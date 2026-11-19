@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -215,4 +216,64 @@ func TestRepoBackportWiring(t *testing.T) {
 
 		require.Error(t, err)
 	})
+}
+
+func TestBranchOptions(t *testing.T) {
+	t.Run("switches to the new branch unless told not to", func(t *testing.T) {
+		got := branchOptions([]string{"v2.15", "my-fix"}, false)
+
+		assert.True(t, got.Switch)
+	})
+
+	t.Run("leaves the checkout alone with --no-switch", func(t *testing.T) {
+		got := branchOptions([]string{"v2.15", "my-fix"}, true)
+
+		assert.False(t, got.Switch)
+	})
+
+	t.Run("takes the project, the line and the name from the arguments", func(t *testing.T) {
+		got := branchOptions([]string{"scc-operator", "main", "bump-deps"}, false)
+
+		assert.Equal(t, "scc-operator", got.Project)
+		assert.Equal(t, "main", got.Line)
+		assert.Equal(t, "bump-deps", got.Name)
+	})
+}
+
+func branchFlags(t *testing.T) *cobra.Command {
+	t.Helper()
+	cmd, _, err := newRootCmd().Find([]string{"repo", "branch"})
+	require.NoError(t, err)
+	return cmd
+}
+
+func TestRepoBranchHasNoSwitch(t *testing.T) {
+	cmd := branchFlags(t)
+
+	f := cmd.Flags().Lookup("no-switch")
+
+	require.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+	assert.Empty(t, f.Shorthand, "a negation has no letter")
+	assert.Contains(t, cmd.LocalFlags().FlagUsages(), "--no-switch")
+}
+
+// --switch is what the flag was before the switch became the default, so it is
+// still taken, and not listed.
+func TestRepoBranchStillTakesSwitchAsAHiddenFlag(t *testing.T) {
+	cmd := branchFlags(t)
+
+	require.NoError(t, cmd.Flags().Parse([]string{"--switch"}))
+
+	f := cmd.Flags().Lookup("switch")
+	require.NotNil(t, f)
+	assert.True(t, f.Hidden)
+	assert.NotContains(t, cmd.LocalFlags().FlagUsages(), "--switch")
+}
+
+func TestRepoBranchSwitchAndNoSwitchExcludeEachOther(t *testing.T) {
+	_, _, err := execRoot(t, "repo", "branch", "--switch", "--no-switch", "v2.15", "my-fix")
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "none of the others can be")
 }
