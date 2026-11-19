@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	clibackport "github.com/rancher/orbs-automation/internal/cli/backport"
 	"github.com/rancher/orbs-automation/internal/cli/branchtags"
 	"github.com/rancher/orbs-automation/internal/cli/imagesexist"
 	"github.com/rancher/orbs-automation/internal/cli/logging"
@@ -325,6 +326,7 @@ is not found or a registry could not be reached.`,
 	})
 	repoCmd.AddCommand(imagesCmd)
 	repoCmd.AddCommand(syncCommand())
+	repoCmd.AddCommand(backportCommand())
 	repoCmd.AddCommand(
 		infoCmd,
 		listCmd,
@@ -414,6 +416,77 @@ does everything but write.`,
 	flags.StringSliceVar(&in.Holdings, "holding", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
 	flags.StringSliceVar(&in.Lines, "line", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
 	flags.BoolVar(&in.Preview, "preview", false, "print the commit message and the PR body too")
+	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
+	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
+	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
+	return cmd
+}
+
+// backportCommand is gero repo backport: carry a merged PR down to release branches.
+func backportCommand() *cobra.Command {
+	var in clibackport.Options
+	cmd := &cobra.Command{
+		Use:   "backport [project] <line>[,<line>...] <pr>",
+		Short: "Carry a merged pull request down to release lines, one pull request for each",
+		Long: `Cherry-pick what a merged pull request put on its base branch onto one or more
+release branches of the same repo, and open one pull request for each.
+
+<pr> is the last argument: its number, #number, or its URL, which also names the
+repo, so the project may be left out. It must be merged, which is checked on
+GitHub. <line> is a Rancher line (v2.15 or 2.15) or a release branch of the
+project, as gero repo tag takes it; several are separated by commas. [project] is
+the config name or owner/name slug, and by default the repo you are in. The lines
+are worked newest first, and a line that is the branch the PR was merged to is
+refused.
+
+Which commits are picked follows how the PR landed, read from the merge commit on
+GitHub: one commit, or a squash merge, picks the merged commit; a rebase merge
+picks each of its commits, oldest first; a merge commit is picked against its first
+parent, as one commit. What fits none of these is an error and not a guess. Every
+pick is a git cherry-pick -x, so its message names the commit it came from, and the
+author of each commit is kept. A target whose history already holds the commits is
+reported as already backported and gets no PR.
+
+When a pick conflicts, gero stops everything: nothing else runs until you have
+resolved it or abandoned it. At a terminal it prints where the files are, opens
+your editor on that directory (it asks which, the first time, and remembers), and
+waits for you to answer: continue, once the conflicts are resolved (gero checks
+that no conflict marker is left, finishes the pick, and notes the files you
+resolved in the PR body), or abort, which abandons the pick, leaves your clone as
+it was, ends the run, and leaves the lines not yet tried as not attempted. With no
+terminal a conflict is abandoned and the run fails, naming the files. --dry-run
+never waits: it reports a conflict and goes on to the next line.
+
+It works as gero repo sync does: in your own clone, on a new branch (or a worktree
+when the clone is dirty); it asks once before it pushes the branches and opens the
+PRs, and --yes goes on without asking. Running it again is safe: your open PR for
+the same commits is found, and one for other commits is closed once the new one is
+open. --no-push stops after the commits and --dry-run does everything but write.`,
+		Args: cobra.RangeArgs(2, 3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			parsed, err := clibackport.ParseArgs(args)
+			if err != nil {
+				return err
+			}
+			in.Args = parsed
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			s := settingsFrom(cmd)
+			in.Yes = s.NonInteractive
+			log := logging.New(cmd.ErrOrStderr(), s.LogLevel, s.CI)
+			in.In, in.Interactive = cmd.InOrStdin(), termfacts.IsTerminal(os.Stdin)
+			return clibackport.Run(ctx, cmd.OutOrStdout(), log, s, cwd, in)
+		},
+	}
+	flags := cmd.Flags()
+	flags.BoolVar(&in.Preview, "preview", false, "print the PR bodies too")
 	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
