@@ -40,7 +40,6 @@ func gitTags(names ...string) []git.Tag {
 
 func newBroWorld(t *testing.T) *broWorld {
 	t.Helper()
-	const hold = "  at: {file: go.mod, key: %s, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all%s}\n"
 	wrHold := func(lines string) string {
 		return "  at: {file: go.mod, key: github.com/acme/wr/v3, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: " + lines + "}\n"
 	}
@@ -57,7 +56,7 @@ func newBroWorld(t *testing.T) *broWorld {
 		chaintest.Doc("Project", "bro", "", "  repo: {name: acme/bro, managedBy: orbs}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r15}, {line: v2.14, branch: r14}]\n"),
 		chaintest.Doc("Holding", "bro-holds-wr-8", "{project: bro, artifact: wr-8-mod}", wrHold("{since: v2.16}")),
 		chaintest.Doc("Holding", "bro-holds-wr-7", "{project: bro, artifact: wr-7-mod}", wrHold("{since: v2.15, until: v2.15}")),
-		chaintest.Doc("Holding", "bro-holds-la", "{project: bro, artifact: la-mod}", fmtHold(hold, "github.com/acme/la", ", lines: {until: v2.14}")),
+		chaintest.Doc("Holding", "bro-holds-la", "{project: bro, artifact: la-mod}", fmtHold("github.com/acme/la", ", lines: {until: v2.14}")),
 		chaintest.Doc("Edit", "tidy", "{holding: [bro-holds-wr-8, bro-holds-wr-7, bro-holds-la]}", "  postEdit:\n    - {run: [go, generate]}\n"),
 	)
 	return &broWorld{
@@ -78,7 +77,7 @@ func newBroWorld(t *testing.T) *broWorld {
 	}
 }
 
-func fmtHold(format, key, lines string) string {
+func fmtHold(key, lines string) string {
 	return "  at: {file: go.mod, key: " + key + ", format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all" + lines + "}\n"
 }
 
