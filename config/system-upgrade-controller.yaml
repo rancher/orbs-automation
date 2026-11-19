@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
+# system-upgrade-controller: owned by hostbusters, one branch for every line, one image, a series for each line.
+# Only master is modelled: the chart that Rancher takes is the one in charts/ of master, for the newest line. The
+# lines from v2.15 down used to be customised in rancher/charts and are held there, not here. v2.16 is not in the
+# team's version table, so it has no series yet.
+apiVersion: gero/v1alpha2
+kind: Project
+name: system-upgrade-controller
+spec:
+  aliases: ["suc"]
+  repo: {name: rancher/system-upgrade-controller, managedBy: hostbusters, defaultBranch: master}
+  branches: {layout: single}
+---
+apiVersion: gero/v1alpha2
+kind: Stream
+name: system-upgrade-controller
+refs: {project: system-upgrade-controller}
+spec:
+  scheme: semver
+  lines:
+    - {line: v2.15, series: "0.20.x"}
+    - {line: v2.14, series: "0.19.x"}
+    - {line: v2.13, series: "0.17.x"}
+    - {line: v2.12, series: "0.16.x"}
+---
+apiVersion: gero/v1alpha2
+kind: Artifact
+name: suc-image
+refs: {stream: system-upgrade-controller}
+spec: {kind: image, name: rancher/system-upgrade-controller}
+---
+# What SUC holds: the kuberlr image tag in its chart values, on master only, so for the line master tracks. master is
+# on v2.16 (its chart is for Rancher 2.16), and the file is kept at the newest kuberlr release of that line's series.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: suc-holds-kuberlr
+refs: {project: system-upgrade-controller, artifact: kuberlr-kubectl-image}
+spec:
+  at: {file: charts/system-upgrade-controller/values.yaml, key: kubectl.image.tag, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.16, until: v2.16}}
