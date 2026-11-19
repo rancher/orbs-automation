@@ -26,7 +26,7 @@ type derivedKey struct{ holding, release string }
 // and the tag each pin resolves for the release the target gets, and says what was
 // derived, each once. A pin that cannot be resolved is in the list with its error and
 // is not given to any target: the plan blocks on it. The specs given are not changed.
-func (r resolution) withCompanions(ctx context.Context, src wanted.Source, specs []spec) ([]spec, []Companion) {
+func (r resolution) withCompanions(ctx context.Context, specs []spec) ([]spec, []Companion) {
 	out := slices.Clone(specs)
 	var list []Companion
 	for i, sp := range specs {
@@ -44,7 +44,7 @@ func (r resolution) withCompanions(ctx context.Context, src wanted.Source, specs
 			key := derivedKey{v.Name(), sp.release.Tag}
 			c, ok := r.derived[key]
 			if !ok {
-				c = companion{wanted.Derive(ctx, src, v, sp.release.Tag), v}
+				c = companion{r.wanted.Companion(ctx, v, sp.release.Tag), v}
 				r.derived[key] = c
 			}
 			if !slices.ContainsFunc(list, func(o Companion) bool { return o.RequiredBy == c.RequiredBy && o.Module == c.Module }) {

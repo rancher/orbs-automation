@@ -34,11 +34,11 @@ type Companion struct {
 // pseudoVersion is the tail of a Go pseudo-version, which names a commit and no tag.
 var pseudoVersion = regexp.MustCompile(`\d{14}-[0-9a-f]{12}(\+incompatible)?$`)
 
-// Derive finds the release of the pinned Artifact of a virtual Holding that goes
+// derive finds the release of the pinned Artifact of a virtual Holding that goes
 // with a release of the Artifact that pins it: it reads the pinning release's file
 // at its tag from the host, takes the version of the pinned module there, and makes
 // it the tag of the pinned Artifact's stream, which must exist.
-func Derive(ctx context.Context, src Source, v *chain.Holding, pinnerTag string) Companion {
+func derive(ctx context.Context, src Source, v *chain.Holding, pinnerTag string) Companion {
 	pinner, pinned := v.PinnedBy().Artifact(), v.Artifact()
 	pinnerSlug := pinner.Project().Slug()
 	c := Companion{

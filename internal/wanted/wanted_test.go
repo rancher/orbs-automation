@@ -223,3 +223,17 @@ func TestRequiredOfAPinnerValueThatIsNoReleaseHasNoValue(t *testing.T) {
 	assert.Contains(t, got.Err.Error(), "no release")
 	assert.Empty(t, got.Release.Tag)
 }
+
+func TestCompanionIsTheDetailOfWhatThePinRequires(t *testing.T) {
+	g := graph(t)
+
+	got := New(newHost()).Companion(bg, g.Virtual()[0], "v1.7.4")
+
+	assert.Empty(t, got.Error)
+	assert.Equal(t, "v0.2.5", got.Tag)
+	assert.Equal(t, "v0.2.5", got.Version)
+	assert.Equal(t, "acme/la", got.Producer)
+	assert.Equal(t, "github.com/acme/la", got.Module)
+	assert.Equal(t, "acme/wr v1.7.4", got.RequiredBy)
+	assert.Equal(t, "go.mod", got.File)
+}

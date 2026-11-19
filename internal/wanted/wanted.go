@@ -137,10 +137,16 @@ func (r *Resolver) newest(ctx context.Context, h *chain.Holding, line string) Wa
 	return Want{Release: release, Why: fmt.Sprintf("the newest release of `%s`", stream.Name())}
 }
 
+// Companion is the release of the pinned module that goes with the release pinnerTag of the
+// Artifact that pins it, with what it was derived from: ForPinnerTag in the detail a plan reports.
+func (r *Resolver) Companion(ctx context.Context, v *chain.Holding, pinnerTag string) Companion {
+	return derive(ctx, cached{r}, v, pinnerTag)
+}
+
 // ForPinnerTag is what the virtual holding v is expected to hold when the holding that
 // pins it holds the release pinnerTag: the version the go.mod of that release requires.
 func (r *Resolver) ForPinnerTag(ctx context.Context, v *chain.Holding, pinnerTag string) Want {
-	c := Derive(ctx, cached{r}, v, pinnerTag)
+	c := r.Companion(ctx, v, pinnerTag)
 	if c.Error != "" {
 		return Want{Err: errors.New(c.Error), RequiredBy: c.RequiredBy}
 	}
