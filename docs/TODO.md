@@ -30,6 +30,7 @@ Each is built and passes its tests, which use fakes. What follows is what a test
 * **PromFed's `promfed-chart` Artifact names the file the repo publishes.** Compare `prometheus-federator-{version}.tgz` with the assets of a release of `rancher/prometheus-federator`. A different name is a fix to `config/prometheus-federator.yaml`.
 * **`repo sync` reads the tags of k3s in a reasonable time.** k3s has thousands of tags, listed once for a run. Check the time of the run above and that the host does not rate-limit it.
 * **`ship` and `ci:ship` behave as before the move to `internal/proposal`.** `repo sync` runs on the same conveyor and has been run for real, which shows the commit, push and PR path. What is left is `ship`'s own: run `gero ship <project> --dry-run --no-push` and `--refresh` on a project with open bump PRs, and a `ci:ship` run in a workflow, and compare the report and the JSON with what an earlier build prints. A difference is a defect. [PROPOSAL](specs/PROPOSAL.md)
+* **`repo backport` works against a real merged PR.** Run `gero repo backport <project> <line> <pr> --dry-run` on a PR merged by squash, one by rebase and one by merge commit, and compare the picks it names with the commits a person would pick. Then run one for real, and one on a PR known to conflict: the editor opens on the directory, continue publishes with the files named in the body, and abort leaves the clone as it was. A difference is a defect. [BACKPORT](specs/BACKPORT.md)
 * **`auth status` reports a real installation token's 403.** Run `gero auth status` in CI with an installation token that cannot reach the consumer: it says why, and exits as documented. Tested with fakes only. [EXECUTION_CONTEXT](specs/EXECUTION_CONTEXT.md)
 
 ---
@@ -134,6 +135,12 @@ Read-only, on the walk. [TOOLING_GOALS](design/TOOLING_GOALS.md)
 * **M: Move the refresh of an open PR into `internal/proposal`.** Its logic is `ship`'s today, and `repo sync` has no `--refresh` for want of it. Done when `ship` calls the conveyor for it, its refresh tests pass as they were, and `repo sync --refresh` rebuilds a stale PR of its own. [PROPOSAL](specs/PROPOSAL.md)
 * **M: Bring a commit or branch holding in line with `repo sync`.** The wanted value is the head of the producer's branch for the stage. Needs "Read a commit or a branch that a repo holds, at a ref" under Tracing the chain first: the engine skips both kinds today. Done when a differing commit holding is written by `sync` through an Edit.
 * **M: Run `repo sync` for every project a team owns.** Done when one command opens the PRs of each owned project and reports each by project.
+
+### Backports
+
+`gero repo backport` carries a merged PR down to release branches. [BACKPORT](specs/BACKPORT.md)
+
+* **M: Reuse a branch an earlier backport run left in the clone.** The conveyor knows a branch as its own by the author of its commits, and a pick keeps the original author, so a second run after `--no-push` stops at "not ours to change". Done when a second run finds the branch of the same picks and reuses it, and one of someone else's is still refused.
 
 ### Doctor and the workstation
 

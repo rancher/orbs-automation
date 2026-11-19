@@ -1,6 +1,6 @@
 # BACKPORT
 
-**Status:** draft. `gero repo backport [project] <line>... <pr>` carries a merged pull request down to the release branches of its own repo, one pull request for each line, and stops for a person when a cherry-pick conflicts.
+**Status:** implemented, except what is under [Not built yet](#not-built-yet). `gero repo backport [project] <line>... <pr>` carries a merged pull request down to the release branches of its own repo, one pull request for each line, and stops for a person when a cherry-pick conflicts.
 
 ## Direction
 
@@ -42,10 +42,12 @@ What fits none of these (no `M`, commits that cannot be read) is an error that n
 
 A cherry-pick that conflicts stops everything. Nothing else runs while one is open, and no later line is tried.
 
-* **At a terminal,** the pick is left in progress in the work directory. gero prints the path and the conflicted files, and asks which editor or IDE to use the first time, then keeps the answer in the user settings file ([CLI_CONFIG](CLI_CONFIG.md)). It opens the editor on the path and waits at a prompt: **continue** or **abort**.
+* **At a terminal,** the pick is left in progress in the work directory. gero prints the path and the conflicted files, and asks which editor or IDE to use the first time, then keeps the answer in gero's state directory, as it does the REPL's history ([CLI_CONFIG](CLI_CONFIG.md)), since an answer is not a setting. Choosing to edit the files yourself opens nothing and keeps nothing, and a command typed in place of a choice is used and kept. It opens the editor on the path and waits at a prompt: **continue**, **abort**, or open the editor again.
 * **Continue** checks that no path is unmerged and no conflict marker is left in what was changed, and says what remains if there is any. When it is clean gero finishes the pick, notes the files that were resolved by hand in the PR body, and goes on to publish and then to the next line.
 * **Abort** abandons the pick, removes the branch and the work directory so the clone is as it was found, and ends the run. The line is reported `aborted`, the lines not tried are `not attempted`, and PRs already published stay.
 * **With no terminal,** a conflict aborts the pick and fails the run with the conflicted files. There is no resumable state and no mode that waits.
+* **A dry run never waits.** It reports a conflict as one it would meet, naming the files, abandons the pick, and goes on to the next line, since nobody is held up by it.
+* **If the editor cannot be asked or started,** the prompt is still there: the directory can be opened by hand. A resolver that fails ends the run as an abort does.
 
 A run that is started again after any of this is safe: the decision in step 3 finds what is already open or already backported.
 
@@ -56,7 +58,7 @@ A run that is started again after any of this is safe: the decision in step 3 fi
 
 ## Not built yet
 
-Everything above.
+* A branch an earlier run left in the clone (a `--no-push` run, or a push that failed) is not reused. The conveyor knows a branch as its own by the author of its commits, and a pick keeps the author of the commit it picks, so a second run stops at "not ours to change" until the branch is deleted.
 
 ## Open questions
 
