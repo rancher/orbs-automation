@@ -3,6 +3,7 @@ package backport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,16 +29,22 @@ type (
 	log        = proposaltest.Log
 )
 
-// fakeHost is the PR on the host.
+// fakeHost is the PRs on the host, by number.
 type fakeHost struct {
-	detail  pulls.Detail
-	commits []pulls.Commit
-	err     error
+	details map[int]pulls.Detail
+	commits map[int][]pulls.Commit
 }
 
-func (h *fakeHost) Get(context.Context, string, int) (pulls.Detail, error) { return h.detail, h.err }
-func (h *fakeHost) Commits(context.Context, string, int) ([]pulls.Commit, error) {
-	return h.commits, h.err
+func (h *fakeHost) Get(_ context.Context, slug string, n int) (pulls.Detail, error) {
+	d, ok := h.details[n]
+	if !ok {
+		return pulls.Detail{}, fmt.Errorf("read %s#%d: not found", slug, n)
+	}
+	return d, nil
+}
+
+func (h *fakeHost) Commits(_ context.Context, _ string, n int) ([]pulls.Commit, error) {
+	return h.commits[n], nil
 }
 
 // scripted is a Resolver that answers each conflict from a function and keeps them.
@@ -64,6 +71,7 @@ type backWS struct {
 	host     *fakeHost
 	addB     string
 	newImage string
+	addC     string
 }
 
 func newBackWS(t *testing.T) (*backWS, *proposal.Executor) {
@@ -76,26 +84,30 @@ func newBackWS(t *testing.T) (*backWS, *proposal.Executor) {
 	put(t, up, "build.yaml", "image: legacy\n")
 	runGit(t, up, "commit", "--quiet", "-a", "-m", "Legacy image")
 	runGit(t, up, "checkout", "--quiet", "main")
-	w := &backWS{t: t, up: up, host: &fakeHost{}}
+	w := &backWS{t: t, up: up, host: &fakeHost{details: map[int]pulls.Detail{}, commits: map[int][]pulls.Commit{}}}
 	w.addB = commit(t, up, "b.txt", "Add b")
 	put(t, up, "build.yaml", "image: new\n")
 	runGit(t, up, "commit", "--quiet", "-a", "--author=Author <author@example.com>", "-m", "Update image")
 	w.newImage = runGit(t, up, "rev-parse", "HEAD")
+	w.addC = commit(t, up, "c.txt", "Add c")
 	w.graph = chaintest.Load(t,
 		chaintest.Lines("v2.16", "v2.15", "v2.14"),
 		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: release/v1}, {line: v2.14, branch: release/v0}]\n"))
 	w.clone = engineer(t, up)
-	w.merged(w.addB, "Add b")
+	w.mergedPR(12, w.addB, "Add b")
 	return w, &proposal.Executor{Git: proposal.GitCLI{}, TempDir: t.TempDir()}
 }
 
-// merged says the PR on the host landed as the one commit, with its title.
-func (w *backWS) merged(sha, title string) {
-	w.host.detail = pulls.Detail{
-		PR:     pulls.PR{Number: 12, URL: "https://github.com/acme/cons/pull/12", Title: title, Base: "main"},
+// merged says PR 12 on the host landed as the one commit, with its title.
+func (w *backWS) merged(sha, title string) { w.mergedPR(12, sha, title) }
+
+// mergedPR says a PR on the host landed as the one commit, with its title, to main.
+func (w *backWS) mergedPR(n int, sha, title string) {
+	w.host.details[n] = pulls.Detail{
+		PR:     pulls.PR{Number: n, URL: fmt.Sprintf("https://github.com/acme/cons/pull/%d", n), Title: title, Base: "main"},
 		Merged: true, MergeCommit: sha,
 	}
-	w.host.commits = []pulls.Commit{{SHA: "orig", Message: title, Author: "Author"}}
+	w.host.commits[n] = []pulls.Commit{{SHA: fmt.Sprintf("orig%d", n), Message: title, Author: "Author"}}
 }
 
 func (w *backWS) Project(string) (*chain.Project, error)    { return w.graph.Project("cons"), nil }
@@ -136,12 +148,12 @@ func (w *backWS) onBranch(branch, file string) string {
 func TestBackportMakesABranchWithThePickedCommitAndItsOrigin(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.NoError(t, err)
 	assert.Equal(t, "acme/cons", plan.Repo)
-	assert.Equal(t, ShapeSingle, plan.Shape)
-	assert.Equal(t, []string{ws.addB}, plan.Picks)
+	require.Len(t, plan.PRs, 1)
+	assert.Equal(t, Source{Number: 12, Title: "Add b", URL: "https://github.com/acme/cons/pull/12", Shape: ShapeSingle, Picks: []string{ws.addB}}, plan.PRs[0])
 	require.Len(t, plan.Targets, 1)
 	tg := target(t, plan, "release/v1")
 	assert.Equal(t, "v2.15", tg.Line)
@@ -164,7 +176,7 @@ func TestBackportMakesABranchWithThePickedCommitAndItsOrigin(t *testing.T) {
 func TestBackportWorksTheNewestLineFirstAndEachTargetOnce(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"2.14", "release/v1", "v2.15"}, PR: 12, NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"2.14", "release/v1", "v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.NoError(t, err)
 	require.Len(t, plan.Targets, 2, "v2.15 and release/v1 are one target")
@@ -175,9 +187,11 @@ func TestBackportWorksTheNewestLineFirstAndEachTargetOnce(t *testing.T) {
 
 func TestBackportRefusesAPRThatIsNotMerged(t *testing.T) {
 	ws, ex := newBackWS(t)
-	ws.host.detail.Merged = false
+	d := ws.host.details[12]
+	d.Merged = false
+	ws.host.details[12] = d
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.ErrorContains(t, err, "not merged")
 	assert.False(t, ws.branchExists("bot/*"))
@@ -186,7 +200,7 @@ func TestBackportRefusesAPRThatIsNotMerged(t *testing.T) {
 func TestBackportRefusesATargetThatIsTheBranchThePRWasMergedTo(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v2.15", "main"}, PR: 12, NoPush: true}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15", "main"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.ErrorContains(t, err, "main")
 	require.ErrorContains(t, err, "merged to")
@@ -196,7 +210,7 @@ func TestBackportRefusesATargetThatIsTheBranchThePRWasMergedTo(t *testing.T) {
 func TestBackportRefusesATargetTheProjectDoesNotHave(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v9.9"}, PR: 12, NoPush: true}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v9.9"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.ErrorContains(t, err, "v9.9")
 }
@@ -207,7 +221,7 @@ func TestBackportOfWhatATargetAlreadyHoldsMakesNoBranch(t *testing.T) {
 	runGit(t, ws.up, "cherry-pick", "-x", ws.addB)
 	runGit(t, ws.up, "checkout", "--quiet", "main")
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PR: 12, NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.NoError(t, err)
 	done := target(t, plan, "release/v1")
@@ -222,7 +236,7 @@ func TestBackportOfWhatATargetAlreadyHoldsMakesNoBranch(t *testing.T) {
 func TestBackportDryRunMakesNothingThatStays(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true, DryRun: true}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true, DryRun: true}, ex)
 
 	require.NoError(t, err)
 	tg := target(t, plan, "release/v1")
@@ -247,7 +261,7 @@ func backPublishing(t *testing.T) (*backWS, *proposal.Executor, *fakeRemote, *lo
 func TestBackportPushesAndOpensOnePRForEachTarget(t *testing.T) {
 	ws, ex, _, lg := backPublishing(t)
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PR: 12}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PRs: []int{12}}, ex)
 
 	require.NoError(t, err)
 	assert.Equal(t, 2, lg.Count("create "))
@@ -261,14 +275,14 @@ func TestBackportPushesAndOpensOnePRForEachTarget(t *testing.T) {
 
 func TestBackportAnAlreadyOpenPRMakesNothing(t *testing.T) {
 	ws, ex, remote, lg := backPublishing(t)
-	checked, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true}, ex)
+	checked, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 	require.NoError(t, err)
 	m, ok := proposal.ParseMarker(target(t, checked, "release/v1").Preview.Body)
 	require.True(t, ok, "the body carries a marker")
 	remote.Open = pulls.Open{PRs: []pulls.PR{proposaltest.PR(77, "danpock", m.String())}}
 	runGit(t, ws.clone, "branch", "-D", target(t, checked, "release/v1").Preview.Branch)
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}}, ex)
 
 	require.NoError(t, err)
 	res := target(t, plan, "release/v1").Result
@@ -280,14 +294,14 @@ func TestBackportAnAlreadyOpenPRMakesNothing(t *testing.T) {
 
 func TestBackportOfAnotherPRToTheSameTargetIsNotTheSameBackport(t *testing.T) {
 	ws, ex, remote, lg := backPublishing(t)
-	checked, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true}, ex)
+	checked, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 	require.NoError(t, err)
 	m, _ := proposal.ParseMarker(target(t, checked, "release/v1").Preview.Body)
 	m.Source = "backport-9" // another PR's backport, open to the same branch
 	remote.Open = pulls.Open{PRs: []pulls.PR{proposaltest.PR(70, "danpock", m.String())}}
 	runGit(t, ws.clone, "branch", "-D", target(t, checked, "release/v1").Preview.Branch)
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}}, ex)
 
 	require.NoError(t, err)
 	assert.Equal(t, proposal.ResultOpened, target(t, plan, "release/v1").Result.Status)
@@ -307,13 +321,14 @@ func TestBackportAConflictWaitsForThePersonAndGoesOnWhenItIsResolved(t *testing.
 	ws.merged(ws.newImage, "Update image")
 	resolver := resolving("image: merged\n")
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true, Resolver: resolver}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true, Resolver: resolver}, ex)
 
 	require.NoError(t, err)
 	require.Len(t, resolver.seen, 1)
 	c := resolver.seen[0]
 	assert.Equal(t, "release/v1", c.Branch)
 	assert.Equal(t, "v2.15", c.Line)
+	assert.Equal(t, 12, c.PR)
 	assert.Equal(t, ws.newImage, c.Commit)
 	assert.Equal(t, "Update image", c.Subject)
 	assert.Equal(t, []string{"build.yaml"}, c.Files)
@@ -340,7 +355,7 @@ func TestBackportAskedToContinueWithMarkersLeftAsksAgainNamingThem(t *testing.T)
 		return Continue, nil
 	}}
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true, Resolver: resolver}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true, Resolver: resolver}, ex)
 
 	require.NoError(t, err)
 	require.Len(t, resolver.seen, 2)
@@ -353,7 +368,7 @@ func TestBackportAbandoningAConflictEndsTheRunAndLeavesTheCloneAsFound(t *testin
 	ws.merged(ws.newImage, "Update image")
 	resolver := &scripted{do: func(Conflict) (Choice, error) { return Abort, nil }}
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PR: 12, NoPush: true, Resolver: resolver}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PRs: []int{12}, NoPush: true, Resolver: resolver}, ex)
 
 	require.ErrorIs(t, err, ErrAborted)
 	assert.Len(t, resolver.seen, 1)
@@ -370,7 +385,7 @@ func TestBackportWithNobodyToAskAbandonsAConflictAndNamesTheFiles(t *testing.T) 
 	ws, ex := newBackWS(t)
 	ws.merged(ws.newImage, "Update image")
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true}, ex)
 
 	require.ErrorIs(t, err, ErrAborted)
 	require.ErrorContains(t, err, "build.yaml")
@@ -385,7 +400,7 @@ func TestBackportAResolverThatFailsEndsTheRunWithItsError(t *testing.T) {
 	boom := errors.New("the editor would not open")
 	resolver := &scripted{do: func(Conflict) (Choice, error) { return 0, boom }}
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, NoPush: true, Resolver: resolver}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, NoPush: true, Resolver: resolver}, ex)
 
 	require.ErrorIs(t, err, boom)
 	assert.Empty(t, runGit(t, ws.clone, "status", "--porcelain"), "the pick is abandoned, not left half done")
@@ -403,7 +418,7 @@ func TestBackportDryRunReportsAConflictWithoutAskingAndGoesOn(t *testing.T) {
 	ws.merged(ws.newImage, "Update image")
 	resolver := &scripted{do: func(Conflict) (Choice, error) { return Continue, nil }}
 
-	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PR: 12, NoPush: true, DryRun: true, Resolver: resolver}, ex)
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PRs: []int{12}, NoPush: true, DryRun: true, Resolver: resolver}, ex)
 
 	require.NoError(t, err, "a dry run waits for nobody, so a conflict is a finding and not a stop")
 	assert.Empty(t, resolver.seen)
@@ -421,7 +436,7 @@ func TestBackportDryRunReportsAConflictWithoutAskingAndGoesOn(t *testing.T) {
 func TestBackportRefusesAPRURLOfAnotherRepoThanTheProject(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, Repo: "acme/other", NoPush: true}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, Repo: "acme/other", NoPush: true}, ex)
 
 	require.ErrorContains(t, err, "acme/other")
 	require.ErrorContains(t, err, "acme/cons")
@@ -431,7 +446,7 @@ func TestBackportRefusesAPRURLOfAnotherRepoThanTheProject(t *testing.T) {
 func TestBackportAcceptsAPRURLOfTheProjectsRepo(t *testing.T) {
 	ws, ex := newBackWS(t)
 
-	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, Repo: "acme/cons", NoPush: true}, ex)
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PRs: []int{12}, Repo: "acme/cons", NoPush: true}, ex)
 
 	require.NoError(t, err)
 }
