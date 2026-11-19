@@ -650,7 +650,67 @@ func enactAll(ctx context.Context, g Git, ex *proposal.Executor, sess *proposal.
 // the actor's own that the new PR covers, every one of their PRs among its own, are closed once it
 // is open; every other is only reported, and a PR of someone else's is never touched. The identical
 // set is the decision's own.
-func overlap(_ context.Context, _ *proposal.Session, _ string, _ *state, _ *proposal.Decided) {
+func overlap(ctx context.Context, sess *proposal.Session, repo string, st *state, d *proposal.Decided) {
+	if sess.Pub == nil || d.Done != nil {
+		return
+	}
+	open, err := sess.Pub.Remote.OpenForBase(ctx, repo, st.tg.Branch, 0)
+	if err != nil {
+		d.Warnings = append(d.Warnings, fmt.Sprintf("could not look for open backports that overlap this one: %v", err))
+		return
+	}
+	for _, p := range open.PRs {
+		m, ok := proposal.ParseMarker(p.Body)
+		if !ok || m.Consumer != repo || m.Target != st.tg.Branch || m.Source == st.marker.Source {
+			continue
+		}
+		set, ok := strings.CutPrefix(m.Source, "backport-")
+		if !ok {
+			continue
+		}
+		theirs := parseNumbers(set)
+		shared := common(theirs, st.tg.PRs)
+		switch {
+		case len(shared) == 0:
+		case p.Author != sess.Me:
+			d.Warnings = append(d.Warnings, fmt.Sprintf("#%d by %s also backports %s: it is not yours, so it is left open", p.Number, p.Author, hashed(shared)))
+		case len(shared) == len(theirs):
+			d.Decision.Supersede = append(d.Decision.Supersede, p)
+		default:
+			d.Warnings = append(d.Warnings, fmt.Sprintf("#%d also backports %s: it is left open, since this one does not cover all of its PRs", p.Number, hashed(shared)))
+		}
+	}
+}
+
+// parseNumbers reads the numbers of a marker's source, 12+15. A part that is not a number is left out.
+func parseNumbers(set string) []int {
+	var out []int
+	for _, part := range strings.Split(set, "+") {
+		if n, err := strconv.Atoi(part); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// common are the numbers of a that are also in b.
+func common(a, b []int) []int {
+	var out []int
+	for _, n := range a {
+		if slices.Contains(b, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// hashed names PRs as #12, #15.
+func hashed(numbers []int) string {
+	names := make([]string, len(numbers))
+	for i, n := range numbers {
+		names[i] = "#" + strconv.Itoa(n)
+	}
+	return strings.Join(names, ", ")
 }
 
 // errStopped marks the failure of a resolver, which ends the run as an abandoned conflict does.
@@ -695,11 +755,11 @@ func confirmation(plan *Plan, work []int, decided []proposal.Decided) (proposal.
 
 // joinNumbers names the PRs as #12, #15.
 func joinNumbers(prs []Source) string {
-	names := make([]string, len(prs))
+	numbers := make([]int, len(prs))
 	for i, p := range prs {
-		names[i] = "#" + strconv.Itoa(p.Number)
+		numbers[i] = p.Number
 	}
-	return strings.Join(names, ", ")
+	return hashed(numbers)
 }
 
 // pick makes the picks of a target in the work directory, stopping on a conflict for a person.
