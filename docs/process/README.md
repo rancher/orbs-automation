@@ -31,6 +31,7 @@ An existing project note in [`../projects/`](../projects/README.md) records how 
 
 * [kuberlr-kubectl](kuberlr-kubectl.md)
 * [backup-restore-operator](backup-restore-operator.md)
+* [compliance-operator](compliance-operator.md)
 * [rancher-assets](rancher-assets.md)
 * [scc-operator](scc-operator.md)
 * [shell](shell.md)
