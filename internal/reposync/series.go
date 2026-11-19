@@ -2,13 +2,12 @@ package reposync
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/platform/git"
-	"github.com/rancher/orbs-automation/internal/tagscheme"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // SeriesHolding is what a project holds of the series of one stream, line by line: a file that
@@ -67,7 +66,7 @@ func SeriesHoldings(ctx context.Context, ws Reader, holder *chain.Project) ([]Se
 	if err != nil {
 		return nil, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
 	}
-	tags := newTagSource(ctx, ws)
+	tags := wanted.New(ws)
 	var out []SeriesHolding
 	for _, h := range mine {
 		held := SeriesHolding{Name: h.Name(), Producer: h.Producer().Slug(), Stream: streamOf(h).Name()}
@@ -93,25 +92,6 @@ func streamOf(h *chain.Holding) *chain.Stream {
 		return a.Stream()
 	}
 	return nil
-}
-
-// tagSource reads the tags of a producer from the host, once for each repository in a run.
-type tagSource func(slug string) ([]git.Tag, error)
-
-func newTagSource(ctx context.Context, ws Reader) tagSource {
-	type result struct {
-		tags []git.Tag
-		err  error
-	}
-	seen := map[string]result{}
-	return func(slug string) ([]git.Tag, error) {
-		if r, ok := seen[slug]; ok {
-			return r.tags, r.err
-		}
-		refs, err := ws.UpstreamRefs(ctx, slug)
-		seen[slug] = result{refs.Tags, err}
-		return refs.Tags, err
-	}
 }
 
 // seriesLinesOf is the lines a pulled holding is for: those the holder lists, or every line of
@@ -140,7 +120,7 @@ type held struct {
 }
 
 // heldLine reads one line of a pulled holding at the head of the line's branch.
-func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding, line string) held {
+func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, res *wanted.Resolver, h *chain.Holding, line string) held {
 	out, branch, head, ok := locate(holder, refs, h, line)
 	if !ok {
 		return out
@@ -149,13 +129,13 @@ func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Re
 	rule := chain.RuleSeriesDiffers
 	if h.Kind() == chain.HoldsRelease {
 		rule = chain.RuleReleaseDiffers
-		want, err := wantedRelease(h, line, tags)
-		if err != nil {
-			out.Error = err.Error()
+		want := res.For(ctx, h, line)
+		if want.Err != nil {
+			out.Error = want.Err.Error()
 			return out
 		}
-		rel = want
-		out.release = &want
+		rel = want.Release
+		out.release = &rel
 	}
 	return checkLine(ctx, ws, holder, h, line, branch, head, rule, rel, out)
 }
@@ -214,32 +194,4 @@ func checkLine(ctx context.Context, ws Reader, holder *chain.Project, h *chain.H
 		out.Suggest = fmt.Sprintf("run `gero repo sync %s --line %s` to open a pull request on %s that writes %s, with Edit %s", holder.Name(), line, branch, out.Want, edits[0].Name())
 	}
 	return out
-}
-
-// wantedRelease is the newest stable release of the stream of a release holding for a line:
-// of the series the stream has for the line, or of every tag it accepts when the stream is
-// universal. A holding that accepts all takes a prerelease too.
-func wantedRelease(h *chain.Holding, line string, tags tagSource) (bump.Release, error) {
-	stream := h.Artifact().Stream()
-	slug := h.Producer().Slug()
-	scheme, err := tagscheme.ForStream(stream)
-	if err != nil {
-		return bump.Release{}, err
-	}
-	all, err := tags(slug)
-	if err != nil {
-		return bump.Release{}, fmt.Errorf("read the tags of %s: %w", slug, err)
-	}
-	arg := ""
-	if !stream.Universal() {
-		arg = line
-	}
-	rel, err := tagscheme.ResolveRelease(scheme, slug, all, arg, h.AcceptsAll(), h.AcceptsAll())
-	if errors.Is(err, tagscheme.ErrNoRelease) {
-		return bump.Release{}, fmt.Errorf("%s has no stable release of %s to hold for %s", slug, stream.Name(), line)
-	}
-	if err != nil {
-		return bump.Release{}, err
-	}
-	return bump.ReleaseOf(h, rel.Tag, rel.Commit)
 }

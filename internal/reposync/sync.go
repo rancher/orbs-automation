@@ -81,8 +81,9 @@ type Row struct {
 	holding *chain.Holding
 	// release is the release a release holding is to be written with.
 	release *bump.Release
-	// pinnedBy is, for the row of the virtual holding a pin makes, what its release was derived from.
-	pinnedBy *wanted.Companion
+	// requiredBy is, for the row of the virtual holding a pin makes, the pinning release whose
+	// go.mod requires it.
+	requiredBy string
 }
 
 // marker is what identifies the PR of the branch: the holder, the branch and the
@@ -141,7 +142,7 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		return plan, fmt.Errorf("read the branches of %s: %w", holder.Slug(), err)
 	}
 	var rows []Row
-	tags := newTagSource(ctx, ws)
+	tags := wanted.New(ws)
 	for _, h := range holdings {
 		rows = append(rows, rowsOf(ctx, ws, in, holder, refs, tags, h)...)
 	}
@@ -173,7 +174,7 @@ func pulledHoldingsOf(holder *chain.Project, names []string) ([]*chain.Holding, 
 // say it should. This is where a kind of holding that is pulled says what its value should be:
 // a series is the series its stream has for the line, and a release is the newest stable one of
 // its stream for the line.
-func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding) []Row {
+func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, refs git.Refs, tags *wanted.Resolver, h *chain.Holding) []Row {
 	var rows []Row
 	for _, line := range seriesLinesOf(holder, h) {
 		if len(in.Lines) > 0 && !slices.ContainsFunc(in.Lines, func(l string) bool { return lines.Normalize(l) == lines.Normalize(line) }) {
@@ -217,47 +218,31 @@ func rowFor(h *chain.Holding, got held) Row {
 // requires, as ship derives it. It is a floor, so a newer one is current. A holding whose
 // own value could not be chosen has no companions, and the files that do not require the
 // module have none either.
-func companionRows(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding, line string, got held, row Row) []Row {
+func companionRows(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, tags *wanted.Resolver, h *chain.Holding, line string, got held, row Row) []Row {
 	if got.release == nil || h.Kind() != chain.HoldsRelease {
 		return nil
 	}
 	var rows []Row
-	src := cachedSource{ws, tags}
 	for _, v := range h.Pinned() {
 		if !v.AppliesTo(line) {
 			continue
 		}
-		c := wanted.Derive(ctx, src, v, got.release.Tag)
+		w := tags.ForPinnerTag(ctx, v, got.release.Tag)
 		var read held
-		if c.Error != "" {
-			read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: c.Error}}
-		} else {
-			rel, err := bump.ReleaseOf(v, c.Tag, "")
-			if err != nil {
-				read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: err.Error()}}
-			} else {
-				read = companionLine(ctx, ws, holder, refs, v, line, rel)
-			}
+		switch {
+		case w.Err != nil:
+			read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: w.Err.Error()}}
+		default:
+			read = companionLine(ctx, ws, holder, refs, v, line, w.Release)
 		}
 		if read.Absent {
 			continue
 		}
 		cr := rowFor(v, read)
-		cr.pinnedBy = &c
+		cr.requiredBy = w.RequiredBy
 		rows = append(rows, cr)
 	}
 	return rows
-}
-
-// cachedSource is the reader of the run with the tags of each repository read once.
-type cachedSource struct {
-	Reader
-	tags tagSource
-}
-
-func (c cachedSource) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
-	tags, err := c.tags(slug)
-	return git.Refs{Tags: tags}, err
 }
 
 // syncBranches groups the rows by the branch they are in, in the order they come, and
@@ -443,8 +428,8 @@ func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, e
 // sourceOf says where the value of a row comes from, for the PR to read: the series its stream
 // has for the line, or the release it is written with.
 func sourceOf(r Row) string {
-	if r.pinnedBy != nil {
-		return fmt.Sprintf("%s: `%s`, which `%s` requires", r.Holding, r.release.Tag, r.pinnedBy.RequiredBy)
+	if r.requiredBy != "" {
+		return fmt.Sprintf("%s: `%s`, which `%s` requires", r.Holding, r.release.Tag, r.requiredBy)
 	}
 	stream := streamOf(r.holding)
 	if r.release != nil {
