@@ -154,7 +154,7 @@ func TestBackportMakesABranchWithThePickedCommitAndItsOrigin(t *testing.T) {
 	assert.Contains(t, tg.Preview.Body, "gero:ship")
 	require.NotNil(t, tg.Result)
 	assert.Equal(t, proposal.ResultCommitted, tg.Result.Status)
-	assert.Equal(t, "b", strings.TrimSpace(ws.onBranch(tg.Preview.Branch, "b.txt")))
+	assert.Equal(t, "Add b", strings.TrimSpace(ws.onBranch(tg.Preview.Branch, "b.txt")))
 	message := runGit(t, ws.clone, "log", "-1", "--format=%B", tg.Preview.Branch)
 	assert.Contains(t, message, "(cherry picked from commit "+ws.addB+")")
 	assert.Equal(t, "Author", runGit(t, ws.clone, "log", "-1", "--format=%an", tg.Preview.Branch))
