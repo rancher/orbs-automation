@@ -417,3 +417,21 @@ func TestBackportDryRunReportsAConflictWithoutAskingAndGoesOn(t *testing.T) {
 	assert.Equal(t, proposal.ResultWouldCommit, clean.Result.Status, "the next target was tried")
 	assert.Empty(t, runGit(t, ws.clone, "status", "--porcelain"))
 }
+
+func TestBackportRefusesAPRURLOfAnotherRepoThanTheProject(t *testing.T) {
+	ws, ex := newBackWS(t)
+
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, Repo: "acme/other", NoPush: true}, ex)
+
+	require.ErrorContains(t, err, "acme/other")
+	require.ErrorContains(t, err, "acme/cons")
+	assert.Empty(t, runGit(t, ws.clone, "branch", "--list", "bot/*"))
+}
+
+func TestBackportAcceptsAPRURLOfTheProjectsRepo(t *testing.T) {
+	ws, ex := newBackWS(t)
+
+	_, err := Run(bg, ws, Input{Lines: []string{"v2.15"}, PR: 12, Repo: "acme/cons", NoPush: true}, ex)
+
+	require.NoError(t, err)
+}
