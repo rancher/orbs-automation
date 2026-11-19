@@ -30,7 +30,7 @@ func graph(t *testing.T) *chain.Graph {
 		chaintest.Doc("Artifact", "la-mod", "{stream: la}", "  kind: gomod\n  name: github.com/acme/la\n"),
 		chaintest.Doc("Artifact", "wr-mod", "{stream: wr, pins: la-mod}", "  kind: gomod\n  name: github.com/acme/wr\n"),
 		chaintest.Doc("Project", "cons", "", "  repo: {name: acme/cons}\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: release/v7.x}]\n"),
-		chaintest.Doc("Holding", "cons-holds-wr", "{project: cons, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all}\n"),
+		chaintest.Doc("Holding", "cons-holds-wr", "{project: cons, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.16}}\n"),
 		chaintest.Doc("Holding", "cons-holds-la", "{project: cons, artifact: la-mod}", "  at: {file: go.mod, key: github.com/acme/la, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", lines: {until: v2.15}}\n"),
 		chaintest.Doc("Holding", "cons-holds-prod", "{project: cons, stream: prod}", "  at: {file: build.yaml, key: prod}\n  holds: {kind: series, form: \"v{major}\"}\n"),
 	)
