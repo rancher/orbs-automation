@@ -81,6 +81,30 @@ type HeldValue struct {
 	// is expected, when it acknowledges it.
 	Differ       bool   `json:"differ,omitempty"`
 	DifferReason string `json:"differReason,omitempty"`
+	// Pin is set for the virtual holding a pin makes: it is read against what the holding
+	// that pins it requires, and not against the latest release of its own stream.
+	Pin *Pin `json:"pin,omitempty"`
+}
+
+// Pin is how a virtual holding stands against the release the pinning holding requires
+// of it (lasso, for wrangler's go.mod): a floor, so what is held is right when it is at
+// least that.
+type Pin struct {
+	Pinner string `json:"pinner"` // the holding that pins it
+	// Held is the floor the release the pinning holding holds now puts on it: whether the
+	// branch is consistent as it stands. Wanted is the floor of the release the pinning
+	// holding would be brought to, which is what repo sync writes.
+	Held   *PinFloor `json:"held,omitempty"`
+	Wanted *PinFloor `json:"wanted,omitempty"`
+}
+
+// PinFloor is one floor a pin puts on a virtual holding, and how the holding stands against it.
+type PinFloor struct {
+	RequiredBy string   `json:"requiredBy"` // the pinning release whose file says so, such as acme/wr v1.7.4
+	Verdict    *Verdict `json:"verdict,omitempty"`
+	// Error is why no floor could be worked out: the pinner holds no release of its stream,
+	// or the release requires a version no release has.
+	Error string `json:"error,omitempty"`
 }
 
 // HeldLocation is what one location of a holding holds in a branch.
