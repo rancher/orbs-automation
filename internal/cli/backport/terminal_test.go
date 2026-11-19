@@ -43,7 +43,7 @@ func contains(list []string, s string) bool {
 }
 
 var conflict = backport.Conflict{
-	Branch: "release/v2.15", Line: "v2.15", Commit: "abcdef1234", Subject: "Update image",
+	Branch: "release/v2.15", Line: "v2.15", PR: 15, Commit: "abcdef1234", Subject: "Update image",
 	Dir: "/work/tree", Files: []string{"build.yaml", "app/gen.go"},
 }
 
@@ -55,7 +55,7 @@ func TestTerminalTellsWhereTheConflictIsOpensTheEditorAndWaitsForContinue(t *tes
 	require.NoError(t, err)
 	assert.Equal(t, backport.Continue, got)
 	assert.Equal(t, []string{"goland /work/tree"}, s.started)
-	for _, want := range []string{"v2.15", "Update image", "abcdef1", "/work/tree", "build.yaml", "app/gen.go"} {
+	for _, want := range []string{"v2.15", "#15", "Update image", "abcdef1", "/work/tree", "build.yaml", "app/gen.go"} {
 		assert.Contains(t, s.out.String(), want)
 	}
 }
