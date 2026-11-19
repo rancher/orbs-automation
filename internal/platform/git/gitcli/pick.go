@@ -196,11 +196,35 @@ func HoldsPickOf(ctx context.Context, dir, ref, commit string) (bool, error) {
 }
 
 // IsAncestor reports whether a is an ancestor of b, or the same commit.
-func IsAncestor(ctx context.Context, dir, a, b string) (bool, error) { return false, nil }
+func IsAncestor(ctx context.Context, dir, a, b string) (bool, error) {
+	_, err := inDir(ctx, dir, "merge-base", "--is-ancestor", a, b)
+	switch {
+	case err == nil:
+		return true, nil
+	case exitCode(err) == 1:
+		return false, nil
+	}
+	return false, err
+}
 
 // PatchPresent reports whether upstream already has a commit with the same change as commit, by
 // patch-id: what git cherry compares. It finds a pick made without -x, or squashed in without its
 // line. A merge commit has no patch-id and is never found.
 func PatchPresent(ctx context.Context, dir, upstream, commit string) (bool, error) {
+	// With the commit's parent as the limit, the only commit on the head side is the commit itself,
+	// and it is compared with what upstream has that the commit's history does not.
+	out, err := inDir(ctx, dir, "cherry", upstream, commit, commit+"^")
+	if err != nil {
+		// A root commit has no parent to limit by, and nothing before it to be found in.
+		if n, perr := ParentCount(ctx, dir, commit); perr == nil && n == 0 {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if sign, hash, ok := strings.Cut(strings.TrimSpace(line), " "); ok && hash == commit {
+			return sign == "-", nil
+		}
+	}
 	return false, nil
 }
