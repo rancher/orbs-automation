@@ -210,7 +210,17 @@
           "description": "outside our organization"
         },
         "managedBy": {
-          "type": "string"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
         },
         "defaultBranch": {
           "type": "string"

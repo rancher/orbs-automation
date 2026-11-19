@@ -88,6 +88,8 @@ func ValidateSetFrom(objs []Object, origin func(Object) string, ctx config.Conte
 	s.projects()
 	s.rancherLines()
 	s.knownLines()
+	s.teams()
+	s.knownTeams()
 	s.artifacts()
 	s.pins()
 	s.pinOverlaps()
@@ -480,6 +482,49 @@ func (s *set) rancherLines() {
 	}
 }
 
+// teams reports a Teams document after the first: there is one set of teams.
+func (s *set) teams() {
+	first := ""
+	for _, o := range s.objs {
+		if _, ok := o.(*Teams); !ok {
+			continue
+		}
+		if first == "" {
+			first = o.GetName()
+			continue
+		}
+		r := s.at(o)
+		r.Errorf("spec", "only one Teams document is allowed, and %q is the first", first)
+		s.add(r)
+	}
+}
+
+// knownTeams reports each team a Project's managedBy names that Teams does not
+// list. shared is not a team and is not listed.
+func (s *set) knownTeams() {
+	known := map[string]bool{ManagedByShared: true}
+	for _, o := range s.objs {
+		if ts, ok := o.(*Teams); ok {
+			for _, t := range ts.Spec.Teams {
+				known[t.ID] = true
+			}
+		}
+	}
+	for _, o := range s.objs {
+		p, ok := o.(*Project)
+		if !ok {
+			continue
+		}
+		r := s.at(o)
+		for i, id := range p.Spec.Repo.ManagedBy {
+			if !known[id] {
+				r.Errorf(fmt.Sprintf("spec.repo.managedBy[%d]", i), "%s is not in Teams", id)
+			}
+		}
+		s.add(r)
+	}
+}
+
 // artifacts reports an Artifact of a kind and name that an earlier Artifact of
 // the same Project has. A Go module and a file are the exception: the same module,
 // or the same file of a release (the k3s binary), is an Artifact of each minor's
@@ -653,9 +698,10 @@ func (s *set) editSteps() {
 }
 
 // hasTeam reports whether a team manages the repo: it names one that is not
-// shared, which no team owns, and is not outside the organization.
+// shared, which no team owns, and is not outside the organization. A shared
+// managedBy is always alone, so it is the first.
 func hasTeam(repo Repo) bool {
-	return repo.ManagedBy != "" && repo.ManagedBy != ManagedByShared && !repo.External
+	return len(repo.ManagedBy) > 0 && repo.ManagedBy[0] != ManagedByShared && !repo.External
 }
 
 // acknowledgements checks what each document says is expected, and marks the

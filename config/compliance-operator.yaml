@@ -1,13 +1,12 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
-# compliance-operator: one release stream for each line, one image. The security team and the Infracloud team own it together;
-# managedBy takes one slug, so a joint one stands for both until it can be a list.
+# compliance-operator: one release stream for each line, one image. The Rancher security team and the Infracloud team own it together.
 # The minor is the Rancher line less ten (v1.6 is v2.16). Lines at v2.11 and before are ended and not in config.
 apiVersion: gero/v1alpha2
 kind: Project
 name: compliance-operator
 spec:
   aliases: ["compliance"]
-  repo: {name: rancher/compliance-operator, managedBy: security-infracloud}
+  repo: {name: rancher/compliance-operator, managedBy: [rst, infracloud]}
   branches:
     layout: perLine
     lines:

@@ -12,8 +12,9 @@ Every file is YAML. A document has `apiVersion`, `kind`, `name`, optional `refs`
 | `Holding` | Where a piece of a producer's release lives in a repo, and how it is written |
 | `Edit` | Extra steps when shipping, and a named rule that needs code |
 | `RancherLines` | The set of Rancher lines and facts about each |
+| `Teams` | The teams that manage projects: each id gero uses, and the GitHub team it stands for |
 
-File names here: one file for each project (`<name>.yaml`), with its stream, artifacts and holdings, and `rancher.lines.yaml`.
+File names here: one file for each project (`<name>.yaml`), with its stream, artifacts and holdings, `rancher.lines.yaml`, and `teams.yaml`.
 
 ## Line phases
 

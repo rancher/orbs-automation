@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Teams",
+  "$defs": {
+    "Acknowledgement": {
+      "properties": {
+        "rule": {
+          "type": "string",
+          "description": "the id of the rule of the warning"
+        },
+        "reason": {
+          "type": "string",
+          "description": "why the warning is expected"
+        },
+        "lines": {
+          "$ref": "#/$defs/Range",
+          "description": "only for a warning about these lines; every line when not given"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Acknowledgement says a warning of a rule on this document is expected, so it is not shown as one."
+    },
+    "Range": {
+      "properties": {
+        "since": {
+          "type": "string",
+          "description": "a line id: from this line on"
+        },
+        "until": {
+          "type": "string",
+          "description": "a line id: up to and including this line"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Range limits something to the Rancher lines from Since to Until, either of which may be left out."
+    },
+    "Team": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "github": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Team is one team: the id every other place names it by, and its GitHub team, bare for a team of the rancher organization or @org/team for another."
+    },
+    "Teams": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Teams"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
+        "spec": {
+          "$ref": "#/$defs/TeamsSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Teams is the set of teams that manage Projects: each an id gero uses, and the GitHub team it stands for."
+    },
+    "TeamsSpec": {
+      "properties": {
+        "teams": {
+          "items": {
+            "$ref": "#/$defs/Team"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "TeamsSpec is the fields of Teams."
+    }
+  },
+  "title": "gero gero/v1alpha2 Teams"
+}

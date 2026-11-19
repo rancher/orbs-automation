@@ -14,6 +14,7 @@ func AddToScheme(s *meta.Scheme) {
 	s.AddKind(APIVersion, KindHolding, func() Object { return new(Holding) })
 	s.AddKind(APIVersion, KindEdit, func() Object { return new(Edit) })
 	s.AddKind(APIVersion, KindRancherLines, func() Object { return new(RancherLines) })
+	s.AddKind(APIVersion, KindTeams, func() Object { return new(Teams) })
 }
 
 // Decode reads every document of a YAML stream of this version into the typed

@@ -635,6 +635,7 @@ func TestAStepFromTheProducerNeedsAProducerATeamManages(t *testing.T) {
 	step := "  postEdit:\n    - {run: x, from: producer}\n"
 	build := func(producer string) []string {
 		return []string{
+			doc("Teams", "rancher", "", "  teams: [{id: orbs, github: orbs}, {id: rst, github: cloudnative-security}]\n"),
 			holder,
 			doc("Project", "q", "", producer),
 			doc("Stream", "s", "{project: q}", streamSpec),
@@ -646,6 +647,9 @@ func TestAStepFromTheProducerNeedsAProducerATeamManages(t *testing.T) {
 
 	t.Run("a team manages it", func(t *testing.T) {
 		assert.Empty(t, validateSet(t, build("  repo: {name: acme/b, managedBy: orbs}\n")...).Findings)
+	})
+	t.Run("a list of teams manages it", func(t *testing.T) {
+		assert.Empty(t, validateSet(t, build("  repo: {name: acme/b, managedBy: [orbs, rst]}\n")...).Findings)
 	})
 	for name, repo := range map[string]string{
 		"no team":         "  repo: {name: acme/b}\n",
@@ -815,4 +819,38 @@ func TestTwoPinsOfOneModuleForDifferentLinesDoNotOverlap(t *testing.T) {
 	)...)
 
 	assert.Empty(t, rep.Findings)
+}
+
+func TestEveryTeamAManagedByNamesIsInTeams(t *testing.T) {
+	teams := doc("Teams", "rancher", "", "  teams:\n    - {id: orbs, github: orbs}\n    - {id: rst, github: cloudnative-security}\n")
+	project := func(by string) string { return doc("Project", "p", "", "  repo: {name: acme/a, managedBy: "+by+"}\n") }
+
+	for name, by := range map[string]string{"one": "orbs", "a list": "[orbs, rst]", "shared alone": "shared"} {
+		t.Run(name+" is known", func(t *testing.T) {
+			assert.Empty(t, validateSet(t, teams, project(by)).Findings)
+		})
+	}
+	t.Run("an id that is not in Teams", func(t *testing.T) {
+		rep := validateSet(t, teams, project("[orbs, hostbusters]"))
+
+		assert.True(t, hasSetError(rep, `Project "p"`, "spec.repo.managedBy[1]", "hostbusters is not in Teams"), "%v", rep.Findings)
+	})
+	t.Run("a project that names no team needs no Teams", func(t *testing.T) {
+		assert.Empty(t, validateSet(t, doc("Project", "p", "", projectSpec)).Findings)
+	})
+	t.Run("no Teams document at all", func(t *testing.T) {
+		rep := validateSet(t, project("orbs"))
+
+		assert.True(t, hasSetError(rep, `Project "p"`, "spec.repo.managedBy[0]", "orbs is not in Teams"), "%v", rep.Findings)
+	})
+}
+
+func TestThereIsOneTeamsDocument(t *testing.T) {
+	teams := func(name string) string {
+		return doc("Teams", name, "", "  teams: [{id: orbs, github: orbs}]\n")
+	}
+
+	rep := validateSet(t, teams("rancher"), teams("other"))
+
+	assert.True(t, hasSetError(rep, `Teams "other"`, "spec", "only one Teams document"), "%v", rep.Findings)
 }

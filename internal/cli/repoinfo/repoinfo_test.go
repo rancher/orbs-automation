@@ -228,14 +228,14 @@ func TestInfoSaysWhoManagesTheProjectAndWhetherTheActiveTeamOwnsIt(t *testing.T)
 	tests := []struct {
 		name       string
 		repo       string
-		want       string
+		want       []string
 		wantOwned  bool
 		wantShared bool
 	}{
-		{"the active team's", "{name: rancher/rancher, managedBy: orbs}", "orbs", true, false},
-		{"another team's", "{name: rancher/rancher, managedBy: release-team}", "release-team", false, false},
-		{"shared", "{name: rancher/rancher, managedBy: shared}", "shared", false, true},
-		{"unset is unspecified", "{name: rancher/rancher}", "", false, false},
+		{"the active team's", "{name: rancher/rancher, managedBy: orbs}", []string{"orbs"}, true, false},
+		{"another team's", "{name: rancher/rancher, managedBy: release-team}", []string{"release-team"}, false, false},
+		{"shared", "{name: rancher/rancher, managedBy: shared}", []string{"shared"}, false, true},
+		{"unset is unspecified", "{name: rancher/rancher}", nil, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -263,7 +263,7 @@ func TestInfoOwnershipFollowsTheActiveTeam(t *testing.T) {
 }
 
 func TestRenderTextShowsManagedByNextToOwned(t *testing.T) {
-	out := renderText(Info{Slug: "rancher/rancher", Owned: true, ManagedBy: "orbs"}, nil)
+	out := renderText(Info{Slug: "rancher/rancher", Owned: true, ManagedBy: []string{"orbs"}}, nil)
 	assert.Regexp(t, `owned +yes\n +managed by +orbs\n`, out)
 
 	out = renderText(Info{Slug: "rancher/rancher-assets"}, nil)
@@ -271,9 +271,9 @@ func TestRenderTextShowsManagedByNextToOwned(t *testing.T) {
 }
 
 func TestInfoJSONCarriesManagedByAndLeavesItOutWhenUnspecified(t *testing.T) {
-	with, err := renderJSON(Info{Slug: "a/b", ManagedBy: "release-team"})
+	with, err := renderJSON(Info{Slug: "a/b", ManagedBy: []string{"release-team"}})
 	require.NoError(t, err)
-	assert.Contains(t, with, `"managedBy": "release-team"`)
+	assert.Contains(t, with, `"managedBy": [`)
 
 	without, err := renderJSON(Info{Slug: "a/b"})
 	require.NoError(t, err)

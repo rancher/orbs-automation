@@ -163,3 +163,17 @@ func TestProjectConfigErrors(t *testing.T) {
 
 	assert.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestChainRefusesAnActiveTeamThatIsNotInTeams(t *testing.T) {
+	files := map[string]string{
+		"a.yaml": "apiVersion: gero/v1alpha2\nkind: Teams\nname: rancher\nspec:\n  teams: [{id: orbs, github: orbs}]\n---\n" + projectDocV2("a", "o/a"),
+	}
+	dir := chainConfig(t, files)
+
+	_, err := open(settings(t, "", nil, map[string]string{"central-config-dir": dir, "team": "nope"}), "/elsewhere", nil).Chain()
+	require.Error(t, err)
+	assert.ErrorContains(t, err, `"nope"`)
+
+	_, err = open(settings(t, "", nil, map[string]string{"central-config-dir": dir, "team": "orbs"}), "/elsewhere", nil).Chain()
+	assert.NoError(t, err)
+}

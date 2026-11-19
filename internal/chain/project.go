@@ -85,27 +85,34 @@ func (p *Project) Slug() string { return p.Doc.Spec.Repo.Name }
 // Aliases returns the shorthand names the Project is also found by.
 func (p *Project) Aliases() []string { return p.Doc.Spec.Aliases }
 
-// ManagedBy is the team responsible for the project, as written: none when it
-// names none, and always none for a repo outside the organization. It may be
-// shared (Shared).
-func (p *Project) ManagedBy() string {
+// ManagedBy is the ids of the teams responsible for the project, as written: none
+// when it names none, and always none for a repo outside the organization. It may
+// be shared alone (Shared).
+func (p *Project) ManagedBy() []string {
 	if p.Doc.Spec.Repo.External {
-		return ""
+		return nil
 	}
 	return p.Doc.Spec.Repo.ManagedBy
 }
 
-// Owned reports whether the team owns the project: it is the one that manages it,
-// and gero ships from what the active team owns. A project nobody manages, a
+// ManagedByLabel is ManagedBy as one string for a message: the ids joined by a
+// comma, or empty when there are none.
+func (p *Project) ManagedByLabel() string { return strings.Join(p.ManagedBy(), ", ") }
+
+// Owned reports whether the team owns the project: it is one of those that manage
+// it, and gero ships from what the active team owns. A project nobody manages, a
 // shared one and one outside the organization are owned by no team.
 func (p *Project) Owned(team string) bool {
 	by := p.ManagedBy()
-	return team != "" && by == team && by != v1alpha2.ManagedByShared
+	return team != "" && team != v1alpha2.ManagedByShared && slices.Contains(by, team)
 }
 
 // Shared reports whether the project is managed by every team together: no team
 // owns it, and any may write into it.
-func (p *Project) Shared() bool { return p.ManagedBy() == v1alpha2.ManagedByShared }
+func (p *Project) Shared() bool {
+	by := p.ManagedBy()
+	return len(by) == 1 && by[0] == v1alpha2.ManagedByShared
+}
 
 // DefaultBranch is the repo's default branch.
 func (p *Project) DefaultBranch() string { return p.Doc.Spec.Repo.DefaultBranch }

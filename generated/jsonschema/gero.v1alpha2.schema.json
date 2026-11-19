@@ -668,7 +668,17 @@
           "description": "outside our organization"
         },
         "managedBy": {
-          "type": "string"
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ]
         },
         "defaultBranch": {
           "type": "string"
@@ -837,6 +847,85 @@
       "additionalProperties": false,
       "type": "object",
       "description": "StreamSpec is the fields of a Stream."
+    },
+    "Team": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "github": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "Team is one team: the id every other place names it by, and its GitHub team, bare for a team of the rancher organization or @org/team for another."
+    },
+    "Teams": {
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "const": "gero/v1alpha2"
+        },
+        "kind": {
+          "type": "string",
+          "const": "Teams"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+          "description": "Name is unique within the kind, and is how refs and logs name the document."
+        },
+        "refs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "type": "object",
+          "description": "Refs holds every reference to another document: names only, and the key\nsays which kind the name is of."
+        },
+        "acknowledge": {
+          "items": {
+            "$ref": "#/$defs/Acknowledgement"
+          },
+          "type": "array",
+          "description": "Acknowledge says which warnings of this document are expected, and why."
+        },
+        "spec": {
+          "$ref": "#/$defs/TeamsSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "spec"
+      ],
+      "description": "Teams is the set of teams that manage Projects: each an id gero uses, and the GitHub team it stands for."
+    },
+    "TeamsSpec": {
+      "properties": {
+        "teams": {
+          "items": {
+            "$ref": "#/$defs/Team"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "TeamsSpec is the fields of Teams."
     }
   },
   "allOf": [
@@ -928,6 +1017,21 @@
       },
       "then": {
         "$ref": "#/$defs/Stream"
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "Teams"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "$ref": "#/$defs/Teams"
       }
     }
   ],

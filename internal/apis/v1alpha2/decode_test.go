@@ -57,9 +57,9 @@ func TestDecodeFixture(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, 85, total)
+	assert.Equal(t, 86, total)
 	assert.Equal(t, map[string]int{
-		KindProject: 19, KindStream: 18, KindArtifact: 21, KindHolding: 22, KindEdit: 4, KindRancherLines: 1,
+		KindProject: 19, KindStream: 18, KindArtifact: 21, KindHolding: 22, KindEdit: 4, KindRancherLines: 1, KindTeams: 1,
 	}, kinds)
 }
 
@@ -76,6 +76,38 @@ spec:
 	assert.Equal(t, KindProject, p.GetKind())
 	assert.Equal(t, "shell", p.GetName())
 	assert.Empty(t, p.GetRefs())
+}
+
+func TestDecodeManagedByIsOneIdOrAList(t *testing.T) {
+	for name, tt := range map[string]struct {
+		written string
+		want    ManagedBy
+	}{
+		"one id":        {"orbs", ManagedBy{"orbs"}},
+		"a list":        {"[infracloud, rst]", ManagedBy{"infracloud", "rst"}},
+		"a list of one": {"[orbs]", ManagedBy{"orbs"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := decodeOne[*Project](t, "apiVersion: gero/v1alpha2\nkind: Project\nname: p\nspec:\n  repo: {name: a/b, managedBy: "+tt.written+"}\n")
+
+			assert.Equal(t, tt.want, p.Spec.Repo.ManagedBy)
+		})
+	}
+}
+
+func TestDecodeTeams(t *testing.T) {
+	ts := decodeOne[*Teams](t, `
+apiVersion: gero/v1alpha2
+kind: Teams
+name: rancher
+spec:
+  teams:
+    - {id: orbs, github: orbs}
+    - {id: scc, github: "@SUSE/scc-team"}
+`)
+
+	assert.Equal(t, KindTeams, ts.GetKind())
+	assert.Equal(t, []Team{{ID: "orbs", GitHub: "orbs"}, {ID: "scc", GitHub: "@SUSE/scc-team"}}, ts.Spec.Teams)
 }
 
 func TestDecodeProject(t *testing.T) {
@@ -102,7 +134,7 @@ spec:
       - {line: v2.14, branch: {dev: dev-v2.14, stable: release-v2.14}}
 `)
 
-	assert.Equal(t, Repo{Name: "rancher/charts", ManagedBy: "release-team", DefaultBranch: "dev-v2.16"}, p.Spec.Repo)
+	assert.Equal(t, Repo{Name: "rancher/charts", ManagedBy: ManagedBy{"release-team"}, DefaultBranch: "dev-v2.16"}, p.Spec.Repo)
 	assert.True(t, p.Spec.FinalDestination)
 	assert.Equal(t, PullRequests{
 		Title: "[{branch}] {package} {chartVersion} {action}", BranchPrefix: "bot/{source}-",

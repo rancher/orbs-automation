@@ -25,6 +25,9 @@ type view struct {
 // newView chooses the projects the options draw (docs/specs/CONFIG_GRAPH.md,
 // "Filtering") and what touches them.
 func newView(g *chain.Graph, opts Options) (*view, error) {
+	if err := checkTeams(g, opts.ManagedBy); err != nil {
+		return nil, err
+	}
 	drawn, err := selectProjects(g.Projects(), opts)
 	if err != nil {
 		return nil, err
@@ -112,6 +115,21 @@ func (v *view) drawnProjects() []*chain.Project {
 	return out
 }
 
+// checkTeams reports a team of --managed-by that is not a team id of the config:
+// shared is every team's and is accepted, and the case is not looked at.
+func checkTeams(g *chain.Graph, teams []string) error {
+	for _, team := range teams {
+		team = strings.ToLower(team)
+		if team == chain.ManagedBySharedTeam {
+			continue
+		}
+		if err := g.CheckTeam(team); err != nil {
+			return fmt.Errorf("--managed-by: %w", err)
+		}
+	}
+	return nil
+}
+
 // selectProjects is the projects the options choose, or an error when a pattern
 // matches nothing or nothing is left.
 func selectProjects(all []*chain.Project, opts Options) ([]*chain.Project, error) {
@@ -190,7 +208,7 @@ func matches(p *chain.Project, pattern string) bool {
 
 // managedBy says whether the project's managedBy is the team, whatever the case.
 func managedBy(p *chain.Project, team string) bool {
-	return p.ManagedBy() != "" && strings.EqualFold(p.ManagedBy(), team)
+	return slices.ContainsFunc(p.ManagedBy(), func(id string) bool { return strings.EqualFold(id, team) })
 }
 
 // row is one line of a project: where it is branched, and what it releases.

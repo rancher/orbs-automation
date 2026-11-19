@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -9,6 +10,10 @@ import (
 	"github.com/rancher/orbs-automation/internal/appconfig"
 	"github.com/rancher/orbs-automation/internal/platform/config"
 )
+
+// ManagedBySharedTeam is the managedBy of a project every team may write into and
+// none owns. It is not a team.
+const ManagedBySharedTeam = v1alpha2.ManagedByShared
 
 // Graph is the whole config, joined.
 type Graph struct {
@@ -24,6 +29,17 @@ type Graph struct {
 	// acknowledged are the warnings the documents say are expected.
 	acknowledged []config.Finding
 	empty        bool
+	teams        []v1alpha2.Team
+	hasTeams     bool // there is a Teams document
+}
+
+// CheckTeam reports an error unless the id is a team of the Teams document. A
+// config with no Teams document names no team, so there is nothing to check.
+func (g *Graph) CheckTeam(id string) error {
+	if !g.hasTeams || slices.ContainsFunc(g.teams, func(t v1alpha2.Team) bool { return t.ID == id }) {
+		return nil
+	}
+	return fmt.Errorf("%q is not a team in Teams", id)
 }
 
 // Build joins the documents of a config that has passed every rule. A document
@@ -34,6 +50,9 @@ func Build(cfg appconfig.Config) *Graph { return BuildWith(cfg, config.Report{})
 // whose warnings the graph keeps, and the warnings its documents acknowledge.
 func BuildWith(cfg appconfig.Config, rep config.Report) *Graph {
 	g := &Graph{byName: map[string]*Project{}, bySlug: map[string]*Project{}, byAlias: map[string]*Project{}, empty: cfg.Empty(), warnings: rep.Warnings(), acknowledged: rep.Acknowledged()}
+	if cfg.Teams != nil {
+		g.hasTeams, g.teams = true, cfg.Teams.Spec.Teams
+	}
 	for _, doc := range cfg.Projects {
 		p := &Project{Doc: doc, graph: g}
 		g.projects = append(g.projects, p)

@@ -3,6 +3,7 @@ package chain_test
 import (
 	"testing"
 
+	"github.com/rancher/orbs-automation/internal/appconfig"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/chain/chaintest"
 	"github.com/stretchr/testify/assert"
@@ -63,12 +64,13 @@ func TestAProjectKnowsItsOwnFacts(t *testing.T) {
 
 func TestTheManagerOfAProject(t *testing.T) {
 	tests := []struct {
-		name, repo, want string
+		name, repo string
+		want       []string
 	}{
-		{"managedBy as given", "{name: acme/a, managedBy: release-team}", "release-team"},
-		{"orbs is not assumed", "{name: acme/a}", ""},
-		{"shared as given", "{name: acme/a, managedBy: shared}", "shared"},
-		{"an external repo has none", "{name: acme/a, external: true}", ""},
+		{"managedBy as given", "{name: acme/a, managedBy: release-team}", []string{"release-team"}},
+		{"orbs is not assumed", "{name: acme/a}", nil},
+		{"shared as given", "{name: acme/a, managedBy: shared}", []string{"shared"}},
+		{"an external repo has none", "{name: acme/a, external: true}", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -173,6 +175,35 @@ func TestAProjectIsOwnedByTheTeamThatManagesIt(t *testing.T) {
 	assert.False(t, g.Project("outside").Owned("orbs"))
 	assert.True(t, g.Project("outside").External())
 	assert.False(t, g.Project("mine").External())
+}
+
+func TestAProjectIsOwnedByEachTeamItsManagedByLists(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Teams("orbs", "release-team", "frameworks"),
+		project("joint", "  repo: {name: acme/joint, managedBy: [orbs, release-team]}\n"),
+	)
+
+	assert.Equal(t, []string{"orbs", "release-team"}, g.Project("joint").ManagedBy())
+	assert.Equal(t, "orbs, release-team", g.Project("joint").ManagedByLabel())
+	assert.True(t, g.Project("joint").Owned("orbs"))
+	assert.True(t, g.Project("joint").Owned("release-team"))
+	assert.False(t, g.Project("joint").Owned("frameworks"))
+	assert.False(t, g.Project("joint").Shared())
+}
+
+func TestTheGraphKnowsATeamByItsIdAndNotByItsGitHubName(t *testing.T) {
+	g := chaintest.Load(t, "apiVersion: gero/v1alpha2\nkind: Teams\nname: rancher\nspec:\n  teams:\n    - {id: frameworks, github: rancher-squad-frameworks}\n", project("a", "  repo: {name: acme/a}\n"))
+
+	assert.NoError(t, g.CheckTeam("frameworks"))
+	assert.ErrorContains(t, g.CheckTeam("rancher-squad-frameworks"), "not a team in Teams")
+	assert.ErrorContains(t, g.CheckTeam("shared"), "not a team in Teams")
+	assert.ErrorContains(t, g.CheckTeam("nope"), `"nope"`)
+}
+
+func TestAConfigWithNoTeamsDocumentHasNoTeamToCheck(t *testing.T) {
+	g := chain.Build(appconfig.Config{})
+
+	assert.NoError(t, g.CheckTeam("orbs"))
 }
 
 func TestASharedProjectIsNoTeamsButEveryones(t *testing.T) {

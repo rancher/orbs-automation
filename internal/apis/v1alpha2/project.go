@@ -23,11 +23,15 @@ const ManagedByShared = "shared"
 
 // Repo identifies the repository.
 type Repo struct {
-	Name          string `yaml:"name"`     // owner/name
-	External      bool   `yaml:"external"` // outside our organization
-	ManagedBy     string `yaml:"managedBy"`
-	DefaultBranch string `yaml:"defaultBranch"`
+	Name          string    `yaml:"name"`     // owner/name
+	External      bool      `yaml:"external"` // outside our organization
+	ManagedBy     ManagedBy `yaml:"managedBy"`
+	DefaultBranch string    `yaml:"defaultBranch"`
 }
+
+// ManagedBy is the teams responsible for a repo, each the id of a team in Teams,
+// written as one id or a list. The one id shared stands alone.
+type ManagedBy []string
 
 // PullRequests holds the conventions for PRs opened against the repo.
 type PullRequests struct {

@@ -23,7 +23,7 @@ func project(name string) string {
 kind: Project
 name: ` + name + `
 spec:
-  repo: {name: rancher/` + name + `, managedBy: orbs}
+  repo: {name: rancher/` + name + `}
   branches: {layout: single}
 ---
 apiVersion: gero/v1alpha2
@@ -245,7 +245,7 @@ apiVersion: gero/v1alpha2
 kind: Project
 name: w
 spec:
-  repo: {name: rancher/w, managedBy: orbs}
+  repo: {name: rancher/w}
   branches:
     layout: perLine
     lines: [{line: v2.16, branch: release/v2.16}, {line: v2.15}]

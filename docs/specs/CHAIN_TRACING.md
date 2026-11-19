@@ -32,12 +32,13 @@ The config for all three stretches is in `config/`. Tracing reads these parts of
 
 * **Stages.** A project whose branches come in tiers has a branch for each stage per line, `branch: {dev: dev-v2.16, stable: release-v2.16}`, with the stages named in `branches.stages`. The stages are `dev` and `stable`, the two the tag schemes have. A holding names the stage it is found on (`holds.stage`), and the chain answers the branch of a line for a stage (`BranchOfLine(line, stage)`). A branch name found in another project's file maps back to its line and stage through this table, with no naming pattern to get wrong. A producer of ours lands on `dev` and the release team promotes to `stable`.
 * **Lines in tags.** A project whose layout is `single` lists its lines in its stream, and the `calverLineStage` scheme says how its tags spell a line and a stage. `rancher-assets` has one branch and tags like `v2.16-20261030T1111Z-dev`. A line is added when the project is used for it. A tag that does not parse, or is of a line not listed, is skipped, so no code discovers lines from tags, and the edge to Rancher reaches only the lines both projects list.
-* **Stewardship: `repo.managedBy` and the active team.** `managedBy` says which team is responsible for a repository. There is no `owned` field: a project is **owned** when its `managedBy` is the **active team context gero works in when run** (`team`, default `orbs`, [CLI_CONFIG](CLI_CONFIG.md)), and gero ships from what it owns.
+* **Stewardship: `repo.managedBy` and the active team.** `managedBy` says which team, or list of teams, is responsible for a repository, each by its `Teams` id ([CONFIG_SCHEMA](../design/CONFIG_SCHEMA.md#teams)). There is no `owned` field: a project is **owned** when its `managedBy` is, or lists, the **active team context gero works in when run** (`team`, default `orbs`, [CLI_CONFIG](CLI_CONFIG.md)), and gero ships from what it owns.
 
   | `managedBy` | What it means to the active team |
   |---|---|
   | the active team | Owned: `gero` ships its downstream, `repo clone --all` clones it, its `from: producer` steps run |
-  | another team | Not ours: that team's own tooling ships its downstream, and `gero` observes |
+  | other teams only | Not ours: that team's own tooling ships its downstream, and `gero` observes |
+  | a list with the active team | Owned, as if it were the only one: each team listed owns it, so each team's `--all` takes it |
   | `shared` | No team owns it and every team may write into it, as for `rancher/rancher`. It is observed as a producer, and no team's `--all` or bare ship takes it |
   | unset | Unspecified: observed, and reported as unspecified. An external repo has no `managedBy` and no owner |
 
@@ -98,7 +99,7 @@ A holding's `holds.lines` is a `{since, until}` range of lines, so each holding 
 
 ## Decided
 
-* A project need not state `managedBy`: it is reported as unspecified, and no team owns it. A team name is a lowercase slug, and `shared` is the one name that is not a team.
+* A project need not state `managedBy`: it is reported as unspecified, and no team owns it. A team is named by its id, a lowercase slug that `Teams` maps to a GitHub team and nothing else does, and `shared` is the one name that is not a team.
 * **No calendar state.** The release cycle (code freeze, RCs, sign-off, release day) is date-based and partly internal, so `gero` does not model it. A chain view reports alignment from tags and files: which tag a branch holds, its line and stage, and whether it is the newest of that line and stage. The stage of a held tag is a fact, never a warning or a failure.
 * **The release team's stage rule is readable, and could be ours.** Their tooling makes a `dev` tag when only the charts dev commit in `lock.yaml` moved, and a prod tag whenever the charts prod commit moved. That is a comparison of `lock.yaml` at two commits, which a read at a ref can do: first to check a held tag's stage against it, later, if the release team adopts `gero` for Assets, to make it part of a `ship` decision.
 * **Lines are listed.** A project that finds its lines in its tags lists them in its stream, without a series, and is judged on those lines: `lines resolve` shows no gap for one it does not list. A per-line project's missing line is still a gap.

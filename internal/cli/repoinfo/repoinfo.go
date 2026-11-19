@@ -44,7 +44,7 @@ type Info struct {
 	Owned         bool         `json:"owned"` // the active team manages it
 	External      bool         `json:"external,omitempty"`
 	Shared        bool         `json:"shared,omitempty"`    // every team manages it together, and none owns it
-	ManagedBy     string       `json:"managedBy,omitempty"` // the team responsible; empty when the project names none
+	ManagedBy     []string     `json:"managedBy,omitempty"` // the teams responsible; empty when the project names none
 	DefaultBranch string       `json:"defaultBranch"`
 	Branches      BranchesInfo `json:"branches"`
 	Streams       []StreamInfo `json:"streams,omitempty"`
@@ -203,7 +203,7 @@ func renderText(i Info, view *style.Renderer) string {
 		if i.External {
 			row("external", "yes")
 		}
-		row("managed by", orUnspecified(i.ManagedBy))
+		row("managed by", orUnspecified(strings.Join(i.ManagedBy, ", ")))
 		row("default branch", i.DefaultBranch)
 		row("branch layout", i.Branches.Layout)
 		if len(i.Branches.Stages) > 0 {

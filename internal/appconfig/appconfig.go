@@ -24,11 +24,12 @@ type Config struct {
 	Holdings  []*v1alpha2.Holding
 	Edits     []*v1alpha2.Edit
 	Lines     *v1alpha2.RancherLines // nil when there is no RancherLines document
+	Teams     *v1alpha2.Teams        // nil when there is no Teams document
 }
 
 // Empty reports whether the config has no document at all.
 func (c Config) Empty() bool {
-	return len(c.Projects)+len(c.Streams)+len(c.Artifacts)+len(c.Holdings)+len(c.Edits) == 0 && c.Lines == nil
+	return len(c.Projects)+len(c.Streams)+len(c.Artifacts)+len(c.Holdings)+len(c.Edits) == 0 && c.Lines == nil && c.Teams == nil
 }
 
 // Load reads every *.yaml and *.yml file under the root of fsys, whatever its name
@@ -102,6 +103,10 @@ func build(objs []v1alpha2.Object) Config {
 		case *v1alpha2.RancherLines:
 			if c.Lines == nil {
 				c.Lines = o
+			}
+		case *v1alpha2.Teams:
+			if c.Teams == nil {
+				c.Teams = o
 			}
 		}
 	}

@@ -50,7 +50,7 @@ func (w *Workspace) loadChain() (*chain.Graph, error) {
 		if g.Empty() {
 			return nil, fmt.Errorf("config bundle %s: %w", src.Bundle.Tag, ErrEmptyConfig)
 		}
-		return g, nil
+		return w.withActiveTeam(g)
 	}
 	dir := src.Dir
 	g, rep := chainload.Load(os.DirFS(dir.Dir), engine.Context{Now: time.Now()})
@@ -59,6 +59,18 @@ func (w *Workspace) loadChain() (*chain.Graph, error) {
 	}
 	if g.Empty() {
 		return nil, fmt.Errorf("config directory %s: %w (the files are YAML documents of gero's, often in the config/ subdirectory of the central checkout)", dir.Dir, ErrEmptyConfig)
+	}
+	return w.withActiveTeam(g)
+}
+
+// withActiveTeam returns the graph, or an error when the active team (the team
+// setting) is not a team id in its Teams.
+func (w *Workspace) withActiveTeam(g *chain.Graph) (*chain.Graph, error) {
+	if w.settings.Team == "" {
+		return g, nil
+	}
+	if err := g.CheckTeam(w.settings.Team); err != nil {
+		return nil, fmt.Errorf("the team setting: %w", err)
 	}
 	return g, nil
 }
