@@ -3,6 +3,7 @@ package execx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 )
@@ -48,9 +49,23 @@ func Passthrough(ctx context.Context, c PassCmd) (int, error) {
 
 // OnPath reports whether a program is found on PATH. Like Passthrough it has no allow list: it
 // is for what the user themselves chose to run.
-func OnPath(name string) bool { return false }
+func OnPath(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
 
 // Launch starts a program of the user's own choice, with a directory as its one argument, and
 // does not wait for it: an editor that hands the directory to a window and returns. The program
 // gets the environment gero was given. It is an error when the program cannot be started.
-func Launch(name, dir string) error { return nil }
+func Launch(name, dir string) error {
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return fmt.Errorf("execx: launch %s: %w", name, err)
+	}
+	cmd := exec.Command(path, dir)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("execx: launch %s: %w", name, err)
+	}
+	go func() { _ = cmd.Wait() }() // so the program is not left a zombie when it exits
+	return nil
+}
