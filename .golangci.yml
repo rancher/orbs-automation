@@ -37,6 +37,7 @@ linters:
             - $gostd
             - github.com/rancher/orbs-automation
             - github.com/spf13/cobra
+            - github.com/spf13/pflag
             - github.com/cli/go-gh
             - github.com/google/go-github
             - github.com/mallardduck/ghreleases
@@ -61,6 +62,7 @@ linters:
           allow:
             - $gostd
             - github.com/spf13/cobra
+            - github.com/spf13/pflag
             - github.com/rancher/orbs-automation/cmd
             - github.com/rancher/orbs-automation/internal/cli
             - github.com/rancher/orbs-automation/internal/gero/clicfg
