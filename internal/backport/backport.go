@@ -243,6 +243,7 @@ func Run(ctx context.Context, ws Workspace, in Input, ex *proposal.Executor) (Pl
 		for _, r := range reads {
 			plan.PRs = append(plan.PRs, Source{Number: r.number, Title: r.detail.Title, URL: r.detail.URL})
 		}
+		plan.PR, plan.Title, plan.URL = plan.PRs[0].Number, plan.PRs[0].Title, plan.PRs[0].URL
 		return plan, nil
 	}
 	sess, err := proposal.Begin(ctx, ws, ex, proposal.SessionInput{Repo: holder, PushTo: in.PushTo, CI: in.CI, NoPush: in.NoPush})

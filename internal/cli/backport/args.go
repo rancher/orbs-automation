@@ -15,7 +15,6 @@ import (
 type Args struct {
 	Project string   // the repo, by config name or slug; empty for the one the working directory is in
 	Lines   []string // the targets, as typed
-	PR      int      // the number of the merged PR, when PRs is not set
 	// PRs are the numbers of the merged PRs, one or several, as typed. Several are a bundle.
 	PRs []int
 	// Repo is the owner/name a PR URL named, or empty when the PR was a number. It must be the
@@ -23,8 +22,9 @@ type Args struct {
 	Repo string
 }
 
-// ParseArgs reads [project] <line>[,<line>...] <pr>. The PR is always the last argument: a
-// number, #number or the URL of the PR. The targets are the one before it, separated by commas.
+// ParseArgs reads [project] <line>[,<line>...] <pr>[,<pr>...]. The PRs are always the last
+// argument: each a number, #number or the URL of the PR, separated by commas. The targets are the
+// one before it, separated by commas.
 func ParseArgs(args []string) (Args, error) {
 	if len(args) < 2 {
 		return Args{}, errors.New("name the release line or branch to backport to, and the PR: gero repo backport [project] <line>[,<line>...] <pr>")
@@ -34,11 +34,23 @@ func ParseArgs(args []string) (Args, error) {
 	}
 	var out Args
 	last := args[len(args)-1]
-	repo, number, ok := parsePR(last)
-	if !ok {
-		return Args{}, fmt.Errorf("%q is not a PR: the last argument is its number, #number or its URL", last)
+	for _, text := range strings.Split(last, ",") {
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return Args{}, fmt.Errorf("%q has an empty PR in it", last)
+		}
+		repo, number, ok := parsePR(text)
+		if !ok {
+			return Args{}, fmt.Errorf("%q is not a PR: the last argument is the number, #number or URL of each, separated by commas", text)
+		}
+		if repo != "" && out.Repo != "" && repo != out.Repo {
+			return Args{}, fmt.Errorf("the PRs are in different repos, %s and %s: a backport is of one repo", out.Repo, repo)
+		}
+		if repo != "" {
+			out.Repo = repo
+		}
+		out.PRs = append(out.PRs, number)
 	}
-	out.PR, out.Repo = number, repo
 	if len(args) == 3 {
 		out.Project = args[0]
 	}

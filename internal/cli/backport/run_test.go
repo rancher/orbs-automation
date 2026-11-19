@@ -51,7 +51,7 @@ func (fakeWS) PushSettings(string) proposal.PushSettings { return proposal.PushS
 func TestRunToWritesTheTextReportOfACheck(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, newFakeWS(t, true), nil, clicfg.OutputText, domain.Input{Lines: []string{"v2.15"}, PR: 5}, false, style.Plain())
+	err := runTo(context.Background(), &out, newFakeWS(t, true), nil, clicfg.OutputText, domain.Input{Lines: []string{"v2.15"}, PRs: []int{5}}, false, style.Plain())
 
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "Backport: acme/cons#5")
@@ -61,7 +61,7 @@ func TestRunToWritesTheTextReportOfACheck(t *testing.T) {
 func TestRunToWritesTheJSONReportOfACheck(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, newFakeWS(t, true), nil, clicfg.OutputJSON, domain.Input{Lines: []string{"v2.15"}, PR: 5}, false, style.Plain())
+	err := runTo(context.Background(), &out, newFakeWS(t, true), nil, clicfg.OutputJSON, domain.Input{Lines: []string{"v2.15"}, PRs: []int{5}}, false, style.Plain())
 
 	require.NoError(t, err)
 	var got struct {
@@ -77,14 +77,14 @@ func TestRunToWritesTheJSONReportOfACheck(t *testing.T) {
 func TestRunToOfAPRThatIsNotMergedIsTheErrorAndNoReport(t *testing.T) {
 	var out bytes.Buffer
 
-	err := runTo(context.Background(), &out, newFakeWS(t, false), nil, clicfg.OutputText, domain.Input{Lines: []string{"v2.15"}, PR: 5}, false, style.Plain())
+	err := runTo(context.Background(), &out, newFakeWS(t, false), nil, clicfg.OutputText, domain.Input{Lines: []string{"v2.15"}, PRs: []int{5}}, false, style.Plain())
 
 	require.ErrorContains(t, err, "not merged")
 	assert.Empty(t, out.String(), "nothing was found, so there is no report to give")
 }
 
 func TestRunToRefusesAFormatItDoesNotWrite(t *testing.T) {
-	err := runTo(context.Background(), &bytes.Buffer{}, newFakeWS(t, true), nil, "yaml", domain.Input{Lines: []string{"v2.15"}, PR: 5}, false, style.Plain())
+	err := runTo(context.Background(), &bytes.Buffer{}, newFakeWS(t, true), nil, "yaml", domain.Input{Lines: []string{"v2.15"}, PRs: []int{5}}, false, style.Plain())
 
 	require.ErrorContains(t, err, "yaml")
 }

@@ -62,7 +62,7 @@ func Run(ctx context.Context, w io.Writer, log *slog.Logger, s clicfg.Settings, 
 		project = opts.Args.Repo // a PR URL says which repo, so no clone to stand in is needed
 	}
 	in := domain.Input{
-		Project: project, Lines: opts.Args.Lines, PR: opts.Args.PR, Repo: opts.Args.Repo,
+		Project: project, Lines: opts.Args.Lines, PRs: opts.Args.PRs, Repo: opts.Args.Repo,
 		BranchPrefix: s.BranchPrefix, DefaultBranchPrefix: s.DefaultBranchPrefix(),
 		DryRun: s.DryRun, NoPush: opts.NoPush, PushTo: opts.PushTo, CI: s.CI,
 	}
