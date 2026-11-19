@@ -334,7 +334,15 @@ type Detail struct {
 
 // Get reads one pull request, open or not.
 func (s *Service) Get(ctx context.Context, slug string, number int) (Detail, error) {
-	return Detail{}, nil
+	owner, name, err := split(slug)
+	if err != nil {
+		return Detail{}, err
+	}
+	p, _, err := s.client.PullRequests.Get(ctx, owner, name, number)
+	if err != nil {
+		return Detail{}, fmt.Errorf("read %s#%d: %w", slug, number, err)
+	}
+	return Detail{PR: convert(p), Merged: p.GetMerged(), MergeCommit: p.GetMergeCommitSHA()}, nil
 }
 
 // Commit is one commit of a pull request, as the host lists it.
@@ -346,5 +354,23 @@ type Commit struct {
 
 // Commits lists the commits of a pull request, oldest first, every page of them.
 func (s *Service) Commits(ctx context.Context, slug string, number int) ([]Commit, error) {
-	return nil, nil
+	owner, name, err := split(slug)
+	if err != nil {
+		return nil, err
+	}
+	opts := &gogithub.ListOptions{PerPage: 100}
+	var out []Commit
+	for {
+		page, resp, err := s.client.PullRequests.ListCommits(ctx, owner, name, number, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list the commits of %s#%d: %w", slug, number, err)
+		}
+		for _, c := range page {
+			out = append(out, Commit{SHA: c.GetSHA(), Message: c.GetCommit().GetMessage(), Author: c.GetCommit().GetAuthor().GetName()})
+		}
+		if resp.NextPage == 0 {
+			return out, nil
+		}
+		opts.Page = resp.NextPage
+	}
 }
