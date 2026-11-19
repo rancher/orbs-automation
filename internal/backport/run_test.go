@@ -397,3 +397,23 @@ func putFile(dir, rel, content string) {
 		panic(err)
 	}
 }
+
+func TestBackportDryRunReportsAConflictWithoutAskingAndGoesOn(t *testing.T) {
+	ws, ex := newBackWS(t)
+	ws.merged(ws.newImage, "Update image")
+	resolver := &scripted{do: func(Conflict) (Choice, error) { return Continue, nil }}
+
+	plan, err := Run(bg, ws, Input{Lines: []string{"v2.15", "v2.14"}, PR: 12, NoPush: true, DryRun: true, Resolver: resolver}, ex)
+
+	require.NoError(t, err, "a dry run waits for nobody, so a conflict is a finding and not a stop")
+	assert.Empty(t, resolver.seen)
+	conflicted := target(t, plan, "release/v1")
+	require.NotNil(t, conflicted.Result)
+	assert.Equal(t, proposal.ResultFailed, conflicted.Result.Status)
+	assert.Contains(t, conflicted.Result.Error, "would conflict")
+	assert.Contains(t, conflicted.Result.Error, "build.yaml")
+	clean := target(t, plan, "release/v0")
+	require.NotNil(t, clean.Result)
+	assert.Equal(t, proposal.ResultWouldCommit, clean.Result.Status, "the next target was tried")
+	assert.Empty(t, runGit(t, ws.clone, "status", "--porcelain"))
+}
