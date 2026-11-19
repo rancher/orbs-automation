@@ -29,13 +29,13 @@ kind: Artifact
 name: suc-image
 refs: {stream: system-upgrade-controller}
 spec: {kind: image, name: rancher/system-upgrade-controller}
----
+#---
 # What SUC holds: the kuberlr image tag in its chart values, on master only, so for the line master tracks. master is
 # on v2.16 (its chart is for Rancher 2.16), and the file is kept at the newest kuberlr release of that line's series.
-apiVersion: gero/v1alpha2
-kind: Holding
-name: suc-holds-kuberlr
-refs: {project: system-upgrade-controller, artifact: kuberlr-kubectl-image}
-spec:
-  at: {file: charts/system-upgrade-controller/values.yaml, key: kubectl.image.tag, format: yaml}
-  holds: {kind: release, form: "{tag}", lines: {since: v2.16, until: v2.16}}
+#apiVersion: gero/v1alpha2
+#kind: Holding
+#name: suc-holds-kuberlr
+#refs: {project: system-upgrade-controller, artifact: kuberlr-kubectl-image}
+#spec:
+#  at: {file: charts/system-upgrade-controller/values.yaml, key: kubectl.image.tag, format: yaml}
+#  holds: {kind: release, form: "{tag}", lines: {since: v2.16, until: v2.16}}

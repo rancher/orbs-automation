@@ -192,3 +192,27 @@ func TestRepoListWiring(t *testing.T) {
 		assert.Contains(t, stdout, "config resolve repos")
 	})
 }
+
+func TestRepoBackportWiring(t *testing.T) {
+	t.Run("is a command of repo", func(t *testing.T) {
+		stdout, _, err := execRoot(t, "repo", "backport", "--help")
+
+		require.NoError(t, err)
+		assert.Contains(t, stdout, "backport [project] <line>[,<line>...] <pr>[,<pr>...]")
+		assert.Contains(t, stdout, "bundle")
+		assert.Contains(t, stdout, "--no-push")
+	})
+
+	t.Run("the last argument must be a PR", func(t *testing.T) {
+		_, _, err := execRoot(t, "repo", "backport", "bro", "v2.15")
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "not a PR")
+	})
+
+	t.Run("a line and a PR are needed", func(t *testing.T) {
+		_, _, err := execRoot(t, "repo", "backport", "123")
+
+		require.Error(t, err)
+	})
+}

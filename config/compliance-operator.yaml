@@ -38,9 +38,9 @@ name: compliance-operator-image
 refs: {stream: compliance-operator}
 spec: {kind: image, name: rancher/compliance-operator}
 ---
-# What compliance-operator holds: the kuberlr image tag, in two places in the chart, kept the same. The values file holds it
-# beside the repository. Chart.yaml lists the image in helm.sh/images, which is a YAML string inside the YAML, so it is read as
-# text: the one line of that list that names the kuberlr image, and the tag after the colon.
+# What compliance-operator holds: the kuberlr image tag. Through v2.15 the chart is in chart/ and holds it in two places, kept the
+# same. The values file holds it beside the repository. Chart.yaml lists the image in helm.sh/images, which is a YAML string
+# inside the YAML, so it is read as text: the one line of that list that names the kuberlr image, and the tag after the colon.
 apiVersion: gero/v1alpha2
 kind: Holding
 name: compliance-operator-holds-kuberlr
@@ -49,4 +49,15 @@ spec:
   at:
     - {file: chart/values.yaml, key: global.kubectl.tag, format: yaml}
     - {file: chart/Chart.yaml, key: 'image: rancher/kuberlr-kubectl:(\S+)$', format: regex}
-  holds: {kind: release, form: "{tag}"}
+  holds: {kind: release, form: "{tag}", lines: {until: v2.15}}
+---
+# From v2.16 the charts are in charts/: rancher-compliance, and rancher-compliance-crd, which holds no image. The tag is held in
+# one place, the values file of rancher-compliance; its Chart.yaml no longer lists images.
+apiVersion: gero/v1alpha2
+kind: Holding
+name: compliance-operator-holds-kuberlr-v216
+refs: {project: compliance-operator, artifact: kuberlr-kubectl-image}
+spec:
+  at:
+    - {file: charts/rancher-compliance/values.yaml, key: global.kubectl.tag, format: yaml}
+  holds: {kind: release, form: "{tag}", lines: {since: v2.16}}

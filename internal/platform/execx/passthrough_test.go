@@ -3,10 +3,12 @@ package execx
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,4 +75,40 @@ func TestPassthroughStopsWhenCancelled(t *testing.T) {
 
 	// Killed before it ran, or while it did: it never reports success.
 	assert.True(t, err != nil || code != 0, "code %d, err %v", code, err)
+}
+
+// fakeEditor puts a program called name on PATH that writes a file called started in the
+// directory it is given, and returns that PATH's directory.
+func fakeEditor(t *testing.T, name string) {
+	t.Helper()
+	bin := t.TempDir()
+	script := "#!/bin/sh\ntouch \"$1/started\"\n"
+	require.NoError(t, os.WriteFile(filepath.Join(bin, name), []byte(script), 0o755))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestOnPathFindsAProgramOnPATHAndNotOneThatIsNot(t *testing.T) {
+	fakeEditor(t, "gero-fake-editor")
+
+	assert.True(t, OnPath("gero-fake-editor"))
+	assert.False(t, OnPath("gero-no-such-editor"))
+}
+
+func TestLaunchStartsTheProgramOnTheDirectory(t *testing.T) {
+	fakeEditor(t, "gero-fake-editor")
+	dir := t.TempDir()
+
+	require.NoError(t, Launch("gero-fake-editor", dir))
+
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(dir, "started"))
+		return err == nil
+	}, 5*time.Second, 20*time.Millisecond, "the program ran with the directory as its argument")
+}
+
+func TestLaunchOfAProgramThatIsNotThereIsAnError(t *testing.T) {
+	err := Launch("gero-no-such-editor", t.TempDir())
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "gero-no-such-editor")
 }

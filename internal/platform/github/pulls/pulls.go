@@ -321,3 +321,56 @@ func (s *Service) EditComment(ctx context.Context, slug string, id int64, body s
 	}
 	return nil
 }
+
+// Detail is a pull request with what says how it ended: whether it was merged and the
+// commit that GitHub records as the result of the merge.
+type Detail struct {
+	PR
+	Merged bool
+	// MergeCommit is the merge commit's SHA: for a merge commit, the merge; for a squash,
+	// the squashed commit; for a rebase merge, the last commit rebased onto the base.
+	MergeCommit string
+}
+
+// Get reads one pull request, open or not.
+func (s *Service) Get(ctx context.Context, slug string, number int) (Detail, error) {
+	owner, name, err := split(slug)
+	if err != nil {
+		return Detail{}, err
+	}
+	p, _, err := s.client.PullRequests.Get(ctx, owner, name, number)
+	if err != nil {
+		return Detail{}, fmt.Errorf("read %s#%d: %w", slug, number, err)
+	}
+	return Detail{PR: convert(p), Merged: p.GetMerged(), MergeCommit: p.GetMergeCommitSHA()}, nil
+}
+
+// Commit is one commit of a pull request, as the host lists it.
+type Commit struct {
+	SHA     string
+	Message string
+	Author  string // the author's name
+}
+
+// Commits lists the commits of a pull request, oldest first, every page of them.
+func (s *Service) Commits(ctx context.Context, slug string, number int) ([]Commit, error) {
+	owner, name, err := split(slug)
+	if err != nil {
+		return nil, err
+	}
+	opts := &gogithub.ListOptions{PerPage: 100}
+	var out []Commit
+	for {
+		page, resp, err := s.client.PullRequests.ListCommits(ctx, owner, name, number, opts)
+		if err != nil {
+			return nil, fmt.Errorf("list the commits of %s#%d: %w", slug, number, err)
+		}
+		for _, c := range page {
+			out = append(out, Commit{SHA: c.GetSHA(), Message: c.GetCommit().GetMessage(), Author: c.GetCommit().GetAuthor().GetName()})
+		}
+		if resp.NextPage == 0 {
+			return out, nil
+		}
+		opts.Page = resp.NextPage
+	}
+}

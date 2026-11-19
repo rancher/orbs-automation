@@ -384,3 +384,55 @@ func TestEditCommentReplacesItsBody(t *testing.T) {
 	assert.Equal(t, "/repos/rancher/rancher/issues/comments/12", s.req(t).URL.Path)
 	assert.Contains(t, s.body(t), `"body":"the new text"`)
 }
+
+const mergedJSON = `{"number":12,"html_url":"https://github.com/rancher/bro/pull/12","title":"Fix the thing","body":"b",` +
+	`"user":{"login":"dev"},"base":{"ref":"main"},"head":{"ref":"fix","user":{"login":"dev"}},` +
+	`"merged":true,"merge_commit_sha":"abc123"}`
+
+func TestGetReadsHowAPRWasMerged(t *testing.T) {
+	s := always(200, mergedJSON)
+
+	got, err := service(t, s).Get(bg, "rancher/bro", 12)
+
+	require.NoError(t, err)
+	assert.Equal(t, "/repos/rancher/bro/pulls/12", s.req(t).URL.Path)
+	assert.True(t, got.Merged)
+	assert.Equal(t, "abc123", got.MergeCommit)
+	assert.Equal(t, 12, got.Number)
+	assert.Equal(t, "main", got.Base)
+	assert.Equal(t, "Fix the thing", got.Title)
+}
+
+func TestGetOfAnOpenPRIsNotMerged(t *testing.T) {
+	got, err := service(t, always(200, `{"number":3,"merged":false,"base":{"ref":"main"}}`)).Get(bg, "rancher/bro", 3)
+
+	require.NoError(t, err)
+	assert.False(t, got.Merged)
+	assert.Equal(t, 3, got.Number)
+}
+
+func TestGetErrorNamesThePR(t *testing.T) {
+	_, err := service(t, always(404, `{"message":"Not Found"}`)).Get(bg, "rancher/bro", 99)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rancher/bro#99")
+}
+
+func TestCommitsListsThePRsCommitsOldestFirstAcrossPages(t *testing.T) {
+	calls := 0
+	s := &stub{handle: func(r *http.Request) reply {
+		calls++
+		if r.URL.Query().Get("page") == "2" {
+			return reply{status: 200, body: `[{"sha":"c2","commit":{"message":"second\n\nbody","author":{"name":"Eve"}}}]`}
+		}
+		return reply{status: 200, body: `[{"sha":"c1","commit":{"message":"first","author":{"name":"Dev"}}}]`,
+			link: `<https://api.github.com/repos/rancher/bro/pulls/12/commits?page=2>; rel="next"`}
+	}}
+
+	got, err := service(t, s).Commits(bg, "rancher/bro", 12)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, calls)
+	assert.Equal(t, "/repos/rancher/bro/pulls/12/commits", s.req(t).URL.Path)
+	assert.Equal(t, []Commit{{SHA: "c1", Message: "first", Author: "Dev"}, {SHA: "c2", Message: "second\n\nbody", Author: "Eve"}}, got)
+}

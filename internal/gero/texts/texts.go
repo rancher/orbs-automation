@@ -116,3 +116,34 @@ var StrategyCommitVars = []string{
 	"project", "source", "sourceRepo", "tag", "version", "branch", "targetBranch",
 	"consumer", "sourceReleaseURL", "strategy", "edit", "changes",
 }
+
+// BackportTitle is the PR title of a backport: the original title, and the line it is carried
+// to. It may use BackportVars.
+func BackportTitle() string { return text("backport_title.txt") }
+
+// BackportBody is the PR body of a backport.
+func BackportBody() string { return text("backport_body.md") + "\n" }
+
+// BackportBundleTitle is the PR title of a backport of several PRs. It may use BackportVars.
+func BackportBundleTitle() string { return text("backport_bundle_title.txt") }
+
+// BackportBundleBody is the PR body of a backport of several PRs.
+func BackportBundleBody() string { return text("backport_bundle_body.md") + "\n" }
+
+// BackportVars are the variables the texts of a backport may use.
+//
+//	line          the Rancher line the PR is carried to, or the branch when it has none
+//	branch        the target branch without "release/"
+//	targetBranch  the target branch as it is named
+//	consumer      the repository, owner/name
+//	number        the number of the PR that is carried
+//	title         its title
+//	url           where to see it
+//	numbers       the numbers of the PRs of a bundle, as "#12, #15"
+//	prs           the PRs of a bundle, one bullet each, linked by title
+//	skipped       a line naming the PRs already on the branch that were not picked, or nothing
+//	commits       the commits that are picked, one bullet each
+//	conflicts     a section naming the files resolved by hand, or nothing
+//	marker        the hidden block that makes the PR known to a later run
+//	key           the end of the branch name that gero builds
+var BackportVars = []string{"line", "branch", "targetBranch", "consumer", "number", "title", "url", "numbers", "prs", "skipped", "commits", "conflicts", "marker", "key"}
