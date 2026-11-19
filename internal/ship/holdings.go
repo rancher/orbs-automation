@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/tagscheme"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // ConsumerHoldings is what one consumer of a project holds of its releases, branch
@@ -211,6 +212,12 @@ func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held
 			v.DifferReason, _ = held.Acknowledgement(chain.RuleLocationsDiffer, sp.target.Line)
 		}
 	}
+	if held.Virtual() {
+		// the virtual holding a pin makes is a floor of what the pinning holding requires, and
+		// the latest release of its own stream says nothing of it
+		v.Pin = r.pinOf(ctx, tree, sp, held)
+		return v
+	}
 	v.Stage = r.scheme.Stage(heldTag(c.Current))
 	v.Stable = verdict(r.scheme, sp.release, c.Check)
 	switch {
@@ -224,6 +231,36 @@ func (r resolution) heldValue(ctx context.Context, tree bump.Tree, sp spec, held
 		}
 	}
 	return v
+}
+
+// pinOf reads the virtual holding v of a branch against the two floors its pinning holding
+// puts on it: what the release the branch holds of the pinner requires, and what the release
+// the pinner is brought to requires.
+func (r resolution) pinOf(ctx context.Context, tree bump.Tree, sp spec, v *chain.Holding) *Pin {
+	pinner := v.PinnedBy()
+	line, branch := sp.target.Line, sp.branch()
+	pin := &Pin{Pinner: pinner.Name()}
+	pin.Wanted = r.floorOf(ctx, tree, sp, v, r.wanted.For(ctx, v, line))
+	if cur, err := bump.CheckHolding(ctx, tree, pinner, line, branch, bump.Release{}); err == nil && !cur.Absent {
+		pin.Held = r.floorOf(ctx, tree, sp, v, r.wanted.Required(ctx, v, cur.Current))
+	}
+	return pin
+}
+
+// floorOf is how a virtual holding of a branch stands against the release a pin requires of it.
+func (r resolution) floorOf(ctx context.Context, tree bump.Tree, sp spec, v *chain.Holding, w wanted.Want) *PinFloor {
+	floor := &PinFloor{RequiredBy: w.RequiredBy}
+	if w.Err != nil {
+		floor.Error = w.Err.Error()
+		return floor
+	}
+	chk, err := bump.CheckHolding(ctx, tree, v, sp.target.Line, sp.branch(), w.Release)
+	if err != nil {
+		floor.Error = err.Error()
+		return floor
+	}
+	floor.Verdict = verdict(r.scheme, Release{Tag: w.Release.Tag}, chk)
+	return floor
 }
 
 // verdict is the check's answer for a release. When the holding could not order

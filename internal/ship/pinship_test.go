@@ -192,7 +192,7 @@ func TestATargetOfAPlanTakesTheCompanionsAndTheirReleasesToTheEngine(t *testing.
 	assert.Equal(t, "r15", target.Branch)
 }
 
-func TestHoldingsOfLassoTraceTheVirtualHoldingAsAnyOther(t *testing.T) {
+func TestHoldingsOfLassoReadTheVirtualHoldingAgainstWhatItsPinRequires(t *testing.T) {
 	w := newPinWorkspace(t)
 
 	got, err := Holdings(ctx, w, w.g.Project("la"))
@@ -205,7 +205,11 @@ func TestHoldingsOfLassoTraceTheVirtualHoldingAsAnyOther(t *testing.T) {
 	held := got[0].Targets[0].Held[0]
 	assert.Equal(t, "bro-holds-wr+la-mod", held.Name)
 	assert.Equal(t, "v0.2.3", held.Current)
-	assert.Equal(t, "v0.2.6", held.Stable.Tag, "against the latest lasso, until status reads what the pin requires")
+	assert.Nil(t, held.Stable, "not against the latest lasso, v0.2.6")
+	require.NotNil(t, held.Pin)
+	require.NotNil(t, held.Pin.Wanted.Verdict)
+	assert.Equal(t, "v0.2.5", held.Pin.Wanted.Verdict.Tag, "what the go.mod of the newest wrangler, v1.7.4, requires")
+	assert.False(t, held.Pin.Wanted.Verdict.UpToDate)
 }
 
 func TestHoldingsOfLassoSayWhenNoFileOfTheVirtualHoldingRequiresIt(t *testing.T) {
