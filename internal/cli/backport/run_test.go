@@ -54,7 +54,8 @@ func TestRunToWritesTheTextReportOfACheck(t *testing.T) {
 	err := runTo(context.Background(), &out, newFakeWS(t, true), nil, clicfg.OutputText, domain.Input{Lines: []string{"v2.15"}, PRs: []int{5}}, false, style.Plain())
 
 	require.NoError(t, err)
-	assert.Contains(t, out.String(), "Backport: acme/cons#5")
+	assert.Contains(t, out.String(), "Backport: acme/cons")
+	assert.Contains(t, out.String(), "#5 Fix")
 	assert.Contains(t, out.String(), "release/v1")
 }
 

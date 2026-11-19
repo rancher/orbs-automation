@@ -3,6 +3,7 @@ package backport
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	domain "github.com/rancher/orbs-automation/internal/backport"
@@ -19,13 +20,16 @@ var ErrFailed = errors.New("some targets were not backported")
 // what was done, with the texts of the PR when full.
 func renderText(p domain.Plan, full bool, view *style.Renderer) string {
 	var b strings.Builder
-	b.WriteString(view.Style(style.Heading, fmt.Sprintf("Backport: %s#%d", p.Repo, p.PR)) + " " + p.Title + "\n")
-	if len(p.Picks) > 0 {
-		short := make([]string, len(p.Picks))
-		for i, c := range p.Picks {
-			short[i] = c[:min(7, len(c))]
+	b.WriteString(view.Style(style.Heading, "Backport: "+p.Repo) + "\n")
+	for _, pr := range p.PRs {
+		b.WriteString(fmt.Sprintf("  #%d %s\n", pr.Number, pr.Title))
+		if len(pr.Picks) > 0 {
+			short := make([]string, len(pr.Picks))
+			for i, c := range pr.Picks {
+				short[i] = c[:min(7, len(c))]
+			}
+			b.WriteString("    " + view.Style(style.Dim, fmt.Sprintf("merged to %s as a %s: picks %s", p.Base, pr.Shape, strings.Join(short, ", "))) + "\n")
 		}
-		b.WriteString("  " + view.Style(style.Dim, fmt.Sprintf("merged to %s as a %s: picks %s", p.Base, p.Shape, strings.Join(short, ", "))) + "\n")
 	}
 	for _, tg := range p.Targets {
 		label := tg.Line
@@ -33,6 +37,12 @@ func renderText(p domain.Plan, full bool, view *style.Renderer) string {
 			label = tg.Branch
 		}
 		b.WriteString("\n" + view.Style(style.Heading, label) + " " + view.Style(style.Dim, tg.Branch) + "\n")
+		if len(tg.PRs) > 1 {
+			b.WriteString("  carries " + hashed(tg.PRs) + "\n")
+		}
+		if len(tg.Skipped) > 0 && tg.Status != domain.StatusAlreadyBackported {
+			b.WriteString("  already on the branch: " + hashed(tg.Skipped) + "\n")
+		}
 		if tg.Preview != nil {
 			b.WriteString("  branch  " + tg.Preview.Branch + "\n  title   " + tg.Preview.Title + "\n")
 			if full {
@@ -49,6 +59,15 @@ func renderText(p domain.Plan, full bool, view *style.Renderer) string {
 		b.WriteString("  " + view.Style(statusRole(tg.Status), string(tg.Status)) + "\n")
 	}
 	return b.String()
+}
+
+// hashed names PRs as #12, #15.
+func hashed(numbers []int) string {
+	names := make([]string, len(numbers))
+	for i, n := range numbers {
+		names[i] = "#" + strconv.Itoa(n)
+	}
+	return strings.Join(names, ", ")
 }
 
 // resultText is what a run did for a target that was worked on.
