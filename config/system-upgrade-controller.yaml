@@ -1,8 +1,8 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/rancher/orbs-automation/main/generated/jsonschema/gero.v1alpha2.schema.json
 # system-upgrade-controller: owned by hostbusters, one branch for every line, one image, a series for each line.
 # Only master is modelled: the chart that Rancher takes is the one in charts/ of master, for the newest line. The
-# lines from v2.15 down used to be customised in rancher/charts and are held there, not here. v2.16 is not in the
-# team's version table, so it has no series yet.
+# lines from v2.15 down used to be customised in rancher/charts and are held there, not here. The team's own version
+# table stops at v2.15; v2.16 is checked against the releases.
 apiVersion: gero/v1alpha2
 kind: Project
 name: system-upgrade-controller
@@ -18,6 +18,7 @@ refs: {project: system-upgrade-controller}
 spec:
   scheme: semver
   lines:
+    - {line: v2.16, series: "0.21.x"}
     - {line: v2.15, series: "0.20.x"}
     - {line: v2.14, series: "0.19.x"}
     - {line: v2.13, series: "0.17.x"}

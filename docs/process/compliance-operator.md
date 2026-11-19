@@ -115,7 +115,7 @@ None.
 ## Config notes
 
 * Takes kuberlr by line; the hand-off is a change here, not a send
-* The kuberlr tag is in two places in the chart: a values key and an entry in the metadata's image list, where the tag is part of an image reference in a list. Can a holding address that?
+* The kuberlr tag is in two places in the chart: a values key and an entry in the metadata's image list, where the tag is part of an image reference inside a string. One holding writes both, the second read as text
 * A line gets its own `release/v1.N` branch; main is the newest line (v2.17) while the charts side has no branch for it
 * Charts takes the release by its own pull, not a send; the hand-off direction is the reverse of BRO's
 * Ended lines (v1.0 and before v1.2) are left out

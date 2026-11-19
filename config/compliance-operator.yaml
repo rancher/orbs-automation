@@ -38,12 +38,15 @@ name: compliance-operator-image
 refs: {stream: compliance-operator}
 spec: {kind: image, name: rancher/compliance-operator}
 ---
-# What compliance-operator holds: the kuberlr image tag in its chart values, beside the repository.
-# The chart's Chart.yaml lists the same image in its image annotation; that entry is not modelled yet.
+# What compliance-operator holds: the kuberlr image tag, in two places in the chart, kept the same. The values file holds it
+# beside the repository. Chart.yaml lists the image in helm.sh/images, which is a YAML string inside the YAML, so it is read as
+# text: the one line of that list that names the kuberlr image, and the tag after the colon.
 apiVersion: gero/v1alpha2
 kind: Holding
 name: compliance-operator-holds-kuberlr
 refs: {project: compliance-operator, artifact: kuberlr-kubectl-image}
 spec:
-  at: {file: chart/values.yaml, key: global.kubectl.tag, format: yaml}
+  at:
+    - {file: chart/values.yaml, key: global.kubectl.tag, format: yaml}
+    - {file: chart/Chart.yaml, key: 'image: rancher/kuberlr-kubectl:(\S+)$', format: regex}
   holds: {kind: release, form: "{tag}"}

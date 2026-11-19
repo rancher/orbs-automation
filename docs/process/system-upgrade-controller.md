@@ -16,7 +16,7 @@ SUC: the controller that applies system-level upgrades to nodes, and the chart R
 ### Version
 
 * **Scheme:** semver, `v0.X.Y`
-* **Tells you:** the minor goes with a Rancher line, but not by a rule: the team keeps a table (v0.20 is 2.15, v0.19 is 2.14, v0.17 is 2.13, v0.16 is 2.12)
+* **Tells you:** the minor goes with a Rancher line, but not by a rule: the team keeps a table (v0.20 is 2.15, v0.19 is 2.14, v0.17 is 2.13, v0.16 is 2.12), which is out of date: v0.21 is 2.16, checked against the releases
 * **Patch:** this project's own
 
 ### Stable and prerelease
@@ -103,7 +103,7 @@ None.
 
 * **Hard today:** the line-to-series table is kept by the team, outside the repo
 * **Hard today:** the chart of older lines is customised in `rancher/charts`, so this repo says nothing about it
-* **Not known:** v2.16's series, and the series for v2.17
+* **Not known:** the series for v2.17
 * **Not known:** whether any release branch is still used
 
 ## Config notes
