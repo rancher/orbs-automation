@@ -12,10 +12,13 @@ import (
 
 func plan() domain.Plan {
 	return domain.Plan{
-		Repo: "rancher/backup-restore-operator", PR: 42, Title: "Fix the thing", URL: "https://github.com/rancher/backup-restore-operator/pull/42",
-		Base: "main", Shape: domain.ShapeRebase, Picks: []string{"1111111aaaa", "2222222bbbb"},
+		Repo: "rancher/backup-restore-operator", Base: "main",
+		PRs: []domain.Source{
+			{Number: 42, Title: "Fix the thing", URL: "https://github.com/rancher/backup-restore-operator/pull/42", Shape: domain.ShapeRebase, Picks: []string{"1111111aaaa", "2222222bbbb"}},
+			{Number: 43, Title: "Follow-up", URL: "https://github.com/rancher/backup-restore-operator/pull/43", Shape: domain.ShapeSquash, Picks: []string{"4444444dddd"}},
+		},
 		Targets: []domain.Target{
-			{Branch: "release/v7.x", Line: "v2.15", Status: domain.StatusReady, Files: []string{"build.yaml"},
+			{Branch: "release/v7.x", Line: "v2.15", Status: domain.StatusReady, Files: []string{"build.yaml"}, PRs: []int{42, 43},
 				Preview: &proposal.Preview{Branch: "bot/backport-42-ab12cd34-v7.x", Title: "[Backport v2.15] Fix the thing", Body: "## Summary\nthe body"},
 				Result: &proposal.TargetResult{Status: proposal.ResultOpened, Branch: "bot/backport-42-ab12cd34-v7.x",
 					PR:      &proposal.PRRef{Number: 77, URL: "https://github.com/rancher/backup-restore-operator/pull/77"},
@@ -29,8 +32,9 @@ func TestRenderTextSaysWhatThePRIsHowItLandedAndWhatEachTargetGot(t *testing.T) 
 	out := renderText(plan(), false, style.Plain())
 
 	for _, want := range []string{
-		"Backport: rancher/backup-restore-operator#42", "Fix the thing", "rebase", "1111111", "2222222",
-		"v2.15", "release/v7.x", "branch  bot/backport-42-ab12cd34-v7.x", "title   [Backport v2.15] Fix the thing",
+		"Backport: rancher/backup-restore-operator", "#42 Fix the thing", "merged to main as a rebase: picks 1111111, 2222222",
+		"#43 Follow-up", "as a squash: picks 4444444",
+		"v2.15", "release/v7.x", "carries #42, #43", "branch  bot/backport-42-ab12cd34-v7.x", "title   [Backport v2.15] Fix the thing",
 		"opened #77 https://github.com/rancher/backup-restore-operator/pull/77", "commit 3333333 Fix part one",
 		"resolved by hand: build.yaml",
 		"v2.14", "already backported",
@@ -38,6 +42,25 @@ func TestRenderTextSaysWhatThePRIsHowItLandedAndWhatEachTargetGot(t *testing.T) 
 		assert.Contains(t, out, want)
 	}
 	assert.NotContains(t, out, "## Summary", "the body is for --preview")
+}
+
+func TestRenderTextOfASinglePRSaysNothingOfABundle(t *testing.T) {
+	p := plan()
+	p.PRs = p.PRs[:1]
+	p.Targets[0].PRs = []int{42}
+
+	out := renderText(p, false, style.Plain())
+
+	assert.NotContains(t, out, "carries")
+}
+
+func TestRenderTextNamesThePRsATargetLeftOutBecauseItHadThem(t *testing.T) {
+	p := plan()
+	p.Targets[0].PRs, p.Targets[0].Skipped = []int{43}, []int{42}
+
+	out := renderText(p, false, style.Plain())
+
+	assert.Contains(t, out, "already on the branch: #42")
 }
 
 func TestRenderTextWithPreviewHasTheBody(t *testing.T) {
