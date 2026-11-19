@@ -491,10 +491,14 @@ func resolve(ctx context.Context, g Git, in Input, w *proposal.Work, st *state, 
 	abandon := func(err error) (string, error) {
 		return "", errors.Join(err, g.AbortPick(ctx, w.Dir))
 	}
+	if in.DryRun {
+		// Nobody is waiting on a dry run, so a conflict is a finding that the others go past.
+		return abandon(fmt.Errorf("would conflict: %s conflicts in %s", conflict.Commit[:min(7, len(conflict.Commit))], strings.Join(conflict.Files, ", ")))
+	}
 	var left []string
 	for {
 		choice := Abort
-		if in.Resolver != nil && !in.DryRun {
+		if in.Resolver != nil {
 			var err error
 			choice, err = in.Resolver.Resolve(ctx, Conflict{
 				Branch: st.tg.Branch, Line: st.tg.Line, Commit: conflict.Commit, Subject: subject, Dir: w.Dir, Files: conflict.Files, Left: left,
