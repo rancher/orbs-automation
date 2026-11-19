@@ -157,6 +157,26 @@ func (r *Resolver) ForPinnerTag(ctx context.Context, v *chain.Holding, pinnerTag
 // TagOf is the release of h's stream that a value h holds is the form of: the inverse of
 // writing the release with the holding's form, found among the tags the stream accepts.
 func (r *Resolver) TagOf(ctx context.Context, h *chain.Holding, value string) (string, bool) {
+	a := h.Artifact()
+	if a == nil {
+		return "", false
+	}
+	tags, err := r.tagsOf(ctx, h.Producer().Slug())
+	if err != nil {
+		return "", false
+	}
+	for _, t := range tags {
+		if !a.Stream().TagMatches(t.Name) {
+			continue
+		}
+		rel, err := bump.ReleaseOf(h, t.Name, t.Commit)
+		if err != nil {
+			return "", false
+		}
+		if written, err := bump.FormOf(h, rel); err == nil && written == value {
+			return t.Name, true
+		}
+	}
 	return "", false
 }
 
@@ -164,5 +184,10 @@ func (r *Resolver) TagOf(ctx context.Context, h *chain.Holding, value string) (s
 // holding v: what the go.mod of that release requires, where ForPinnerTag takes the
 // release the pinner is brought to. pinnerValue is what the pinning holding holds.
 func (r *Resolver) Required(ctx context.Context, v *chain.Holding, pinnerValue string) Want {
-	return Want{}
+	pinner := v.PinnedBy()
+	tag, ok := r.TagOf(ctx, pinner, pinnerValue)
+	if !ok {
+		return Want{Err: fmt.Errorf("%s holds %q, which is no release of %s", pinner.Name(), pinnerValue, pinner.Artifact().Stream().Name())}
+	}
+	return r.ForPinnerTag(ctx, v, tag)
 }
