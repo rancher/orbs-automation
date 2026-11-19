@@ -14,6 +14,10 @@ type Git interface {
 	ParentCount(ctx context.Context, dir, commit string) (int, error)
 	FirstParentLog(ctx context.Context, dir, tip string, n int) ([]gitcli.Logged, error)
 	HoldsPickOf(ctx context.Context, dir, ref, commit string) (bool, error)
+	// PatchPresent reports whether upstream has a commit with the same change as commit.
+	PatchPresent(ctx context.Context, dir, upstream, commit string) (bool, error)
+	// IsAncestor reports whether a is an ancestor of b.
+	IsAncestor(ctx context.Context, dir, a, b string) (bool, error)
 	CherryPick(ctx context.Context, dir string, p gitcli.Pick) (commit string, err error)
 	Unmerged(ctx context.Context, dir string) ([]string, error)
 	ConflictMarkers(dir string, files []string) ([]string, error)
@@ -59,3 +63,11 @@ func (GitCLI) ContinuePick(ctx context.Context, dir string, files []string, p gi
 }
 
 func (GitCLI) AbortPick(ctx context.Context, dir string) error { return gitcli.AbortPick(ctx, dir) }
+
+func (GitCLI) PatchPresent(ctx context.Context, dir, upstream, commit string) (bool, error) {
+	return gitcli.PatchPresent(ctx, dir, upstream, commit)
+}
+
+func (GitCLI) IsAncestor(ctx context.Context, dir, a, b string) (bool, error) {
+	return gitcli.IsAncestor(ctx, dir, a, b)
+}

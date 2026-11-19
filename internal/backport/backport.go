@@ -38,6 +38,18 @@ const (
 // ErrAborted is the failure of a target whose conflict was abandoned.
 var ErrAborted = errors.New("the cherry-pick was abandoned")
 
+// MaxPRs is how many PRs one backport may bundle.
+const MaxPRs = 10
+
+// Source is a merged PR that is carried, and how it landed.
+type Source struct {
+	Number int      `json:"number"`
+	Title  string   `json:"title"`
+	URL    string   `json:"url"`
+	Shape  Shape    `json:"shape,omitempty"`
+	Picks  []string `json:"picks,omitempty"` // the commits it picks, oldest first
+}
+
 // Host is what a backport reads of the PR on its host.
 type Host interface {
 	Get(ctx context.Context, slug string, number int) (pulls.Detail, error)
@@ -72,6 +84,7 @@ const (
 type Conflict struct {
 	Branch  string   // the target branch
 	Line    string   // its Rancher line, when it has one
+	PR      int      // the PR whose commit was being picked
 	Commit  string   // the commit that was being picked
 	Subject string   // its first line
 	Dir     string   // the work directory, where the files are
@@ -90,7 +103,9 @@ type Resolver interface {
 type Input struct {
 	Project string   // the repo, by config name or slug; empty for the one the working directory is in
 	Lines   []string // the targets: Rancher lines or release branches, as typed
-	PR      int      // the number of the merged PR
+	PR      int      // the number of the merged PR, when PRs is not set
+	// PRs are the merged PRs to carry, one or several. Several are a bundle.
+	PRs []int
 	// Repo is the owner/name a PR URL named, or empty. It must be the repo of the project.
 	Repo string
 	// BranchPrefix is the user's branchPrefix setting, which replaces the project's.
@@ -109,18 +124,20 @@ type Input struct {
 
 // Plan is what a backport would do, and what a run did.
 type Plan struct {
-	Repo    string               `json:"repo"` // the repository, owner/name
-	PR      int                  `json:"pr"`
-	Title   string               `json:"title"`
-	URL     string               `json:"url"`
-	Base    string               `json:"base"`
-	Shape   Shape                `json:"shape,omitempty"`
-	Picks   []string             `json:"picks,omitempty"`
-	Clone   string               `json:"clone,omitempty"`
-	Remote  string               `json:"remote,omitempty"`
-	Push    *proposal.PushTarget `json:"push,omitempty"`
-	Actor   *proposal.Actor      `json:"actor,omitempty"`
-	Targets []Target             `json:"targets,omitempty"`
+	Repo   string               `json:"repo"` // the repository, owner/name
+	PR     int                  `json:"pr"`
+	Title  string               `json:"title"`
+	URL    string               `json:"url"`
+	Base   string               `json:"base"`
+	Shape  Shape                `json:"shape,omitempty"`
+	Picks  []string             `json:"picks,omitempty"`
+	Clone  string               `json:"clone,omitempty"`
+	Remote string               `json:"remote,omitempty"`
+	Push   *proposal.PushTarget `json:"push,omitempty"`
+	Actor  *proposal.Actor      `json:"actor,omitempty"`
+	// PRs are the PRs that are carried, in the order they are picked.
+	PRs     []Source `json:"prs,omitempty"`
+	Targets []Target `json:"targets,omitempty"`
 }
 
 // Target is one release branch the PR is carried to.
@@ -129,6 +146,11 @@ type Target struct {
 	Line   string `json:"line,omitempty"`
 	Head   string `json:"head,omitempty"` // the commit at the head of the branch on the host
 	Status Status `json:"status"`
+	// PRs are the numbers of the PRs this target's PR carries, and Skipped those left out
+	// because the target already had them. Picks are the commits picked, in order.
+	PRs     []int    `json:"prs,omitempty"`
+	Skipped []int    `json:"skipped,omitempty"`
+	Picks   []string `json:"picks,omitempty"`
 	// Files are the files that had conflicts, resolved by hand.
 	Files   []string          `json:"conflicts,omitempty"`
 	Preview *proposal.Preview `json:"preview,omitempty"`
