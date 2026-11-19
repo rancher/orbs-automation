@@ -3,7 +3,11 @@ package backport
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/rancher/orbs-automation/internal/backport"
 )
@@ -42,11 +46,122 @@ type Terminal struct {
 	Start func(ctx context.Context, command, dir string) error
 
 	in *bufio.Reader
+	// byHand says the person chose to edit the files themselves, so no editor is opened.
+	byHand bool
 }
 
 var _ backport.Resolver = (*Terminal)(nil)
 
 // Resolve tells the person about the conflict and waits for the answer.
 func (t *Terminal) Resolve(ctx context.Context, c backport.Conflict) (backport.Choice, error) {
-	return 0, nil
+	if t.in == nil {
+		t.in = bufio.NewReader(t.In)
+	}
+	t.say(conflictText(c))
+	if t.Editor == "" && !t.byHand {
+		if err := t.chooseEditor(); err != nil {
+			return 0, err
+		}
+	}
+	t.open(ctx, c.Dir)
+	for {
+		t.say("c = continue once the conflicts are resolved, a = abort this backport, o = open the editor again: ")
+		answer, err := t.ask()
+		if err != nil {
+			return 0, err
+		}
+		switch strings.ToLower(answer) {
+		case "c", "continue":
+			return backport.Continue, nil
+		case "a", "abort", "":
+			if answer == "" && !t.atEnd() {
+				continue
+			}
+			return backport.Abort, nil
+		case "o", "open":
+			t.open(ctx, c.Dir)
+		}
+	}
+}
+
+// conflictText says what stopped and where the files are.
+func conflictText(c backport.Conflict) string {
+	var b strings.Builder
+	label := c.Line
+	if label == "" {
+		label = c.Branch
+	}
+	short := c.Commit[:min(7, len(c.Commit))]
+	fmt.Fprintf(&b, "\nThe pick of %s %q conflicts on %s (%s).\nResolve these files in %s:\n", short, c.Subject, label, c.Branch, c.Dir)
+	for _, f := range c.Files {
+		fmt.Fprintf(&b, "  %s\n", f)
+	}
+	for _, f := range c.Left {
+		fmt.Fprintf(&b, "  %s still has a conflict marker\n", f)
+	}
+	return b.String()
+}
+
+func (t *Terminal) say(text string) { _, _ = io.WriteString(t.Out, text) }
+
+// atEnd reports whether the input has ended.
+func (t *Terminal) atEnd() bool {
+	_, err := t.in.Peek(1)
+	return err != nil
+}
+
+// ask reads one answer, trimmed. The end of the input is an empty answer, and atEnd tells it
+// from a blank line.
+func (t *Terminal) ask() (string, error) {
+	line, err := t.in.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	return strings.TrimSpace(line), nil
+}
+
+// open starts the editor on the work directory, and says so when it will not start, since the
+// person can still open the directory themselves.
+func (t *Terminal) open(ctx context.Context, dir string) {
+	if t.Editor == "" || t.byHand {
+		return
+	}
+	if err := t.Start(ctx, t.Editor, dir); err != nil {
+		t.say(fmt.Sprintf("could not open %s: %v\n", t.Editor, err))
+	}
+}
+
+// chooseEditor asks which editor to open, from the ones installed or a command typed in, and
+// keeps a choice for the next run. Choosing none leaves the editing to the person.
+func (t *Terminal) chooseEditor() error {
+	var found []Editor
+	for _, e := range Editors {
+		if t.Installed(e.Command) {
+			found = append(found, e)
+		}
+	}
+	t.say("\nWhich editor should open the files?\n")
+	for i, e := range found {
+		t.say(fmt.Sprintf("  %d  %s (%s)\n", i+1, e.Name, e.Command))
+	}
+	t.say("  n  none, I will edit them myself\nChoose a number, n, or type a command: ")
+	answer, err := t.ask()
+	if err != nil {
+		return err
+	}
+	if n, err := strconv.Atoi(answer); err == nil && n >= 1 && n <= len(found) {
+		answer = found[n-1].Command
+	}
+	switch strings.ToLower(answer) {
+	case "", "n", "none":
+		t.byHand = true
+		return nil
+	}
+	t.Editor = answer
+	if t.Remember != nil {
+		if err := t.Remember(answer); err != nil {
+			t.say(fmt.Sprintf("could not keep %s as your editor: %v\n", answer, err))
+		}
+	}
+	return nil
 }
