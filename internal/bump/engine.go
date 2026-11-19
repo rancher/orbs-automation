@@ -426,7 +426,7 @@ func (r Route) TargetsFor(line string) ([]Target, error) {
 		stage := h.Stage()
 		if h.Artifact().Stream().Universal() {
 			for _, branch := range r.Consumer.BranchesOfStage(stage) {
-				if l := r.Consumer.LineOfBranch(branch); l == "" || h.HoldsLine(l) {
+				if l := r.Consumer.LineOfBranch(branch); l == "" || h.AppliesTo(l) {
 					add(branch, h)
 				}
 			}
