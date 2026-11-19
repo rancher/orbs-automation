@@ -187,3 +187,39 @@ func TestTheTagsOfARepositoryAreReadOnce(t *testing.T) {
 	assert.Equal(t, 1, h.reads["acme/la"])
 	assert.Equal(t, 1, h.reads["acme/wr"])
 }
+
+func TestTagOfIsTheReleaseAHeldValueIsTheFormOf(t *testing.T) {
+	g := graph(t)
+	r := New(newHost())
+	h := holding(t, g, "cons-holds-wr") // written as {bareTag}
+
+	tag, ok := r.TagOf(bg, h, "v1.7.4")
+	assert.True(t, ok)
+	assert.Equal(t, "v1.7.4", tag)
+
+	_, ok = r.TagOf(bg, h, "v9.9.9")
+	assert.False(t, ok, "no tag of the stream is written so")
+	_, ok = r.TagOf(bg, h, "not a version")
+	assert.False(t, ok)
+}
+
+func TestRequiredIsTheFloorOfTheReleaseThePinnerHoldsNow(t *testing.T) {
+	g := graph(t)
+
+	got := New(newHost()).Required(bg, g.Virtual()[0], "v1.7.4")
+
+	require.NoError(t, got.Err)
+	assert.Equal(t, "v0.2.5", got.Release.Tag, "what the go.mod of wrangler v1.7.4 requires, though v1.7.5 is out")
+	assert.Equal(t, "acme/wr v1.7.4", got.RequiredBy)
+	assert.True(t, got.Floor)
+}
+
+func TestRequiredOfAPinnerValueThatIsNoReleaseHasNoValue(t *testing.T) {
+	g := graph(t)
+
+	got := New(newHost()).Required(bg, g.Virtual()[0], "v9.9.9")
+
+	require.Error(t, got.Err)
+	assert.Contains(t, got.Err.Error(), "no release")
+	assert.Empty(t, got.Release.Tag)
+}
