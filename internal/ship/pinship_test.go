@@ -45,7 +45,7 @@ func broGoMod(la string) string {
 
 func newPinWorkspace(t *testing.T, extra ...string) pinWorkspace {
 	t.Helper()
-	g, _ := pinGraph(t, laStream, extra...)
+	g := pinGraph(t, laStream, extra...)
 	return pinWorkspace{g: g, host: pinHost{
 		files: map[string]string{
 			"acme/wr@sha-v1.7.4:go.mod": "", // not read: the tag's commit is not a ref
@@ -227,7 +227,7 @@ func TestHoldingsOfLassoSayWhenNoFileOfTheVirtualHoldingRequiresIt(t *testing.T)
 // and lasso v0.2.5 on both branches.
 func withPinDestination(t *testing.T) pinWorkspace {
 	t.Helper()
-	g, _ := pinGraph(t, laStream,
+	g := pinGraph(t, laStream,
 		chaintest.Doc("Project", "dest", "", "  repo: {name: acme/dest}\n  finalDestination: true\n  branches:\n    layout: perLine\n    lines: [{line: v2.16}, {line: v2.15, branch: r15}]\n"),
 		chaintest.Doc("Holding", "dest-holds-wr", "{project: dest, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.15}}\n"),
 	)

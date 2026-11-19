@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/texts"
+	"github.com/rancher/orbs-automation/internal/pin"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/proposal"
@@ -80,6 +81,8 @@ type Row struct {
 	holding *chain.Holding
 	// release is the release a release holding is to be written with.
 	release *bump.Release
+	// pinnedBy is, for the row of the virtual holding a pin makes, what its release was derived from.
+	pinnedBy *pin.Companion
 }
 
 // marker is what identifies the PR of the branch: the holder, the branch and the
@@ -177,24 +180,84 @@ func rowsOf(ctx context.Context, ws Reader, in Input, holder *chain.Project, ref
 			continue
 		}
 		got := heldLine(ctx, ws, holder, refs, tags, h, line)
-		row := Row{SeriesLine: got.SeriesLine, Holding: h.Name(), Kind: h.Kind(), holding: h, release: got.release}
-		switch {
-		case got.Error != "":
-			row.Status, row.Reason = StatusFailed, got.Error
-		case got.UpToDate:
-			row.Status = StatusUpToDate
-		case got.Left != "":
-			row.Status, row.Reason = StatusBlocked, got.Left
-		case got.Acknowledged != "":
-			row.Status, row.Reason = StatusBlocked, "the difference is acknowledged: "+got.Acknowledged
-		case len(h.Edits()) == 0:
-			row.Status, row.Reason = StatusBlocked, fmt.Sprintf("%v: Holding %q is only read until one does", bump.ErrNoEdit, h.Name())
-		default:
-			row.Status = StatusReady
+		row := rowFor(h, got)
+		companions := companionRows(ctx, ws, holder, refs, tags, h, line, got, row)
+		for _, c := range companions {
+			if c.Status == StatusFailed && row.Status == StatusReady {
+				// the write of wrangler alone would put go.mod out of step with what it requires
+				row.Status, row.Reason = StatusBlocked, fmt.Sprintf("its companion %s cannot be derived: %s", c.Holding, c.Reason)
+			}
 		}
 		rows = append(rows, row)
+		rows = append(rows, companions...)
 	}
 	return rows
+}
+
+// rowFor is the row of a holding on a line, from what was read of it.
+func rowFor(h *chain.Holding, got held) Row {
+	row := Row{SeriesLine: got.SeriesLine, Holding: h.Name(), Kind: h.Kind(), holding: h, release: got.release}
+	switch {
+	case got.Error != "":
+		row.Status, row.Reason = StatusFailed, got.Error
+	case got.UpToDate:
+		row.Status = StatusUpToDate
+	case got.Acknowledged != "":
+		row.Status, row.Reason = StatusBlocked, "the difference is acknowledged: "+got.Acknowledged
+	case len(bump.PullEdits(h)) == 0:
+		row.Status, row.Reason = StatusBlocked, fmt.Sprintf("%v: Holding %q is only read until one does", bump.ErrNoEdit, h.Name())
+	default:
+		row.Status = StatusReady
+	}
+	return row
+}
+
+// companionRows reads what a holding that pins another Artifact holds of it on a line: the
+// release of the pinned module that the go.mod of the release the holding is brought to
+// requires, as ship derives it. It is a floor, so a newer one is current. A holding whose
+// own value could not be chosen has no companions, and the files that do not require the
+// module have none either.
+func companionRows(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding, line string, got held, row Row) []Row {
+	if got.release == nil || h.Kind() != chain.HoldsRelease {
+		return nil
+	}
+	var rows []Row
+	src := cachedSource{ws, tags}
+	for _, v := range h.Pinned() {
+		if !v.AppliesTo(line) {
+			continue
+		}
+		c := pin.Derive(ctx, src, v, got.release.Tag)
+		var read held
+		if c.Error != "" {
+			read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: c.Error}}
+		} else {
+			rel, err := bump.ReleaseOf(v, c.Tag, "")
+			if err != nil {
+				read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: err.Error()}}
+			} else {
+				read = companionLine(ctx, ws, holder, refs, v, line, rel)
+			}
+		}
+		if read.Absent {
+			continue
+		}
+		cr := rowFor(v, read)
+		cr.pinnedBy = &c
+		rows = append(rows, cr)
+	}
+	return rows
+}
+
+// cachedSource is the reader of the run with the tags of each repository read once.
+type cachedSource struct {
+	Reader
+	tags tagSource
+}
+
+func (c cachedSource) UpstreamRefs(_ context.Context, slug string) (git.Refs, error) {
+	tags, err := c.tags(slug)
+	return git.Refs{Tags: tags}, err
 }
 
 // syncBranches groups the rows by the branch they are in, in the order they come, and
@@ -380,6 +443,9 @@ func syncPreview(in Input, holder *chain.Project, b Branch) (proposal.Preview, e
 // sourceOf says where the value of a row comes from, for the PR to read: the series its stream
 // has for the line, or the release it is written with.
 func sourceOf(r Row) string {
+	if r.pinnedBy != nil {
+		return fmt.Sprintf("%s: `%s`, which `%s` requires", r.Holding, r.release.Tag, r.pinnedBy.RequiredBy)
+	}
 	stream := streamOf(r.holding)
 	if r.release != nil {
 		return fmt.Sprintf("%s: `%s` of `%s`", r.Holding, r.release.Tag, stream.Name())

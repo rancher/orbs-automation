@@ -14,7 +14,7 @@ import (
 // pinGraph is wrangler (wr), whose module pins lasso (la), and bro, which holds
 // wrangler for v2.15 and newer. Lasso's tags are v0.2.*. The virtual Holding of
 // lasso in bro is the first the graph makes.
-func pinGraph(t *testing.T, laStream string, extra ...string) (*chain.Graph, *chain.Holding) {
+func pinGraph(t *testing.T, laStream string, extra ...string) *chain.Graph {
 	t.Helper()
 	g := chaintest.Load(t, append([]string{
 		chaintest.Lines("v2.16", "v2.15"),
@@ -28,7 +28,7 @@ func pinGraph(t *testing.T, laStream string, extra ...string) (*chain.Graph, *ch
 		chaintest.Doc("Holding", "bro-holds-wr", "{project: bro, artifact: wr-mod}", "  at: {file: go.mod, key: github.com/acme/wr, format: gomod}\n  holds: {kind: release, form: \"{bareTag}\", accept: all, lines: {since: v2.15}}\n"),
 	}, extra...)...)
 	require.NotEmpty(t, g.Virtual())
-	return g, g.Virtual()[0]
+	return g
 }
 
 const laStream = "  universal: true\n  tagPattern: \"v0.2.*\"\n"
@@ -50,11 +50,4 @@ func (h pinHost) UpstreamFile(_ context.Context, slug, ref, path string) ([]byte
 		return []byte(data), nil
 	}
 	return nil, errors.New("file not found")
-}
-
-func lassoHost(requires string) pinHost {
-	return pinHost{
-		files: map[string]string{"acme/wr@v1.7.4:go.mod": "module github.com/acme/wr\n\nrequire github.com/acme/la " + requires + "\n"},
-		tags:  map[string][]git.Tag{"acme/la": tags("v0.2.4", "v0.2.5", "v0.2.6")},
-	}
 }

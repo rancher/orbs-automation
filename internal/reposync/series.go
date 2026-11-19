@@ -42,9 +42,6 @@ type SeriesLine struct {
 	// difference is expected.
 	Suggest      string `json:"suggest,omitempty"`
 	Acknowledged string `json:"acknowledged,omitempty"`
-	// Left is why a difference is not one to correct here: the holding pins another Artifact,
-	// whose release comes from a go.mod and which ship writes.
-	Left string `json:"left,omitempty"`
 }
 
 // SeriesHoldings reads each series holding of a project, for each line it holds, at the head
@@ -138,31 +135,20 @@ func seriesLinesOf(holder *chain.Project, h *chain.Holding) []string {
 type held struct {
 	SeriesLine
 	release *bump.Release
+	// Absent is for a companion: the files of the line do not require the pinned module.
+	Absent bool
 }
 
 // heldLine reads one line of a pulled holding at the head of the line's branch.
 func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, tags tagSource, h *chain.Holding, line string) held {
-	out := held{SeriesLine: SeriesLine{Line: line}}
-	branch, ok := holder.BranchOfLine(line, h.Stage())
+	out, branch, head, ok := locate(holder, refs, h, line)
 	if !ok {
-		out.Error = fmt.Sprintf("%s has no branch for %s", holder.Slug(), line)
-		return out
-	}
-	out.Branch = branch
-	head, ok := refs.Branch(branch)
-	out.Head = head.Commit
-	if !ok {
-		out.Error = fmt.Sprintf("%s has no branch %s", holder.Slug(), branch)
 		return out
 	}
 	var rel bump.Release
 	rule := chain.RuleSeriesDiffers
 	if h.Kind() == chain.HoldsRelease {
 		rule = chain.RuleReleaseDiffers
-		if len(h.Pinned()) > 0 {
-			out.Left = "it pins another Artifact, whose release comes from a go.mod: ship writes it"
-			return out
-		}
 		want, err := wantedRelease(h, line, tags)
 		if err != nil {
 			out.Error = err.Error()
@@ -171,12 +157,51 @@ func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Re
 		rel = want
 		out.release = &want
 	}
+	return checkLine(ctx, ws, holder, h, line, branch, head, rule, rel, out)
+}
+
+// companionLine reads one line of the virtual holding a pin makes, at the head of the line's
+// branch, against the release its pinning holding's release requires.
+func companionLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Refs, v *chain.Holding, line string, rel bump.Release) held {
+	out, branch, head, ok := locate(holder, refs, v, line)
+	if !ok {
+		return out
+	}
+	out.release = &rel
+	return checkLine(ctx, ws, holder, v, line, branch, head, chain.RuleReleaseDiffers, rel, out)
+}
+
+// locate finds the branch of the line and its head on the host. When it cannot, ok is false and
+// the line says why.
+func locate(holder *chain.Project, refs git.Refs, h *chain.Holding, line string) (out held, branch string, head git.Branch, ok bool) {
+	out = held{SeriesLine: SeriesLine{Line: line}}
+	branch, ok = holder.BranchOfLine(line, h.Stage())
+	if !ok {
+		out.Error = fmt.Sprintf("%s has no branch for %s", holder.Slug(), line)
+		return out, "", git.Branch{}, false
+	}
+	out.Branch = branch
+	head, ok = refs.Branch(branch)
+	out.Head = head.Commit
+	if !ok {
+		out.Error = fmt.Sprintf("%s has no branch %s", holder.Slug(), branch)
+	}
+	return out, branch, head, ok
+}
+
+// checkLine reads what a holding holds at the head of a branch against what the line wants,
+// the release given for a release holding.
+func checkLine(ctx context.Context, ws Reader, holder *chain.Project, h *chain.Holding, line, branch string, head git.Branch, rule string, rel bump.Release, out held) held {
 	check, err := bump.CheckHolding(ctx, bump.HostTree(ws, holder.Slug(), head.Commit), h, line, branch, rel)
 	if err != nil {
 		out.Error = err.Error()
 		return out
 	}
 	out.Want, out.Current, out.UpToDate = check.Want, check.Current, check.UpToDate
+	if check.Absent {
+		out.Absent = true
+		return out
+	}
 	if len(check.Locations) > 0 {
 		out.File = check.Locations[0].Place.File
 	}
@@ -185,7 +210,7 @@ func heldLine(ctx context.Context, ws Reader, holder *chain.Project, refs git.Re
 	}
 	out.Change = check.Change.Description
 	out.Acknowledged, _ = h.Acknowledgement(rule, line)
-	if edits := h.Edits(); len(edits) > 0 && out.Acknowledged == "" {
+	if edits := bump.PullEdits(h); len(edits) > 0 && out.Acknowledged == "" {
 		out.Suggest = fmt.Sprintf("run `gero repo sync %s --line %s` to open a pull request on %s that writes %s, with Edit %s", holder.Name(), line, branch, out.Want, edits[0].Name())
 	}
 	return out

@@ -130,7 +130,9 @@ var ErrNoEdit = errors.New("no Edit follows the holding")
 // PullRoute is the route that writes holdings of one holder that are brought in line
 // from where they hold, and not shipped from a producer's release: a series, and a release
 // that the caller chose from the producer's tags (Target.Pulled). A holding that pins
-// another Artifact is not pulled: its companion comes from a go.mod, and is ship's.
+// another Artifact is pulled with its companion, the virtual holding its pin makes, which
+// the caller gives a release too (derived from the go.mod of the release the pinning
+// holding is written with); the companion follows the Edits of the holding it comes from.
 // The holdings may be of several producers, so
 // the route has none of its own, and one run writes them all and runs the Edits that
 // follow them once. A pulled holding is no route of the chain, and this is the one way
@@ -143,15 +145,11 @@ func (e *Engine) PullRoute(holdings ...*chain.Holding) (Route, error) {
 	var producer *chain.Project
 	for i, h := range holdings {
 		switch {
-		case h.Virtual():
-			return Route{}, fmt.Errorf("Holding %q is virtual: its release is the one the pin it follows resolves, which ship writes", h.Name())
-		case h.Kind() == chain.HoldsRelease && len(h.Pinned()) > 0:
-			return Route{}, fmt.Errorf("Holding %q pins another Artifact, whose release comes from a go.mod: ship writes it", h.Name())
 		case h.Kind() != chain.HoldsSeries && h.Kind() != chain.HoldsRelease:
 			return Route{}, fmt.Errorf("Holding %q holds a %s, which is not pulled", h.Name(), h.Kind())
 		case h.Holder() != holdings[0].Holder():
 			return Route{}, fmt.Errorf("Holding %q is in %s, not %s like %q", h.Name(), h.Holder().Slug(), holdings[0].Holder().Slug(), holdings[0].Name())
-		case len(h.Edits()) == 0:
+		case len(PullEdits(h)) == 0:
 			return Route{}, fmt.Errorf("%w: Holding %q is only read until one does", ErrNoEdit, h.Name())
 		case e.unusable[h]:
 			return Route{}, fmt.Errorf("Holding %q cannot be written: its format or an edit that follows it is not usable", h.Name())
@@ -163,6 +161,15 @@ func (e *Engine) PullRoute(holdings ...*chain.Holding) (Route, error) {
 		}
 	}
 	return Route{Route: chain.Route{Producer: producer, Consumer: holdings[0].Holder(), Holdings: holdings}, engine: e, pull: true}, nil
+}
+
+// PullEdits returns the edits that follow a holding for a pull: its own, and for the virtual
+// holding a pin makes, those of the holding it comes from, which write it.
+func PullEdits(h *chain.Holding) []*chain.Edit {
+	if h.Virtual() {
+		return h.PinnedBy().Edits()
+	}
+	return h.Edits()
 }
 
 // producerSlug is the repository of the route's producer, and empty for a route of
