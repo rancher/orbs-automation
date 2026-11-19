@@ -5,12 +5,12 @@ import (
 	"slices"
 
 	"github.com/rancher/orbs-automation/internal/chain"
-	"github.com/rancher/orbs-automation/internal/pin"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // Companion is a release shipped with the one asked for, because the Artifact of
 // that release pins the Artifact of this one. A Companion with an Error stops the run.
-type Companion = pin.Companion
+type Companion = wanted.Companion
 
 // companion is a Companion and the virtual Holding it is the release of.
 type companion struct {
@@ -26,7 +26,7 @@ type derivedKey struct{ holding, release string }
 // and the tag each pin resolves for the release the target gets, and says what was
 // derived, each once. A pin that cannot be resolved is in the list with its error and
 // is not given to any target: the plan blocks on it. The specs given are not changed.
-func (r resolution) withCompanions(ctx context.Context, src pin.Source, specs []spec) ([]spec, []Companion) {
+func (r resolution) withCompanions(ctx context.Context, src wanted.Source, specs []spec) ([]spec, []Companion) {
 	out := slices.Clone(specs)
 	var list []Companion
 	for i, sp := range specs {
@@ -44,7 +44,7 @@ func (r resolution) withCompanions(ctx context.Context, src pin.Source, specs []
 			key := derivedKey{v.Name(), sp.release.Tag}
 			c, ok := r.derived[key]
 			if !ok {
-				c = companion{pin.Derive(ctx, src, v, sp.release.Tag), v}
+				c = companion{wanted.Derive(ctx, src, v, sp.release.Tag), v}
 				r.derived[key] = c
 			}
 			if !slices.ContainsFunc(list, func(o Companion) bool { return o.RequiredBy == c.RequiredBy && o.Module == c.Module }) {

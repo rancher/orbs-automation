@@ -12,10 +12,10 @@ import (
 	"github.com/rancher/orbs-automation/internal/bump"
 	"github.com/rancher/orbs-automation/internal/chain"
 	"github.com/rancher/orbs-automation/internal/gero/texts"
-	"github.com/rancher/orbs-automation/internal/pin"
 	"github.com/rancher/orbs-automation/internal/platform/git"
 	"github.com/rancher/orbs-automation/internal/platform/templates"
 	"github.com/rancher/orbs-automation/internal/proposal"
+	"github.com/rancher/orbs-automation/internal/wanted"
 )
 
 // Input is what the user asked to sync: the held values of one project.
@@ -82,7 +82,7 @@ type Row struct {
 	// release is the release a release holding is to be written with.
 	release *bump.Release
 	// pinnedBy is, for the row of the virtual holding a pin makes, what its release was derived from.
-	pinnedBy *pin.Companion
+	pinnedBy *wanted.Companion
 }
 
 // marker is what identifies the PR of the branch: the holder, the branch and the
@@ -227,7 +227,7 @@ func companionRows(ctx context.Context, ws Reader, holder *chain.Project, refs g
 		if !v.AppliesTo(line) {
 			continue
 		}
-		c := pin.Derive(ctx, src, v, got.release.Tag)
+		c := wanted.Derive(ctx, src, v, got.release.Tag)
 		var read held
 		if c.Error != "" {
 			read = held{SeriesLine: SeriesLine{Line: line, Branch: row.Branch, Head: row.Head, Error: c.Error}}

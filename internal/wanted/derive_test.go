@@ -1,4 +1,4 @@
-package pin
+package wanted
 
 import (
 	"context"
@@ -60,20 +60,10 @@ func lassoHost(requires string) pinHost {
 	}
 }
 
-var ctx = context.Background()
-
-func tags(names ...string) []git.Tag {
-	out := make([]git.Tag, len(names))
-	for i, n := range names {
-		out[i] = git.Tag{Name: n, Commit: "sha-" + n}
-	}
-	return out
-}
-
 func TestDeriveTakesTheReleaseOfThePinnedModuleFromTheGoModOfTheTag(t *testing.T) {
 	_, v := pinGraph(t, laStream)
 
-	got := Derive(ctx, lassoHost("v0.2.5"), v, "v1.7.4")
+	got := Derive(bg, lassoHost("v0.2.5"), v, "v1.7.4")
 
 	assert.Empty(t, got.Error)
 	assert.Equal(t, "v0.2.5", got.Tag)
@@ -90,7 +80,7 @@ func TestDeriveReadsTheFileThePinNames(t *testing.T) {
 	host := lassoHost("v0.2.5")
 	host.files["acme/wr@v1.7.5:go.mod"] = "module github.com/acme/wr\n\nrequire github.com/acme/la v0.2.6\n"
 
-	assert.Equal(t, "v0.2.6", Derive(ctx, host, v, "v1.7.5").Tag, "the file of the tag asked for")
+	assert.Equal(t, "v0.2.6", Derive(bg, host, v, "v1.7.5").Tag, "the file of the tag asked for")
 }
 
 func TestDeriveRefusesWhatNoReleaseCanBeMadeOf(t *testing.T) {
@@ -116,7 +106,7 @@ func TestDeriveRefusesWhatNoReleaseCanBeMadeOf(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, v := pinGraph(t, tt.stream)
 
-			got := Derive(ctx, tt.host(), v, tt.pinner)
+			got := Derive(bg, tt.host(), v, tt.pinner)
 
 			assert.Contains(t, got.Error, tt.contains)
 			assert.Empty(t, got.Tag, "no release was derived")
@@ -129,7 +119,7 @@ func TestDeriveMakesATagWithThePrefixOfTheStream(t *testing.T) {
 	host := lassoHost("v0.2.5")
 	host.tags["acme/la"] = tags("sub/v0.2.4", "sub/v0.2.5")
 
-	got := Derive(ctx, host, v, "v1.7.4")
+	got := Derive(bg, host, v, "v1.7.4")
 
 	assert.Empty(t, got.Error)
 	assert.Equal(t, "sub/v0.2.5", got.Tag, "the version is the bare tag, and the stream's prefix goes before it")

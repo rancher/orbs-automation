@@ -1,8 +1,4 @@
-// Package pin derives the release of a pinned Artifact that goes with a release of the
-// Artifact that pins it: wrangler's go.mod requires a lasso, and a consumer that holds
-// wrangler holds that lasso too. Both ship, which writes a release it was given, and
-// repo sync, which writes the newest one of a stream, take the companion from here.
-package pin
+package wanted
 
 import (
 	"context"
@@ -33,12 +29,6 @@ type Companion struct {
 	// require the module, requires a version no release has, or one of another
 	// stream.
 	Error string `json:"error,omitempty"`
-}
-
-// Source is what deriving a companion reads from the host.
-type Source interface {
-	UpstreamRefs(ctx context.Context, slug string) (git.Refs, error)
-	UpstreamFile(ctx context.Context, slug, ref, path string) ([]byte, error)
 }
 
 // pseudoVersion is the tail of a Go pseudo-version, which names a commit and no tag.
