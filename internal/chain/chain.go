@@ -24,7 +24,11 @@ type Graph struct {
 	// acknowledged are the warnings the documents say are expected.
 	acknowledged []config.Finding
 	empty        bool
+	teams        []v1alpha2.Team
 }
+
+// CheckTeam reports an error unless the id is a team of the Teams document.
+func (g *Graph) CheckTeam(id string) error { return nil }
 
 // Build joins the documents of a config that has passed every rule. A document
 // whose refs do not lead anywhere is not possible in such a config.

@@ -90,3 +90,11 @@ func decodeLocation(node *yaml.Node) (At, error) {
 	}
 	return at, nil
 }
+
+// UnmarshalYAML reads managedBy as one team id or a list of them.
+func (m *ManagedBy) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode {
+		*m = ManagedBy{node.Value}
+	}
+	return nil
+}

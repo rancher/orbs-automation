@@ -127,8 +127,8 @@ func (m *mindmapWriter) project(g *chain.Graph, v *view, p *chain.Project) {
 		marks = append(marks, classExternal)
 	case p.Shared():
 		marks = append(marks, classShared)
-	case p.ManagedBy() != "":
-		marks = append(marks, "managed by "+p.ManagedBy())
+	case p.ManagedByLabel() != "":
+		marks = append(marks, "managed by "+p.ManagedByLabel())
 	}
 	if p.FinalDestination() {
 		marks = append(marks, classHub)
@@ -291,8 +291,8 @@ func writeProject(b *strings.Builder, v *view, p *chain.Project) {
 		class = classExternal
 	case p.Shared():
 		class = classShared
-	case p.ManagedBy() != "":
-		label += "\nmanaged by " + p.ManagedBy()
+	case p.ManagedByLabel() != "":
+		label += "\nmanaged by " + p.ManagedByLabel()
 	}
 	classes := class
 	if p.FinalDestination() {

@@ -219,7 +219,7 @@ func changes(in previewInput) string {
 // managedByWords says who manages a project, for the PR to read: managed by a
 // team, or by none that is named.
 func managedByWords(p *chain.Project) string {
-	if team := p.ManagedBy(); team != "" {
+	if team := p.ManagedByLabel(); team != "" {
 		return "which " + team + " manages"
 	}
 	return "which no team names"

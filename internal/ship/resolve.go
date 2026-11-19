@@ -396,7 +396,7 @@ func pickRoute(producer *chain.Project, routes []bump.Route, to string) (bump.Ro
 // project the active team does not own.
 func notOwnedConsumer(producer, consumer *chain.Project, team string) error {
 	return fmt.Errorf("%w: %s is managed by %s, so gero only ships it into a project %s owns or one that is shared, and %s is neither",
-		ErrNotOwned, producer.Name(), orUnspecified(producer.ManagedBy()), orTheActiveTeam(team), consumer.Name())
+		ErrNotOwned, producer.Name(), orUnspecified(producer.ManagedByLabel()), orTheActiveTeam(team), consumer.Name())
 }
 
 // orUnspecified is the team of a project, or a word for none.
@@ -422,7 +422,7 @@ func notOwned(p *chain.Project, team string) error {
 	if team == "" {
 		active = "is not owned by the active team"
 	}
-	if by := p.ManagedBy(); by != "" {
+	if by := p.ManagedByLabel(); by != "" {
 		return fmt.Errorf("%w: %s %s, so gero only observes it, and %s ships its releases", ErrNotOwned, p.Name(), active, by)
 	}
 	return fmt.Errorf("%w: %s %s, so gero only observes it", ErrNotOwned, p.Name(), active)

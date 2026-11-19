@@ -357,7 +357,7 @@ func skippedNote(res resolution, specs []spec) string {
 		return ""
 	}
 	return fmt.Sprintf("%s is managed by %s, so gero did not run the %d step(s) that run from its repo (%s) and the PRs may be incomplete",
-		res.producer.Slug(), orUnspecified(res.producer.ManagedBy()), len(runs), strings.Join(runs, ", "))
+		res.producer.Slug(), orUnspecified(res.producer.ManagedByLabel()), len(runs), strings.Join(runs, ", "))
 }
 
 // overall is the state of the whole plan.

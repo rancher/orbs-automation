@@ -190,7 +190,7 @@ func matches(p *chain.Project, pattern string) bool {
 
 // managedBy says whether the project's managedBy is the team, whatever the case.
 func managedBy(p *chain.Project, team string) bool {
-	return p.ManagedBy() != "" && strings.EqualFold(p.ManagedBy(), team)
+	return slices.ContainsFunc(p.ManagedBy(), func(id string) bool { return strings.EqualFold(id, team) })
 }
 
 // row is one line of a project: where it is branched, and what it releases.

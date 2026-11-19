@@ -655,7 +655,7 @@ func (s *set) editSteps() {
 // hasTeam reports whether a team manages the repo: it names one that is not
 // shared, which no team owns, and is not outside the organization.
 func hasTeam(repo Repo) bool {
-	return repo.ManagedBy != "" && repo.ManagedBy != ManagedByShared && !repo.External
+	return len(repo.ManagedBy) > 0 && repo.ManagedBy[0] != ManagedByShared && !repo.External
 }
 
 // acknowledgements checks what each document says is expected, and marks the

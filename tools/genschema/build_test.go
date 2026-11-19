@@ -53,6 +53,7 @@ func TestBuildMakesAFileForEachKindThePairAndTheUserFile(t *testing.T) {
 		"v1alpha2/project.schema.json",
 		"v1alpha2/rancherlines.schema.json",
 		"v1alpha2/stream.schema.json",
+		"v1alpha2/teams.schema.json",
 	}, names)
 }
 
@@ -112,7 +113,7 @@ func TestTheGoCommentsAreTheDescriptions(t *testing.T) {
 func TestThePairPicksTheSchemaOfAKindByItsKind(t *testing.T) {
 	doc := built(t)["gero.v1alpha2.schema.json"]
 	branches := dig(t, doc, "allOf").([]any)
-	require.Len(t, branches, 6, "one for each kind")
+	require.Len(t, branches, 7, "one for each kind")
 	kinds := map[any]any{}
 	for _, b := range branches {
 		kinds[dig(t, b, "if", "properties", "kind", "const")] = dig(t, b, "then", "$ref")

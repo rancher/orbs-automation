@@ -102,7 +102,7 @@ spec:
       - {line: v2.14, branch: {dev: dev-v2.14, stable: release-v2.14}}
 `)
 
-	assert.Equal(t, Repo{Name: "rancher/charts", ManagedBy: "release-team", DefaultBranch: "dev-v2.16"}, p.Spec.Repo)
+	assert.Equal(t, Repo{Name: "rancher/charts", ManagedBy: ManagedBy{"release-team"}, DefaultBranch: "dev-v2.16"}, p.Spec.Repo)
 	assert.True(t, p.Spec.FinalDestination)
 	assert.Equal(t, PullRequests{
 		Title: "[{branch}] {package} {chartVersion} {action}", BranchPrefix: "bot/{source}-",

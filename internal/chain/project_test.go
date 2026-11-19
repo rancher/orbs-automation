@@ -63,12 +63,13 @@ func TestAProjectKnowsItsOwnFacts(t *testing.T) {
 
 func TestTheManagerOfAProject(t *testing.T) {
 	tests := []struct {
-		name, repo, want string
+		name, repo string
+		want       []string
 	}{
-		{"managedBy as given", "{name: acme/a, managedBy: release-team}", "release-team"},
-		{"orbs is not assumed", "{name: acme/a}", ""},
-		{"shared as given", "{name: acme/a, managedBy: shared}", "shared"},
-		{"an external repo has none", "{name: acme/a, external: true}", ""},
+		{"managedBy as given", "{name: acme/a, managedBy: release-team}", []string{"release-team"}},
+		{"orbs is not assumed", "{name: acme/a}", nil},
+		{"shared as given", "{name: acme/a, managedBy: shared}", []string{"shared"}},
+		{"an external repo has none", "{name: acme/a, external: true}", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

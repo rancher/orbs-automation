@@ -59,10 +59,12 @@ func (p *Project) Validate(_ config.Context, r *config.Report) {
 	case strings.ContainsAny(repo.Name, " \t"):
 		r.Errorf("spec.repo.name", "%q has a space", repo.Name)
 	}
-	if repo.ManagedBy != "" && !slug.MatchString(repo.ManagedBy) {
-		r.Errorf("spec.repo.managedBy", "%q must be a lowercase slug such as release-team", repo.ManagedBy)
+	for _, id := range repo.ManagedBy {
+		if !slug.MatchString(id) {
+			r.Errorf("spec.repo.managedBy", "%q must be a lowercase slug such as release-team", id)
+		}
 	}
-	if repo.External && repo.ManagedBy != "" {
+	if repo.External && len(repo.ManagedBy) > 0 {
 		r.Errorf("spec.repo.external", "a repo outside the organization has no managing team: remove managedBy")
 	}
 
