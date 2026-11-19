@@ -90,6 +90,8 @@ type Input struct {
 	Project string   // the repo, by config name or slug; empty for the one the working directory is in
 	Lines   []string // the targets: Rancher lines or release branches, as typed
 	PR      int      // the number of the merged PR
+	// Repo is the owner/name a PR URL named, or empty. It must be the repo of the project.
+	Repo string
 	// BranchPrefix is the user's branchPrefix setting, which replaces the project's.
 	BranchPrefix string
 	// DefaultBranchPrefix is used when neither BranchPrefix nor the project says one.
