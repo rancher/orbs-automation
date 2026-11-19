@@ -502,3 +502,10 @@ open. --no-push stops after the commits and --dry-run does everything but write.
 	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
 	return cmd
 }
+
+// branchOptions is what gero repo branch runs with: the project, line and name
+// from its arguments, and whether to leave the checkout on the new branch.
+func branchOptions(args []string, noSwitch bool) repobranch.Options {
+	project, line, name := repobranch.ParseArgs(args)
+	return repobranch.Options{Project: project, Line: line, Name: name}
+}
