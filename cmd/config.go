@@ -105,10 +105,10 @@ data, so it takes none of the filters above and refuses them.`,
 			return err
 		},
 	}
-	graphCmd.Flags().BoolVar(&graphOpts.External, "external", false, "also draw external Projects")
-	graphCmd.Flags().StringArrayVar(&graphOpts.Projects, "project", nil, "draw only the Projects matching this name, slug or alias (repeatable; * is a wildcard, a leading ! leaves out what matches)")
-	graphCmd.Flags().StringArrayVar(&graphOpts.ManagedBy, "managed-by", nil, "draw only the Projects this team manages (repeatable; shared is one)")
-	graphCmd.Flags().StringVar(&graphOpts.Line, "line", "", "draw one release line only, such as v2.16: its branches, series and what is for it")
+	graphCmd.Flags().BoolVarP(&graphOpts.External, "external", "e", false, "also draw external Projects")
+	graphCmd.Flags().StringArrayVarP(&graphOpts.Projects, "project", "P", nil, "draw only the Projects matching this name, slug or alias (repeatable; * is a wildcard, a leading ! leaves out what matches)")
+	graphCmd.Flags().StringArrayVarP(&graphOpts.ManagedBy, "managed-by", "m", nil, "draw only the Projects this team manages (repeatable; shared is one)")
+	graphCmd.Flags().StringVarP(&graphOpts.Line, "line", "l", "", "draw one release line only, such as v2.16: its branches, series and what is for it")
 	resolveCmd.AddCommand(graphCmd)
 	configCmd.AddCommand(
 		&cobra.Command{

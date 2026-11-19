@@ -137,7 +137,7 @@ read. For config and the clone alone, with no network, use repo info.`,
 	}
 	statusCmd.Flags().BoolVar(&noConsumers, "no-consumers", false, "leave out who has picked up what this project ships")
 	statusCmd.Flags().BoolVar(&noSources, "no-sources", false, "leave out what this project takes from the projects that ship to it")
-	var switchTo bool
+	var noSwitch bool
 	branchCmd := &cobra.Command{
 		Use:   "branch [project] <line> <name>",
 		Short: "Make a branch off the upstream branch of a release line",
@@ -145,11 +145,12 @@ read. For config and the clone alone, with no network, use repo info.`,
 line, after fetching it, in your clone of the project. The line is one of the
 Project's release lines (v2.15), or a branch of it (release/v2.15, main).
 
-Your checkout stays where it is, as git branch does, and the command says how
-to switch to the new branch. --switch moves you onto it, with git's own rules
-for uncommitted changes. A branch of the name that already holds commits of
-ours on the current head is kept as it is; one with commits that are not ours
-is never touched. With --dry-run nothing is left behind.
+Your checkout moves onto the new branch, as git switch -c does, with git's own
+rules for uncommitted changes. --no-switch leaves it where it is, as git branch
+does, and the command says how to switch to the new branch. A branch of the name
+that already holds commits of ours on the current head is kept as it is; one
+with commits that are not ours is never touched. With --dry-run nothing is left
+behind.
 
 Name a Project (its config name or its owner/name slug) before the line, else
 the repository you are in is used.`,
@@ -163,13 +164,14 @@ the repository you are in is used.`,
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			project, line, name := repobranch.ParseArgs(args)
-			return repobranch.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, repobranch.Options{
-				Project: project, Line: line, Name: name, Switch: switchTo,
-			})
+			return repobranch.Run(ctx, cmd.OutOrStdout(), settingsFrom(cmd), cwd, branchOptions(args, noSwitch))
 		},
 	}
-	branchCmd.Flags().BoolVar(&switchTo, "switch", false, "leave your checkout on the new branch")
+	branchCmd.Flags().BoolVar(&noSwitch, "no-switch", false, "leave your checkout where it is, and say how to switch to the new branch")
+	// --switch was the flag before the switch became the default: still taken, not listed.
+	branchCmd.Flags().Bool("switch", false, "")
+	_ = branchCmd.Flags().MarkHidden("switch")
+	branchCmd.MarkFlagsMutuallyExclusive("switch", "no-switch")
 	var cloneAll bool
 	var cloneInto string
 	cloneCmd := &cobra.Command{
@@ -212,8 +214,8 @@ built yet. --dry-run says what would be cloned and reads the host for forks.`,
 			})
 		},
 	}
-	cloneCmd.Flags().BoolVar(&cloneAll, "all", false, "clone every project the active team owns, and that is not external")
-	cloneCmd.Flags().StringVar(&cloneInto, "into", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
+	cloneCmd.Flags().BoolVarP(&cloneAll, "all", "a", false, "clone every project the active team owns, and that is not external")
+	cloneCmd.Flags().StringVarP(&cloneInto, "into", "i", "", "the directory to clone into, instead of repos.cloneRoot (env GERO_REPOS_CLONE_ROOT)")
 	var push, yes, nonInteractive, stable, minor, major, retag bool
 	tagCmd := &cobra.Command{
 		Use:   "tag [project] <line> [tag]",
@@ -413,10 +415,10 @@ does everything but write.`,
 		},
 	}
 	flags := cmd.Flags()
-	flags.StringSliceVar(&in.Holdings, "holding", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
-	flags.StringSliceVar(&in.Lines, "line", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
-	flags.BoolVar(&in.Preview, "preview", false, "print the commit message and the PR body too")
-	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.StringSliceVarP(&in.Holdings, "holding", "H", nil, "sync only this holding, by name; repeat it or separate names with commas for several")
+	flags.StringSliceVarP(&in.Lines, "line", "l", nil, "sync only this Rancher line (v2.15); repeat it or separate lines with commas for several")
+	flags.BoolVarP(&in.Preview, "preview", "p", false, "print the commit message and the PR body too")
+	flags.StringVarP(&in.PushTo, "push-to", "T", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
@@ -495,10 +497,17 @@ open. --no-push stops after the commits and --dry-run does everything but write.
 		},
 	}
 	flags := cmd.Flags()
-	flags.BoolVar(&in.Preview, "preview", false, "print the PR bodies too")
-	flags.StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	flags.BoolVarP(&in.Preview, "preview", "p", false, "print the PR bodies too")
+	flags.StringVarP(&in.PushTo, "push-to", "T", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	flags.BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	flags.BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	flags.BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")
 	return cmd
+}
+
+// branchOptions is what gero repo branch runs with: the project, line and name
+// from its arguments, and whether to leave the checkout on the new branch.
+func branchOptions(args []string, noSwitch bool) repobranch.Options {
+	project, line, name := repobranch.ParseArgs(args)
+	return repobranch.Options{Project: project, Line: line, Name: name, Switch: !noSwitch}
 }

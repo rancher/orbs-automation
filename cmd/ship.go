@@ -99,7 +99,7 @@ with both flags it is a dry run.`,
 		},
 	}
 	shipflags.Bind(shipCmd, &in)
-	shipCmd.Flags().StringVar(&in.PushTo, "push-to", "", "push the branches to the fork or the upstream, instead of what your settings say")
+	shipCmd.Flags().StringVarP(&in.PushTo, "push-to", "T", "", "push the branches to the fork or the upstream, instead of what your settings say")
 	shipCmd.Flags().BoolVarP(&in.Yes, "yes", "y", false, "go on without asking before pushing branches and opening PRs")
 	shipCmd.Flags().BoolVar(&in.Yes, "non-interactive", false, "the same as --yes: never ask")
 	shipCmd.Flags().BoolVar(&in.NoPush, "no-push", false, "commit on a branch in your clone for review, but do not push or open a PR")

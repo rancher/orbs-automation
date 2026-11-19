@@ -85,7 +85,7 @@ the file for this command and for the commands that follow.`,
 	f.StringVar(&o.BranchPrefix, "branch-prefix", "", "the prefix of your branch names, such as alice/")
 	f.StringSliceVar(&o.Search, "search", nil, "directories to scan for clones you already have, repos.search (comma-separated or repeated)")
 	f.StringVar(&o.CloneRoot, "clone-root", "", "the one directory gero repo clone puts new clones in, repos.cloneRoot")
-	f.BoolVar(&o.Force, "force", false, "replace the user file if it exists")
+	f.BoolVarP(&o.Force, "force", "f", false, "replace the user file if it exists")
 	root.AddCommand(cmd)
 }
 

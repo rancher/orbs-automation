@@ -34,7 +34,6 @@ func TestGlobalFlagsDeclared(t *testing.T) {
 
 			f := cmd.PersistentFlags().Lookup(name)
 			require.NotNil(t, f, "flag --%s", name)
-			assert.Empty(t, f.Shorthand)
 		})
 	}
 }

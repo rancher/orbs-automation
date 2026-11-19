@@ -67,11 +67,12 @@ Global (persistent) flags:
 | `--config-source auto\|bundle\|dir` | Where the central config comes from, a local directory or the release bundle ([CLI_CONFIG](CLI_CONFIG.md#locating-the-central-application-config)); env `GERO_CONFIG_SOURCE` |
 | `--bundle-channel auto\|stable\|prerelease` | Which releases the bundle may come from ([CENTRAL_BUNDLE](CENTRAL_BUNDLE.md)); env `GERO_BUNDLE_CHANNEL` |
 | `--bundle-file <path>` | One bundle file, downloaded by hand, as the central config; env `GERO_BUNDLE_FILE` |
-| `--upstream <remote>` | The remote treated as the real source; env `GERO_UPSTREAM` ([CLI_CONFIG](CLI_CONFIG.md)) |
-| `--output text\|json\|env` | The output format; env `GERO_OUTPUT`. `--json` is shorthand for `--output json` |
-| `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing: no branch is pushed and no PR is opened. Read-only commands accept and ignore it. Env `GERO_DRY_RUN`; not a user-file key, so a file cannot turn it on for every run. Default is off, with `gero workflows verify` as the explicit check mode. |
-| `--non-interactive`, `--yes` | On the commands that write (`gero ship`, `gero repo tag`; `gero shell install` has `--yes`; `gero init` has `--force` for an existing file and never confirms), not global: never prompt (env `GERO_NON_INTERACTIVE`, which any command reads), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing |
-| `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
+| `-u`, `--upstream <remote>` | The remote treated as the real source; env `GERO_UPSTREAM` ([CLI_CONFIG](CLI_CONFIG.md)) |
+| `-t`, `--team <name>` | The active team context; env `GERO_TEAM` ([CLI_CONFIG](CLI_CONFIG.md)) |
+| `-o`, `--output text\|json\|env` | The output format; env `GERO_OUTPUT`. `--json` is shorthand for `--output json` |
+| `-n`, `--dry-run` | Commands that write (to disk, git or GitHub) compute and print what they would do, and change nothing: no branch is pushed and no PR is opened. Read-only commands accept and ignore it. Env `GERO_DRY_RUN`; not a user-file key, so a file cannot turn it on for every run. Default is off, with `gero workflows verify` as the explicit check mode. |
+| `--non-interactive`, `-y`, `--yes` | On the commands that write (`gero ship`, `gero repo tag`; `gero shell install` has `--yes`; `gero init` has `--force` for an existing file and never confirms), not global: never prompt (env `GERO_NON_INTERACTIVE`, which any command reads), and answer yes to the one confirmation a write command asks before it starts ([EXECUTION_CONTEXT](EXECUTION_CONTEXT.md#write-command-contract)). Without it, a write command with no TTY fails before writing |
+| `-j`, `--json` | Machine output ([CLI_OUTPUT](CLI_OUTPUT.md)); shorthand for `--output json`. `--output env` prints `KEY=value` lines for `$GITHUB_OUTPUT` and `$GITHUB_ENV` |
 | `-v`, `--verbose` | Raises log level ([CLI_OUTPUT](CLI_OUTPUT.md)): `-v` is `info`, `-vv` is `debug`. Wins over `GERO_LOG` |
 | `--color auto\|always\|never` | When output is styled ([CLI_OUTPUT](CLI_OUTPUT.md#terminal-capabilities)). `auto` (default) follows `NO_COLOR`, `CLICOLOR_FORCE`, `TERM` and whether stdout is a TTY. `always` and `never` decide it, and beat those variables |
 | `--no-color` | Shorthand for `--color never` |
@@ -79,7 +80,17 @@ Global (persistent) flags:
 
 **Network policy.** A command that needs the network to do its job reads it, and does not ask first: an opt-in flag on every read would make the commands tedious to use. `GERO_OFFLINE=true` makes the central config bundle come from the cache only ([CLI_CONFIG](CLI_CONFIG.md)). `gero repo info` is local-only by design, with no online mode to opt out of, and `gero repo status` is its networked counterpart. Reads that a public repository allows are made anonymously, and a token is sent only when the host asks for one. `gero doctor` is the exception, offline by default with `--online`, because it checks the workstation itself ([DOCTOR](DOCTOR.md)).
 
-Per-command flags are defined with their command and follow `--kebab-case`.
+### Flag conventions
+
+Per-command flags are defined with their command and follow `--kebab-case`. A flag has one spelling across every command, and one short letter across every command that has it: the letter belongs to the flag's name, so `-l` is `--line` wherever it appears. The spelling of a word is the one the config uses, so `--prerelease` (as in `--bundle-channel prerelease`), never `--pre-release`. When a spelling changes, the old one stays as an alias that help does not list.
+
+Short letters go in three tiers, and an earlier tier wins a letter:
+
+1. **Global flags** (`-v`, `-o`, `-j`, `-n`, `-t`, `-u`). A global letter is reserved on every command, so no local flag may take it.
+2. **Flags several commands share** (`-y`, `-l`, `-p`, `-T`, `-r`).
+3. **Flags of one command** (`-P`, `-m`, `-e`, `-H`, `-a`, `-i`, `-f`, `-c`). Two of these may share a letter only when no other choice is left and they are on different commands.
+
+A flag that is a negation (`--no-push`), is set once and then lives in the environment or the user file (the config and bundle flags, `--clone-root`), or has no obvious letter stays long. `-h` is `--help`, and `--version` takes no shorthand because `-v` is `--verbose`. A test walks the command tree and holds each flag to one letter (`cmd/flags_test.go`), so a new flag with a letter, or a new letter for an old flag, is a change to that table.
 
 ## 3. Execution-context gating
 
