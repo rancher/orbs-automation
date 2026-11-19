@@ -13,6 +13,7 @@ import (
 	"github.com/rancher/orbs-automation/internal/cli/repl"
 	"github.com/rancher/orbs-automation/internal/gero/clicfg"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -243,4 +244,86 @@ func TestTheREPLRunsLinesFromItsInputWithAValidTemplate(t *testing.T) {
 	require.NoError(t, wdErr)
 	assert.Contains(t, out.String(), wd)
 	assert.Equal(t, []string{"GERO_REPL=1"}, setenv)
+}
+
+// replBaseFlags parses args as given to gero repl and returns what it would put
+// in front of every line.
+func replBaseFlags(t *testing.T, args ...string) []string {
+	t.Helper()
+	root := newRootCmd()
+	root.SetArgs(append([]string{"repl"}, args...))
+	var got []string
+	for _, c := range root.Commands() {
+		if c.Name() == "repl" {
+			c.RunE = func(cmd *cobra.Command, _ []string) error { got = baseFlags(cmd); return nil }
+			c.PersistentPreRunE = func(*cobra.Command, []string) error { return nil }
+		}
+	}
+	require.NoError(t, root.Execute())
+	return got
+}
+
+// The short and the long form of a global flag are one flag, so gero repl
+// carries either the same way to its lines.
+func TestBaseFlagsCarriesTheShortFormsGivenToRepl(t *testing.T) {
+	tests := []struct {
+		short, long []string
+		want        []string
+	}{
+		{[]string{"-j"}, []string{"--json"}, []string{"--json=true"}},
+		{[]string{"-n"}, []string{"--dry-run"}, []string{"--dry-run=true"}},
+		{[]string{"-o", "env"}, []string{"--output", "env"}, []string{"--output=env"}},
+		{[]string{"-u", "up"}, []string{"--upstream", "up"}, []string{"--upstream=up"}},
+		{[]string{"-t", "red"}, []string{"--team", "red"}, []string{"--team=red"}},
+		{[]string{"-vv"}, []string{"--verbose", "--verbose"}, []string{"--verbose=2"}},
+	}
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.short, " "), func(t *testing.T) {
+			assert.Equal(t, tt.want, replBaseFlags(t, tt.short...), "short form")
+			assert.Equal(t, tt.want, replBaseFlags(t, tt.long...), "long form")
+		})
+	}
+}
+
+// Whatever global flag is given to gero repl holds for the whole session, so a
+// flag added later reaches the lines without being listed anywhere.
+func TestEveryGlobalFlagIsCarriedFromRepl(t *testing.T) {
+	newRootCmd().PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		arg := "--" + f.Name + "=x"
+		switch f.Value.Type() {
+		case "bool":
+			arg = "--" + f.Name
+		case "count":
+			arg = "--" + f.Name
+		}
+
+		got := replBaseFlags(t, arg)
+
+		require.Len(t, got, 1, "--%s given to gero repl is not carried to its lines", f.Name)
+		assert.True(t, strings.HasPrefix(got[0], "--"+f.Name+"="), "--%s was carried as %s", f.Name, got[0])
+	})
+}
+
+// Each line is parsed on its own tree, so the short forms work on a line too.
+func TestReplLineTakesShortFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		base []string
+		args []string
+	}{
+		{"on the line", nil, []string{"version", "-j"}},
+		{"with a value", nil, []string{"version", "-o", "json"}},
+		{"from gero repl", []string{"--json=true"}, []string{"version"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			var out, errOut bytes.Buffer
+			run := lineRunner(tt.base, bytes.NewReader(nil), &out, &errOut)
+
+			require.NoError(t, runLine(t, run, tt.args...))
+
+			assert.Contains(t, out.String(), `"version"`)
+		})
+	}
 }
