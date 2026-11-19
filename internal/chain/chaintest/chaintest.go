@@ -5,6 +5,7 @@ package chaintest
 import (
 	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -21,8 +22,14 @@ var Now = time.Date(2026, 11, 7, 0, 0, 0, 0, time.UTC)
 
 // Load decodes, validates and joins the documents, which must be a valid config:
 // any error fails the test. Warnings are allowed.
+//
+// A Teams document is added unless one is given, with the ids the tests use for
+// managedBy: a config that names a team must have it in Teams.
 func Load(t testing.TB, docs ...string) *chain.Graph {
 	t.Helper()
+	if !slices.ContainsFunc(docs, func(d string) bool { return strings.Contains(d, "\nkind: Teams\n") }) {
+		docs = append(docs[:len(docs):len(docs)], Teams("orbs", "release-team", "frameworks", "rancher", "x"))
+	}
 	fsys := fstest.MapFS{}
 	for i, d := range docs {
 		fsys[fmt.Sprintf("doc%02d.yaml", i)] = &fstest.MapFile{Data: []byte(d)}
@@ -45,6 +52,17 @@ func Doc(kind, name, refs, spec string) string {
 		d += "spec:\n" + spec
 	}
 	return d
+}
+
+// Teams writes the Teams document with the ids, each standing for a GitHub team of
+// the same name.
+func Teams(ids ...string) string {
+	var b strings.Builder
+	b.WriteString("  teams:\n")
+	for _, id := range ids {
+		b.WriteString("    - {id: " + id + ", github: " + id + "}\n")
+	}
+	return Doc("Teams", "rancher", "", b.String())
 }
 
 // Lines writes the RancherLines document with the lines, newest first.

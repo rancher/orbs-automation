@@ -152,3 +152,13 @@ func TestAHintOnAFieldThatDoesNotExistIsAnError(t *testing.T) {
 	assert.Error(t, applyHint(defs, hint{def: "Holds", key: "kynd", enum: []string{"a"}}), "a renamed field")
 	assert.Error(t, applyHint(defs, hint{def: "Hold", key: "kind", enum: []string{"a"}}), "a renamed type")
 }
+
+func TestManagedByIsOneIdOrAListOfThem(t *testing.T) {
+	doc := built(t)["v1alpha2/project.schema.json"]
+
+	oneOf := dig(t, doc, "$defs", "Repo", "properties", "managedBy", "oneOf").([]any)
+
+	require.Len(t, oneOf, 2)
+	assert.Equal(t, "string", dig(t, oneOf[0], "type"))
+	assert.Equal(t, "array", dig(t, oneOf[1], "type"))
+}

@@ -677,3 +677,30 @@ func TestMindmapLineNarrowsTheLinesOfAProject(t *testing.T) {
 	assert.NotContains(t, out, "v2.17:")
 	assert.NotContains(t, out, "v2.15:")
 }
+
+func TestGraphManagedByKeepsAProjectThatListsTheTeam(t *testing.T) {
+	g := chaintest.Load(t,
+		chaintest.Teams("orbs", "frameworks"),
+		project("joint", "  repo: {name: acme/joint, managedBy: [orbs, frameworks]}\n"),
+		project("solo", "  repo: {name: acme/solo, managedBy: orbs}\n"),
+	)
+
+	out, err := graph(fakeWorkspace{g: g}, Options{ManagedBy: []string{"frameworks"}})
+
+	require.NoError(t, err)
+	assert.Contains(t, out, `"acme/joint": {`)
+	assert.NotContains(t, out, `"acme/solo"`)
+	assert.Contains(t, out, "managed by orbs, frameworks", "a project's label names every team")
+}
+
+func TestGraphManagedByTakesATeamIdAndNotAGitHubName(t *testing.T) {
+	g := chaintest.Load(t,
+		"apiVersion: gero/v1alpha2\nkind: Teams\nname: rancher\nspec:\n  teams: [{id: frameworks, github: rancher-squad-frameworks}]\n",
+		project("lib", "  repo: {name: acme/lib, managedBy: frameworks}\n"),
+	)
+
+	_, err := graph(fakeWorkspace{g: g}, Options{ManagedBy: []string{"rancher-squad-frameworks"}})
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "not a team in Teams")
+}

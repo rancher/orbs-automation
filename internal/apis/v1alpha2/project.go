@@ -23,8 +23,8 @@ const ManagedByShared = "shared"
 
 // Repo identifies the repository.
 type Repo struct {
-	Name          string `yaml:"name"`     // owner/name
-	External      bool   `yaml:"external"` // outside our organization
+	Name          string    `yaml:"name"`     // owner/name
+	External      bool      `yaml:"external"` // outside our organization
 	ManagedBy     ManagedBy `yaml:"managedBy"`
 	DefaultBranch string    `yaml:"defaultBranch"`
 }

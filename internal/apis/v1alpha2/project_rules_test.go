@@ -94,6 +94,9 @@ func TestProjectRules(t *testing.T) {
 		{"a repo name that is not owner and name", "  repo: {name: shell}\n", "spec.repo.name", "owner/name"},
 		{"a repo name with three parts", "  repo: {name: a/b/c}\n", "spec.repo.name", "owner/name"},
 		{"managedBy that is not a slug", "  repo: {name: a/b, managedBy: Release Team}\n", "spec.repo.managedBy", "lowercase slug"},
+		{"a managedBy list with a name that is not a slug", "  repo: {name: a/b, managedBy: [orbs, Release Team]}\n", "spec.repo.managedBy[1]", "lowercase slug"},
+		{"shared in a list with a team", "  repo: {name: a/b, managedBy: [orbs, shared]}\n", "spec.repo.managedBy", "shared"},
+		{"a team listed twice", "  repo: {name: a/b, managedBy: [orbs, orbs]}\n", "spec.repo.managedBy[1]", "twice"},
 		{"external and managed", "  repo: {name: a/b, external: true, managedBy: orbs}\n", "spec.repo.external", "no managing team"},
 		{"pushTo that is neither", "  repo: {name: a/b}\n  pullRequests: {pushTo: origin}\n", "spec.pullRequests.pushTo", "fork or upstream"},
 		{"a title with an unknown placeholder", "  repo: {name: a/b}\n  pullRequests: {title: \"{nope}\"}\n", "spec.pullRequests.title", "unknown placeholder {nope}"},
@@ -122,6 +125,30 @@ func TestProjectRules(t *testing.T) {
 
 			assert.Nil(t, p, "a project that breaks a rule is dropped")
 			assert.True(t, hasError(rep, tt.path, tt.want), "want an error at %s containing %q, got %v", tt.path, tt.want, rep.Findings)
+		})
+	}
+}
+
+func TestProjectManagedByIsOneIdOrAList(t *testing.T) {
+	for name, tt := range map[string]struct {
+		written string
+		want    ManagedBy
+	}{
+		"one id":      {"orbs", ManagedBy{"orbs"}},
+		"a list":      {"[infracloud, rst]", ManagedBy{"infracloud", "rst"}},
+		"shared":      {"shared", ManagedBy{"shared"}},
+		"unspecified": {"", nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			spec := "  repo: {name: a/b, managedBy: " + tt.written + "}\n"
+			if tt.written == "" {
+				spec = "  repo: {name: a/b}\n"
+			}
+
+			p, rep := loadProject(t, spec)
+
+			require.Empty(t, rep.Findings)
+			assert.Equal(t, tt.want, p.Spec.Repo.ManagedBy)
 		})
 	}
 }

@@ -22,6 +22,7 @@ func minors() []string {
 		doc("Project", "dest", "", "  repo: {name: acme/dest}\n  finalDestination: true\n"+perLine),
 		docHolds("dest-holds-1-2", "dest", "lib-1-2-module", "{since: v2.16}"),
 		docHolds("dest-holds-1-1", "dest", "lib-1-1-module", "{until: v2.15}"),
+		doc("Teams", "rancher", "", "  teams: [{id: orbs, github: orbs}]\n"),
 	}
 }
 
