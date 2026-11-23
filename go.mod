@@ -5,7 +5,7 @@ go 1.27.0
 toolchain go1.27.4
 
 require (
-	charm.land/lipgloss/v2 v2.1.0
+	charm.land/lipgloss/v2 v2.1.1
 	github.com/cli/go-gh/v2 v2.17.0
 	github.com/ergochat/readline v0.1.3
 	github.com/go-git/go-git/v5 v5.19.3
